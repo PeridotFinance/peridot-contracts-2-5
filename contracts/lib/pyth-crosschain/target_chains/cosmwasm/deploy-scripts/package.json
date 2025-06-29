@@ -1,0 +1,34 @@
+{
+  "name": "@pythnetwork/cosmwasm-deploy-scripts",
+  "version": "1.0.0",
+  "description": "",
+  "private": "true",
+  "scripts": {
+    "build": "tsc",
+    "build-contract": "ts-node ./src/build-contract.ts",
+    "instantiate-wormhole": "ts-node ./src/instantiate-wormhole.ts",
+    "instantiate-pyth": "ts-node ./src/instantiate-pyth.ts",
+    "test:format": "prettier --check .",
+    "fix:format": "prettier --write ."
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@cosmjs/crypto": "^0.32.3",
+    "@ltd/j-toml": "^1.38.0",
+    "@pythnetwork/contract-manager": "workspace:*",
+    "@pythnetwork/cosmwasm-deploy-tools": "workspace:*",
+    "@pythnetwork/xc-admin-common": "workspace:^",
+    "adm-zip": "^0.5.10",
+    "node-downloader-helper": "^2.1.7",
+    "rimraf": "^5.0.0",
+    "typescript": "catalog:",
+    "yargs": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.0",
+    "@types/yargs": "^17.0.18",
+    "prettier": "catalog:",
+    "ts-node": "catalog:"
+  }
+}

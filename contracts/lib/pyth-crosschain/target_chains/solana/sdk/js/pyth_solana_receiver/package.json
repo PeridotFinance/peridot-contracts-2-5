@@ -1,0 +1,54 @@
+{
+  "name": "@pythnetwork/pyth-solana-receiver",
+  "version": "0.10.1",
+  "description": "Pyth solana receiver SDK",
+  "homepage": "https://pyth.network",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pyth-network/pyth-crosschain.git",
+    "directory": "target_chains/solana/sdk/js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test:lint": "eslint src/ --max-warnings 0",
+    "test:format": "prettier --check \"src/**/*.ts\"",
+    "fix:lint": "eslint src/ --fix --max-warnings 0",
+    "fix:format": "prettier --write \"src/**/*.ts\"",
+    "prepublishOnly": "pnpm run build && pnpm test:lint",
+    "preversion": "pnpm run test:lint",
+    "version": "pnpm run format && git add -A src"
+  },
+  "keywords": [
+    "pyth",
+    "oracle"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@pythnetwork/hermes-client": "workspace:*",
+    "@types/jest": "^29.4.0",
+    "@typescript-eslint/eslint-plugin": "^5.20.0",
+    "@typescript-eslint/parser": "^5.20.0",
+    "eslint": "^8.13.0",
+    "jest": "^29.4.0",
+    "prettier": "catalog:",
+    "quicktype": "^23.0.76",
+    "ts-jest": "^29.0.5",
+    "ts-node": "catalog:",
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@noble/hashes": "^1.4.0",
+    "@pythnetwork/price-service-sdk": "workspace:*",
+    "@pythnetwork/solana-utils": "workspace:*",
+    "@solana/web3.js": "^1.90.0"
+  }
+}

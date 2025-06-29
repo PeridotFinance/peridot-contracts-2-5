@@ -1,0 +1,39 @@
+{
+  "name": "peridot-defi-bot",
+  "version": "1.0.0",
+  "description": "Telegram DeFi Bot for Peridot Protocol (Compound V2 Fork)",
+  "main": "dist/bot.js",
+  "scripts": {
+    "start": "ts-node src/bot.ts",
+    "dev": "nodemon --exec ts-node src/bot.ts",
+    "build": "tsc",
+    "deploy": "npm run build && docker-compose up -d"
+  },
+  "keywords": [
+    "telegram",
+    "defi",
+    "peridot",
+    "compound",
+    "bot"
+  ],
+  "author": "Peridot Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^4.0.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "ethers": "^5.7.2",
+    "openai": "^4.20.1",
+    "telegraf": "^4.15.6",
+    "uuid": "^11.1.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.10.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.2"
+  }
+}

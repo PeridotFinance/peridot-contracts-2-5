@@ -1,0 +1,25 @@
+BSC Testnet:
+
+$P = 0xB911C192ed1d6428A12F2Cf8F636B00c34e68a2a
+
+PayPal USD: 0xa41D586530BC7BC872095950aE03a780d5114445
+SimplePriceOracle: 0xf79b3af6954bCbeDfE0F6BE34DD1153A391E8083
+Pyth Contract: 0x5744Cbf430D99456a0A8771208b674F27f8EF0Fb
+Price Stale Threshold: 60 seconds
+
+Unitroller (Proxy): 0xe797A0001A3bC1B2760a24c3D7FDD172906bCCd6
+PeridottrollerG7 (Implementation): 0x3e1C0dd89FF970a4022C3d5F9189634FB02C064c
+PeridottrollerG7 Proxy (Use this address): 0xe797A0001A3bC1B2760a24c3D7FDD172906bCCd6
+JumpRateModelV2: 0xf66037a2b7aDA645f22523E0dDb461c9012125d1
+Comptroller Owner: 0xF450B38cccFdcfAD2f98f7E4bB533151a2fB00E9
+
+PToken Name: Peridot PUSD
+PToken Symbol: pPUSD
+PToken Decimals: 8
+Initial Exchange Rate Mantissa: 20000000000000000
+Admin: 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38
+PErc20Delegate (Implementation) deployed at: 0x78B0f1E4ed8a17c7541EF954f046911E3E94566D
+==== Deployment Complete ====
+PErc20Delegator (Proxy for pPUSD ) deployed at: 0xEDdC65ECaF2e67c301a01fDc1da6805084f621D0
+
+MockOracle: 0x82BF1C5516F6A91d4bF1E0aB62aF373dB049Df91

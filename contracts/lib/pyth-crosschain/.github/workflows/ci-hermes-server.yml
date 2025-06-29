@@ -1,0 +1,39 @@
+name: Check Hermes Server
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ci-hermes-server.yml
+      - apps/hermes/server/**
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/hermes/server
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "apps/hermes/server -> target"
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+          override: true
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Format check
+        run: cargo fmt --all -- --check
+        if: success() || failure()
+      - name: Clippy check
+        run: cargo clippy --tests -- --deny warnings
+        if: success() || failure()
+      - name: Run executor tests
+        run: cargo test
+        if: success() || failure()

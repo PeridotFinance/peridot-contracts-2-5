@@ -1,0 +1,47 @@
+{
+  "name": "@pythnetwork/cosmwasm-deploy-tools",
+  "version": "1.1.0",
+  "description": "",
+  "main": "./lib/index.js",
+  "private": "true",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "ts-node ./src/ci/deploy.ts",
+    "test:format": "prettier --check .",
+    "fix:format": "prettier --write ."
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@cosmjs/cosmwasm-stargate": "^0.32.3",
+    "@cosmjs/encoding": "^0.32.3",
+    "@cosmjs/proto-signing": "^0.32.3",
+    "@cosmjs/stargate": "^0.32.3",
+    "@cosmjs/tendermint-rpc": "^0.32.3",
+    "@injectivelabs/networks": "^1.14.6",
+    "@injectivelabs/sdk-ts": "1.14.7",
+    "@ltd/j-toml": "^1.38.0",
+    "@osmonauts/utils": "^1.18.0",
+    "@pythnetwork/price-service-client": "workspace:*",
+    "@pythnetwork/xc-admin-common": "workspace:*",
+    "@terra-money/terra.js": "^3.1.10",
+    "adm-zip": "^0.5.10",
+    "dotenv": "^16.0.0",
+    "ethers": "^5.4.4",
+    "long": "^5.2.3",
+    "node-downloader-helper": "^2.1.7",
+    "osmojs": "^16.12.1",
+    "yargs": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.0",
+    "@types/yargs": "^17.0.18",
+    "@typescript-eslint/eslint-plugin": "^5.43.0",
+    "@typescript-eslint/parser": "^5.43.0",
+    "cosmjs-types": "^0.9.0",
+    "eslint": "^8.27.0",
+    "eslint-config-prettier": "^8.5.0",
+    "ts-node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

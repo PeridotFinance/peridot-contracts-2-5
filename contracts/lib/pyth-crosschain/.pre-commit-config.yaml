@@ -1,0 +1,160 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: >
+          (?x)^(
+            target_chains/sui/vendor/|
+            patches/|
+            apps/hermes/server/proto/vendor/
+          )
+      - id: end-of-file-fixer
+        exclude: >
+          (?x)^(
+            target_chains/sui/vendor/|
+            patches/|
+            apps/api-reference/public/currency-icons/|
+            apps/hermes/server/proto/vendor/
+          )
+      - id: check-added-large-files
+        exclude: >
+          (?x)^(
+            target_chains/sui/vendor/|
+            patches/
+          )
+  - repo: local
+    hooks:
+      - id: turbo-fix-format
+        name: Run turbo fix on packages
+        language: system
+        entry: sh -c 'pnpm turbo fix'
+        pass_filenames: false
+      # Hooks for the remote executor
+      - id: cargo-fmt-remote-executor
+        name: Cargo format for remote executor
+        language: "rust"
+        entry: cargo +1.73.0 fmt --manifest-path ./governance/remote_executor/Cargo.toml --all
+        pass_filenames: false
+        files: governance/remote_executor
+      - id: cargo-clippy-remote-executor
+        name: Cargo clippy for remote executor
+        language: "rust"
+        entry: cargo +1.73.0 clippy --manifest-path ./governance/remote_executor/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: governance/remote_executor
+      # Hooks for cosmwasm contract
+      - id: cargo-fmt-cosmwasm
+        name: Cargo format for cosmwasm contract
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./target_chains/cosmwasm/Cargo.toml --all
+        pass_filenames: false
+        files: target_chains/cosmwasm
+      - id: cargo-clippy-cosmwasm
+        name: Cargo clippy for cosmwasm contract
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./target_chains/cosmwasm/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: target_chains/cosmwasm
+      # Hooks for Hermes
+      - id: cargo-fmt-hermes
+        name: Cargo format for Hermes
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./apps/hermes/server/Cargo.toml --all
+        pass_filenames: false
+        files: apps/hermes
+      - id: cargo-clippy-hermes
+        name: Cargo clippy for Hermes
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./apps/hermes/server/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: apps/hermes
+      # Hooks for Fortuna
+      - id: cargo-fmt-fortuna
+        name: Cargo format for Fortuna
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./apps/fortuna/Cargo.toml --all
+        pass_filenames: false
+        files: apps/fortuna
+      - id: cargo-clippy-fortuna
+        name: Cargo clippy for Fortuna
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./apps/fortuna/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: apps/fortuna
+      # Hooks for message buffer contract
+      - id: cargo-fmt-message-buffer
+        name: Cargo format for message buffer contract
+        language: "rust"
+        entry: cargo +1.66.1 fmt --manifest-path ./pythnet/message_buffer/Cargo.toml --all
+        pass_filenames: false
+        files: pythnet/message_buffer
+      - id: cargo-clippy-message-buffer
+        name: Cargo clippy for message buffer contract
+        language: "rust"
+        entry: cargo +1.66.1 clippy --manifest-path ./pythnet/message_buffer/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: pythnet/message_buffer
+      # Hooks for pythnet_sdk
+      - id: cargo-fmt-pythnet-sdk
+        name: Cargo format for pythnet SDK
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./pythnet/pythnet_sdk/Cargo.toml --all
+        pass_filenames: false
+        files: pythnet/pythnet_sdk
+      - id: cargo-clippy-pythnet-sdk
+        name: Cargo clippy for pythnet SDK
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./pythnet/pythnet_sdk/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: pythnet/pythnet_sdk
+      # Hooks for solana receiver contract
+      - id: cargo-fmt-pyth-solana-receiver
+        name: Cargo format for solana target chain contract
+        language: "rust"
+        entry: cargo +1.73.0 fmt --manifest-path ./target_chains/solana/Cargo.toml --all
+        pass_filenames: false
+        files: target_chains/solana
+      - id: cargo-clippy-pyth-solana-receiver
+        name: Cargo clippy for solana target chain contract
+        language: "rust"
+        entry: cargo +1.73.0 clippy --manifest-path ./target_chains/solana/Cargo.toml --tests -- --deny warnings
+        pass_filenames: false
+        files: target_chains/solana
+      # For Lazer
+      - id: cargo-fmt-lazer
+        name: Cargo format for Lazer
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./lazer/Cargo.toml --all
+        pass_filenames: false
+        files: lazer
+      - id: cargo-clippy-lazer
+        name: Cargo clippy for Lazer
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./lazer/Cargo.toml --all-targets -- --deny warnings
+        pass_filenames: false
+        files: lazer
+      - id: cargo-fmt-stylus-sdk
+        name: Cargo format for Stylus SDK
+        language: "rust"
+        entry: cargo +1.82.0 fmt --manifest-path ./target_chains/ethereum/sdk/stylus/Cargo.toml --all
+        pass_filenames: false
+        files: target_chains/ethereum/sdk/stylus
+      - id: cargo-clippy-stylus-sdk
+        name: Cargo clippy for Stylus SDK
+        language: "rust"
+        entry: cargo +1.82.0 clippy --manifest-path ./target_chains/ethereum/sdk/stylus/Cargo.toml  --all-targets -- --deny warnings
+        pass_filenames: false
+        files: target_chains/ethereum/sdk/stylus
+      - id: fmt-aptos-lazer
+        name: Format Aptos Lazer contracts
+        language: system
+        entry: aptos move fmt --package-path lazer/contracts/aptos
+        pass_filenames: false
+        files: lazer/contracts/aptos
+      - id: lint-aptos-lazer
+        name: Lint Aptos Lazer contracts
+        language: system
+        entry: aptos move lint --package-dir lazer/contracts/aptos --check-test-code --dev
+        pass_filenames: false
+        files: lazer/contracts/aptos

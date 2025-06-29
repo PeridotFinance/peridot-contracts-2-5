@@ -1,0 +1,10 @@
+node_modules
+interface
+lib
+cache
+typechain-types
+artifacts
+forge-artifacts
+coverage
+bin
+out

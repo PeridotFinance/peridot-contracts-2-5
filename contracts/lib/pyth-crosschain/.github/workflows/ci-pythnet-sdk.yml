@@ -1,0 +1,34 @@
+name: Check Pythnet SDK
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ci-pythnet-sdk.yml
+      - pythnet/pythnet_sdk/**
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pythnet/pythnet_sdk
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "pythnet/pythnet_sdk -> target"
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.82.0
+          override: true
+      - name: Format check
+        run: cargo fmt --all -- --check
+        if: success() || failure()
+      - name: Clippy check
+        run: cargo clippy --tests -- --deny warnings
+        if: success() || failure()
+      - name: Run executor tests
+        run: cargo test
+        if: success() || failure()

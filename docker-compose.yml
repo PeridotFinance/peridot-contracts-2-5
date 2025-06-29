@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  peridot-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: peridot-defi-bot
+    restart: unless-stopped
+    environment:
+      # Telegram Bot Configuration
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+
+      # Blockchain Configuration
+      - RPC_URL=${RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}
+      - CHAIN_ID=${CHAIN_ID:-421614}
+
+      # Peridot Protocol Addresses
+      - PERIDOTTROLLER_ADDRESS=${PERIDOTTROLLER_ADDRESS}
+      - ORACLE_ADDRESS=${ORACLE_ADDRESS}
+
+      # Market Addresses
+      - PUSDC_ADDRESS=${PUSDC_ADDRESS}
+      - PUSDT_ADDRESS=${PUSDT_ADDRESS}
+
+      # AI Configuration (Optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-production}
+
+    volumes:
+      # Mount logs directory (optional)
+      - ./logs:/app/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Bot is healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Networks (optional, for multi-service setups)
+    networks:
+      - peridot-network
+
+# Networks
+networks:
+  peridot-network:
+    driver: bridge
+
+# Volumes for persistent data (if needed in future)
+volumes:
+  bot-data:
+    driver: local

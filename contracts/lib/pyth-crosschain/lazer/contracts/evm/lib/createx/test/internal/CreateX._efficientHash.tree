@@ -1,0 +1,3 @@
+CreateX_EfficientHash_Internal_Test
+├── It matches the output of a high-level hash.
+└── It should never revert.

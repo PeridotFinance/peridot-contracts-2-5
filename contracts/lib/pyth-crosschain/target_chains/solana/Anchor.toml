@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "programs/pyth-push-oracle",
+    "programs/pyth-solana-receiver",
+]
+
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+pyth_solana_receiver = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "https://api.devnet.solana.com"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+export = "anchor build && ./scripts/patch_idl.sh"
