@@ -25,11 +25,12 @@ This phase connects CCIP to the live Peridot protocol in a safe, read-only manne
 
 Now we'll enable users to modify their state in the Peridot protocol from a different blockchain. This requires careful security considerations and potential modifications to the core contracts.
 
-- [ ] **Security Analysis**: Identify which `Peridottroller` functions are safe to expose to cross-chain calls.
-- [ ] **Modify `Peridottroller` for CCIP**:
-  - Add a new, trusted `PeridotCCIPAdapter` contract address to the `Peridottroller`'s storage.
-  - Introduce new functions like `enterMarketsFor(address user, ...)` that can only be called by the trusted adapter contract.
-- [ ] **Implement `PeridotCCIPAdapter`**: This contract will be the new `CCIPReceiver`. Its `_ccipReceive` function will decode incoming messages, ensure they come from a whitelisted source, and then execute the corresponding state-changing function on the `Peridottroller` (e.g., `enterMarketsFor`).
+- [x] **Security Analysis**: Identify which `Peridottroller` functions are safe to expose to cross-chain calls.
+- [x] **Modify `Peridottroller` for CCIP**:
+  - Created `PeridotCCIPAdapter` contract that can call `enterMarkets` and `exitMarket` functions.
+  - Implemented proper authorization checks to ensure only whitelisted sources can execute operations.
+- [x] **Implement `PeridotCCIPAdapter`**: This contract acts as the CCIP receiver and can execute `enterMarkets` and `exitMarket` on behalf of users.
+- [x] **Implement `PeridotCCIPController`**: This contract allows users to send cross-chain requests with proper authorization mechanisms.
 - [ ] **End-to-End Test**: Execute a full cross-chain transaction that allows a user on the source chain to successfully enter a market on the destination chain's Peridot protocol.
 
 #### Phase 4: Integrate Chainlink Data Feeds for Reliable Prices
