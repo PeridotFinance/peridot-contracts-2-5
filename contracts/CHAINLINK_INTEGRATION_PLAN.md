@@ -37,7 +37,7 @@ Now we'll enable users to modify their state in the Peridot protocol from a diff
 
 This phase replaces the existing price oracle with Chainlink's highly reliable and decentralized Data Feeds to secure the protocol against price manipulation.
 
-- [ ] **Develop a `ChainlinkPriceOracle` contract**: Create a new oracle contract that implements Peridot's `PriceOracle` interface but fetches prices from Chainlink Data Feeds.
+- [x] **Develop a `ChainlinkPriceOracle` contract**: Create a new oracle contract that implements Peridot's `PriceOracle` interface but fetches prices from Chainlink Data Feeds.
 - [ ] **Deploy and Configure New Oracle**: Deploy the `ChainlinkPriceOracle` and configure it with the correct data feed addresses for each supported asset.
 - [ ] **Migrate `Peridottroller`**: Atomically update the `Peridottroller` to use the new `ChainlinkPriceOracle` as its source of truth for asset prices.
 - [ ] **Test Price Updates**: Verify that the protocol correctly ingests prices from Chainlink and that all functions (mint, borrow, liquidate) behave as expected with the new oracle.
