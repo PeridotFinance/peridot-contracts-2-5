@@ -1,0 +1,18 @@
+type InitArg = record {
+  ecdsa_key_id : record { name : text; curve : variant { secp256k1 } };
+  rpc_service : variant {
+    Custom : record { url : text; headers : opt vec record { text; text } };
+    Chain : nat64;
+    Provider : nat64;
+  };
+  filter_addresses : vec text;
+  chain_id : nat64;
+  filter_events : vec text;
+};
+service : {
+  get_cross_chain_rates : () -> (text) query;
+  get_evm_address : () -> (opt text) query;
+  get_liquidation_opportunities : (nat64) -> (vec text) query;
+  get_market_state : (nat64) -> (opt text) query;
+  get_user_position : (text, nat64) -> (opt text) query;
+}

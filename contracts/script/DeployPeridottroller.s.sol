@@ -17,12 +17,12 @@ import "../contracts/PriceOracle.sol"; // Interface for the oracle
  * IMPORTANT: Update the ORACLE_ADDRESS constant below with the deployed SimplePriceOracle address
  *            before running this script.
  */
-contract DeployComptroller is Script {
+contract DeployPeridottroller is Script {
     // !!! IMPORTANT: Replace with your deployed SimplePriceOracle address !!!
     address constant ORACLE_ADDRESS =
-        0xf79b3af6954bCbeDfE0F6BE34DD1153A391E8083;
+        0xeAEdaF63CbC1d00cB6C14B5c4DE161d68b7C63A0;
     address constant PERIDOT_ADDRESS =
-        0xB911C192ed1d6428A12F2Cf8F636B00c34e68a2a;
+        0x28fE679719e740D15FC60325416bB43eAc50cD15;
 
     // Interest Rate Model Parameters (Example values, adjust as needed)
     // uint baseRatePerYear = 0.02e18; // 2%
@@ -32,10 +32,10 @@ contract DeployComptroller is Script {
 
     // Using Mantissa scalar 1e18 for calculations
     // 1e18; Represents 1.0 or 100%
-    uint baseRatePerYear = 0.02 * 1e18; // 2% APR
-    uint multiplierPerYear = 0.1 * 1e18; // 10% APR slope
+    uint baseRatePerYear = 0.03 * 1e18; // 3% APR
+    uint multiplierPerYear = 0.12 * 1e18; // 12% APR slope
     uint jumpMultiplierPerYear = 2 * 1e18; // 200% APR slope after kink
-    uint kink_ = 0.8 * 1e18; // 80% utilization threshold
+    uint kink_ = 0.85 * 1e18; // 85% utilization threshold
 
     // Close factor and liquidation incentive (Example values, adjust as needed)
     uint closeFactorMantissa = 0.5e18; // 50%

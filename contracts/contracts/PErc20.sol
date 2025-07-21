@@ -161,6 +161,16 @@ contract PErc20 is PToken, PErc20Interface {
         return _addReservesInternal(addAmount);
     }
 
+    /*** Flash Loan Support ***/
+
+    /**
+     * @notice Returns the underlying token address for flash loans
+     * @return The address of the underlying ERC20 token
+     */
+    function getUnderlyingAddress() internal view override returns (address) {
+        return underlying;
+    }
+
     /*** Safe Token ***/
 
     /**

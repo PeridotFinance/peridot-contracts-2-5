@@ -1,10 +1,21 @@
 import { Telegraf, Markup } from "telegraf";
 import * as dotenv from "dotenv";
 import { BlockchainService } from "./services/blockchain";
+import { ElizaClient } from "./services/elizaClient";
 import { PeridotService } from "./services/peridot";
 import { AIService } from "./services/ai";
 import { UserSessionService } from "./services/userSession";
 import { WalletService } from "./services/wallet";
+import { WalletEnhancedService } from "./services/walletEnhanced";
+import { RateLimiterService } from "./services/rateLimiter";
+import {
+  walletKeyboard,
+  exportKeyboard,
+  confirmationKeyboard,
+  writeOperationsKeyboard,
+  marketSelectionKeyboard,
+  amountInputKeyboard,
+} from "./utils/keyboards";
 
 dotenv.config();
 
@@ -34,10 +45,17 @@ const ai = process.env.OPENAI_API_KEY
   ? new AIService(process.env.OPENAI_API_KEY)
   : null;
 
+// Initialize ElizaOS client if URL provided
+const eliza = process.env.ELIZA_API_URL
+  ? new ElizaClient(process.env.ELIZA_API_URL)
+  : null;
+
 const userSessions = new UserSessionService();
 const walletService = new WalletService();
+const walletEnhanced = new WalletEnhancedService();
+const rateLimiter = new RateLimiterService();
 
-// Market addresses for BSC Testnet
+// Market &lt;address&gt;s for BSC Testnet
 const MARKETS: Record<string, string> = {
   PPUSD:
     process.env.PPUSD_ADDRESS || "0xEDdC65ECaF2e67c301a01fDc1da6805084f621D0",
@@ -96,7 +114,7 @@ async function handleMarkets(ctx: any) {
       }
     }
 
-    marketSummary += `🎯 <b>Quick Actions:</b>\n• /position - View your positions\n• /liquidity - Check account health\n• /wallet <address> - Connect wallet`;
+    marketSummary += `🎯 <b>Quick Actions:</b>\n• /position - View your positions\n• /liquidity - Check account health\n• /wallet_info - Wallet info\n• /wallet_balance - Wallet balance\n• /wallet &lt;address&gt; - Connect wallet`;
     ctx.reply(marketSummary, { parse_mode: "HTML" });
   } catch (error) {
     console.error("Markets command error:", error);
@@ -109,7 +127,7 @@ async function handlePosition(ctx: any) {
 
   if (!session.walletAddress) {
     ctx.reply(
-      "❌ Please set your wallet first: `/wallet <address>` or create one with `/create_wallet`",
+      "❌ Please set your wallet first: `/wallet &lt;address&gt;` or create one with `/create_wallet`",
       { parse_mode: "HTML" }
     );
     return;
@@ -223,7 +241,7 @@ async function handleAnalyze(ctx: any) {
 
   if (!session.walletAddress) {
     ctx.reply(
-      "❌ Please set your wallet first: `/wallet <address>` or create one with `/create_wallet`",
+      "❌ Please set your wallet first: `/wallet &lt;address&gt;` or create one with `/create_wallet`",
       { parse_mode: "HTML" }
     );
     return;
@@ -328,7 +346,22 @@ const showWelcomeMessage = (ctx: any) => {
     welcomeMessage += `🔧 <b>Quick Actions:</b>
 /markets - View available markets
 /position - Check your positions
-/analyze - AI-powered analysis
+/liquidity - Check account health
+/wallet_info - Enhanced wallet management
+
+💰 <b>Write Operations:</b>
+/supply &lt;symbol&gt; &lt;amount&gt; - Supply tokens to earn
+/borrow &lt;symbol&gt; &lt;amount&gt; - Borrow against collateral
+/repay &lt;symbol&gt; &lt;amount&gt; - Repay borrowed amounts
+/redeem &lt;symbol&gt; &lt;amount&gt; - Withdraw supplied tokens
+
+🔒 <b>Security:</b>
+/set_passphrase - Add passphrase protection
+/export_wallet - Export keys (rate limited)
+/rate_status - Check operation limits
+
+🤖 <b>AI Analysis:</b>
+/analyze - AI-powered position analysis
 
 `;
   }
@@ -336,7 +369,7 @@ const showWelcomeMessage = (ctx: any) => {
   welcomeMessage += `/help - See all commands
 
 💡 <b>Pro Tip:</b> Just type naturally! I understand requests like:
-"Show me USDC market info" or "What's my position?"`;
+"Show me USDC market info" or "What's my position?"\n\n<b>What is Peridot?</b>\nThink of Peridot as a community bank, but on the blockchain. You can:\n• <b>Lend:</b> Deposit your assets to earn interest.\n• <b>Borrow:</b> Use your deposits as collateral to borrow other assets.\n\n<b>What is a Wallet?</b>\nA crypto wallet is like your personal bank account for the digital world. It's where you'll store your assets securely and sign transactions."`;
 
   ctx.reply(welcomeMessage, {
     parse_mode: "HTML",
@@ -353,9 +386,6 @@ Think of Peridot as a community bank, but on the blockchain. You can:
 
 <b>What is a Wallet?</b>
 A crypto wallet is like your personal bank account for the digital world. It's where you'll store your assets securely. We will create one for you to get started, and you'll have full control over it.
-
-<b>🚀 Next Step:</b>
-To get started, use <code>/create_wallet</code> to create your first wallet, or <code>/wallet &lt;address&gt;</code> if you already have one.
 
 We're here to guide you every step of the way!`;
 
@@ -403,6 +433,16 @@ const askCryptoQuestion = (ctx: any) => {
 
 // Bot startup message
 bot.start((ctx) => {
+  // Auto-create wallet if none exists
+  if (!walletService.hasWallet(ctx.from.id)) {
+    const newWallet = walletService.createWalletForUser(ctx.from.id);
+    // auto-connect session
+    userSessions.setWallet(ctx.from.id, newWallet.address);
+    ctx.reply(
+      `✅ <b>New Wallet Created & Connected</b>\n\nAddress: <code>${newWallet.address}</code>\n\nFund it with test tokens to start interacting with Peridot. Use /export_wallet to view keys (⚠️ care).`,
+      { parse_mode: "HTML" }
+    );
+  }
   const session = userSessions.getSession(ctx.from.id);
 
   if (session.onboardingStage === "done") {
@@ -469,6 +509,14 @@ bot.action("wallet_set_own", (ctx) => {
 });
 
 bot.action("wallet_create_new", async (ctx) => {
+  if (walletService.hasWallet(ctx.from.id)) {
+    ctx.answerCbQuery();
+    ctx.editMessageReplyMarkup(undefined);
+    ctx.reply(
+      "✅ You already have a wallet assigned! Use /wallet_info to view it."
+    );
+    return;
+  }
   userSessions.setOnboardingStage(ctx.from.id, "done");
   ctx.answerCbQuery();
   ctx.editMessageReplyMarkup(undefined);
@@ -536,13 +584,21 @@ bot.action(/strategy_(.+)/, (ctx) => {
   ctx.answerCbQuery(`You selected: ${strategyMap[strategy]}`);
   ctx.editMessageReplyMarkup(undefined);
   ctx.reply(
-    "Perfect, thank you! I've saved your strategy to personalize my advice.\n\n🚀 <b>Ready to get started?</b>\nUse <code>/create_wallet</code> to create your first wallet!",
+    "Perfect, thank you! I've saved your strategy to personalize my advice.",
     { parse_mode: "HTML" }
   );
   showWelcomeMessage(ctx);
 });
 
 bot.action("create_wallet_confirm", async (ctx) => {
+  if (walletService.hasWallet(ctx.from.id)) {
+    ctx.answerCbQuery();
+    ctx.editMessageReplyMarkup(undefined);
+    ctx.reply(
+      "✅ You already have a wallet assigned! Use /wallet_info to view it."
+    );
+    return;
+  }
   ctx.answerCbQuery();
   ctx.editMessageReplyMarkup(undefined);
 
@@ -600,12 +656,11 @@ bot.help((ctx) => {
   const helpMessage = `🆘 <b>Peridot Bot Commands</b>
 
 <b>💼 Wallet & Position:</b>
-/wallet &lt;address&gt; - Set your wallet address
+/wallet &lt;address&gt; - Set your wallet address (advanced)
 /create_wallet - Create a new wallet
 /wallet_info - View your wallet information
 /wallet_balance - Check your wallet balance
 /export_wallet - Export private key (⚠️ Use carefully!)
-/connect_wallet - Connect your created wallet
 /position - View your positions
 /liquidity - Check account health
 
@@ -621,10 +676,10 @@ bot.help((ctx) => {
 /advice - Get personalized advice
 /strategy - Investment strategies
 
-<b>⚙️ Settings:</b>
-/settings - User preferences
-/alerts - Manage price alerts
-/stats - Bot statistics
+
+
+
+
 
 <b>🎯 Natural Language:</b>
 Just type what you want! Examples:
@@ -670,12 +725,14 @@ Address: <code>${address.slice(0, 6)}...${address.slice(-4)}</code>
 
 Now I can provide personalized analysis! Try:
 • /position - View your positions
+• /liquidity - Check account health
+• /wallet_info - Wallet info
+• /wallet_balance - Wallet balance
 • /analyze - AI-powered analysis
 • /liquidity - Check health status`,
     { parse_mode: "HTML" }
   );
 });
-
 // Wallet info command
 bot.command("wallet_info", async (ctx) => {
   const storedWallet = walletService.getUserWallet(ctx.from.id);
@@ -695,10 +752,11 @@ bot.command("wallet_info", async (ctx) => {
 📍 <b>Address:</b> <code>${storedWallet.address}</code>
 📅 <b>Created:</b> ${storedWallet.createdAt.toLocaleDateString()}
 🔗 <b>Status:</b> ${isConnected ? "✅ Connected" : "❌ Not connected"}
+💎 <b>ETH Balance:</b> ${await blockchain.getBalance(storedWallet.address)}
 
 <b>🔧 Actions:</b>
 • /export_wallet - Export private key (⚠️ Use carefully!)
-• /connect_wallet - Connect this wallet to your session
+
 • /wallet_balance - Check wallet balance`;
 
   ctx.reply(walletInfo, { parse_mode: "HTML" });
@@ -706,8 +764,17 @@ bot.command("wallet_info", async (ctx) => {
 
 // Export wallet command (dangerous - should be used carefully)
 bot.command("export_wallet", async (ctx) => {
-  const storedWallet = walletService.getUserWallet(ctx.from.id);
+  // Check rate limit for export operations
+  const limitCheck = rateLimiter.canPerformAction(
+    ctx.from.id,
+    "export_private_key"
+  );
+  if (!limitCheck.allowed) {
+    ctx.reply(`⚠️ Export operations are rate limited. ${limitCheck.message}`);
+    return;
+  }
 
+  const storedWallet = walletService.getUserWallet(ctx.from.id);
   if (!storedWallet) {
     ctx.reply("❌ You don't have a wallet to export.");
     return;
@@ -715,12 +782,70 @@ bot.command("export_wallet", async (ctx) => {
 
   ctx.reply(
     "⚠️ <b>Export Private Key</b>\n\nThis will show your private key. Make sure you're in a private chat and no one can see your screen!",
-    Markup.inlineKeyboard([
-      Markup.button.callback("🔐 Show Private Key", "export_private_key"),
-      Markup.button.callback("📋 Show Mnemonic", "export_mnemonic"),
-      Markup.button.callback("❌ Cancel", "export_cancel"),
-    ])
+    exportKeyboard()
   );
+});
+
+// Set passphrase command for enhanced security
+bot.command("set_passphrase", async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1);
+  if (args.length === 0) {
+    ctx.reply(
+      "🔐 <b>Set Wallet Passphrase</b>\n\nUsage: <code>/set_passphrase your_secure_passphrase</code>\n\n⚠️ <b>Important:</b>\n• Choose a strong, unique passphrase\n• This will be required to export your private keys\n• Cannot be recovered if lost\n• Type in private chat only",
+      { parse_mode: "HTML" }
+    );
+    return;
+  }
+
+  const passphrase = args.join(" ");
+  if (passphrase.length < 8) {
+    ctx.reply("❌ Passphrase must be at least 8 characters long.");
+    return;
+  }
+
+  try {
+    await walletEnhanced.setUserPassphrase(ctx.from.id, passphrase);
+    ctx.reply(
+      "✅ Passphrase set successfully! Your wallet security has been enhanced."
+    );
+
+    // Delete the message containing the passphrase for security
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      // Ignore if we can't delete (might not have permission)
+    }
+  } catch (error) {
+    console.error("Error setting passphrase:", error);
+    ctx.reply("❌ Error setting passphrase. Please try again.");
+  }
+});
+
+// Wallet info command with enhanced keyboard
+bot.command("wallet_info", async (ctx) => {
+  const wallet = walletService.getUserWallet(ctx.from.id);
+  if (!wallet) {
+    ctx.reply("❌ You don't have a wallet. Use /start to create one.");
+    return;
+  }
+
+  const hasPassphrase = walletEnhanced.hasPassphrase(ctx.from.id);
+  const securityLevel = hasPassphrase
+    ? "🔒 Enhanced (Passphrase Protected)"
+    : "🔓 Basic (No Passphrase)";
+
+  const walletInfo = `🏦 <b>Your Wallet Information</b>
+
+📍 <b>Address:</b> <code>${wallet.address}</code>
+🔐 <b>Security Level:</b> ${securityLevel}
+📅 <b>Created:</b> ${wallet.createdAt.toLocaleDateString()}
+
+<b>Quick Actions:</b>`;
+
+  ctx.reply(walletInfo, {
+    parse_mode: "HTML",
+    ...walletKeyboard(),
+  });
 });
 
 bot.action("export_private_key", async (ctx) => {
@@ -757,9 +882,30 @@ bot.action("export_private_key", async (ctx) => {
 bot.action("export_mnemonic", async (ctx) => {
   ctx.answerCbQuery();
   ctx.editMessageReplyMarkup(undefined);
-  ctx.reply(
-    "🔧 Mnemonic phrase export is not available for security reasons. Use private key export instead."
-  );
+
+  const mnemonic = walletService.getMnemonic(ctx.from.id);
+  if (!mnemonic) {
+    ctx.reply("❌ Error retrieving mnemonic phrase.");
+    return;
+  }
+
+  const message = `📋 <b>Your Recovery Phrase (Mnemonic)</b>
+
+<code>${mnemonic}</code>
+
+⚠️ <b>SECURITY WARNING:</b>
+• Never share this phrase with anyone
+• Store it securely offline
+• Anyone with this phrase can access your wallet
+• Delete this message after saving it
+
+<b>This message will be deleted in 60 seconds for security.</b>`;
+
+  const sentMessage = await ctx.reply(message, { parse_mode: "HTML" });
+
+  setTimeout(() => {
+    ctx.deleteMessage(sentMessage.message_id).catch(() => {});
+  }, 60000);
 });
 
 bot.action("export_cancel", (ctx) => {
@@ -768,24 +914,168 @@ bot.action("export_cancel", (ctx) => {
   ctx.reply("❌ Export cancelled.");
 });
 
-// Connect wallet command
-bot.command("connect_wallet", async (ctx) => {
-  const storedWallet = walletService.getUserWallet(ctx.from.id);
+// --- ENHANCED KEYBOARD ACTION HANDLERS ---
 
-  if (!storedWallet) {
-    ctx.reply(
-      "❌ You don't have a wallet to connect. Create one first with /create_wallet."
-    );
+// Wallet keyboard actions
+bot.action("wallet_show_keys", async (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+
+  const limitCheck = rateLimiter.canPerformAction(
+    ctx.from.id,
+    "export_private_key"
+  );
+  if (!limitCheck.allowed) {
+    ctx.reply(`⚠️ Export operations are rate limited. ${limitCheck.message}`);
     return;
   }
 
-  userSessions.setWallet(ctx.from.id, storedWallet.address);
   ctx.reply(
-    `✅ <b>Wallet Connected</b>
+    "⚠️ <b>Export Keys</b>\n\nChoose what to export. Make sure you're in a private chat!",
+    exportKeyboard()
+  );
+});
 
-📍 Address: <code>${storedWallet.address}</code>
+bot.action("wallet_check_balance", async (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
 
-You can now use all wallet features!`,
+  const wallet = walletService.getUserWallet(ctx.from.id);
+  if (!wallet) {
+    ctx.reply("❌ No wallet found.");
+    return;
+  }
+
+  try {
+    const balance = await blockchain.getBalance(wallet.address);
+    ctx.reply(
+      `💰 <b>Wallet Balance</b>\n\n📍 Address: <code>${wallet.address.slice(
+        0,
+        6
+      )}...${wallet.address.slice(-4)}</code>\n💎 Balance: ${balance} ETH`,
+      { parse_mode: "HTML" }
+    );
+  } catch (error) {
+    ctx.reply("❌ Error checking balance.");
+  }
+});
+
+bot.action("wallet_positions", async (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+
+  // Call position handler directly
+  await handlePosition(ctx);
+});
+
+bot.action("wallet_help", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+
+  const helpText = `🏦 <b>Wallet Help</b>
+
+<b>Security Commands:</b>
+• /set_passphrase - Add passphrase protection
+• /export_wallet - Export keys (rate limited)
+
+<b>Write Operations:</b>
+• /supply - Supply tokens to earn interest
+• /borrow - Borrow tokens against collateral
+• /repay - Repay borrowed amounts
+• /redeem - Withdraw supplied tokens
+• /claim - Claim rewards
+• /approve - Approve token spending
+
+<b>Information:</b>
+• /position - View your positions
+• /markets - Browse available markets
+• /wallet_balance - Check ETH balance
+
+<b>Rate Limits:</b>
+Write operations are rate limited for security. Limits reset automatically.`;
+
+  ctx.reply(helpText, { parse_mode: "HTML" });
+});
+
+// Rate limit status command
+bot.command("rate_status", (ctx) => {
+  const writeActions = [
+    "supply",
+    "borrow",
+    "repay",
+    "redeem",
+    "claim",
+    "approve",
+  ];
+  let statusText = "📊 <b>Rate Limit Status</b>\n\n";
+
+  for (const action of writeActions) {
+    const status = rateLimiter.getStatus(ctx.from.id, action);
+    if (status.hasLimit) {
+      const remaining = status.maxAttempts! - (status.currentCount || 0);
+      statusText += `${action}: ${status.currentCount || 0}/${
+        status.maxAttempts
+      } (${remaining} remaining)\n`;
+    }
+  }
+
+  const stats = rateLimiter.getStats();
+  statusText += `\n📈 <b>Global Stats:</b>\nActive users: ${stats.activeUsers}\nTotal tracked: ${stats.totalEntries}`;
+
+  ctx.reply(statusText, { parse_mode: "HTML" });
+});
+
+// Write operations keyboard
+bot.action("write_supply", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "💰 <b>Supply Tokens</b>\n\nUsage: <code>/supply SYMBOL AMOUNT</code>\n\nExample: <code>/supply USDC 100</code>",
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.action("write_borrow", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "📉 <b>Borrow Tokens</b>\n\nUsage: <code>/borrow SYMBOL AMOUNT</code>\n\nExample: <code>/borrow USDT 50</code>",
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.action("write_repay", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "💸 <b>Repay Borrowed Amount</b>\n\nUsage: <code>/repay SYMBOL AMOUNT</code>\n\nExample: <code>/repay USDT 50</code>",
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.action("write_redeem", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "🔄 <b>Redeem Supplied Tokens</b>\n\nUsage: <code>/redeem SYMBOL AMOUNT</code>\n\nExample: <code>/redeem USDC 100</code>",
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.action("write_claim", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "🎁 <b>Claim Rewards</b>\n\nUsage: <code>/claim SYMBOL</code>\n\nExample: <code>/claim USDC</code>",
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.action("write_approve", (ctx) => {
+  ctx.answerCbQuery();
+  ctx.editMessageReplyMarkup(undefined);
+  ctx.reply(
+    "✅ <b>Approve Token Spending</b>\n\nUsage: <code>/approve SYMBOL AMOUNT</code>\n\nExample: <code>/approve USDC 1000</code>",
     { parse_mode: "HTML" }
   );
 });
@@ -912,7 +1202,7 @@ bot.command("liquidity", async (ctx) => {
   const session = userSessions.getSession(ctx.from.id);
 
   if (!session.walletAddress) {
-    ctx.reply("❌ Please set your wallet first: `/wallet <address>`");
+    ctx.reply("❌ Please set your wallet first: `/wallet &lt;address&gt;`");
     return;
   }
 
@@ -1097,6 +1387,113 @@ bot.on("text", async (ctx) => {
 
 // Keyboard button handlers disabled - using commands only for now
 
+// --- WRITE COMMANDS VIA ELIZAOS WITH RATE LIMITING ---
+if (eliza) {
+  // Helper function for rate-limited write operations
+  const executeWriteWithLimits = async (
+    ctx: any,
+    action: string,
+    symbol: string,
+    amountStr: string
+  ) => {
+    // Check rate limit
+    const limitCheck = rateLimiter.canPerformAction(ctx.from.id, action);
+    if (!limitCheck.allowed) {
+      ctx.reply(`⚠️ ${limitCheck.message}`);
+      return;
+    }
+
+    const wallet = walletService.getUserWallet(ctx.from.id);
+    if (!wallet) {
+      ctx.reply("❌ No wallet found. Use /start to create one.");
+      return;
+    }
+
+    // Record the attempt
+    rateLimiter.recordAttempt(ctx.from.id, action);
+
+    ctx.reply(`⏳ Submitting ${action} transaction...`);
+    try {
+      const txHash = await eliza.executeWrite(
+        action,
+        { symbol, amount: amountStr },
+        wallet.address
+      );
+
+      const remainingInfo =
+        limitCheck.remainingAttempts !== undefined
+          ? `\n\n📊 Remaining ${action} attempts: ${limitCheck.remainingAttempts}`
+          : "";
+
+      ctx.reply(
+        `✅ ${
+          action.charAt(0).toUpperCase() + action.slice(1)
+        } submitted! TX: <code>${txHash}</code>${remainingInfo}`,
+        {
+          parse_mode: "HTML",
+        }
+      );
+    } catch (error) {
+      console.error(`${action} error`, error);
+      ctx.reply(`❌ Failed to submit ${action} transaction.`);
+    }
+  };
+
+  bot.command("supply", async (ctx) => {
+    const [_, symbol, amountStr] = ctx.message.text.split(" ");
+    if (!symbol || !amountStr) {
+      ctx.reply("Usage: /supply <symbol> <amount>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "supply", symbol, amountStr);
+  });
+
+  bot.command("borrow", async (ctx) => {
+    const [_, symbol, amountStr] = ctx.message.text.split(" ");
+    if (!symbol || !amountStr) {
+      ctx.reply("Usage: /borrow <symbol> <amount>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "borrow", symbol, amountStr);
+  });
+
+  bot.command("repay", async (ctx) => {
+    const [_, symbol, amountStr] = ctx.message.text.split(" ");
+    if (!symbol || !amountStr) {
+      ctx.reply("Usage: /repay <symbol> <amount>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "repay", symbol, amountStr);
+  });
+
+  bot.command("redeem", async (ctx) => {
+    const [_, symbol, amountStr] = ctx.message.text.split(" ");
+    if (!symbol || !amountStr) {
+      ctx.reply("Usage: /redeem <symbol> <amount>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "redeem", symbol, amountStr);
+  });
+
+  bot.command("claim", async (ctx) => {
+    const [_, symbol] = ctx.message.text.split(" ");
+    if (!symbol) {
+      ctx.reply("Usage: /claim <symbol>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "claim", symbol, "0");
+  });
+
+  bot.command("approve", async (ctx) => {
+    const [_, symbol, amountStr] = ctx.message.text.split(" ");
+    if (!symbol || !amountStr) {
+      ctx.reply("Usage: /approve <symbol> <amount>");
+      return;
+    }
+    await executeWriteWithLimits(ctx, "approve", symbol, amountStr);
+  });
+}
+
 // Error handling
 bot.catch((err, ctx) => {
   console.error("Bot error:", err);
@@ -1141,4 +1538,5 @@ initializeBot().catch((error) => {
 // Clean up old sessions periodically (every 24 hours)
 setInterval(() => {
   userSessions.cleanupOldSessions();
+  rateLimiter.cleanup(); // Also cleanup expired rate limit entries
 }, 24 * 60 * 60 * 1000);

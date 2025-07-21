@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "canisters": {
+    "peridot_monitor": {
+      "type": "rust",
+      "package": "peridot_monitor",
+      "candid": "src/peridot_monitor/peridot_monitor.did",
+      "init_arg_file": "initArgument.did"
+    },
+    "evm_rpc": {
+      "type": "pull",
+      "id": "7hfb6-caaaa-aaaar-qadga-cai"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:4943",
+      "type": "ephemeral",
+      "replica": {
+        "subnet_type": "system"
+      }
+    },
+    "ic": {
+      "providers": ["https://icp0.io", "https://ic0.app"],
+      "type": "persistent"
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
+ 

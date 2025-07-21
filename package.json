@@ -19,8 +19,11 @@
   "author": "Peridot Team",
   "license": "MIT",
   "dependencies": {
+    "@elizaos/plugin-bootstrap": "1.0.15",
+    "@elizaos/plugin-openai": "1.0.6",
+    "@elizaos/plugin-telegram": "1.0.4",
     "@google-cloud/functions-framework": "^4.0.0",
-    "axios": "^1.6.2",
+    "axios": "^1.10.0",
     "dotenv": "^16.3.1",
     "ethers": "^5.7.2",
     "openai": "^4.20.1",

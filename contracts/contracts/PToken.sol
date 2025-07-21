@@ -7,6 +7,7 @@ import "./ErrorReporter.sol";
 import "./EIP20Interface.sol";
 import "./InterestRateModel.sol";
 import "./ExponentialNoError.sol";
+import "./PeridottrollerStorage.sol";
 
 /**
  * @title Peridot's PToken Contract
@@ -1347,6 +1348,187 @@ abstract contract PToken is
 
         return NO_ERROR;
     }
+
+    /*** Flash Loan Functions ***/
+
+    /**
+     * @notice Returns the maximum amount available for flash loan for a given token
+     * @param token The address of the token to flash loan
+     * @return The maximum amount available for flash loan
+     */
+    function maxFlashLoan(
+        address token
+    ) external view override returns (uint256) {
+        // Only allow flash loans of the underlying token
+        if (token != getUnderlyingAddress()) {
+            return 0;
+        }
+
+        // If flash loans are paused, return 0
+        if (flashLoansPaused) {
+            return 0;
+        }
+
+        uint256 cash = getCashPrior();
+        uint256 maxAmount = (cash * maxFlashLoanRatio) / 10000;
+
+        return maxAmount;
+    }
+
+    /**
+     * @notice Returns the fee for a flash loan of the given amount
+     * @param token The address of the token to flash loan
+     * @param amount The amount to flash loan
+     * @return The fee for the flash loan
+     */
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view override returns (uint256) {
+        // Only allow flash loans of the underlying token
+        require(
+            token == getUnderlyingAddress(),
+            "FlashLoan: token not supported"
+        );
+
+        return (amount * flashLoanFeeBps) / 10000;
+    }
+
+    /**
+     * @notice Executes a flash loan
+     * @param receiver The contract that will receive the flash loan
+     * @param token The address of the token to flash loan
+     * @param amount The amount to flash loan
+     * @param data Arbitrary data to pass to the receiver
+     * @return True if the flash loan was successful
+     */
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external override nonReentrant returns (bool) {
+        // Only allow flash loans of the underlying token
+        require(
+            token == getUnderlyingAddress(),
+            "FlashLoan: token not supported"
+        );
+
+        // Check if flash loans are paused
+        require(!flashLoansPaused, "FlashLoan: flash loans are paused");
+
+        // Check if amount is within limits
+        require(
+            amount <= this.maxFlashLoan(token),
+            "FlashLoan: amount exceeds maximum"
+        );
+
+        // Calculate fee
+        uint256 fee = (amount * flashLoanFeeBps) / 10000;
+
+        // Accrue interest to ensure fresh state
+        accrueInterest();
+
+        // Get cash balance before
+        uint256 balanceBefore = getCashPrior();
+
+        // Check sufficient liquidity
+        require(balanceBefore >= amount, "FlashLoan: insufficient liquidity");
+
+        // Transfer tokens to receiver
+        doTransferOut(payable(address(receiver)), amount);
+
+        // Execute the flash loan callback
+        require(
+            receiver.onFlashLoan(msg.sender, token, amount, fee, data) ==
+                keccak256("ERC3156FlashBorrower.onFlashLoan"),
+            "FlashLoan: invalid callback return"
+        );
+
+        // Get cash balance after
+        uint256 balanceAfter = getCashPrior();
+
+        // Ensure the loan + fee was repaid
+        require(
+            balanceAfter >= balanceBefore + fee,
+            "FlashLoan: loan not repaid"
+        );
+
+        // Update reserves with fee (protocol keeps the fee)
+        if (fee > 0) {
+            totalReserves = totalReserves + fee;
+        }
+
+        // Emit flash loan event
+        emit FlashLoan(address(receiver), token, amount, fee);
+
+        return true;
+    }
+
+    /**
+     * @notice Admin function to set flash loan fee
+     * @param newFeeBps New fee in basis points (1 = 0.01%)
+     */
+    function _setFlashLoanFee(uint newFeeBps) external returns (uint) {
+        // Check caller is admin
+        require(msg.sender == admin, "Only admin can set flash loan fee");
+
+        // Fee cannot exceed 1% (100 basis points)
+        require(newFeeBps <= 100, "Flash loan fee too high");
+
+        uint oldFeeBps = flashLoanFeeBps;
+        flashLoanFeeBps = newFeeBps;
+
+        emit NewFlashLoanFee(oldFeeBps, newFeeBps);
+
+        return NO_ERROR;
+    }
+
+    /**
+     * @notice Admin function to set maximum flash loan ratio
+     * @param newMaxRatio New maximum ratio in basis points (10000 = 100%)
+     */
+    function _setMaxFlashLoanRatio(uint newMaxRatio) external returns (uint) {
+        // Check caller is admin
+        require(msg.sender == admin, "Only admin can set max flash loan ratio");
+
+        // Ratio cannot exceed 100% (10000 basis points)
+        require(newMaxRatio <= 10000, "Flash loan ratio too high");
+
+        uint oldMaxRatio = maxFlashLoanRatio;
+        maxFlashLoanRatio = newMaxRatio;
+
+        emit NewMaxFlashLoanRatio(oldMaxRatio, newMaxRatio);
+
+        return NO_ERROR;
+    }
+
+    /**
+     * @notice Admin function to pause/unpause flash loans
+     * @param state True to pause, false to unpause
+     */
+    function _setFlashLoansPaused(bool state) external returns (bool) {
+        // Check caller is admin or pause guardian
+        if (
+            !(msg.sender == admin ||
+                msg.sender ==
+                PeridottrollerV2Storage(address(peridottroller))
+                    .pauseGuardian())
+        ) {
+            return false;
+        }
+
+        flashLoansPaused = state;
+        emit FlashLoansPaused(state);
+
+        return true;
+    }
+
+    /**
+     * @notice Get the underlying token address (to be implemented in derived contracts)
+     * @return The address of the underlying token
+     */
+    function getUnderlyingAddress() internal view virtual returns (address);
 
     /*** Safe Token ***/
 

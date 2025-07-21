@@ -42,7 +42,7 @@ contract SimplePriceOracle is PriceOracle {
         PToken pToken
     ) private view returns (address) {
         address asset;
-        if (peridotareStrings(pToken.symbol(), "pETH")) {
+        if (compareStrings(pToken.symbol(), "pETH")) {
             asset = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
         } else {
             asset = address(PErc20(address(pToken)).underlying());
@@ -58,11 +58,11 @@ contract SimplePriceOracle is PriceOracle {
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 roundId,
+                uint80 /* roundId */,
                 int256 price,
-                uint256 startedAt,
+                uint256 /* startedAt */,
                 uint256 updatedAt,
-                uint80 answeredInRound
+                uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
                 if (
@@ -140,11 +140,11 @@ contract SimplePriceOracle is PriceOracle {
 
             if (address(aggregator) != address(0)) {
                 try aggregator.latestRoundData() returns (
-                    uint80 roundId,
+                    uint80 /* roundId */,
                     int256 price,
-                    uint256 startedAt,
+                    uint256 /* startedAt */,
                     uint256 updatedAt,
-                    uint80 answeredInRound
+                    uint80 /* answeredInRound */
                 ) {
                     if (
                         block.timestamp - updatedAt <=
@@ -198,11 +198,11 @@ contract SimplePriceOracle is PriceOracle {
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 roundId,
+                uint80 /* roundId */,
                 int256 price,
-                uint256 startedAt,
+                uint256 /* startedAt */,
                 uint256 updatedAt,
-                uint80 answeredInRound
+                uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
                 if (
@@ -289,7 +289,7 @@ contract SimplePriceOracle is PriceOracle {
         }
     }
 
-    function peridotareStrings(
+    function compareStrings(
         string memory a,
         string memory b
     ) internal pure returns (bool) {

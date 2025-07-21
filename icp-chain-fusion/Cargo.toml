@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "src/peridot_monitor",
+]
+resolver = "2"
+
+[workspace.dependencies]
+candid = "0.10"
+ic-cdk = "0.14"
+ic-cdk-timers = "0.11"
+ic-stable-structures = "0.6.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+alloy = { git = "https://github.com/ic-alloy/ic-alloy.git", tag = "v0.3.5-icp.1", default-features = false, features = ["icp", "sol-types", "json", "contract"] }
+getrandom = { version = "0.2.15", features = ["custom"] }
+evm-rpc-canister-types = "5.0.1"
+hex = "0.4"
+anyhow = "1.0"
+num-traits = "0.2"
+minicbor = { version = "0.24.0", features = ["alloc", "derive"] }
+minicbor-derive = "0.15.0"
+serde_bytes = "0.11.14"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true 

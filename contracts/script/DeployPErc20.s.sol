@@ -20,20 +20,20 @@ contract DeployPErc20Delegator is Script {
     // --- CONFIGURATION ---
     // !!! IMPORTANT: Replace these placeholders !!!
     address constant UNDERLYING_ERC20_ADDRESS =
-        0xa41D586530BC7BC872095950aE03a780d5114445; // Address of the underlying ERC20 (e.g., USDC)
+        0x6fE981Dbd557f81ff66836af0932cba535Cbc343; // Address of the underlying ERC20 (e.g., USDC)
     address constant COMPTROLLER_ADDRESS =
-        0xe797A0001A3bC1B2760a24c3D7FDD172906bCCd6; // Address of the deployed Unitroller proxy
+        0xa41D586530BC7BC872095950aE03a780d5114445; // Address of the deployed Unitroller proxy
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0xf66037a2b7aDA645f22523E0dDb461c9012125d1; // Address of the deployed InterestRateModel
+        0x2d271dEb2596d78aaa2551695Ebfa9Cd440713aC; // Address of the deployed InterestRateModel
 
     // PToken Parameters (Adjust as needed)
     // Initial exchange rate = (underlying / pToken) * 10^(18 + underlyingDecimals - pTokenDecimals)
-    // Let's use the standard initial exchange rate = 2 * 10^(18 + underlying_decimals - ptoken_decimals)
     // Example USDC (6 dec), pUSDC (8 dec): 2 * 10^(18 + 6 - 8) = 2 * 10^16 = 2e16
     // A common starting point: initial exchange rate of 0.02 corresponds to 2e16 mantissa (assuming 18 decimals for mantissa)
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e16; // Example: Initial exchange rate of 0.02, scaled by 1e18. Adjust based on decimals! Needs careful calculation.
-    string constant PTOKEN_NAME = "Peridot PUSD"; // e.g., "Peridot USDC"
-    string constant PTOKEN_SYMBOL = "pPUSD"; // e.g., "pUSDC"
+    // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26; // Example: Initial exchange rate of 0.02, scaled by 1e18. Adjust based on decimals! Needs careful calculation.
+    string constant PTOKEN_NAME = "Peridot Chainlink"; // e.g., "Peridot USDC"
+    string constant PTOKEN_SYMBOL = "pLINK"; // e.g., "pUSDC"
     uint8 constant PTOKEN_DECIMALS = 8; // Standard PToken decimals
 
     address admin = msg.sender; // Admin/Owner address

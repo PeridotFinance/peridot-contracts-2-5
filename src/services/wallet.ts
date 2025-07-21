@@ -11,6 +11,7 @@ export interface GeneratedWallet {
 export interface StoredWallet {
   address: string;
   encryptedPrivateKey: string;
+  encryptedMnemonic: string;
   createdAt: Date;
   userId: number;
 }
@@ -57,6 +58,16 @@ export class WalletService {
   }
 
   /**
+   * Decrypt mnemonic
+   */
+  private decryptMnemonic(
+    encryptedMnemonic: string,
+    userId: number
+  ): string {
+    return this.decryptPrivateKey(encryptedMnemonic, userId);
+  }
+
+  /**
    * Create and store a wallet for a user
    */
   createWalletForUser(userId: number): GeneratedWallet {
@@ -67,10 +78,12 @@ export class WalletService {
       wallet.privateKey,
       userId
     );
+    const encryptedMnemonic = this.encryptPrivateKey(wallet.mnemonic, userId);
 
     const storedWallet: StoredWallet = {
       address: wallet.address,
       encryptedPrivateKey,
+      encryptedMnemonic,
       createdAt: new Date(),
       userId,
     };
@@ -101,6 +114,20 @@ export class WalletService {
       return this.decryptPrivateKey(wallet.encryptedPrivateKey, userId);
     } catch (error) {
       console.error("Error decrypting private key:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get mnemonic for a user
+   */
+  getMnemonic(userId: number): string | null {
+    const wallet = this.wallets.get(userId);
+    if (!wallet) return null;
+    try {
+      return this.decryptMnemonic(wallet.encryptedMnemonic, userId);
+    } catch (error) {
+      console.error("Error decrypting mnemonic:", error);
       return null;
     }
   }

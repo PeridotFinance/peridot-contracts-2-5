@@ -132,6 +132,17 @@ contract PEther is PToken {
         mintInternal(msg.value);
     }
 
+    /*** Flash Loan Support ***/
+
+    /**
+     * @notice Returns the underlying token address for flash loans
+     * @dev For ETH markets, returns the ETH sentinel address
+     * @return The address representing ETH for flash loans
+     */
+    function getUnderlyingAddress() internal pure override returns (address) {
+        return 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // ETH sentinel address
+    }
+
     /*** Safe Token ***/
 
     /**

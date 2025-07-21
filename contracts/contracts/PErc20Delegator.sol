@@ -578,6 +578,64 @@ contract PErc20Delegator is
         return abi.decode(data, (uint));
     }
 
+    /*** Flash Loan Functions ***/
+
+    /**
+     * @notice Returns the maximum amount available for flash loan
+     * @param token The address of the token to flash loan
+     * @return The maximum amount available for flash loan
+     */
+    function maxFlashLoan(
+        address token
+    ) external view override returns (uint256) {
+        bytes memory data = delegateToViewImplementation(
+            abi.encodeWithSignature("maxFlashLoan(address)", token)
+        );
+        return abi.decode(data, (uint256));
+    }
+
+    /**
+     * @notice Returns the fee for a flash loan of the given amount
+     * @param token The address of the token to flash loan
+     * @param amount The amount to flash loan
+     * @return The fee for the flash loan
+     */
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view override returns (uint256) {
+        bytes memory data = delegateToViewImplementation(
+            abi.encodeWithSignature("flashFee(address,uint256)", token, amount)
+        );
+        return abi.decode(data, (uint256));
+    }
+
+    /**
+     * @notice Executes a flash loan
+     * @param receiver The contract that will receive the flash loan
+     * @param token The address of the token to flash loan
+     * @param amount The amount to flash loan
+     * @param data Arbitrary data to pass to the receiver
+     * @return True if the flash loan was successful
+     */
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external override returns (bool) {
+        bytes memory returnData = delegateToImplementation(
+            abi.encodeWithSignature(
+                "flashLoan(address,address,uint256,bytes)",
+                receiver,
+                token,
+                amount,
+                data
+            )
+        );
+        return abi.decode(returnData, (bool));
+    }
+
     /**
      * @notice Internal method to delegate execution to another contract
      * @dev It returns to the external caller whatever the implementation returns or forwards reverts

@@ -1,0 +1,1 @@
+RefMut<'_, StableBTreeMap<std::string::String, UserPosition, VirtualMemory<Ic0StableMemory>>>

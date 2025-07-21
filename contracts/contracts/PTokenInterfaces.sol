@@ -6,6 +6,33 @@ import "./InterestRateModel.sol";
 import "./EIP20NonStandardInterface.sol";
 import "./ErrorReporter.sol";
 
+// Add ERC-3156 imports
+interface IERC3156FlashBorrower {
+    function onFlashLoan(
+        address initiator,
+        address token,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata data
+    ) external returns (bytes32);
+}
+
+interface IERC3156FlashLender {
+    function maxFlashLoan(address token) external view returns (uint256);
+
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view returns (uint256);
+
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool);
+}
+
 contract PTokenStorage {
     /**
      * @dev Guard variable for re-entrancy checks
@@ -109,6 +136,24 @@ contract PTokenStorage {
      * @notice Share of seized collateral that is added to reserves
      */
     uint public constant protocolSeizeShareMantissa = 2.8e16; //2.8%
+
+    /*** Flash Loan Storage ***/
+
+    /**
+     * @notice Flash loan fee rate (in basis points). 1 = 0.01%
+     */
+    uint public flashLoanFeeBps;
+
+    /**
+     * @notice Maximum flash loan amount as a percentage of total cash (in basis points)
+     * 10000 = 100% of available cash
+     */
+    uint public maxFlashLoanRatio;
+
+    /**
+     * @notice Whether flash loans are paused
+     */
+    bool public flashLoansPaused;
 }
 
 abstract contract PTokenInterface is PTokenStorage {
@@ -235,6 +280,33 @@ abstract contract PTokenInterface is PTokenStorage {
      */
     event Approval(address indexed owner, address indexed spender, uint amount);
 
+    /*** Flash Loan Events ***/
+
+    /**
+     * @notice Event emitted when a flash loan is executed
+     */
+    event FlashLoan(
+        address indexed receiver,
+        address indexed token,
+        uint256 amount,
+        uint256 fee
+    );
+
+    /**
+     * @notice Event emitted when flash loan fee is changed
+     */
+    event NewFlashLoanFee(uint oldFeeBps, uint newFeeBps);
+
+    /**
+     * @notice Event emitted when maximum flash loan ratio is changed
+     */
+    event NewMaxFlashLoanRatio(uint oldMaxRatio, uint newMaxRatio);
+
+    /**
+     * @notice Event emitted when flash loans are paused/unpaused
+     */
+    event FlashLoansPaused(bool paused);
+
     /*** User Interface ***/
 
     function transfer(address dst, uint amount) external virtual returns (bool);
@@ -312,6 +384,24 @@ abstract contract PTokenInterface is PTokenStorage {
     function _setInterestRateModel(
         InterestRateModel newInterestRateModel
     ) external virtual returns (uint);
+
+    /*** Flash Loan Functions ***/
+
+    function maxFlashLoan(
+        address token
+    ) external view virtual returns (uint256);
+
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view virtual returns (uint256);
+
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external virtual returns (bool);
 }
 
 contract PErc20Storage {

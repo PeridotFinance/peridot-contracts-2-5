@@ -10,9 +10,9 @@ import {Ownable} from "../node_modules/@openzeppelin/contracts/access/Ownable.so
 contract USDT is ERC20, ERC20Burnable, Ownable, ERC20Permit {
     constructor(
         address initialOwner
-    ) ERC20("USD tETHER", "USDT") Ownable(initialOwner) ERC20Permit("USDT") {}
+    ) ERC20("Peridot USD", "PUSD") Ownable(initialOwner) ERC20Permit("PUSD") {}
 
-    function mint(address to, uint256 amount) public {
+    function mint(address to, uint256 amount) public onlyOwner {
         _mint(to, amount);
     }
 }
