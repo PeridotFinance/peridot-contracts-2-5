@@ -1,0 +1,13 @@
+/home/josh/peridot-ccip/icp-chain-fusion/target/debug/deps/liballoy_serde-d1672e93cfa0dc2e.rmeta: /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/lib.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/bool.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/optional.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/num.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/quantity.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/storage.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/ttd.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/other/mod.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/../README.md
+
+/home/josh/peridot-ccip/icp-chain-fusion/target/debug/deps/alloy_serde-d1672e93cfa0dc2e.d: /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/lib.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/bool.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/optional.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/num.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/quantity.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/storage.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/ttd.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/other/mod.rs /home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/../README.md
+
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/lib.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/bool.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/optional.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/num.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/quantity.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/storage.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/ttd.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/other/mod.rs:
+/home/josh/.cargo/git/checkouts/ic-alloy-359b4e0581e10759/47a9d0b/crates/serde/src/../README.md:

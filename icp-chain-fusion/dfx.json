@@ -5,11 +5,25 @@
       "type": "rust",
       "package": "peridot_monitor",
       "candid": "src/peridot_monitor/peridot_monitor.did",
-      "init_arg_file": "initArgument.did"
+      "init_arg_file": "initArgument.did",
+      "dependencies": ["evm_rpc"],
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ]
     },
     "evm_rpc": {
-      "type": "pull",
-      "id": "7hfb6-caaaa-aaaar-qadga-cai"
+      "type": "custom",
+      "candid": "https://github.com/dfinity/evm-rpc-canister/releases/latest/download/evm_rpc.did",
+      "wasm": "https://github.com/dfinity/evm-rpc-canister/releases/latest/download/evm_rpc.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "7hfb6-caaaa-aaaar-qadga-cai"
+        }
+      },
+      "specified_id": "7hfb6-caaaa-aaaar-qadga-cai",
+      "init_arg": "(record { logFilter = opt variant { HideAll }})"
     }
   },
   "defaults": {
@@ -34,4 +48,3 @@
   "output_env_file": ".env",
   "version": 1
 }
- 

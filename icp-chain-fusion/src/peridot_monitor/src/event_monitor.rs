@@ -289,7 +289,7 @@ async fn update_market_state_from_event(event: &EventLog) -> Result<(), String> 
 
 fn get_chain_config(chain_id: ChainId) -> Result<(String, Vec<String>), String> {
     match chain_id {
-        41454 => {
+        10143 => {
             // Monad testnet
             Ok((
                 "https://testnet-rpc.monad.xyz".to_string(),

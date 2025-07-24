@@ -16,10 +16,35 @@ type InitArg = record {
     };
 };
 
+type ApiResult = variant {
+    ok : text;
+    err : text;
+};
+
 service : (InitArg) -> {
+    // ===== EXISTING API FUNCTIONS =====
     get_evm_address : () -> (opt text) query;
     get_user_position : (text, nat64) -> (opt text) query;
     get_market_state : (nat64) -> (opt text) query;
     get_liquidation_opportunities : (nat64) -> (vec text) query;
     get_cross_chain_rates : () -> (text) query;
+    
+    // ===== NEW ENHANCED API FUNCTIONS =====
+    get_enhanced_user_position : (text) -> (ApiResult) query;
+    get_cross_chain_market_summary : () -> (ApiResult) query;
+    get_chain_analytics : (nat64) -> (ApiResult) query;
+    get_liquidation_opportunities_enhanced : () -> (ApiResult) query;
+    
+    // ===== CROSS-CHAIN TRANSACTION FUNCTIONS =====
+    execute_cross_chain_supply : (text, nat64, nat64, text, text, nat64, nat64) -> (ApiResult);
+    execute_cross_chain_borrow : (text, nat64, nat64, text, text, nat64, nat64) -> (ApiResult);
+    execute_cross_chain_liquidation : (text, nat64, nat64, text, text, text, text, nat64, nat64) -> (ApiResult);
+    
+    // ===== GAS ESTIMATION AND UTILITIES =====
+    estimate_cross_chain_gas : (text, nat64, nat64, text, text) -> (ApiResult) query;
+    
+    // ===== TESTING AND DEBUG FUNCTIONS =====
+    get_canister_status : () -> (text) query;
+    start_enhanced_monitoring : () -> (text);
+    test_chain_fusion_manager : () -> (text) query;
 } 

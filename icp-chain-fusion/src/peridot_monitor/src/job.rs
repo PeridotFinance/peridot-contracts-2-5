@@ -147,8 +147,8 @@ fn get_chain_id_from_log(log: &Log) -> u64 {
     let address = log.address();
     match address.to_string().as_str() {
         "0xe797a0001a3bc1b2760a24c3d7fdd172906bccd6" => 97,    // BNB testnet
-        "0xa41d586530bc7bc872095950ae03a780d5114445" => 41454, // Monad testnet
-        _ => 41454, // Default to Monad testnet
+        "0xa41d586530bc7bc872095950ae03a780d5114445" => 10143, // Monad testnet
+        _ => 10143, // Default to Monad testnet
     }
 }
 

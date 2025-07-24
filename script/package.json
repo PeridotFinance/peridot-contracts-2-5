@@ -4,7 +4,8 @@
   "description": "A script to update the LINK price on the SimplePriceOracle contract.",
   "main": "update-link-price.js",
   "scripts": {
-    "start": "node update-link-price.js"
+    "start": "node update-link-price.js",
+    "liquidation-bot": "node liquidation-bot.js"
   },
   "dependencies": {
     "@uniswap/sdk-core": "^4.0.1",

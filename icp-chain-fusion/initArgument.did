@@ -1,32 +1,51 @@
 (
   record {
-    // ecdsa_key_id specifies the threshold key to use for signing transactions.
-    // currently, it is set to the key only present when running dfx locally.
+    // ===== ICP CONFIGURATION =====
     ecdsa_key_id = record {
-      name = "dfx_test_key";
+      name = "dfx_test_key";    // Use "key_1" for mainnet
       curve = variant { secp256k1 };
     };
-    // rpc_service specifies the RPC service to use for interacting with the EVM.
+    
+    // ===== TARGET CHAIN: MONAD TESTNET (Where Peridot contracts are deployed) =====
     rpc_service = variant {
       Custom = record {
         url = "https://testnet-rpc.monad.xyz";
         headers = null;
       }
     };
-    // filter_addresses specifies the contract addresses we'd like to listen on for events
+    chain_id = 10143 : nat64;   // Monad Testnet (CORRECTED)
+    
+    // ===== PERIDOT CONTRACT ADDRESSES ON MONAD =====
     filter_addresses = vec { 
-      "0xa41D586530BC7BC872095950aE03a780d5114445";  // Monad Peridot contract
-      "0xe797A0001A3bC1B2760a24c3D7FDD172906bCCd6";  // BNB Peridot contract
+      "0xa41D586530BC7BC872095950aE03a780d5114445";  // Monad Peridot Controller
+      "0x28fE679719e740D15FC60325416bB43eAc50cD15";  // Mock Monad USDC pToken
     };
-    // chain_id specifies the chain ID of the EVM we're interacting with.
-    chain_id = 41454 : nat64;  // Monad testnet
-    // filter_events specifies the events we'd like to listen to on the EVM.
+    
+    // ===== PERIDOT EVENTS TO MONITOR ON MONAD =====
     filter_events = vec { 
-      "Mint(address,uint256,uint256)";
-      "Redeem(address,uint256,uint256)";
-      "Borrow(address,uint256,uint256,uint256)";
-      "RepayBorrow(address,address,uint256,uint256,uint256)";
-      "LiquidateBorrow(address,address,uint256,address,uint256)";
+      "Mint(address,uint256,uint256)";                    // Supply events
+      "Redeem(address,uint256,uint256)";                 // Redeem events  
+      "Borrow(address,uint256,uint256,uint256)";         // Borrow events
+      "RepayBorrow(address,address,uint256,uint256)";    // Repay events
+      "LiquidateBorrow(address,address,address,uint256,uint256)"; // Liquidation events
+      "Transfer(address,address,uint256)";               // Token transfers
     };
+    
+    // ===== CROSS-CHAIN SOURCE CHAIN CONFIGURATION (BNB TESTNET ONLY) =====
+    // Users from BNB Testnet (Chain ID: 97) can interact with Monad Peridot
+    // This simplified configuration focuses on one testnet for initial testing
+    
+    // The canister will:
+    // 1. Accept transactions from users on BNB Testnet (97)
+    // 2. Use threshold ECDSA to sign transactions on Monad Testnet (41454)
+    // 3. Execute supply/borrow/liquidate operations on Monad Peridot
+    // 4. Handle cross-chain asset bridging between BNB and Monad
+    
+    // Supported Assets on BNB Testnet:
+    // - USDC: 0xD3b07a7E4E8E8A3B1C8F5A2B7E9F4E5D6C8A9B1C (mock)
+    // - BNB: 0x0000000000000000000000000000000000000000 (native)
+    // - BUSD: 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7 (mock)
+    
+    // NOTE: Using BNB testnet only for focused testing
   }
 ) 

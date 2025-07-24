@@ -68,25 +68,46 @@ contract DeploySimplePriceOracle is Script {
     }
 
     function _configureMainnet(address deployer) internal {
-        console.log("Configuring for Ethereum Mainnet");
+        console.log("Configuring for Monad Testnet");
 
         ChainlinkFeeds memory feeds = ChainlinkFeeds({
-            ethUsd: 0x0c76859E85727683Eeba0C70Bc2e0F5781337818,
-            btcUsd: 0x2Cd9D7E85494F68F5aF08EF96d6FD5e8F71B4d31,
-            usdcUsd: 0x70BB0758a38ae43418ffcEd9A25273dd4e804D15,
-            usdtUsd: 0x14eE6bE30A91989851Dc23203E41C804D4D71441,
-            linkUsd: 0x4682035965Cd2B88759193ee2660d8A0766e1391
+            ethUsd: 0x0c76859E85727683Eeba0C70Bc2e0F5781337818, // ETH/USD Chainlink feed
+            btcUsd: 0x2Cd9D7E85494F68F5aF08EF96d6FD5e8F71B4d31, // BTC/USD Chainlink feed
+            usdcUsd: 0x70BB0758a38ae43418ffcEd9A25273dd4e804D15, // USDC/USD Chainlink feed
+            usdtUsd: 0x14eE6bE30A91989851Dc23203E41C804D4D71441, // USDT/USD Chainlink feed
+            linkUsd: address(0) // Skip LINK - will be handled by your script
         });
 
         AssetAddresses memory assets = AssetAddresses({
-            weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37,
-            wbtc: 0xcf5a6076cfa32686c0Df13aBaDa2b40dec133F1d,
-            usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea,
-            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D,
-            link: 0x514910771AF9Ca656af840dff83E8264EcF986CA
+            weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37, // WETH from addresses.MD
+            wbtc: 0xcf5a6076cfa32686c0Df13aBaDa2b40dec133F1d, // WBTC from addresses.MD
+            usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea, // USDC from addresses.MD
+            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // USDT from addresses.MD
+            link: address(0) // Skip LINK - will be handled by your script
         });
 
         _registerChainlinkFeeds(feeds, assets);
+
+        // Set USD stablecoins to $1.00 (1e18 = $1.00 with 18 decimals)
+        console.log("Setting USD stablecoins to $1.00...");
+        oracle.setDirectPrice(assets.usdc, 1e18); // $1.00 for USDC
+        oracle.setDirectPrice(assets.usdt, 1e18); // $1.00 for USDT
+
+        // Set PUSD to $1.00 as well
+        address pusd = 0xc55c86ef14Dc7A058895659CC11c97C344bF6e7B; // PUSD from addresses.MD
+        oracle.setDirectPrice(pusd, 1e18); // $1.00 for PUSD
+
+        // Set rUSDC to $1.00 as well
+        address rUsdc = 0x400A417fEDEef43Fc5b8be0D8cD6DF687847Ee8D; // rUSDC from addresses.MD
+        oracle.setDirectPrice(rUsdc, 1e18); // $1.00 for rUSDC
+
+        console.log("USD stablecoins set to $1.00");
+        console.log(
+            "Note: LINK prices will be updated by your automated script"
+        );
+        console.log(
+            "Note: WMON prices should be set manually or via separate script"
+        );
     }
 
     function _configureGoerli(address deployer) internal {

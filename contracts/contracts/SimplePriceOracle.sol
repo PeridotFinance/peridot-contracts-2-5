@@ -4,6 +4,7 @@ pragma solidity ^0.8.10;
 import "./PriceOracle.sol";
 import "./PErc20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract SimplePriceOracle is PriceOracle {
     mapping(address => uint) prices;
@@ -190,6 +191,34 @@ contract SimplePriceOracle is PriceOracle {
 
     function setOwner(address _newOwner) public onlyOwner {
         owner = _newOwner;
+    }
+
+    // Remove a Chainlink price feed for an asset
+    function removeChainlinkFeed(address asset) public onlyAdmin {
+        require(address(assetToAggregator[asset]) != address(0), "No feed exists for this asset");
+        delete assetToAggregator[asset];
+        delete lastValidChainlinkPrice[asset];
+        emit ChainlinkFeedRegistered(asset, address(0)); // Emit with zero address to indicate removal
+    }
+
+    // Withdraw LINK tokens from the contract (in case any are sent to this contract)
+    function withdrawLINK(address linkToken, address to, uint256 amount) public onlyOwner {
+        require(to != address(0), "Cannot withdraw to zero address");
+        require(amount > 0, "Amount must be greater than zero");
+        
+        // Use the ERC20 interface to transfer LINK tokens
+        IERC20 link = IERC20(linkToken);
+        uint256 balance = link.balanceOf(address(this));
+        require(balance >= amount, "Insufficient LINK balance");
+        
+        bool success = link.transfer(to, amount);
+        require(success, "LINK transfer failed");
+    }
+
+    // Get LINK balance of this contract (utility function)
+    function getLINKBalance(address linkToken) public view returns (uint256) {
+        IERC20 link = IERC20(linkToken);
+        return link.balanceOf(address(this));
     }
 
     // v1 price oracle interface for use as backing of proxy
