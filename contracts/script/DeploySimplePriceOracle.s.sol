@@ -59,7 +59,7 @@ contract DeploySimplePriceOracle is Script {
 
         if (chainId == 10143) {
             _configureMainnet(deployer);
-        } else if (chainId == 5) {
+        } else if (chainId == 97) {
             _configureGoerli(deployer);
         } else {
             console.log("Unknown network, configuring with basic setup");
@@ -71,19 +71,19 @@ contract DeploySimplePriceOracle is Script {
         console.log("Configuring for Monad Testnet");
 
         ChainlinkFeeds memory feeds = ChainlinkFeeds({
-            ethUsd: 0x0c76859E85727683Eeba0C70Bc2e0F5781337818, // ETH/USD Chainlink feed
-            btcUsd: 0x2Cd9D7E85494F68F5aF08EF96d6FD5e8F71B4d31, // BTC/USD Chainlink feed
-            usdcUsd: 0x70BB0758a38ae43418ffcEd9A25273dd4e804D15, // USDC/USD Chainlink feed
-            usdtUsd: 0x14eE6bE30A91989851Dc23203E41C804D4D71441, // USDT/USD Chainlink feed
-            linkUsd: address(0) // Skip LINK - will be handled by your script
+            ethUsd: 0x143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7, // ETH/USD Chainlink feed
+            btcUsd: 0x5741306c21795FdCBb9b265Ea0255F499DFe515C, // BTC/USD Chainlink feed
+            usdcUsd: 0x90c069C4538adAc136E051052E14c1cD799C41B7, // USDC/USD Chainlink feed
+            usdtUsd: 0xEca2605f0BCF2BA5966372C99837b1F182d3D620, // USDT/USD Chainlink feed
+            linkUsd: 0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f // Skip LINK - will be handled by your script
         });
 
         AssetAddresses memory assets = AssetAddresses({
             weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37, // WETH from addresses.MD
-            wbtc: 0xcf5a6076cfa32686c0Df13aBaDa2b40dec133F1d, // WBTC from addresses.MD
+            wbtc: 0x6ce8dA28E2f864420840cF74474eFf5fD80E65B8, // WBTC from addresses.MD
             usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea, // USDC from addresses.MD
             usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // USDT from addresses.MD
-            link: address(0) // Skip LINK - will be handled by your script
+            link: 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06 // Skip LINK - will be handled by your script
         });
 
         _registerChainlinkFeeds(feeds, assets);
@@ -114,19 +114,19 @@ contract DeploySimplePriceOracle is Script {
         console.log("Configuring for Goerli Testnet");
 
         ChainlinkFeeds memory feeds = ChainlinkFeeds({
-            ethUsd: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e,
-            btcUsd: 0xA39434A63A52E749F02807ae27335515BA4b07F7,
-            usdcUsd: 0xAb5c49580294Aff77670F839ea425f5b78ab3Ae7,
-            usdtUsd: 0x4682035965Cd2B88759193ee2660d8A0766e1391, // Not available on Goerli
-            linkUsd: 0x48731cF7e84dc94C5f84577882c14Be11a5B7456
+            ethUsd: 0x143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7, // ETH/USD Chainlink feed
+            btcUsd: 0x5741306c21795FdCBb9b265Ea0255F499DFe515C, // BTC/USD Chainlink feed
+            usdcUsd: 0x90c069C4538adAc136E051052E14c1cD799C41B7, // USDC/USD Chainlink feed
+            usdtUsd: 0xEca2605f0BCF2BA5966372C99837b1F182d3D620, // USDT/USD Chainlink feed
+            linkUsd: 0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f // Skip LINK - will be handled by your script
         });
 
         AssetAddresses memory assets = AssetAddresses({
-            weth: 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6,
-            wbtc: 0x4682035965Cd2B88759193ee2660d8A0766e1391, // Use mock address or skip
-            usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea,
-            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D,
-            link: 0x326C977E6efc84E512bB9C30f76E30c160eD06FB
+            weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37, // WETH from addresses.MD
+            wbtc: 0x6ce8dA28E2f864420840cF74474eFf5fD80E65B8, // WBTC from addresses.MD
+            usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea, // USDC from addresses.MD
+            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // USDT from addresses.MD
+            link: 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06 // Skip LINK - will be handled by your script
         });
 
         _registerChainlinkFeeds(feeds, assets);

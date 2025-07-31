@@ -310,8 +310,8 @@ fn get_chain_config(chain_id: ChainId) -> Result<(String, Vec<String>), String> 
 fn get_last_synced_block(chain_id: ChainId) -> Option<u64> {
     // In production, this would be stored in stable memory
     // For MVP, return a default starting block
-    Some(match chain_id {
-        41454 => 1000000, // Monad testnet starting block
+    Some(        match chain_id {
+            10143 => 1000000, // Monad testnet starting block
         97 => 35000000,   // BNB testnet starting block
         _ => 0,
     })
@@ -325,8 +325,8 @@ fn update_last_synced_block(chain_id: ChainId, block_number: u64) {
 async fn get_current_block_number(chain_id: ChainId) -> Result<u64, String> {
     // In production, this would call the RPC endpoint
     // For MVP, return a simulated block number
-    Ok(match chain_id {
-        41454 => 1000100, // Monad testnet current block
+    Ok(        match chain_id {
+            10143 => 1000100, // Monad testnet current block
         97 => 35000100,   // BNB testnet current block
         _ => 0,
     })

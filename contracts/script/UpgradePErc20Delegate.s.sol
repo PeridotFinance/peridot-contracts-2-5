@@ -12,8 +12,8 @@ import "../contracts/PErc20Delegator.sol";
 /// @dev Run with: forge script script/UpgradePErc20Delegate.s.sol:UpgradePErc20Delegate --rpc-url <RPC> --private-key <PK> --broadcast
 contract UpgradePErc20Delegate is Script {
     // Existing PErc20Delegator proxy address you want to upgrade
-    address public constant DELEGATOR_ADDRESS =
-        0x60a0e1A24C4F5DD389a155182DC78a5da061C265
+    address payable public constant DELEGATOR_ADDRESS =
+        payable(0x60a0e1A24C4F5DD389a155182DC78a5da061C265);
 
     // Whether the old implementation should call _resignImplementation() during upgrade
     bool public constant ALLOW_RESIGN = true;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 pragma solidity ^0.8.10;
 
+import "./PToken.sol";
+
 abstract contract PeridottrollerInterface {
     /// @notice Indicator that this is a Peridottroller contract (for inspection)
     bool public constant isPeridottroller = true;
@@ -126,4 +128,8 @@ abstract contract PeridottrollerInterface {
     function getAccountLiquidity(
         address account
     ) external view virtual returns (uint, uint, uint);
+
+    function getAllMarkets() external view virtual returns (PToken[] memory);
+
+
 }

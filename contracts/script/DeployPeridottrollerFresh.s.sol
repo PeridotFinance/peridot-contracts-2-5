@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
-import "../contracts/PeridottrollerG7.sol";
+import "../contracts/PeridottrollerG7Fixed.sol";
 import "../contracts/Unitroller.sol";
 import "../contracts/PriceOracle.sol";
 
@@ -22,9 +22,9 @@ contract DeployPeridottrollerFresh is Script {
     // === CONFIGURATION ===
     // Same values from your original deployment
     address constant ORACLE_ADDRESS =
-        0xeAEdaF63CbC1d00cB6C14B5c4DE161d68b7C63A0;
+        0xBfEaDDA58d0583f33309AdE83F35A680824E397f;
     address constant PERIDOT_ADDRESS =
-        0x28fE679719e740D15FC60325416bB43eAc50cD15;
+        0x5A5063a749fCF050CE58Cae6bB76A29bb37BA4Ed;
 
     // Same configuration values as original
     uint constant closeFactorMantissa = 0.5e18; // 50%
@@ -49,7 +49,7 @@ contract DeployPeridottrollerFresh is Script {
 
         // 2. Deploy new PeridottrollerG7 (Implementation) with correct PERIDOT
         console.log("\n=== Deploying PeridottrollerG7 ===");
-        PeridottrollerG7 peridotTrollerImpl = new PeridottrollerG7(
+        PeridottrollerG7Fixed peridotTrollerImpl = new PeridottrollerG7Fixed(
             PERIDOT_ADDRESS
         );
         console.log(
@@ -74,11 +74,16 @@ contract DeployPeridottrollerFresh is Script {
         console.log("Implementation accepted by Unitroller");
 
         // 5. Get Peridottroller Proxy Interface
-        PeridottrollerG7 peridotTrollerProxy = PeridottrollerG7(
+        PeridottrollerG7Fixed peridotTrollerProxy = PeridottrollerG7Fixed(
             address(unitroller)
         );
 
-        // 6. Verify PERIDOT is correctly set
+        // 6. Initialize PERIDOT address since constructor wasn't called
+        console.log("\n=== Initializing PERIDOT ===");
+        peridotTrollerProxy.initializePERIDOT(PERIDOT_ADDRESS);
+        console.log("PERIDOT address initialized via proxy");
+
+        // 7. Verify PERIDOT is correctly set
         console.log("\n=== Verification ===");
         console.log(
             "Proxy implementation:",

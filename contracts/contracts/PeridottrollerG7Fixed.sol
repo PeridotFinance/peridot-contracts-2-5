@@ -126,6 +126,17 @@ contract PeridottrollerG7Fixed is
     }
 
     /**
+     * @notice Initialize the PERIDOT address after proxy setup
+     * @dev This function is needed for proxy deployments where constructor isn't called
+     * @param _peridot The address of the PERIDOT token
+     */
+    function initializePERIDOT(address _peridot) external {
+        require(msg.sender == admin, "only admin can initialize PERIDOT");
+        require(PERIDOT == address(0), "PERIDOT already initialized");
+        PERIDOT = _peridot;
+    }
+
+    /**
      * @notice Admin function to set the PERIDOT token address
      * @dev This fixes the proxy storage layout issue where PERIDOT shows as 0x000...
      * @param newPeridotAddress The new PERIDOT token address
@@ -1752,7 +1763,7 @@ contract PeridottrollerG7Fixed is
      * @dev The automatic getter may be used to access an individual market.
      * @return The list of market addresses
      */
-    function getAllMarkets() public view returns (PToken[] memory) {
+    function getAllMarkets() public view override returns (PToken[] memory) {
         return allMarkets;
     }
 

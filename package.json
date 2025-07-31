@@ -1,6 +1,6 @@
 {
   "name": "peridot-defi-bot",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "Telegram DeFi Bot for Peridot Protocol (Compound V2 Fork)",
   "main": "dist/bot.js",
   "scripts": {

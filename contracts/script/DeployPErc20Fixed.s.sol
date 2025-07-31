@@ -16,15 +16,15 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0x400A417fEDEef43Fc5b8be0D8cD6DF687847Ee8D;
+        0x64544969ed7EBf5f083679233325356EbE738930;
     address constant COMPTROLLER_ADDRESS =
-        0xa41D586530BC7BC872095950aE03a780d5114445;
+        0xe8F09917d56Cc5B634f4DE091A2c82189dc41b54;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x2d271dEb2596d78aaa2551695Ebfa9Cd440713aC;
+        0xE83d1578AAD5E7DeA8cDcb73FD83dEcfD35C70b4;
 
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e14;
-    string constant PTOKEN_NAME = "Peridot rUSDC";
-    string constant PTOKEN_SYMBOL = "prUSDC";
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26;
+    string constant PTOKEN_NAME = "Peridot USDC";
+    string constant PTOKEN_SYMBOL = "pUSDC";
     uint8 constant PTOKEN_DECIMALS = 8;
 
     // Reserve factor (15% = 0.15 * 1e18)

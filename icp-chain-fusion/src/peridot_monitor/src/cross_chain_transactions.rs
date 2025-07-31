@@ -65,7 +65,7 @@ impl Default for CrossChainConfig {
 pub struct CrossChainRequest {
     pub user_address: String,            // User's address on source chain
     pub source_chain_id: u64,            // Chain where user initiates (ETH, Polygon, etc.)
-    pub target_chain_id: u64,            // Always Monad (41454) for Peridot
+    pub target_chain_id: u64,            // Always Monad (10143) for Peridot
     pub action: PeridotAction,            // What to do on Monad
     pub amount: String,                   // Amount in wei/smallest unit
     pub asset_address: String,           // Asset contract on source chain
@@ -508,8 +508,8 @@ impl CrossChainTransactionHandler {
         // }
         
         // Validate target chain is Monad
-        if request.target_chain_id != 41454 {
-            return Err("Target chain must be Monad (41454)".to_string());
+        if request.target_chain_id != 10143 {
+            return Err("Target chain must be Monad (10143)".to_string());
         }
         
         // Validate source chain is supported
@@ -569,7 +569,7 @@ impl CrossChainTransactionHandler {
         
         match config.supported_source_chains.get(&chain_id) {
             Some(chain_info) => Ok(RpcService::Custom(RpcApi {
-                url: chain_info.rpc_url.clone(),
+                url: chain_info._rpc_url.clone(),
                 headers: None,
             })),
             None => Err(format!("Unsupported chain ID: {}", chain_id)),

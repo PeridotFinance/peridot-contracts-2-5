@@ -42,9 +42,9 @@ contract SetReserveFactor is Script {
         vm.stopBroadcast();
 
         console.log("\n=== Summary ===");
-        console.log("✅ Reserve factor set to 15% for both tokens");
-        console.log("✅ This means 15% of interest goes to reserves");
-        console.log("✅ 85% of interest goes to suppliers");
+        console.log("Reserve factor set to 15% for both tokens");
+        console.log("This means 15% of interest goes to reserves");
+        console.log("85% of interest goes to suppliers");
     }
 
     function setReserveFactorForToken(
@@ -68,13 +68,12 @@ contract SetReserveFactor is Script {
         ) {
             if (result == 0) {
                 console.log(
-                    "✅",
                     tokenName,
                     "reserve factor updated successfully"
                 );
                 console.log("   New reserve factor:", RESERVE_FACTOR_MANTISSA);
             } else {
-                console.log("❌", tokenName, "failed with error code:", result);
+                console.log(tokenName, "failed with error code:", result);
                 if (result == 1) {
                     console.log("   Error: Unauthorized (caller is not admin)");
                 } else {
@@ -82,9 +81,9 @@ contract SetReserveFactor is Script {
                 }
             }
         } catch Error(string memory reason) {
-            console.log("❌", tokenName, "failed with reason:", reason);
+            console.log(tokenName, "failed with reason:", reason);
         } catch {
-            console.log("❌", tokenName, "failed with unknown error");
+            console.log(tokenName, "failed with unknown error");
         }
 
         // Verify the change

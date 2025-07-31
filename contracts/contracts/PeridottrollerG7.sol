@@ -118,6 +118,17 @@ contract PeridottrollerG7 is
         admin = msg.sender;
     }
 
+    /**
+     * @notice Initialize the PERIDOT address after proxy setup
+     * @dev This function is needed for proxy deployments where constructor isn't called
+     * @param _peridot The address of the PERIDOT token
+     */
+    function initializePERIDOT(address _peridot) external {
+        require(msg.sender == admin, "only admin can initialize PERIDOT");
+        require(PERIDOT == address(0), "PERIDOT already initialized");
+        PERIDOT = _peridot;
+    }
+
     /*** Assets You Are In ***/
 
     /**
@@ -1709,7 +1720,7 @@ contract PeridottrollerG7 is
      * @dev The automatic getter may be used to access an individual market.
      * @return The list of market addresses
      */
-    function getAllMarkets() public view returns (PToken[] memory) {
+    function getAllMarkets() public view override returns (PToken[] memory) {
         return allMarkets;
     }
 

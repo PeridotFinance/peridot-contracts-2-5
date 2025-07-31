@@ -30,6 +30,9 @@ const LINK_TOKEN_ADDRESS = process.env.LINK_TOKEN_ADDRESS;
 const USD_TOKEN_ADDRESS = process.env.USD_TOKEN_ADDRESS;
 const WMONAD_TOKEN_ADDRESS = process.env.WMONAD_TOKEN_ADDRESS;
 const UNISWAP_FACTORY_ADDRESS = process.env.UNISWAP_FACTORY_ADDRESS;
+// $P token and its direct USDC pool
+const P_TOKEN_ADDRESS = process.env.P_TOKEN_ADDRESS;
+const P_USDC_POOL_ADDRESS = process.env.P_USDC_POOL_ADDRESS;
 
 // --- Helper Functions ---
 
@@ -280,6 +283,77 @@ async function getLinkPriceFromUniswap(provider) {
   return priceMantissa;
 }
 
+/**
+ * Fetches the price of $P in USD (USDC) from its direct Uniswap V3 pool.
+ * @param {ethers.providers.Provider} provider Ethers.js provider instance.
+ * @returns {Promise<ethers.BigNumber>} The price of $P in USD, formatted with 18 decimals.
+ */
+async function getPPriceFromUniswap(provider) {
+  console.log("Fetching $P/USD price from direct Uniswap pool...");
+
+  if (!P_USDC_POOL_ADDRESS) {
+    throw new Error("P_USDC_POOL_ADDRESS env variable not set");
+  }
+
+  const poolContract = new ethers.Contract(
+    P_USDC_POOL_ADDRESS,
+    IUniswapV3PoolABI,
+    provider
+  );
+
+  const [token0Address, token1Address, fee, slot0, liquidity] = await Promise.all([
+    poolContract.token0(),
+    poolContract.token1(),
+    poolContract.fee(),
+    poolContract.slot0(),
+    poolContract.liquidity(),
+  ]);
+
+  const { chainId } = await provider.getNetwork();
+
+  // Gather metadata for the two tokens
+  const token0Contract = new ethers.Contract(token0Address, ERC20_ABI, provider);
+  const token1Contract = new ethers.Contract(token1Address, ERC20_ABI, provider);
+
+  const [token0Decimals, token0Symbol, token1Decimals, token1Symbol] = await Promise.all([
+    token0Contract.decimals(),
+    token0Contract.symbol(),
+    token1Contract.decimals(),
+    token1Contract.symbol(),
+  ]);
+
+  const token0 = new Token(chainId, token0Address, token0Decimals, token0Symbol);
+  const token1 = new Token(chainId, token1Address, token1Decimals, token1Symbol);
+
+  const pool = new Pool(
+    token0,
+    token1,
+    fee,
+    slot0.sqrtPriceX96.toString(),
+    liquidity.toString(),
+    slot0.tick
+  );
+
+  let pUsdPrice;
+
+  if (token0.address.toLowerCase() === USD_TOKEN_ADDRESS.toLowerCase()) {
+    // token0 is USDC – price of $P is token1Price (USDC per $P)
+    pUsdPrice = pool.token1Price;
+  } else if (token1.address.toLowerCase() === USD_TOKEN_ADDRESS.toLowerCase()) {
+    // token1 is USDC – price of $P is token0Price (USDC per $P)
+    pUsdPrice = pool.token0Price;
+  } else {
+    throw new Error("Neither token in the pool is USDC; cannot derive $P price in USD");
+  }
+
+  console.log(`Calculated $P/USD price: ${pUsdPrice.toSignificant(6)}`);
+
+  const priceAsFloat = parseFloat(pUsdPrice.toSignificant(18));
+  const priceMantissa = ethers.utils.parseEther(priceAsFloat.toString());
+
+  return priceMantissa;
+}
+
 async function main() {
   console.log("Starting price update script...");
 
@@ -291,6 +365,8 @@ async function main() {
     USD_TOKEN_ADDRESS: process.env.USD_TOKEN_ADDRESS,
     WMONAD_TOKEN_ADDRESS: process.env.WMONAD_TOKEN_ADDRESS,
     UNISWAP_FACTORY_ADDRESS: process.env.UNISWAP_FACTORY_ADDRESS,
+    P_TOKEN_ADDRESS: process.env.P_TOKEN_ADDRESS,
+    P_USDC_POOL_ADDRESS: process.env.P_USDC_POOL_ADDRESS,
   };
 
   const missingEnvVars = Object.entries(requiredEnvVars)
@@ -318,21 +394,31 @@ async function main() {
 
   const updatePrice = async () => {
     try {
-      const price = await getLinkPriceFromUniswap(provider);
+      const [linkPrice, pPrice] = await Promise.all([
+        getLinkPriceFromUniswap(provider),
+        getPPriceFromUniswap(provider),
+      ]);
       console.log(
-        `Updating price oracle with new price: ${ethers.utils.formatUnits(
-          price,
-          18
-        )}`
+        `Updating LINK price oracle: ${ethers.utils.formatUnits(linkPrice, 18)} | $P price: ${ethers.utils.formatUnits(pPrice, 18)}`
       );
 
-      const tx = await priceOracleContract.setDirectPrice(
+      // Submit LINK price
+      const tx1 = await priceOracleContract.setDirectPrice(
         LINK_TOKEN_ADDRESS,
-        price
+        linkPrice
       );
-      console.log(`Transaction sent: ${tx.hash}`);
-      await tx.wait();
-      console.log("Price update transaction confirmed.");
+      console.log(`LINK price tx sent: ${tx1.hash}`);
+      await tx1.wait();
+      console.log("LINK price update confirmed.");
+
+      // Submit $P price
+      const tx2 = await priceOracleContract.setDirectPrice(
+        P_TOKEN_ADDRESS,
+        pPrice
+      );
+      console.log(`$P price tx sent: ${tx2.hash}`);
+      await tx2.wait();
+      console.log("$P price update confirmed.");
     } catch (error) {
       console.error("Failed to update price:", error);
     }

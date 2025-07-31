@@ -1,0 +1,58 @@
+type ApiResult = variant { ok : text; err : text };
+type InitArg = record {
+  ecdsa_key_id : record { name : text; curve : variant { secp256k1 } };
+  rpc_service : variant {
+    Custom : record { url : text; headers : opt vec record { text; text } };
+    Chain : nat64;
+    Provider : nat64;
+  };
+  filter_addresses : vec text;
+  chain_id : nat64;
+  filter_events : vec text;
+};
+service : (InitArg) -> {
+  estimate_cross_chain_gas : (text, nat64, nat64, text, text) -> (
+      ApiResult,
+    ) query;
+  execute_cross_chain_borrow : (
+      text,
+      nat64,
+      nat64,
+      text,
+      text,
+      nat64,
+      nat64,
+    ) -> (ApiResult);
+  execute_cross_chain_liquidation : (
+      text,
+      nat64,
+      nat64,
+      text,
+      text,
+      text,
+      text,
+      nat64,
+      nat64,
+    ) -> (ApiResult);
+  execute_cross_chain_supply : (
+      text,
+      nat64,
+      nat64,
+      text,
+      text,
+      nat64,
+      nat64,
+    ) -> (ApiResult);
+  get_canister_status : () -> (text) query;
+  get_chain_analytics : (nat64) -> (ApiResult) query;
+  get_cross_chain_market_summary : () -> (ApiResult) query;
+  get_cross_chain_rates : () -> (text) query;
+  get_enhanced_user_position : (text) -> (ApiResult) query;
+  get_evm_address : () -> (opt text) query;
+  get_liquidation_opportunities : (nat64) -> (vec text) query;
+  get_liquidation_opportunities_enhanced : () -> (ApiResult) query;
+  get_market_state : (nat64) -> (opt text) query;
+  get_user_position : (text, nat64) -> (opt text) query;
+  start_enhanced_monitoring : () -> (text);
+  test_chain_fusion_manager : () -> (text) query;
+}

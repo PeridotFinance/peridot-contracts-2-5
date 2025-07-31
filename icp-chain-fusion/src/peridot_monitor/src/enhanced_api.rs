@@ -315,7 +315,7 @@ fn calculate_liquidity_flows(_market_states: &std::collections::BTreeMap<u64, Ma
     // Mock implementation - in reality, analyze transaction patterns
     vec![
         LiquidityFlow {
-            from_chain: 41454,
+            from_chain: 10143,
             to_chain: 97,
             asset: "USDC".to_string(),
             flow_direction: "Supply".to_string(),
@@ -356,7 +356,7 @@ fn calculate_market_health(
 
 fn estimate_gas_cost(chain_id: u64) -> f64 {
     match chain_id {
-        41454 => 0.001, // Monad - very low
+                    10143 => 0.001, // Monad - very low
         97 => 0.01,     // BNB testnet
         1 => 5.0,       // Ethereum mainnet
         _ => 1.0,       // Default

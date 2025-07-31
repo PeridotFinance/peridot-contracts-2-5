@@ -1851,7 +1851,7 @@ contract Peridottroller is
      * @dev The automatic getter may be used to access an individual market.
      * @return The list of market addresses
      */
-    function getAllMarkets() public view returns (PToken[] memory) {
+    function getAllMarkets() public view override returns (PToken[] memory) {
         return allMarkets;
     }
 

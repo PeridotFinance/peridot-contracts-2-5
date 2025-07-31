@@ -18,7 +18,7 @@ contract DeployPEther is Script {
     // --- CONFIGURATION ---
     // !!! IMPORTANT: Replace these placeholders !!!
     address constant COMPTROLLER_ADDRESS =
-        0xfB3f8837B1Ad7249C1B253898b3aa7FaB22E68aD; // Address of the deployed Unitroller proxy
+        0xa41D586530BC7BC872095950aE03a780d5114445; // Address of the deployed Unitroller proxy
     address constant INTEREST_RATE_MODEL_ADDRESS =
         0x2d271dEb2596d78aaa2551695Ebfa9Cd440713aC; // Address of the deployed InterestRateModel
 
