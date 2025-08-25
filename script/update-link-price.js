@@ -33,6 +33,7 @@ const UNISWAP_FACTORY_ADDRESS = process.env.UNISWAP_FACTORY_ADDRESS;
 // $P token and its direct USDC pool
 const P_TOKEN_ADDRESS = process.env.P_TOKEN_ADDRESS;
 const P_USDC_POOL_ADDRESS = process.env.P_USDC_POOL_ADDRESS;
+const GMON_TOKEN_ADDRESS = process.env.GMON_TOKEN_ADDRESS;
 
 // --- Helper Functions ---
 
@@ -271,13 +272,15 @@ async function getLinkPriceFromUniswap(provider) {
 
   // Debug the price conversion
   console.log(`Price object type: ${typeof linkUsdPrice}`);
-  console.log(`Price object methods: ${Object.getOwnPropertyNames(linkUsdPrice)}`);
+  console.log(
+    `Price object methods: ${Object.getOwnPropertyNames(linkUsdPrice)}`
+  );
 
   // Convert using a more robust approach
-  const priceAsFloat = parseFloat(linkUsdPrice.toSignificant(18));
-  console.log(`Price as float: ${priceAsFloat}`);
+  const priceAsString = linkUsdPrice.toFixed(18);
+  console.log(`Price as string (fixed to 18 decimals): ${priceAsString}`);
 
-  const priceMantissa = ethers.utils.parseEther(priceAsFloat.toString());
+  const priceMantissa = ethers.utils.parseEther(priceAsString);
   console.log(`Price mantissa: ${priceMantissa.toString()}`);
 
   return priceMantissa;
@@ -301,29 +304,49 @@ async function getPPriceFromUniswap(provider) {
     provider
   );
 
-  const [token0Address, token1Address, fee, slot0, liquidity] = await Promise.all([
-    poolContract.token0(),
-    poolContract.token1(),
-    poolContract.fee(),
-    poolContract.slot0(),
-    poolContract.liquidity(),
-  ]);
+  const [token0Address, token1Address, fee, slot0, liquidity] =
+    await Promise.all([
+      poolContract.token0(),
+      poolContract.token1(),
+      poolContract.fee(),
+      poolContract.slot0(),
+      poolContract.liquidity(),
+    ]);
 
   const { chainId } = await provider.getNetwork();
 
   // Gather metadata for the two tokens
-  const token0Contract = new ethers.Contract(token0Address, ERC20_ABI, provider);
-  const token1Contract = new ethers.Contract(token1Address, ERC20_ABI, provider);
+  const token0Contract = new ethers.Contract(
+    token0Address,
+    ERC20_ABI,
+    provider
+  );
+  const token1Contract = new ethers.Contract(
+    token1Address,
+    ERC20_ABI,
+    provider
+  );
 
-  const [token0Decimals, token0Symbol, token1Decimals, token1Symbol] = await Promise.all([
-    token0Contract.decimals(),
-    token0Contract.symbol(),
-    token1Contract.decimals(),
-    token1Contract.symbol(),
-  ]);
+  const [token0Decimals, token0Symbol, token1Decimals, token1Symbol] =
+    await Promise.all([
+      token0Contract.decimals(),
+      token0Contract.symbol(),
+      token1Contract.decimals(),
+      token1Contract.symbol(),
+    ]);
 
-  const token0 = new Token(chainId, token0Address, token0Decimals, token0Symbol);
-  const token1 = new Token(chainId, token1Address, token1Decimals, token1Symbol);
+  const token0 = new Token(
+    chainId,
+    token0Address,
+    token0Decimals,
+    token0Symbol
+  );
+  const token1 = new Token(
+    chainId,
+    token1Address,
+    token1Decimals,
+    token1Symbol
+  );
 
   const pool = new Pool(
     token0,
@@ -343,13 +366,92 @@ async function getPPriceFromUniswap(provider) {
     // token1 is USDC – price of $P is token0Price (USDC per $P)
     pUsdPrice = pool.token0Price;
   } else {
-    throw new Error("Neither token in the pool is USDC; cannot derive $P price in USD");
+    throw new Error(
+      "Neither token in the pool is USDC; cannot derive $P price in USD"
+    );
   }
 
   console.log(`Calculated $P/USD price: ${pUsdPrice.toSignificant(6)}`);
 
-  const priceAsFloat = parseFloat(pUsdPrice.toSignificant(18));
-  const priceMantissa = ethers.utils.parseEther(priceAsFloat.toString());
+  const priceAsString = pUsdPrice.toFixed(18);
+  const priceMantissa = ethers.utils.parseEther(priceAsString);
+
+  return priceMantissa;
+}
+
+/**
+ * Fetches the price of MON in USD (USDC) from its direct Uniswap V3 pool.
+ * @param {ethers.providers.Provider} provider Ethers.js provider instance.
+ * @returns {Promise<ethers.BigNumber>} The price of MON in USD, formatted with 18 decimals.
+ */
+async function getMonUsdPriceFromUniswap(provider) {
+  console.log("Fetching MON/USDC price from direct Uniswap pool...");
+
+  const { chainId } = await provider.getNetwork();
+  console.log(`Connected to chain with ID: ${chainId}`);
+
+  const factory = new ethers.Contract(
+    UNISWAP_FACTORY_ADDRESS,
+    IUniswapV3FactoryABI,
+    provider
+  );
+
+  // Define tokens
+  const wmonadContract = new ethers.Contract(
+    WMONAD_TOKEN_ADDRESS,
+    ERC20_ABI,
+    provider
+  );
+  const usdContract = new ethers.Contract(
+    USD_TOKEN_ADDRESS,
+    ERC20_ABI,
+    provider
+  );
+  const [wmonadDecimals, wmonadSymbol, usdDecimals, usdSymbol] =
+    await Promise.all([
+      wmonadContract.decimals(),
+      wmonadContract.symbol(),
+      usdContract.decimals(),
+      usdContract.symbol(),
+    ]);
+
+  const WMONAD = new Token(
+    chainId,
+    WMONAD_TOKEN_ADDRESS,
+    wmonadDecimals,
+    wmonadSymbol
+  );
+  const USD = new Token(chainId, USD_TOKEN_ADDRESS, usdDecimals, usdSymbol);
+
+  console.log("Finding MON/USD pool...");
+  const wmonadUsdPool = await findLiquidPool(
+    factory,
+    WMONAD,
+    USD,
+    provider,
+    chainId
+  );
+  console.log(
+    `MON/USD pool created: ${wmonadUsdPool.token0.symbol}/${wmonadUsdPool.token1.symbol}, liquidity: ${wmonadUsdPool.liquidity}`
+  );
+
+  let monUsdPrice;
+
+  if (
+    wmonadUsdPool.token0.address.toLowerCase() ===
+    WMONAD_TOKEN_ADDRESS.toLowerCase()
+  ) {
+    // token0 is WMONAD, token1 is USD. Price of WMONAD in USD is token0Price.
+    monUsdPrice = wmonadUsdPool.token0Price;
+  } else {
+    // token1 is WMONAD, token0 is USD. Price of WMONAD in USD is token1Price.
+    monUsdPrice = wmonadUsdPool.token1Price;
+  }
+
+  console.log(`Calculated MON/USD price: ${monUsdPrice.toSignificant(6)}`);
+
+  const priceAsString = monUsdPrice.toFixed(18);
+  const priceMantissa = ethers.utils.parseEther(priceAsString);
 
   return priceMantissa;
 }
@@ -367,6 +469,7 @@ async function main() {
     UNISWAP_FACTORY_ADDRESS: process.env.UNISWAP_FACTORY_ADDRESS,
     P_TOKEN_ADDRESS: process.env.P_TOKEN_ADDRESS,
     P_USDC_POOL_ADDRESS: process.env.P_USDC_POOL_ADDRESS,
+    GMON_TOKEN_ADDRESS: process.env.GMON_TOKEN_ADDRESS,
   };
 
   const missingEnvVars = Object.entries(requiredEnvVars)
@@ -394,12 +497,19 @@ async function main() {
 
   const updatePrice = async () => {
     try {
-      const [linkPrice, pPrice] = await Promise.all([
+      const [linkPrice, pPrice, monPrice] = await Promise.all([
         getLinkPriceFromUniswap(provider),
         getPPriceFromUniswap(provider),
+        getMonUsdPriceFromUniswap(provider),
       ]);
       console.log(
-        `Updating LINK price oracle: ${ethers.utils.formatUnits(linkPrice, 18)} | $P price: ${ethers.utils.formatUnits(pPrice, 18)}`
+        `Updating prices: LINK ${ethers.utils.formatUnits(
+          linkPrice,
+          18
+        )} | $P ${ethers.utils.formatUnits(
+          pPrice,
+          18
+        )} | MON ${ethers.utils.formatUnits(monPrice, 18)}`
       );
 
       // Submit LINK price
@@ -419,6 +529,15 @@ async function main() {
       console.log(`$P price tx sent: ${tx2.hash}`);
       await tx2.wait();
       console.log("$P price update confirmed.");
+
+      // Submit MON price for gMON token
+      const tx3 = await priceOracleContract.setDirectPrice(
+        GMON_TOKEN_ADDRESS,
+        monPrice
+      );
+      console.log(`gMON price tx sent: ${tx3.hash}`);
+      await tx3.wait();
+      console.log("gMON price update confirmed.");
     } catch (error) {
       console.error("Failed to update price:", error);
     }

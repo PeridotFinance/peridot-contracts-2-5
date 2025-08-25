@@ -43,13 +43,7 @@ contract MockChainlinkAggregator {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 _roundId,
-            int256 _price,
-            uint256 startedAt,
-            uint256 _updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 _roundId, int256 _price, uint256 startedAt, uint256 _updatedAt, uint80 answeredInRound)
     {
         require(!shouldRevert, "Mock revert");
         return (roundId, price, block.timestamp, updatedAt, roundId);
@@ -126,9 +120,9 @@ contract SimplePriceOracleTest {
         // Deploy interest rate model
         interestRateModel = new JumpRateModel(
             0.02e18, // baseRatePerYear (2%)
-            0.10e18, // multiplierPerYear (10%)
-            2.00e18, // jumpMultiplierPerYear (200%)
-            0.80e18 // kink (80%)
+            0.1e18, // multiplierPerYear (10%)
+            2.0e18, // jumpMultiplierPerYear (200%)
+            0.8e18 // kink (80%)
         );
 
         // Configure the Peridottroller
@@ -160,10 +154,7 @@ contract SimplePriceOracleTest {
 
         // Test getting price after setting
         uint256 retrievedPriceAfter = oracle.assetPrices(address(underlying));
-        emit TestResult(
-            "Price set correctly",
-            retrievedPriceAfter == testPrice
-        );
+        emit TestResult("Price set correctly", retrievedPriceAfter == testPrice);
 
         emit PriceSet(address(underlying), testPrice);
     }
@@ -198,28 +189,17 @@ contract SimplePriceOracleTest {
 
         // Verify aggregator was registered
         address registeredAggregator = oracle.getAggregator(assetAddress);
-        emit TestResult(
-            "Chainlink feed registered correctly",
-            registeredAggregator == address(mockAggregator)
-        );
+        emit TestResult("Chainlink feed registered correctly", registeredAggregator == address(mockAggregator));
 
         // Test price retrieval from Chainlink
         uint256 chainlinkPrice = oracle.assetPrices(assetAddress);
         // Mock aggregator returns 100 * 1e8 (8 decimals), should be converted to 100 * 1e18
         uint256 expectedPrice = 100 * 1e18;
-        emit TestResult(
-            "Chainlink price retrieved correctly",
-            chainlinkPrice == expectedPrice
-        );
+        emit TestResult("Chainlink price retrieved correctly", chainlinkPrice == expectedPrice);
 
         // Test latest round data
-        (
-            uint80 roundId,
-            int256 price,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        ) = oracle.getLatestRoundData(assetAddress);
+        (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.getLatestRoundData(assetAddress);
 
         emit TestResult("Round data retrieved", price == 100 * 1e8);
     }
@@ -275,10 +255,7 @@ contract SimplePriceOracleTest {
 
         // Should still return cached price
         uint256 priceWhenStale = oracle.assetPrices(assetAddress);
-        emit TestResult(
-            "Returns cached price when stale",
-            priceWhenStale == 100 * 1e18
-        );
+        emit TestResult("Returns cached price when stale", priceWhenStale == 100 * 1e18);
     }
 
     /**
@@ -295,10 +272,7 @@ contract SimplePriceOracleTest {
 
         // Should return manual price
         uint256 retrievedPrice = oracle.assetPrices(address(newToken));
-        emit TestResult(
-            "Manual price fallback works",
-            retrievedPrice == manualPrice
-        );
+        emit TestResult("Manual price fallback works", retrievedPrice == manualPrice);
     }
 
     /**
@@ -320,20 +294,14 @@ contract SimplePriceOracleTest {
 
         // Should return cached price when aggregator fails
         uint256 priceOnFailure = oracle.assetPrices(assetAddress);
-        emit TestResult(
-            "Returns cached price on aggregator failure",
-            priceOnFailure == 100 * 1e18
-        );
+        emit TestResult("Returns cached price on aggregator failure", priceOnFailure == 100 * 1e18);
 
         // Reset aggregator
         mockAggregator.setShouldRevert(false);
 
         // Should work normally again
         uint256 priceAfterReset = oracle.assetPrices(assetAddress);
-        emit TestResult(
-            "Works normally after aggregator reset",
-            priceAfterReset == 100 * 1e18
-        );
+        emit TestResult("Works normally after aggregator reset", priceAfterReset == 100 * 1e18);
     }
 
     /**
@@ -355,20 +323,14 @@ contract SimplePriceOracleTest {
 
         // Should return cached price for negative price
         uint256 priceWithNegative = oracle.assetPrices(assetAddress);
-        emit TestResult(
-            "Returns cached price for negative price",
-            priceWithNegative == 100 * 1e18
-        );
+        emit TestResult("Returns cached price for negative price", priceWithNegative == 100 * 1e18);
 
         // Set zero price
         mockAggregator.setPrice(0);
 
         // Should return cached price for zero price
         uint256 priceWithZero = oracle.assetPrices(assetAddress);
-        emit TestResult(
-            "Returns cached price for zero price",
-            priceWithZero == 100 * 1e18
-        );
+        emit TestResult("Returns cached price for zero price", priceWithZero == 100 * 1e18);
     }
 
     /**
@@ -380,19 +342,14 @@ contract SimplePriceOracleTest {
         oracle.setChainlinkStaleThreshold(newThreshold);
 
         uint256 currentThreshold = oracle.chainlinkPriceStaleThreshold();
-        emit TestResult(
-            "Stale threshold updated correctly",
-            currentThreshold == newThreshold
-        );
+        emit TestResult("Stale threshold updated correctly", currentThreshold == newThreshold);
 
         // Test with the new threshold
         address assetAddress = address(underlying);
         oracle.registerChainlinkFeed(assetAddress, address(mockAggregator));
 
         // Set time to be 1.5 hours ago (should not be stale with 2-hour threshold)
-        uint256 recentTime = block.timestamp > 5400
-            ? block.timestamp - 5400
-            : 0;
+        uint256 recentTime = block.timestamp > 5400 ? block.timestamp - 5400 : 0;
         mockAggregator.setUpdatedAt(recentTime); // 1.5 hours
 
         bool isStale = oracle.isPriceStale(assetAddress);

@@ -27,10 +27,7 @@ contract PErc20Delegate is PErc20, CDelegateInterface {
             implementation = address(0);
         }
 
-        require(
-            msg.sender == admin,
-            "only the admin may call _becomeImplementation"
-        );
+        require(msg.sender == admin, "only the admin may call _becomeImplementation");
     }
 
     /**
@@ -42,9 +39,6 @@ contract PErc20Delegate is PErc20, CDelegateInterface {
             implementation = address(0);
         }
 
-        require(
-            msg.sender == admin,
-            "only the admin may call _resignImplementation"
-        );
+        require(msg.sender == admin, "only the admin may call _resignImplementation");
     }
 }

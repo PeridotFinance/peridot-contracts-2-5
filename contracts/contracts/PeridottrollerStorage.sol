@@ -35,17 +35,17 @@ contract PeridottrollerV1Storage is UnitrollerAdminStorage {
     /**
      * @notice Multiplier used to calculate the maximum repayAmount when liquidating a borrow
      */
-    uint public closeFactorMantissa;
+    uint256 public closeFactorMantissa;
 
     /**
      * @notice Multiplier representing the discount on collateral that a liquidator receives
      */
-    uint public liquidationIncentiveMantissa;
+    uint256 public liquidationIncentiveMantissa;
 
     /**
      * @notice Max number of assets a single account can participate in (borrow or use as collateral)
      */
-    uint public maxAssets;
+    uint256 public maxAssets;
 
     /**
      * @notice Per-account mapping of "assets you are in", capped by maxAssets
@@ -60,7 +60,7 @@ contract PeridottrollerV2Storage is PeridottrollerV1Storage {
         //  Multiplier representing the most one can borrow against their collateral in this market.
         //  For instance, 0.9 to allow borrowing 90% of collateral value.
         //  Must be between 0 and 1, and stored as a mantissa.
-        uint collateralFactorMantissa;
+        uint256 collateralFactorMantissa;
         // Per-market mapping of "accounts in this asset"
         mapping(address => bool) accountMembership;
         // Whether or not this market receives PERIDOT
@@ -99,10 +99,10 @@ contract PeridottrollerV3Storage is PeridottrollerV2Storage {
     PToken[] public allMarkets;
 
     /// @notice The rate at which the flywheel distributes PERIDOT, per block
-    uint public peridotRate;
+    uint256 public peridotRate;
 
     /// @notice The portion of peridotRate that each market currently receives
-    mapping(address => uint) public peridotSpeeds;
+    mapping(address => uint256) public peridotSpeeds;
 
     /// @notice The PERIDOT market supply state for each market
     mapping(address => PeridotMarketState) public peridotSupplyState;
@@ -111,13 +111,13 @@ contract PeridottrollerV3Storage is PeridottrollerV2Storage {
     mapping(address => PeridotMarketState) public peridotBorrowState;
 
     /// @notice The PERIDOT borrow index for each market for each supplier as of the last time they accrued PERIDOT
-    mapping(address => mapping(address => uint)) public peridotSupplierIndex;
+    mapping(address => mapping(address => uint256)) public peridotSupplierIndex;
 
     /// @notice The PERIDOT borrow index for each market for each borrower as of the last time they accrued PERIDOT
-    mapping(address => mapping(address => uint)) public peridotBorrowerIndex;
+    mapping(address => mapping(address => uint256)) public peridotBorrowerIndex;
 
     /// @notice The PERIDOT accrued but not yet transferred to each user
-    mapping(address => uint) public peridotAccrued;
+    mapping(address => uint256) public peridotAccrued;
 }
 
 contract PeridottrollerV4Storage is PeridottrollerV3Storage {
@@ -125,23 +125,23 @@ contract PeridottrollerV4Storage is PeridottrollerV3Storage {
     address public borrowCapGuardian;
 
     // @notice Borrow caps enforced by borrowAllowed for each pToken address. Defaults to zero which corresponds to unlimited borrowing.
-    mapping(address => uint) public borrowCaps;
+    mapping(address => uint256) public borrowCaps;
 }
 
 contract PeridottrollerV5Storage is PeridottrollerV4Storage {
     /// @notice The portion of PERIDOT that each contributor receives per block
-    mapping(address => uint) public peridotContributorSpeeds;
+    mapping(address => uint256) public peridotContributorSpeeds;
 
     /// @notice Last block at which a contributor's PERIDOT rewards have been allocated
-    mapping(address => uint) public lastContributorBlock;
+    mapping(address => uint256) public lastContributorBlock;
 }
 
 contract PeridottrollerV6Storage is PeridottrollerV5Storage {
     /// @notice The rate at which peridot is distributed to the corresponding borrow market (per block)
-    mapping(address => uint) public peridotBorrowSpeeds;
+    mapping(address => uint256) public peridotBorrowSpeeds;
 
     /// @notice The rate at which peridot is distributed to the corresponding supply market (per block)
-    mapping(address => uint) public peridotSupplySpeeds;
+    mapping(address => uint256) public peridotSupplySpeeds;
 }
 
 contract PeridottrollerV7Storage is PeridottrollerV6Storage {
@@ -149,5 +149,5 @@ contract PeridottrollerV7Storage is PeridottrollerV6Storage {
     bool public proposal65FixExecuted;
 
     /// @notice Accounting storage mapping account addresses to how much PERIDOT they owe the protocol.
-    mapping(address => uint) public peridotReceivable;
+    mapping(address => uint256) public peridotReceivable;
 }

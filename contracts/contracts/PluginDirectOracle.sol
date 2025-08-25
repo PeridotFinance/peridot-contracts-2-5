@@ -7,10 +7,7 @@ import "./PErc20.sol";
 interface IFeeds {
     function latestAnswer() external view returns (uint256);
 
-    function latestRoundData()
-        external
-        view
-        returns (uint80, uint256, uint256, uint256, uint80);
+    function latestRoundData() external view returns (uint80, uint256, uint256, uint256, uint80);
 
     function decimals() external view returns (uint8);
 
@@ -32,11 +29,7 @@ contract FeedsAccess {
         return feeds.latestAnswer();
     }
 
-    function fetchLatestRoundData()
-        external
-        view
-        returns (uint80, uint256, uint256, uint256, uint80)
-    {
+    function fetchLatestRoundData() external view returns (uint80, uint256, uint256, uint256, uint80) {
         return feeds.latestRoundData();
     }
 
@@ -56,18 +49,15 @@ contract FeedsAccess {
  */
 contract PluginDirectOracle is PriceOracle {
     mapping(address => address) public assetToFeedsAccess; // Maps asset to FeedsAccess contract
-    mapping(address => uint) public feedsStaleThreshold; // Stale threshold per asset
-    mapping(address => uint) prices; // Manual price fallback
+    mapping(address => uint256) public feedsStaleThreshold; // Stale threshold per asset
+    mapping(address => uint256) prices; // Manual price fallback
     mapping(address => bool) public admin;
 
     address private owner;
-    uint public defaultStaleThreshold;
+    uint256 public defaultStaleThreshold;
 
     event PricePosted(
-        address asset,
-        uint previousPriceMantissa,
-        uint requestedPriceMantissa,
-        uint newPriceMantissa
+        address asset, uint256 previousPriceMantissa, uint256 requestedPriceMantissa, uint256 newPriceMantissa
     );
     event FeedRegistered(address asset, address feedsAccess);
 
@@ -81,15 +71,13 @@ contract PluginDirectOracle is PriceOracle {
         _;
     }
 
-    constructor(uint _defaultStaleThreshold) {
+    constructor(uint256 _defaultStaleThreshold) {
         owner = msg.sender;
         admin[msg.sender] = true;
         defaultStaleThreshold = _defaultStaleThreshold;
     }
 
-    function _getUnderlyingAddress(
-        PToken pToken
-    ) private view returns (address) {
+    function _getUnderlyingAddress(PToken pToken) private view returns (address) {
         address asset;
         if (compareStrings(pToken.symbol(), "pETH")) {
             asset = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -99,16 +87,12 @@ contract PluginDirectOracle is PriceOracle {
         return asset;
     }
 
-    function getUnderlyingPrice(
-        PToken pToken
-    ) external view override returns (uint) {
+    function getUnderlyingPrice(PToken pToken) external view override returns (uint256) {
         address asset = _getUnderlyingAddress(pToken);
         address feedsAccessAddress = assetToFeedsAccess[asset];
 
         if (feedsAccessAddress != address(0)) {
-            try this._getFeedsPrice(feedsAccessAddress, asset) returns (
-                uint priceMantissa
-            ) {
+            try this._getFeedsPrice(feedsAccessAddress, asset) returns (uint256 priceMantissa) {
                 if (priceMantissa > 0) {
                     return priceMantissa;
                 }
@@ -118,7 +102,7 @@ contract PluginDirectOracle is PriceOracle {
         }
 
         // Fallback to manually set price
-        uint manualPrice = prices[asset];
+        uint256 manualPrice = prices[asset];
         if (manualPrice > 0) {
             return manualPrice;
         }
@@ -126,39 +110,28 @@ contract PluginDirectOracle is PriceOracle {
         revert("No valid price available");
     }
 
-    function _getFeedsPrice(
-        address feedsAccessAddress,
-        address asset
-    ) external view returns (uint) {
+    function _getFeedsPrice(address feedsAccessAddress, address asset) external view returns (uint256) {
         require(msg.sender == address(this), "Internal function only");
 
         FeedsAccess feedsAccess = FeedsAccess(feedsAccessAddress);
 
         // Get latest round data
-        (
-            uint80 roundId,
-            uint256 price,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        ) = feedsAccess.fetchLatestRoundData();
+        (uint80 roundId, uint256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            feedsAccess.fetchLatestRoundData();
 
         // Check staleness
-        uint staleThreshold = feedsStaleThreshold[asset];
+        uint256 staleThreshold = feedsStaleThreshold[asset];
         if (staleThreshold == 0) {
             staleThreshold = defaultStaleThreshold;
         }
 
-        require(
-            block.timestamp - updatedAt <= staleThreshold,
-            "Price feed is stale"
-        );
+        require(block.timestamp - updatedAt <= staleThreshold, "Price feed is stale");
         require(price > 0, "Invalid price from feed");
 
         // Get decimals and convert to 18 decimals
         uint8 feedDecimals = feedsAccess.getDecimals();
 
-        uint priceMantissa = price;
+        uint256 priceMantissa = price;
         if (feedDecimals < 18) {
             priceMantissa = priceMantissa * (10 ** (18 - feedDecimals));
         } else if (feedDecimals > 18) {
@@ -173,10 +146,7 @@ contract PluginDirectOracle is PriceOracle {
      * @param asset The asset address
      * @param aggregatorAddress The Plugin aggregator address from their documentation
      */
-    function deployAndRegisterFeed(
-        address asset,
-        address aggregatorAddress
-    ) external onlyAdmin returns (address) {
+    function deployAndRegisterFeed(address asset, address aggregatorAddress) external onlyAdmin returns (address) {
         require(aggregatorAddress != address(0), "Invalid aggregator address");
 
         // Deploy FeedsAccess with the aggregator address (Plugin pattern)
@@ -194,10 +164,7 @@ contract PluginDirectOracle is PriceOracle {
      * @param asset The asset address
      * @param feedsAccessAddress The FeedsAccess contract address
      */
-    function registerFeed(
-        address asset,
-        address feedsAccessAddress
-    ) external onlyAdmin {
+    function registerFeed(address asset, address feedsAccessAddress) external onlyAdmin {
         assetToFeedsAccess[asset] = feedsAccessAddress;
         emit FeedRegistered(asset, feedsAccessAddress);
     }
@@ -205,27 +172,16 @@ contract PluginDirectOracle is PriceOracle {
     /**
      * @notice Set manual price fallback
      */
-    function setUnderlyingPrice(
-        PToken pToken,
-        uint underlyingPriceMantissa
-    ) external onlyAdmin {
+    function setUnderlyingPrice(PToken pToken, uint256 underlyingPriceMantissa) external onlyAdmin {
         address asset = _getUnderlyingAddress(pToken);
-        emit PricePosted(
-            asset,
-            prices[asset],
-            underlyingPriceMantissa,
-            underlyingPriceMantissa
-        );
+        emit PricePosted(asset, prices[asset], underlyingPriceMantissa, underlyingPriceMantissa);
         prices[asset] = underlyingPriceMantissa;
     }
 
     /**
      * @notice Set stale threshold for an asset
      */
-    function setAssetStaleThreshold(
-        address asset,
-        uint threshold
-    ) external onlyAdmin {
+    function setAssetStaleThreshold(address asset, uint256 threshold) external onlyAdmin {
         feedsStaleThreshold[asset] = threshold;
     }
 
@@ -248,11 +204,7 @@ contract PluginDirectOracle is PriceOracle {
         return owner;
     }
 
-    function compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) ==
-            keccak256(abi.encodePacked((b))));
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 }

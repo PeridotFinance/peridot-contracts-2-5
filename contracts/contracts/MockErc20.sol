@@ -36,10 +36,7 @@ contract MockErc20 is EIP20Interface {
         emit Transfer(from, address(0), amount);
     }
 
-    function transfer(
-        address dst,
-        uint256 amount
-    ) external override returns (bool) {
+    function transfer(address dst, uint256 amount) external override returns (bool) {
         require(balanceOf[msg.sender] >= amount, "Insufficient balance");
         balanceOf[msg.sender] -= amount;
         balanceOf[dst] += amount;
@@ -47,11 +44,7 @@ contract MockErc20 is EIP20Interface {
         return true;
     }
 
-    function transferFrom(
-        address src,
-        address dst,
-        uint256 amount
-    ) external override returns (bool) {
+    function transferFrom(address src, address dst, uint256 amount) external override returns (bool) {
         require(balanceOf[src] >= amount, "Insufficient balance");
         require(allowance[src][msg.sender] >= amount, "Insufficient allowance");
 
@@ -63,10 +56,7 @@ contract MockErc20 is EIP20Interface {
         return true;
     }
 
-    function approve(
-        address spender,
-        uint256 amount
-    ) external override returns (bool) {
+    function approve(address spender, uint256 amount) external override returns (bool) {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;

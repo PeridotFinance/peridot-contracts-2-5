@@ -22,7 +22,7 @@ contract PEther is PToken {
     constructor(
         PeridottrollerInterface peridottroller_,
         InterestRateModel interestRateModel_,
-        uint initialExchangeRateMantissa_,
+        uint256 initialExchangeRateMantissa_,
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
@@ -31,20 +31,15 @@ contract PEther is PToken {
         // Creator of the contract is admin during initialization
         admin = payable(msg.sender);
 
-        initialize(
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
-        );
+        initialize(peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_);
 
         // Set the proper admin now that initialization is done
         admin = admin_;
     }
 
-    /*** User Interface ***/
+    /**
+     * User Interface **
+     */
 
     /**
      * @notice Sender supplies assets into the market and receives pTokens in exchange
@@ -60,7 +55,7 @@ contract PEther is PToken {
      * @param redeemTokens The number of pTokens to redeem into underlying
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeem(uint redeemTokens) external returns (uint) {
+    function redeem(uint256 redeemTokens) external returns (uint256) {
         redeemInternal(redeemTokens);
         return NO_ERROR;
     }
@@ -71,7 +66,7 @@ contract PEther is PToken {
      * @param redeemAmount The amount of underlying to redeem
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeemUnderlying(uint redeemAmount) external returns (uint) {
+    function redeemUnderlying(uint256 redeemAmount) external returns (uint256) {
         redeemUnderlyingInternal(redeemAmount);
         return NO_ERROR;
     }
@@ -81,7 +76,7 @@ contract PEther is PToken {
      * @param borrowAmount The amount of the underlying asset to borrow
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function borrow(uint borrowAmount) external returns (uint) {
+    function borrow(uint256 borrowAmount) external returns (uint256) {
         borrowInternal(borrowAmount);
         return NO_ERROR;
     }
@@ -110,10 +105,7 @@ contract PEther is PToken {
      * @param borrower The borrower of this pToken to be liquidated
      * @param pTokenCollateral The market in which to seize collateral from the borrower
      */
-    function liquidateBorrow(
-        address borrower,
-        PToken pTokenCollateral
-    ) external payable {
+    function liquidateBorrow(address borrower, PToken pTokenCollateral) external payable {
         liquidateBorrowInternal(borrower, msg.value, pTokenCollateral);
     }
 
@@ -121,7 +113,7 @@ contract PEther is PToken {
      * @notice The sender adds to reserves.
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function _addReserves() external payable returns (uint) {
+    function _addReserves() external payable returns (uint256) {
         return _addReservesInternal(msg.value);
     }
 
@@ -132,7 +124,9 @@ contract PEther is PToken {
         mintInternal(msg.value);
     }
 
-    /*** Flash Loan Support ***/
+    /**
+     * Flash Loan Support **
+     */
 
     /**
      * @notice Returns the underlying token address for flash loans
@@ -143,14 +137,16 @@ contract PEther is PToken {
         return 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // ETH sentinel address
     }
 
-    /*** Safe Token ***/
+    /**
+     * Safe Token **
+     */
 
     /**
      * @notice Gets balance of this contract in terms of Ether, before this message
      * @dev This excludes the value of the current message, if any
      * @return The quantity of Ether owned by this contract
      */
-    function getCashPrior() internal view override returns (uint) {
+    function getCashPrior() internal view override returns (uint256) {
         return address(this).balance - msg.value;
     }
 
@@ -160,20 +156,14 @@ contract PEther is PToken {
      * @param amount Amount of Ether being sent
      * @return The actual amount of Ether transferred
      */
-    function doTransferIn(
-        address from,
-        uint amount
-    ) internal override returns (uint) {
+    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         // Sanity checks
         require(msg.sender == from, "sender mismatch");
         require(msg.value == amount, "value mismatch");
         return amount;
     }
 
-    function doTransferOut(
-        address payable to,
-        uint amount
-    ) internal virtual override {
+    function doTransferOut(address payable to, uint256 amount) internal virtual override {
         /* Send the Ether, with minimal gas and revert on failure */
         to.transfer(amount);
     }

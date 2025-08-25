@@ -4,8 +4,6 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {PeridotSpoke} from "../contracts/PeridotSpoke.sol";
 import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
-import {PeridotForwarder} from "../contracts/PeridotForwarder.sol";
-import {PeridotSpokeReceiver} from "../contracts/PeridotSpokeReceiver.sol";
 import {MockAxelarGateway} from "./MockAxelarGateway.sol";
 import {MockErc20} from "../contracts/MockErc20.sol";
 import {PErc20CrossChain} from "../contracts/PErc20CrossChain.sol";
@@ -23,8 +21,6 @@ contract CrossChainLendingTest is Test {
     // Contracts to test
     PeridotSpoke spoke;
     PeridotHubHandler hubHandler;
-    PeridotForwarder forwarder;
-    PeridotSpokeReceiver spokeReceiver;
     PErc20CrossChain pToken;
 
     // Users
@@ -40,54 +36,54 @@ contract CrossChainLendingTest is Test {
         peridottroller = new MockPeridottroller();
         interestRateModel = new MockInterestRateModel();
 
-        // Deploy contracts
-        forwarder = new PeridotForwarder();
-        hubHandler = new PeridotHubHandler(address(mockGateway), address(mockGateway), address(forwarder));
+        // Deploy contracts (PeridotHubHandler constructor takes gateway and gasService)
+        hubHandler = new PeridotHubHandler(
+            address(mockGateway),
+            address(mockGateway) // Using mockGateway for gasService too
+        );
+        pToken = new PErc20CrossChain(address(hubHandler)); // Pass hub handler address
+
         string memory hubHandlerStr = Strings.toHexString(uint256(uint160(address(hubHandler))), 20);
-        spoke = new PeridotSpoke(address(mockGateway), "Ethereum", hubHandlerStr);
-        spokeReceiver = new PeridotSpokeReceiver(address(mockGateway));
-        pToken = new PErc20CrossChain();
+
+        spoke = new PeridotSpoke();
+        spoke.initialize(address(mockGateway), address(mockGateway), "Ethereum", hubHandlerStr, address(this));
+
+        // Initialize pToken
         pToken.initialize(address(token), peridottroller, interestRateModel, 1e18, "Peridot Mock Token", "pMTK", 18);
 
         // Link contracts
         mockGateway.setHubHandler(payable(address(hubHandler)));
         hubHandler.setPToken(address(token), address(pToken));
-        pToken._setForwarder(address(forwarder));
-        spoke.setPToken(address(pToken));
+        // New safeguards: allowlist pToken and set Axelar symbol mapping for underlying
+        hubHandler.setAllowedPToken(address(pToken), true);
+        hubHandler.setUnderlyingAxelarSymbol(address(token), "MTK");
 
+        // Authorize the spoke contract on the hub
+        hubHandler.setSpokeContract("Ethereum", Strings.toHexString(uint256(uint160(address(spoke))), 20));
+
+        // Register token with mock Axelar gateway
+        mockGateway.setTokenAddress("MTK", address(token));
 
         // Mint tokens and provide ether to alice
         vm.deal(alice, 100 ether);
-        vm.startPrank(alice);
         token.mint(alice, 1_000_000e18);
-        vm.stopPrank();
     }
 
     function testSupply() public {
         uint256 amount = 100e18;
 
-        // 1. User approves the gateway to spend their tokens
-        vm.prank(alice);
-        token.approve(address(mockGateway), amount);
+        // 1. User approves the spoke contract to spend their tokens
+        vm.startPrank(alice);
+        token.approve(address(spoke), amount);
 
         // 2. User initiates the supply operation on the spoke contract
-        PeridotForwarder.UserAction memory userAction = PeridotForwarder.UserAction({
-            user: alice,
-            asset: address(token), // The asset being supplied on the spoke chain is the underlying
-            amount: amount,
-            nonce: 0,
-            deadline: 0
-        });
+        // No signature or complex UserAction is needed anymore.
+        spoke.supplyToPeridot{value: 1 ether}("MTK", amount);
 
-        bytes32 digest = forwarder.getTypedDataHash(userAction);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePrivateKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        vm.stopPrank();
 
-        // The spoke contract is the one sending the cross-chain message, with a gas fee
-        vm.prank(alice);
-        spoke.supplyToPeridot{value: 1 ether}(userAction.user, userAction.asset, userAction.amount, userAction.nonce, userAction.deadline, signature);
-
-        // Assert that the user's pToken balance on the hub has increased
+        // Assert that the user's pToken balance on the hub has increased.
+        // The mock gateway simulates the cross-chain call and minting.
         assertEq(pToken.balanceOf(alice), amount);
     }
 
@@ -95,35 +91,17 @@ contract CrossChainLendingTest is Test {
         // First, supply collateral to be able to borrow
         testSupply();
 
-        // No approval is needed for borrow on the spoke chain
-
-        uint256 borrowAmount = 50e18; // Borrow 50 tokens
+        uint256 borrowAmount = 50e18;
         uint256 balanceAfterSupply = token.balanceOf(alice);
-        
-        // Debug: Check balance after supply
-        // Should be 999,900 tokens (1,000,000 - 100)
-        assertEq(balanceAfterSupply, 999900e18);
 
-        // In testBorrow, we must use a new nonce (1) because testSupply used nonce 0.
-        uint256 borrowNonce = 1;
+        // In the new architecture, the user doesn't need to sign a message for borrowing.
+        // They just call the spoke contract directly.
+        vm.startPrank(alice);
+        spoke.borrowFromPeridot{value: 1 ether}(address(pToken), borrowAmount);
+        vm.stopPrank();
 
-        PeridotForwarder.UserAction memory userAction = PeridotForwarder.UserAction({
-            user: alice,
-            asset: address(pToken), // Borrow is against the pToken asset
-            amount: borrowAmount,
-            nonce: borrowNonce,
-            deadline: block.timestamp
-        });
-
-        bytes32 digest = forwarder.getTypedDataHash(userAction);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePrivateKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
-
-        // The user calls the spoke contract to initiate the borrow
-        vm.prank(alice);
-        spoke.borrowFromPeridot{value: 1 ether}(userAction.user, userAction.asset, userAction.amount, userAction.nonce, userAction.deadline, signature);
-
-        // Assert that the user's token balance on the spoke chain has increased by the borrow amount
+        // Assert that the user's token balance on the spoke chain has increased by the borrow amount.
+        // The mock gateway simulates the borrow on the hub and the token transfer back to the spoke.
         uint256 finalBalance = token.balanceOf(alice);
         assertEq(finalBalance, balanceAfterSupply + borrowAmount);
     }

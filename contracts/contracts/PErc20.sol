@@ -27,27 +27,22 @@ contract PErc20 is PToken, PErc20Interface {
         address underlying_,
         PeridottrollerInterface peridottroller_,
         InterestRateModel interestRateModel_,
-        uint initialExchangeRateMantissa_,
+        uint256 initialExchangeRateMantissa_,
         string memory name_,
         string memory symbol_,
         uint8 decimals_
     ) public {
         // PToken initialize does the bulk of the work
-        super.initialize(
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
-        );
+        super.initialize(peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_);
 
         // Set underlying and sanity check it
         underlying = underlying_;
         EIP20Interface(underlying).totalSupply();
     }
 
-    /*** User Interface ***/
+    /**
+     * User Interface **
+     */
 
     /**
      * @notice Sender supplies assets into the market and receives pTokens in exchange
@@ -55,7 +50,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param mintAmount The amount of the underlying asset to supply
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function mint(uint mintAmount) external override returns (uint) {
+    function mint(uint256 mintAmount) external override returns (uint256) {
         mintInternal(mintAmount);
         return NO_ERROR;
     }
@@ -66,7 +61,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param redeemTokens The number of pTokens to redeem into underlying
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeem(uint redeemTokens) external override returns (uint) {
+    function redeem(uint256 redeemTokens) external override returns (uint256) {
         redeemInternal(redeemTokens);
         return NO_ERROR;
     }
@@ -77,9 +72,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param redeemAmount The amount of underlying to redeem
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeemUnderlying(
-        uint redeemAmount
-    ) external override returns (uint) {
+    function redeemUnderlying(uint256 redeemAmount) external override returns (uint256) {
         redeemUnderlyingInternal(redeemAmount);
         return NO_ERROR;
     }
@@ -89,7 +82,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param borrowAmount The amount of the underlying asset to borrow
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function borrow(uint borrowAmount) external override returns (uint) {
+    function borrow(uint256 borrowAmount) external override returns (uint256) {
         borrowInternal(borrowAmount);
         return NO_ERROR;
     }
@@ -99,7 +92,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param repayAmount The amount to repay, or -1 for the full outstanding amount
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function repayBorrow(uint repayAmount) external override returns (uint) {
+    function repayBorrow(uint256 repayAmount) external override returns (uint256) {
         repayBorrowInternal(repayAmount);
         return NO_ERROR;
     }
@@ -110,10 +103,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param repayAmount The amount to repay, or -1 for the full outstanding amount
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function repayBorrowBehalf(
-        address borrower,
-        uint repayAmount
-    ) external override returns (uint) {
+    function repayBorrowBehalf(address borrower, uint256 repayAmount) external override returns (uint256) {
         repayBorrowBehalfInternal(borrower, repayAmount);
         return NO_ERROR;
     }
@@ -126,11 +116,11 @@ contract PErc20 is PToken, PErc20Interface {
      * @param pTokenCollateral The market in which to seize collateral from the borrower
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function liquidateBorrow(
-        address borrower,
-        uint repayAmount,
-        PTokenInterface pTokenCollateral
-    ) external override returns (uint) {
+    function liquidateBorrow(address borrower, uint256 repayAmount, PTokenInterface pTokenCollateral)
+        external
+        override
+        returns (uint256)
+    {
         liquidateBorrowInternal(borrower, repayAmount, pTokenCollateral);
         return NO_ERROR;
     }
@@ -140,14 +130,8 @@ contract PErc20 is PToken, PErc20Interface {
      * @param token The address of the ERC-20 token to sweep
      */
     function sweepToken(EIP20NonStandardInterface token) external override {
-        require(
-            msg.sender == admin,
-            "PErc20::sweepToken: only admin can sweep tokens"
-        );
-        require(
-            address(token) != underlying,
-            "PErc20::sweepToken: can not sweep underlying token"
-        );
+        require(msg.sender == admin, "PErc20::sweepToken: only admin can sweep tokens");
+        require(address(token) != underlying, "PErc20::sweepToken: can not sweep underlying token");
         uint256 balance = token.balanceOf(address(this));
         token.transfer(admin, balance);
     }
@@ -157,11 +141,13 @@ contract PErc20 is PToken, PErc20Interface {
      * @param addAmount The amount fo underlying token to add as reserves
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function _addReserves(uint addAmount) external override returns (uint) {
+    function _addReserves(uint256 addAmount) external override returns (uint256) {
         return _addReservesInternal(addAmount);
     }
 
-    /*** Flash Loan Support ***/
+    /**
+     * Flash Loan Support **
+     */
 
     /**
      * @notice Returns the underlying token address for flash loans
@@ -171,14 +157,16 @@ contract PErc20 is PToken, PErc20Interface {
         return underlying;
     }
 
-    /*** Safe Token ***/
+    /**
+     * Safe Token **
+     */
 
     /**
      * @notice Gets balance of this contract in terms of the underlying
      * @dev This excludes the value of the current message, if any
      * @return The quantity of underlying tokens owned by this contract
      */
-    function getCashPrior() internal view virtual override returns (uint) {
+    function getCashPrior() internal view virtual override returns (uint256) {
         EIP20Interface token = EIP20Interface(underlying);
         return token.balanceOf(address(this));
     }
@@ -192,18 +180,11 @@ contract PErc20 is PToken, PErc20Interface {
      *      Note: This wrapper safely handles non-standard ERC-20 tokens that do not return a value.
      *            See here: https://medium.com/coinmonks/missing-return-value-bug-at-least-130-tokens-affected-d67bf08521ca
      */
-    function doTransferIn(
-        address from,
-        uint amount
-    ) internal virtual override returns (uint) {
+    function doTransferIn(address from, uint256 amount) internal virtual override returns (uint256) {
         // Read from storage once
         address underlying_ = underlying;
-        EIP20NonStandardInterface token = EIP20NonStandardInterface(
-            underlying_
-        );
-        uint balanceBefore = EIP20Interface(underlying_).balanceOf(
-            address(this)
-        );
+        EIP20NonStandardInterface token = EIP20NonStandardInterface(underlying_);
+        uint256 balanceBefore = EIP20Interface(underlying_).balanceOf(address(this));
         token.transferFrom(from, address(this), amount);
 
         bool success;
@@ -226,9 +207,7 @@ contract PErc20 is PToken, PErc20Interface {
         require(success, "TOKEN_TRANSFER_IN_FAILED");
 
         // Calculate the amount that was *actually* transferred
-        uint balanceAfter = EIP20Interface(underlying_).balanceOf(
-            address(this)
-        );
+        uint256 balanceAfter = EIP20Interface(underlying_).balanceOf(address(this));
         return balanceAfter - balanceBefore; // underflow already checked above, just subtract
     }
 
@@ -241,10 +220,7 @@ contract PErc20 is PToken, PErc20Interface {
      *      Note: This wrapper safely handles non-standard ERC-20 tokens that do not return a value.
      *            See here: https://medium.com/coinmonks/missing-return-value-bug-at-least-130-tokens-affected-d67bf08521ca
      */
-    function doTransferOut(
-        address payable to,
-        uint amount
-    ) internal virtual override {
+    function doTransferOut(address payable to, uint256 amount) internal virtual override {
         EIP20NonStandardInterface token = EIP20NonStandardInterface(underlying);
         token.transfer(to, amount);
 
@@ -274,10 +250,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @dev PTokens whose underlying are not PeridotLike should revert here
      */
     function _delegatePeridotLikeTo(address peridotLikeDelegatee) external {
-        require(
-            msg.sender == admin,
-            "only the admin may set the peridot-like delegate"
-        );
+        require(msg.sender == admin, "only the admin may set the peridot-like delegate");
         PeridotLike(underlying).delegate(peridotLikeDelegatee);
     }
 }

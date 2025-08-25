@@ -7,14 +7,6 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
 
 contract MockAxelarGateway is IAxelarGateway, IAxelarGasService {
-    // Local struct mirroring PeridotForwarder.UserAction for decoding
-    struct UserAction {
-        address user;
-        address asset;
-        uint256 amount;
-        uint256 nonce;
-        uint256 deadline;
-    }
     address public gasService;
     address payable public hubHandler;
 
@@ -26,96 +18,99 @@ contract MockAxelarGateway is IAxelarGateway, IAxelarGasService {
         hubHandler = _hubHandler;
     }
 
+    // Simulates a cross-chain call that includes a token transfer.
     function callContractWithToken(
-        string calldata destinationChain,
-        string calldata destinationAddress,
+        string calldata, // destinationChain
+        string calldata, // destinationAddress
         bytes calldata payload,
         string calldata symbol,
         uint256 amount
     ) external payable {
         if (msg.sender == hubHandler) {
-            // This is a hub-to-spoke transfer (borrow return trip)
-            // Decode the payload to get the user address and token address
-            (address user, address tokenAddr) = abi.decode(payload, (address, address));
-            
-            // Transfer tokens from hub handler to the user (simulating cross-chain delivery)
-            if (amount > 0) {
-                IERC20(tokenAddr).transferFrom(hubHandler, user, amount);
-            }
-        } else {
-            // This is a spoke-to-hub transfer (supply operation)
-            (address user, address tokenAddr, ) = decodeUserAction(payload);
-            
-            // The gateway pulls the tokens from the user and forwards them to the hub handler
-            if (amount > 0) {
-                IERC20(tokenAddr).transferFrom(user, hubHandler, amount);
-            }
+            // --- Hub-to-Spoke Transfer (Borrow Return Trip) ---
+            // The hub sends tokens back to a user on the spoke chain.
+            address tokenAddr = tokenAddresses(symbol);
+            address user = abi.decode(payload, (address));
 
-            string memory sourceAddress = Strings.toHexString(uint256(uint160(user)));
-            if (amount > 0) {
-                PeridotHubHandler(hubHandler).executeWithToken{value: msg.value}(bytes32(0), "SpokeChain", sourceAddress, payload, symbol, amount);
-            } else {
-                PeridotHubHandler(hubHandler).execute{value: msg.value}(bytes32(0), "SpokeChain", sourceAddress, payload);
-            }
+            // Simulate the token transfer from the HubHandler to the end user.
+            IERC20(tokenAddr).transferFrom(hubHandler, user, amount);
+        } else {
+            // --- Spoke-to-Hub Transfer (Supply Operation) ---
+            // 1. Simulate the gateway pulling tokens from the Spoke contract (msg.sender).
+            address tokenAddr = tokenAddresses(symbol);
+            IERC20(tokenAddr).transferFrom(msg.sender, hubHandler, amount);
+
+            // 2. Simulate the gateway calling the HubHandler.
+            // The sourceAddress in a real transaction would be the Spoke contract's address as a string.
+            string memory sourceAddressStr = Strings.toHexString(uint256(uint160(msg.sender)), 20);
+
+            PeridotHubHandler(hubHandler).executeWithToken(
+                bytes32(0),
+                "Ethereum", // Mock source chain
+                sourceAddressStr,
+                payload,
+                symbol,
+                amount
+            );
         }
     }
 
-    function callContract(string calldata destinationChain, string calldata destinationAddress, bytes calldata payload) external payable {
-        (address user, address tokenAddr, uint256 amount) = decodeUserAction(payload);
-        string memory sourceAddress = Strings.toHexString(uint256(uint160(user)));
-        // callContract is used for borrow operations - always call execute, never executeWithToken
-        PeridotHubHandler(hubHandler).execute{value: msg.value}(bytes32(0), "SpokeChain", sourceAddress, payload);
+    // Simulates a cross-chain call without a token transfer.
+    function callContract(
+        string calldata, // destinationChain
+        string calldata, // destinationAddress
+        bytes calldata payload
+    ) external payable {
+        // --- Spoke-to-Hub Transfer (Borrow Request) ---
+        // This is a message from the Spoke contract to the HubHandler to initiate a borrow.
+        // The sourceAddress is the Spoke contract's address.
+        string memory sourceAddressStr = Strings.toHexString(uint256(uint160(msg.sender)), 20);
+
+        PeridotHubHandler(hubHandler).execute(
+            bytes32(0),
+            "Ethereum", // Mock source chain
+            sourceAddressStr,
+            payload
+        );
     }
 
+    // --- Mock Gas Service Functions ---
     function payNativeGasForContractCallWithToken(
-        address, // source
-        string calldata, // destinationChain
-        string calldata, // destinationContract (address in string form)
-        bytes calldata, // payload
-        string calldata, // symbol
-        uint256, // amount
-        address // refundAddress
-    ) external payable {}
-
-    function payNativeGasForContractCall(
         address,
         string calldata,
-        string calldata, // destinationAddress
+        string calldata,
         bytes calldata,
+        string calldata,
+        uint256,
         address
     ) external payable {}
 
-    // ----------------- Helper decoding functions -----------------
-    // These helper functions are used via try/catch to safely extract token address information from arbitrary payloads.
+    function payNativeGasForContractCall(address, string calldata, string calldata, bytes calldata, address)
+        external
+        payable
+    {}
 
-    /**
-     * @notice Decode a supply payload of form abi.encode(UserAction, signature)
-     * @param payload The calldata payload
-     * @return user The user address contained in the UserAction struct
-     * @return asset The asset address contained in the UserAction struct
-     * @return amount The amount contained in the UserAction struct
-     */
-    function decodeUserAction(bytes memory payload) public pure returns (address user, address asset, uint256 amount) {
-        (UserAction memory action, /* bytes memory signature */) = abi.decode(payload, (UserAction, bytes));
-        user = action.user;
-        asset = action.asset;
-        amount = action.amount;
+    // --- Mock Token Registry ---
+    mapping(string => address) private _tokenAddresses;
+
+    function setTokenAddress(string memory symbol, address token) external {
+        _tokenAddresses[symbol] = token;
     }
 
-    function decodeUserActionAsset(bytes memory payload) public pure returns (address asset) {
-        (UserAction memory action, /* bytes memory signature */) = abi.decode(payload, (UserAction, bytes));
-        asset = action.asset;
+    function tokenAddresses(string memory symbol) public view returns (address) {
+        return _tokenAddresses[symbol];
     }
 
-    /**
-     * @notice Decode a borrow-return payload of form abi.encode(user, tokenAddr)
-     * @param payload The calldata payload
-     * @return token The token address
-     */
-    function decodeTokenAddr(bytes memory payload) external pure returns (address token) {
-        (/* address user */, address tokenAddr) = abi.decode(payload, (address, address));
-        token = tokenAddr;
+    // --- Mock Validation Functions (Always true for tests) ---
+    function validateContractCallAndMint(bytes32, string calldata, string calldata, bytes32, string calldata, uint256)
+        external
+        pure
+        returns (bool)
+    {
+        return true;
     }
 
-
+    function validateContractCall(bytes32, string calldata, string calldata, bytes32) external pure returns (bool) {
+        return true;
+    }
 }

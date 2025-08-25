@@ -10,7 +10,7 @@ contract SupportMarket is Script {
     address constant PERIDOTTROLLER_ADDRESS =
         0xe8F09917d56Cc5B634f4DE091A2c82189dc41b54;
     address constant PTOKEN_ADDRESS =
-        0xC4FE7BD6b9EdD67bF2ba5daa317D7cd80E1913bb; // PErc20Delegator (Proxy) address
+        0x39e955B2Dc405062b4212026EEC24CCBB81b9065; // PErc20Delegator (Proxy) address
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -24,7 +24,7 @@ contract SupportMarket is Script {
         require(result == 0, "Failed to support market");
 
         // Set collateral factor (75% for USDC)
-        uint256 collateralFactor = 0.20 * 1e18;
+        uint256 collateralFactor = 0.80 * 1e18;
         uint256 collateralResult = comptroller._setCollateralFactor(
             PToken(PTOKEN_ADDRESS),
             collateralFactor
@@ -32,9 +32,8 @@ contract SupportMarket is Script {
         require(collateralResult == 0, "Failed to set collateral factor");
 
         // Set reserve factor (8% for higher supplier APY)
-        PToken pToken = PToken(PTOKEN_ADDRESS);
-        uint256 reserveResult = pToken._setReserveFactor(0.10 * 1e18);
-        require(reserveResult == 0, "Failed to set reserve factor");
+        /*PToken pToken = PToken(PTOKEN_ADDRESS);
+        uint256 reserveResult = pToken._setReserveFactor(0.10 * 1e18);*/
 
         vm.stopBroadcast();
 

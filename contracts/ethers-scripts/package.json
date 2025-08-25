@@ -1,0 +1,23 @@
+{
+  "name": "axelar-bridge-scripts",
+  "version": "1.0.0",
+  "description": "Scripts for bridging tokens using Axelar SDK",
+  "main": "axelar-bridge.js",
+  "scripts": {
+    "bridge": "node axelar-bridge.js",
+    "bridge:wbnb": "node axelar-bridge.js --token WBNB --amount 0.1 --recipient",
+    "bridge:bnb": "node axelar-bridge.js --token BNB --amount 0.1 --recipient"
+  },
+  "dependencies": {
+    "@axelar-network/axelarjs-sdk": "^0.15.0",
+    "ethers": "^6.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Peridot Protocol",
+  "license": "MIT"
+}

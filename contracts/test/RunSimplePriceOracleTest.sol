@@ -35,13 +35,7 @@ contract RunSimplePriceOracleTest {
             uint256 staleThreshold
         ) = testContract.getTestInfo();
 
-        emit TestInfo(
-            oracleAddress,
-            underlyingAddress,
-            pTokenAddress,
-            aggregatorAddress,
-            staleThreshold
-        );
+        emit TestInfo(oracleAddress, underlyingAddress, pTokenAddress, aggregatorAddress, staleThreshold);
 
         emit TestCompleted();
     }

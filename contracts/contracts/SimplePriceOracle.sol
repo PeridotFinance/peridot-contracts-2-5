@@ -7,21 +7,18 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract SimplePriceOracle is PriceOracle {
-    mapping(address => uint) prices;
+    mapping(address => uint256) prices;
     mapping(address => bool) public admin;
     mapping(address => AggregatorV3Interface) public assetToAggregator; // Maps asset addresses to Chainlink aggregators
-    mapping(address => uint) public lastValidChainlinkPrice; // Stores the last valid price from Chainlink
+    mapping(address => uint256) public lastValidChainlinkPrice; // Stores the last valid price from Chainlink
     address private owner;
-    uint public chainlinkPriceStaleThreshold; // Maximum age of price feed in seconds (default 3600 = 1 hour)
+    uint256 public chainlinkPriceStaleThreshold; // Maximum age of price feed in seconds (default 3600 = 1 hour)
 
     event PricePosted(
-        address asset,
-        uint previousPriceMantissa,
-        uint requestedPriceMantissa,
-        uint newPriceMantissa
+        address asset, uint256 previousPriceMantissa, uint256 requestedPriceMantissa, uint256 newPriceMantissa
     );
     event ChainlinkFeedRegistered(address asset, address aggregator);
-    event LastChainlinkPriceUpdated(address indexed asset, uint priceMantissa);
+    event LastChainlinkPriceUpdated(address indexed asset, uint256 priceMantissa);
 
     modifier onlyAdmin() {
         require(admin[msg.sender], "Only admin can call this function");
@@ -33,15 +30,13 @@ contract SimplePriceOracle is PriceOracle {
         _;
     }
 
-    constructor(uint _staleThreshold) {
+    constructor(uint256 _staleThreshold) {
         owner = msg.sender;
         admin[msg.sender] = true;
         chainlinkPriceStaleThreshold = _staleThreshold; // Default: 3600 seconds (1 hour)
     }
 
-    function _getUnderlyingAddress(
-        PToken pToken
-    ) private view returns (address) {
+    function _getUnderlyingAddress(PToken pToken) private view returns (address) {
         address asset;
         if (compareStrings(pToken.symbol(), "pETH")) {
             asset = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -51,26 +46,20 @@ contract SimplePriceOracle is PriceOracle {
         return asset;
     }
 
-    function getUnderlyingPrice(
-        PToken pToken
-    ) public view override returns (uint) {
+    function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
         address asset = _getUnderlyingAddress(pToken);
         AggregatorV3Interface aggregator = assetToAggregator[asset];
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
-                if (
-                    block.timestamp - updatedAt <=
-                    chainlinkPriceStaleThreshold &&
-                    price > 0
-                ) {
+                if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
                     // Price is fresh and valid, convert to 18 decimals
                     uint8 decimals = aggregator.decimals();
                     uint256 priceMantissa = uint256(price);
@@ -84,7 +73,7 @@ contract SimplePriceOracle is PriceOracle {
                     return priceMantissa;
                 } else {
                     // Price is stale or invalid, return last known valid price if available
-                    uint lastValidPrice = lastValidChainlinkPrice[asset];
+                    uint256 lastValidPrice = lastValidChainlinkPrice[asset];
                     if (lastValidPrice != 0) {
                         return lastValidPrice;
                     }
@@ -92,7 +81,7 @@ contract SimplePriceOracle is PriceOracle {
                 }
             } catch {
                 // If latestRoundData fails, try returning last known valid price
-                uint lastValidPrice = lastValidChainlinkPrice[asset];
+                uint256 lastValidPrice = lastValidChainlinkPrice[asset];
                 if (lastValidPrice != 0) {
                     return lastValidPrice;
                 }
@@ -104,30 +93,19 @@ contract SimplePriceOracle is PriceOracle {
         return prices[asset];
     }
 
-    function setUnderlyingPrice(
-        PToken pToken,
-        uint underlyingPriceMantissa
-    ) public onlyAdmin {
+    function setUnderlyingPrice(PToken pToken, uint256 underlyingPriceMantissa) public onlyAdmin {
         address asset = _getUnderlyingAddress(pToken);
-        emit PricePosted(
-            asset,
-            prices[asset],
-            underlyingPriceMantissa,
-            underlyingPriceMantissa
-        );
+        emit PricePosted(asset, prices[asset], underlyingPriceMantissa, underlyingPriceMantissa);
         prices[asset] = underlyingPriceMantissa;
     }
 
-    function setDirectPrice(address asset, uint price) public onlyAdmin {
+    function setDirectPrice(address asset, uint256 price) public onlyAdmin {
         emit PricePosted(asset, prices[asset], price, price);
         prices[asset] = price;
     }
 
     // Register a Chainlink price feed for an asset
-    function registerChainlinkFeed(
-        address asset,
-        address aggregator
-    ) public onlyAdmin {
+    function registerChainlinkFeed(address asset, address aggregator) public onlyAdmin {
         require(aggregator != address(0), "Invalid aggregator address");
         assetToAggregator[asset] = AggregatorV3Interface(aggregator);
         emit ChainlinkFeedRegistered(asset, aggregator);
@@ -135,35 +113,27 @@ contract SimplePriceOracle is PriceOracle {
 
     // Update cached prices from Chainlink Oracle (can be called by anyone to update cache)
     function updateChainlinkPrices(address[] calldata assets) public {
-        for (uint i = 0; i < assets.length; i++) {
+        for (uint256 i = 0; i < assets.length; i++) {
             address asset = assets[i];
             AggregatorV3Interface aggregator = assetToAggregator[asset];
 
             if (address(aggregator) != address(0)) {
                 try aggregator.latestRoundData() returns (
-                    uint80 /* roundId */,
+                    uint80, /* roundId */
                     int256 price,
-                    uint256 /* startedAt */,
+                    uint256, /* startedAt */
                     uint256 updatedAt,
                     uint80 /* answeredInRound */
                 ) {
-                    if (
-                        block.timestamp - updatedAt <=
-                        chainlinkPriceStaleThreshold &&
-                        price > 0
-                    ) {
+                    if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
                         // Price is fresh and valid, update cache
                         uint8 decimals = aggregator.decimals();
                         uint256 priceMantissa = uint256(price);
 
                         if (decimals < 18) {
-                            priceMantissa =
-                                priceMantissa *
-                                (10 ** (18 - decimals));
+                            priceMantissa = priceMantissa * (10 ** (18 - decimals));
                         } else if (decimals > 18) {
-                            priceMantissa =
-                                priceMantissa /
-                                (10 ** (decimals - 18));
+                            priceMantissa = priceMantissa / (10 ** (decimals - 18));
                         }
 
                         lastValidChainlinkPrice[asset] = priceMantissa;
@@ -177,7 +147,7 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // Set the maximum age for Chainlink price feeds
-    function setChainlinkStaleThreshold(uint _newThreshold) public onlyOwner {
+    function setChainlinkStaleThreshold(uint256 _newThreshold) public onlyOwner {
         chainlinkPriceStaleThreshold = _newThreshold;
     }
 
@@ -205,12 +175,12 @@ contract SimplePriceOracle is PriceOracle {
     function withdrawLINK(address linkToken, address to, uint256 amount) public onlyOwner {
         require(to != address(0), "Cannot withdraw to zero address");
         require(amount > 0, "Amount must be greater than zero");
-        
+
         // Use the ERC20 interface to transfer LINK tokens
         IERC20 link = IERC20(linkToken);
         uint256 balance = link.balanceOf(address(this));
         require(balance >= amount, "Insufficient LINK balance");
-        
+
         bool success = link.transfer(to, amount);
         require(success, "LINK transfer failed");
     }
@@ -222,23 +192,19 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // v1 price oracle interface for use as backing of proxy
-    function assetPrices(address asset) external view returns (uint) {
+    function assetPrices(address asset) external view returns (uint256) {
         AggregatorV3Interface aggregator = assetToAggregator[asset];
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
-                if (
-                    block.timestamp - updatedAt <=
-                    chainlinkPriceStaleThreshold &&
-                    price > 0
-                ) {
+                if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
                     // Price is fresh and valid, convert to 18 decimals
                     uint8 decimals = aggregator.decimals();
                     uint256 priceMantissa = uint256(price);
@@ -252,7 +218,7 @@ contract SimplePriceOracle is PriceOracle {
                     return priceMantissa;
                 } else {
                     // Price is stale or invalid, return last known valid price if available
-                    uint lastValidPrice = lastValidChainlinkPrice[asset];
+                    uint256 lastValidPrice = lastValidChainlinkPrice[asset];
                     if (lastValidPrice != 0) {
                         return lastValidPrice;
                     }
@@ -260,7 +226,7 @@ contract SimplePriceOracle is PriceOracle {
                 }
             } catch {
                 // If latestRoundData fails, try returning last known valid price
-                uint lastValidPrice = lastValidChainlinkPrice[asset];
+                uint256 lastValidPrice = lastValidChainlinkPrice[asset];
                 if (lastValidPrice != 0) {
                     return lastValidPrice;
                 }
@@ -278,18 +244,10 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // Get the latest round data for an asset directly
-    function getLatestRoundData(
-        address asset
-    )
+    function getLatestRoundData(address asset)
         external
         view
-        returns (
-            uint80 roundId,
-            int256 price,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         AggregatorV3Interface aggregator = assetToAggregator[asset];
         require(address(aggregator) != address(0), "No aggregator for asset");
@@ -303,26 +261,14 @@ contract SimplePriceOracle is PriceOracle {
             return true; // No feed = stale
         }
 
-        try aggregator.latestRoundData() returns (
-            uint80,
-            int256 price,
-            uint256,
-            uint256 updatedAt,
-            uint80
-        ) {
-            return (block.timestamp - updatedAt >
-                chainlinkPriceStaleThreshold ||
-                price <= 0);
+        try aggregator.latestRoundData() returns (uint80, int256 price, uint256, uint256 updatedAt, uint80) {
+            return (block.timestamp - updatedAt > chainlinkPriceStaleThreshold || price <= 0);
         } catch {
             return true; // Failed call = stale
         }
     }
 
-    function compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) ==
-            keccak256(abi.encodePacked((b))));
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 }

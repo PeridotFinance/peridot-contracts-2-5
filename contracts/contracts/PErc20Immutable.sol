@@ -24,7 +24,7 @@ contract PErc20Immutable is PErc20 {
         address underlying_,
         PeridottrollerInterface peridottroller_,
         InterestRateModel interestRateModel_,
-        uint initialExchangeRateMantissa_,
+        uint256 initialExchangeRateMantissa_,
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
@@ -35,13 +35,7 @@ contract PErc20Immutable is PErc20 {
 
         // Initialize the market
         initialize(
-            underlying_,
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
+            underlying_, peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_
         );
 
         // Set the proper admin now that initialization is done

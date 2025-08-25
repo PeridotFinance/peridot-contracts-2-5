@@ -5,45 +5,66 @@ import {PeridottrollerInterface} from "../contracts/PeridottrollerInterface.sol"
 import {PToken} from "../contracts/PToken.sol";
 
 contract MockPeridottroller is PeridottrollerInterface {
-    function enterMarkets(address[] calldata pTokens) external override returns (uint[] memory) {
-        return new uint[](pTokens.length);
+    function enterMarkets(address[] calldata pTokens) external override returns (uint256[] memory) {
+        return new uint256[](pTokens.length);
     }
 
-    function exitMarket(address pToken) external override returns (uint) {
+    function exitMarket(address pToken) external override returns (uint256) {
         return 0;
     }
 
-    function mintAllowed(address pToken, address minter, uint mintAmount) external override returns (uint) {
+    function mintAllowed(address pToken, address minter, uint256 mintAmount) external override returns (uint256) {
         return 0;
     }
 
-    function mintVerify(address pToken, address minter, uint mintAmount, uint mintTokens) external override {}
+    function mintVerify(address pToken, address minter, uint256 mintAmount, uint256 mintTokens) external override {}
 
-    function redeemAllowed(address pToken, address redeemer, uint redeemTokens) external override returns (uint) {
+    function redeemAllowed(address pToken, address redeemer, uint256 redeemTokens)
+        external
+        override
+        returns (uint256)
+    {
         return 0;
     }
 
-    function redeemVerify(address pToken, address redeemer, uint redeemAmount, uint redeemTokens) external override {}
+    function redeemVerify(address pToken, address redeemer, uint256 redeemAmount, uint256 redeemTokens)
+        external
+        override
+    {}
 
-    function borrowAllowed(address pToken, address borrower, uint borrowAmount) external override returns (uint) {
+    function borrowAllowed(address pToken, address borrower, uint256 borrowAmount)
+        external
+        override
+        returns (uint256)
+    {
         return 0;
     }
 
-    function borrowVerify(address pToken, address borrower, uint borrowAmount) external override {}
+    function borrowVerify(address pToken, address borrower, uint256 borrowAmount) external override {}
 
-    function repayBorrowAllowed(address pToken, address payer, address borrower, uint repayAmount) external override returns (uint) {
+    function repayBorrowAllowed(address pToken, address payer, address borrower, uint256 repayAmount)
+        external
+        override
+        returns (uint256)
+    {
         return 0;
     }
 
-    function repayBorrowVerify(address pToken, address payer, address borrower, uint repayAmount, uint borrowerIndex) external override {}
+    function repayBorrowVerify(
+        address pToken,
+        address payer,
+        address borrower,
+        uint256 repayAmount,
+        uint256 borrowerIndex
+    ) external override {}
 
     function liquidateBorrowAllowed(
         address pTokenBorrowed,
         address pTokenCollateral,
         address liquidator,
         address borrower,
-        uint repayAmount
-    ) external override returns (uint) {
+        uint256 repayAmount
+    ) external override returns (uint256) {
         return 0;
     }
 
@@ -52,8 +73,8 @@ contract MockPeridottroller is PeridottrollerInterface {
         address pTokenCollateral,
         address liquidator,
         address borrower,
-        uint repayAmount,
-        uint seizeTokens
+        uint256 repayAmount,
+        uint256 seizeTokens
     ) external override {}
 
     function seizeAllowed(
@@ -61,8 +82,8 @@ contract MockPeridottroller is PeridottrollerInterface {
         address pTokenBorrowed,
         address liquidator,
         address borrower,
-        uint seizeTokens
-    ) external override returns (uint) {
+        uint256 seizeTokens
+    ) external override returns (uint256) {
         return 0;
     }
 
@@ -71,27 +92,30 @@ contract MockPeridottroller is PeridottrollerInterface {
         address pTokenBorrowed,
         address liquidator,
         address borrower,
-        uint seizeTokens
+        uint256 seizeTokens
     ) external override {}
 
-    function transferAllowed(address pToken, address src, address dst, uint transferTokens) external override returns (uint) {
+    function transferAllowed(address pToken, address src, address dst, uint256 transferTokens)
+        external
+        override
+        returns (uint256)
+    {
         return 0;
     }
 
-    function transferVerify(address pToken, address src, address dst, uint transferTokens) external override {}
+    function transferVerify(address pToken, address src, address dst, uint256 transferTokens) external override {}
 
-    function liquidateCalculateSeizeTokens(
-        address pTokenBorrowed,
-        address pTokenCollateral,
-        uint repayAmount
-    ) external view override returns (uint, uint) {
+    function liquidateCalculateSeizeTokens(address pTokenBorrowed, address pTokenCollateral, uint256 repayAmount)
+        external
+        view
+        override
+        returns (uint256, uint256)
+    {
         return (0, 1e18);
     }
 
-    function getAccountLiquidity(
-        address account
-    ) external view override returns (uint, uint, uint) {
-        return (0, 1000e18, 0);
+    function getAccountLiquidity(address account) external view override returns (uint256, uint256, uint256) {
+        return (0, 10000e18, 0); // $10,000 liquidity
     }
 
     function getAllMarkets() external view override returns (PToken[] memory) {

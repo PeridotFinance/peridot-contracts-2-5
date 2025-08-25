@@ -1,20 +1,24 @@
 # Peridot Protocol V2 🌟
 
-A next-generation decentralized lending protocol with enterprise-grade cross-chain capabilities, powered by Chainlink's infrastructure and designed for seamless multi-chain DeFi operations.
+A next-generation decentralized lending protocol with enterprise-grade cross-chain capabilities, powered by **Axelar's General Message Passing (GMP)** for seamless multi-chain DeFi operations.
 
 ## 🚀 Overview
 
-Peridot Protocol V2 is a comprehensive lending and borrowing platform that combines the security of battle-tested DeFi primitives with cutting-edge cross-chain technology. Built with a modular "skateboard to car" approach, the protocol offers:
+Peridot Protocol V2 is a comprehensive lending and borrowing platform that combines the security of battle-tested DeFi primitives with cutting-edge cross-chain technology. The protocol offers:
 
-- **🔗 Cross-Chain Interoperability**: Powered by Chainlink CCIP for secure cross-chain messaging and operations
+- **🔗 Cross-Chain Interoperability**: Powered by Axelar for secure cross-chain messaging and token transfers
 - **📊 Reliable Price Feeds**: Enterprise-grade price oracles using Chainlink Data Feeds
-- **🎲 Fair Liquidations**: MEV-protected liquidation system using Chainlink VRF
-- **🏗️ Modular Architecture**: Scalable design supporting multiple blockchain networks
+- **🏗️ Hub & Spoke Architecture**: Scalable design supporting multiple blockchain networks
 - **🛡️ Battle-Tested Security**: Built on proven lending protocols with additional security layers
 
 ## 🏛️ Architecture
 
-### Core Protocol Components
+### **Hub & Spoke Model**
+
+- **Hub Chain** (e.g., BNB Chain): The central chain where lending pools and core logic reside.
+- **Spoke Chains** (e.g., Arbitrum): Users can supply and borrow from the hub without needing a wallet on the hub chain.
+
+### **Core Protocol Components**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -22,25 +26,26 @@ Peridot Protocol V2 is a comprehensive lending and borrowing platform that combi
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
-│  │  Peridottroller │    │    PTokens      │    │ Price Oracle│  │
-│  │   (Core Logic)  │◄──►│ (pUSDC, pETH)   │◄──►│  (Chainlink)│  │
+│  │ Peridottroller  │    │    PTokens      │    │ Price Oracle│  │
+│  │  (Core Logic)   │◄──►│ (pUSDC, pETH)   │◄──►│ (Chainlink) │  │
 │  └─────────────────┘    └─────────────────┘    └─────────────┘  │
 │           │                       │                      │      │
 │           ▼                       ▼                      ▼      │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
-│  │  Interest Rate  │    │   Liquidation   │    │    CCIP     │  │
-│  │     Models      │    │   (VRF-based)   │    │ Integration │  │
+│  │ Interest Rate   │    │ Cross-Chain Ops │    │ Axelar GMP  │  │
+│  │     Models      │    │ (Hub & Spoke)   │    │ Integration │  │
 │  └─────────────────┘    └─────────────────┘    └─────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Cross-Chain Integration
+### Cross-Chain Integration with Axelar
 
-The protocol leverages **Chainlink CCIP** for comprehensive cross-chain functionality:
+The protocol leverages **Axelar GMP** for all cross-chain functionality:
 
-- **Chainlink CCIP**: Secure cross-chain messaging and state synchronization
-- **Cross-Chain Operations**: Query account liquidity and manage markets across chains
-- **Unified Liquidity**: Access to protocol liquidity from any CCIP-supported blockchain
+- **PeridotSpoke.sol** (Spoke): User-facing contract to initiate supply/borrow operations
+- **PeridotHubHandler.sol** (Hub): Receives cross-chain messages and tokens from spoke chains
+- **PErc20CrossChain.sol** (Hub): Modified pToken that allows hub handler to mint/borrow on behalf of users
+- **Axelar Gas Service**: Pays for cross-chain transaction execution
 
 ## 🛠️ Technology Stack
 
@@ -49,22 +54,17 @@ The protocol leverages **Chainlink CCIP** for comprehensive cross-chain function
 - **Solidity ^0.8.20** - Core contract development
 - **Foundry** - Development framework and testing
 - **OpenZeppelin** - Security-audited contract libraries
-- **Hardhat** - Additional tooling and deployment scripts
 
 ### Cross-Chain Infrastructure
 
-- **Chainlink CCIP** - Cross-chain messaging and token transfers
-- **Chainlink Data Feeds** - Reliable price oracles
-- **Chainlink VRF** - Verifiable randomness for fair liquidations
+- **Axelar GMP** - Cross-chain messaging and token transfers
+- **Chainlink Data Feeds** - Reliable price oracles (on hub chain)
 
 ## 📋 Prerequisites
-
-Before getting started, ensure you have:
 
 - [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 - [Node.js](https://nodejs.org/) (v16 or higher)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation)
-- [Hardhat](https://hardhat.org/getting-started/)
 
 ## 🚀 Quick Start
 
@@ -91,168 +91,104 @@ Create a `.env` file with your configuration:
 
 ```bash
 # Network RPC URLs
-ETHEREUM_SEPOLIA_RPC_URL=your_sepolia_rpc_url
-AVALANCHE_FUJI_RPC_URL=your_fuji_rpc_url
+BNB_TESTNET_RPC_URL=your_bnb_testnet_rpc_url
+ARBITRUM_SEPOLIA_RPC_URL=your_arbitrum_rpc_url
 
 # Private key for deployment
 PRIVATE_KEY=your_private_key
-
-# API keys
-ETHERSCAN_API_KEY=your_etherscan_api_key
 ```
 
 ### 4. Compile Contracts
 
 ```bash
-# Using Foundry
 forge build
-
-# Using Hardhat
-npx hardhat compile
 ```
 
 ## 🏗️ Deployment Guide
 
-The protocol follows a structured deployment approach across five phases:
-
-### Phase 1: Core Protocol Deployment
-
-Deploy the foundational Peridot lending contracts:
+### Phase 1: Hub Chain Deployment (BNB Chain)
 
 ```bash
-# Deploy Price Oracle
-forge script script/DeployOracle.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
+# Deploy core hub contracts
+forge script script/DeployHub.s.sol --rpc-url $BNB_TESTNET_RPC_URL --private-key $PRIVATE_KEY --broadcast
 
-# Deploy Peridottroller
-forge script script/DeployPeridottroller.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-
-# Deploy PTokens
-forge script script/DeployPErc20.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
+# Deploy cross-chain pTokens
+forge script script/DeployPErc20CrossChain.s.sol --rpc-url $BNB_TESTNET_RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```
 
-### Phase 2: Chainlink Integration
-
-Deploy and configure Chainlink components:
+### Phase 2: Spoke Chain Deployment (Arbitrum)
 
 ```bash
-# Deploy all Chainlink integration contracts
-forge script script/DeployChainlinkIntegration.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-
-# Configure CCIP allowlists and settings
-forge script script/ConfigureChainlinkCCIP.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
+# Deploy spoke contract
+forge script script/DeploySpoke.s.sol --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```
 
-### Phase 3: CCIP Configuration
+### Phase 3: Configuration
 
-Configure cross-chain allowlists and test cross-chain functionality:
-
-```bash
-# Configure CCIP allowlists for cross-chain operations
-forge script script/ConfigureChainlinkCCIP.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-
-# Test cross-chain account liquidity queries
-forge script script/TestCCIPQueries.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-```
+- **Set pToken mappings** on the deployed `PeridotHubHandler`
+- **Set spoke contract addresses** on the `PeridotHubHandler`
 
 ## 🧪 Testing
-
-Run the comprehensive test suite:
 
 ```bash
 # Run all tests
 forge test
 
-# Run tests with verbosity
-forge test -vvv
-
 # Run specific test file
-forge test --match-path test/ChainlinkIntegration.t.sol
-
-# Generate coverage report
-forge coverage
+forge test --match-path test/CrossChainLending.t.sol
 ```
 
 ## 📖 Key Contracts
 
-### Core Protocol
+### Hub Chain Contracts
 
 - **`Peridottroller.sol`** - Main risk management and governance contract
-- **`PToken.sol`** - Base implementation for interest-bearing tokens
-- **`PErc20.sol`** - ERC20 market implementation
-- **`PEther.sol`** - Native ETH market implementation
+- **`PErc20CrossChain.sol`** - Modified pToken for cross-chain operations
+- **`PeridotHubHandler.sol`** - Axelar message and token receiver
 
-### Chainlink Integration
+### Spoke Chain Contracts
 
-- **`ChainlinkPriceOracle.sol`** - Chainlink Data Feeds integration
-- **`PeridotCCIPAdapter.sol`** - Cross-chain state management
-- **`PeridotCCIPController.sol`** - Cross-chain operation initiator
-- **`PeridotVRFLiquidator.sol`** - Fair liquidation with VRF
-
-### CCIP Cross-Chain Components
-
-- **`CCIPSender.sol`** - Basic cross-chain message sender
-- **`CCIPReceiver_Unsafe.sol`** - Basic cross-chain message receiver
-- **`PeridotCCIPReader.sol`** - Cross-chain query processor
-- **`PeridotCCIPSender.sol`** - Cross-chain query initiator
+- **`PeridotSpoke.sol`** - User-facing contract for supply/borrow
 
 ## 🔧 Available Scripts
 
 ### Deployment Scripts
 
-- `DeployPeridottroller.s.sol` - Deploy core controller
-- `DeployPErc20.s.sol` - Deploy ERC20 markets
-- `DeployChainlinkIntegration.s.sol` - Deploy all Chainlink components
-- `DeployOracle.s.sol` - Deploy price oracle
+- `DeployHub.s.sol` - Deploy all hub contracts
+- `DeploySpoke.s.sol` - Deploy spoke contract
+- `DeployPErc20CrossChain.s.sol` - Deploy cross-chain pTokens
 
-### Configuration Scripts
+### Usage Scripts
 
-- `ConfigureChainlinkCCIP.s.sol` - Configure CCIP allowlists and settings
-- `FetchPrice.s.sol` - Query Chainlink oracle prices
-
-### Testing Scripts
-
-- `TestCCIPQueries.s.sol` - Test cross-chain account liquidity queries
-- `TestCCIPOperations.s.sol` - Test cross-chain market operations
+- `CrossChainLend.s.sol` - Initiate supply and borrow operations from a spoke chain
 
 ## 🛡️ Security Features
 
-### Multi-Layer Security
-
-- **Allowlist Controls** - Restrict cross-chain interactions to approved contracts
-- **Source Validation** - Verify message origins and authenticity
-- **Rate Limiting** - Prevent abuse and ensure system stability
-- **Emergency Controls** - Circuit breakers and pause mechanisms
-
-### MEV Protection
-
-- **VRF Liquidations** - Use Chainlink VRF for fair liquidator selection
-- **Time Delays** - Prevent front-running with configurable delays
-- **Random Selection** - Eliminate predictable liquidation ordering
-
-### Oracle Security
-
-- **Staleness Checks** - Ensure price data freshness
-- **Fallback Oracles** - Backup price sources for reliability
-- **Deviation Monitoring** - Track and validate price movements
+- **Spoke Contract Authorization**: Only authorized spoke contracts can call the hub
+- **pToken Access Control**: Only the hub handler can mint/borrow on behalf of users
+- **Axelar Security**: Inherits security from Axelar's decentralized validator network
 
 ## 🌐 Cross-Chain Operations
 
-### Supported Operations
+### Supply Flow (Arbitrum → BNB Chain)
 
-- **Cross-Chain Queries** - Check account liquidity from any chain
-- **Market Management** - Enter/exit markets across chains
-- **Liquidation Monitoring** - Fair liquidation across all chains
+1. User calls `supplyToPeridot()` on Arbitrum `PeridotSpoke`
+2. Spoke sends tokens and message to Axelar Gateway
+3. `PeridotHubHandler` on BNB Chain receives tokens and calls `mintFor()` on `PErc20CrossChain`
+4. User receives pTokens on BNB Chain
 
-### Fee Structure
+### Borrow Flow (Arbitrum → BNB Chain → Arbitrum)
 
-- **CCIP Fees** - Paid in LINK tokens for cross-chain operations
-- **Gas Optimization** - Efficient cross-chain message execution
-- **Fee Estimation** - Built-in fee calculation for all cross-chain operations
+1. User calls `borrowFromPeridot()` on Arbitrum `PeridotSpoke`
+2. Spoke sends message (no tokens) to Axelar Gateway
+3. `PeridotHubHandler` on BNB Chain receives message and calls `borrowFor()`
+4. `PErc20CrossChain` sends borrowed tokens to `PeridotHubHandler`
+5. `PeridotHubHandler` sends tokens back to user on Arbitrum via Axelar
 
 ## 📚 Documentation
 
-- **[Chainlink Integration Plan](CHAINLINK_INTEGRATION_PLAN.md)** - Detailed integration roadmap
-- **[Technical Implementation](PERIDOT_CHAINLINK_INTEGRATION.md)** - Architecture documentation
+- **[Axelar GMP](https://docs.axelar.dev/dev/general-message-passing/overview)** - Axelar cross-chain documentation
+- **[Foundry Book](https://book.getfoundry.sh/)** - Foundry development framework
 
 ## 📄 License
 
@@ -261,8 +197,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🔗 Links
 
 - **Website**: [https://peridot.finance](https://peridot.finance)
-- **Documentation**: [https://docs.peridot.finance](https://docs.peridot.finance)
-- **Discord**: [https://discord.gg/peridot](https://discord.gg/peridot)
 - **Twitter**: [https://twitter.com/PeridotProtocol](https://twitter.com/PeridotProtocol)
 
 ## ⚠️ Disclaimer

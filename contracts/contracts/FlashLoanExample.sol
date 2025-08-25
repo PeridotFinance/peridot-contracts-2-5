@@ -11,12 +11,7 @@ import "./EIP20Interface.sol";
  */
 contract FlashLoanExample is IERC3156FlashBorrower {
     // Events
-    event FlashLoanExecuted(
-        address indexed token,
-        uint256 amount,
-        uint256 fee,
-        bytes32 action
-    );
+    event FlashLoanExecuted(address indexed token, uint256 amount, uint256 fee, bytes32 action);
 
     // Errors
     error UnauthorizedFlashLoan();
@@ -24,8 +19,7 @@ contract FlashLoanExample is IERC3156FlashBorrower {
     error FlashLoanFailed();
 
     // Constants
-    bytes32 private constant CALLBACK_SUCCESS =
-        keccak256("ERC3156FlashBorrower.onFlashLoan");
+    bytes32 private constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     // State variables
     address public owner;
@@ -70,23 +64,15 @@ contract FlashLoanExample is IERC3156FlashBorrower {
      * @param action The action to execute (encoded as bytes32)
      * @param extraData Additional data for the action
      */
-    function executeFlashLoan(
-        address pToken,
-        address token,
-        uint256 amount,
-        bytes32 action,
-        bytes calldata extraData
-    ) external onlyOwner {
+    function executeFlashLoan(address pToken, address token, uint256 amount, bytes32 action, bytes calldata extraData)
+        external
+        onlyOwner
+    {
         // Prepare data for the flash loan callback
         bytes memory data = abi.encode(action, extraData, msg.sender);
 
         // Execute flash loan
-        bool success = IERC3156FlashLender(pToken).flashLoan(
-            IERC3156FlashBorrower(this),
-            token,
-            amount,
-            data
-        );
+        bool success = IERC3156FlashLender(pToken).flashLoan(IERC3156FlashBorrower(this), token, amount, data);
 
         if (!success) {
             revert FlashLoanFailed();
@@ -102,16 +88,14 @@ contract FlashLoanExample is IERC3156FlashBorrower {
      * @param data Additional data passed from the flash loan
      * @return The keccak256 hash of "ERC3156FlashBorrower.onFlashLoan"
      */
-    function onFlashLoan(
-        address initiator,
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external override onlyAuthorizedLender returns (bytes32) {
+    function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)
+        external
+        override
+        onlyAuthorizedLender
+        returns (bytes32)
+    {
         // Decode the data
-        (bytes32 action, bytes memory extraData, address originalCaller) = abi
-            .decode(data, (bytes32, bytes, address));
+        (bytes32 action, bytes memory extraData, address originalCaller) = abi.decode(data, (bytes32, bytes, address));
 
         // Verify the initiator is this contract (security check)
         if (initiator != address(this)) {
@@ -154,13 +138,7 @@ contract FlashLoanExample is IERC3156FlashBorrower {
         } else if (action == keccak256("COLLATERAL_SWAP")) {
             _executeCollateralSwap(token, amount, fee, extraData);
         } else if (action == keccak256("SIMPLE_TRANSFER")) {
-            _executeSimpleTransfer(
-                token,
-                amount,
-                fee,
-                extraData,
-                originalCaller
-            );
+            _executeSimpleTransfer(token, amount, fee, extraData, originalCaller);
         } else {
             revert InvalidFlashLoanData();
         }
@@ -169,17 +147,9 @@ contract FlashLoanExample is IERC3156FlashBorrower {
     /**
      * @notice Example arbitrage action
      */
-    function _executeArbitrage(
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes memory extraData
-    ) internal {
+    function _executeArbitrage(address token, uint256 amount, uint256 fee, bytes memory extraData) internal {
         // Decode arbitrage parameters
-        (address targetExchange, uint256 minProfit) = abi.decode(
-            extraData,
-            (address, uint256)
-        );
+        (address targetExchange, uint256 minProfit) = abi.decode(extraData, (address, uint256));
 
         // Example: Simple arbitrage logic
         // 1. Trade on target exchange
@@ -194,15 +164,10 @@ contract FlashLoanExample is IERC3156FlashBorrower {
     /**
      * @notice Example liquidation action
      */
-    function _executeLiquidation(
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes memory extraData
-    ) internal {
+    function _executeLiquidation(address token, uint256 amount, uint256 fee, bytes memory extraData) internal {
         // Decode liquidation parameters
-        (address borrower, address collateralToken, uint256 repayAmount) = abi
-            .decode(extraData, (address, address, uint256));
+        (address borrower, address collateralToken, uint256 repayAmount) =
+            abi.decode(extraData, (address, address, uint256));
 
         // Example liquidation logic:
         // 1. Use flash loan to repay borrower's debt
@@ -215,17 +180,9 @@ contract FlashLoanExample is IERC3156FlashBorrower {
     /**
      * @notice Example collateral swap action
      */
-    function _executeCollateralSwap(
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes memory extraData
-    ) internal {
+    function _executeCollateralSwap(address token, uint256 amount, uint256 fee, bytes memory extraData) internal {
         // Decode swap parameters
-        (address newCollateralToken, uint256 swapRatio) = abi.decode(
-            extraData,
-            (address, uint256)
-        );
+        (address newCollateralToken, uint256 swapRatio) = abi.decode(extraData, (address, uint256));
 
         // Example collateral swap logic:
         // 1. Withdraw current collateral
@@ -259,10 +216,7 @@ contract FlashLoanExample is IERC3156FlashBorrower {
     /**
      * @notice Emergency function to withdraw tokens (only owner)
      */
-    function emergencyWithdraw(
-        address token,
-        uint256 amount
-    ) external onlyOwner {
+    function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
         EIP20Interface(token).transfer(owner, amount);
     }
 
