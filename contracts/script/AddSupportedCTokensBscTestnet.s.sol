@@ -22,7 +22,7 @@ contract AddSupportedCTokensBscTestnet is Script {
         0xa568bD70068A940910d04117c36Ab1A0225FD140; // PEther (pBNB)
 
     function run() external {
-        address managerAddr = 0xB5f80Fb15CeBaB3E4c217e03350E431fC218c94E;
+        address managerAddr = 0xcf0fE6c3ECd1f6d4c0BF8B361e6D262a8902Bd34;
         require(managerAddr != address(0), "MANAGER env not set");
 
         uint256 pk = vm.envUint("PRIVATE_KEY");

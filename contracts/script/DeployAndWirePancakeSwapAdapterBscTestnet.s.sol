@@ -25,7 +25,7 @@ contract DeployAndWirePancakeSwapAdapterBscTestnet is Script {
 
     // Project addresses from addresses.MD (BSC Testnet)
     address public constant DEFAULT_VAULT_EXECUTOR =
-        0x80034925b8cd129cEFAAd27162597adF4120F59c;
+        0x419e2b8F3333E3fb8fCB5b8D6902f1bE3Ae0Ba4F;
     address public constant DEFAULT_LINK =
         0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06; // LINK
     address public constant DEFAULT_USDC =
