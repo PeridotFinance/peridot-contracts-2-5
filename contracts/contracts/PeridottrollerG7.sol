@@ -19,7 +19,6 @@ contract PeridottrollerG7 is
     PeridottrollerErrorReporter,
     ExponentialNoError
 {
-    address public PERIDOT;
 
     /// @notice Emitted when an admin supports a market
     event MarketListed(PToken pToken);
@@ -88,21 +87,10 @@ contract PeridottrollerG7 is
     // No collateralFactorMantissa may exceed this value
     uint256 internal constant collateralFactorMaxMantissa = 0.9e18; // 0.9
 
-    constructor(address _COMP) {
-        PERIDOT = _COMP;
+    constructor() {
         admin = msg.sender;
     }
 
-    /**
-     * @notice Initialize the PERIDOT address after proxy setup
-     * @dev This function is needed for proxy deployments where constructor isn't called
-     * @param _peridot The address of the PERIDOT token
-     */
-    function initializePERIDOT(address _peridot) external {
-        require(msg.sender == admin, "only admin can initialize PERIDOT");
-        require(PERIDOT == address(0), "PERIDOT already initialized");
-        PERIDOT = _peridot;
-    }
 
     /**
      * Assets You Are In **
@@ -1409,7 +1397,7 @@ contract PeridottrollerG7 is
      * @notice Return the address of the PERIDOT token
      * @return The address of PERIDOT
      */
-    function getPeridotAddress() public view returns (address) {
-        return PERIDOT;
+    function getPeridotAddress() public view virtual returns (address) {
+        return 0x507f0F5E58d21f07d133722e038067248fe4ecBE;
     }
 }
