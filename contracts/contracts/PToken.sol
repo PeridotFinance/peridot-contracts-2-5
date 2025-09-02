@@ -1468,11 +1468,8 @@ abstract contract PToken is
             "FlashLoan: amount exceeds maximum"
         );
 
-        // Calculate fee
-        uint256 fee = (amount * flashLoanFeeBps) / 10000;
-
-        // Accrue interest to ensure fresh state
-        accrueInterest();
+        // Calculate minimum required fee
+        uint256 minFee = (amount * flashLoanFeeBps) / 10000;
 
         // Get cash balance before
         uint256 balanceBefore = getCashPrior();
@@ -1485,7 +1482,7 @@ abstract contract PToken is
 
         // Execute the flash loan callback
         require(
-            receiver.onFlashLoan(msg.sender, token, amount, fee, data) ==
+            receiver.onFlashLoan(msg.sender, token, amount, minFee, data) ==
                 keccak256("ERC3156FlashBorrower.onFlashLoan"),
             "FlashLoan: invalid callback return"
         );
@@ -1493,19 +1490,26 @@ abstract contract PToken is
         // Get cash balance after
         uint256 balanceAfter = getCashPrior();
 
-        // Ensure the loan + fee was repaid
+        // Compute the actual fee paid as the delta of cash
         require(
-            balanceAfter >= balanceBefore + fee,
+            balanceAfter >= balanceBefore,
+            "FlashLoan: loan not repaid"
+        );
+        uint256 actualFee = balanceAfter - balanceBefore;
+
+        // Require borrower paid at least the minimum fee
+        require(
+            actualFee >= minFee,
             "FlashLoan: loan not repaid"
         );
 
-        // Update reserves with fee (protocol keeps the fee)
-        if (fee > 0) {
-            totalReserves = totalReserves + fee;
+        // Update reserves with the actual fee to avoid inflating available cash
+        if (actualFee > 0) {
+            totalReserves = totalReserves + actualFee;
         }
 
-        // Emit flash loan event
-        emit FlashLoan(address(receiver), token, amount, fee);
+        // Emit flash loan event with the actual fee
+        emit FlashLoan(address(receiver), token, amount, actualFee);
 
         return true;
     }
