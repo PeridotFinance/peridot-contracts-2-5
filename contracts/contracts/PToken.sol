@@ -1474,9 +1474,6 @@ abstract contract PToken is
         // Get cash balance before
         uint256 balanceBefore = getCashPrior();
 
-        // Check sufficient liquidity
-        require(balanceBefore >= amount, "FlashLoan: insufficient liquidity");
-
         // Transfer tokens to receiver
         doTransferOut(payable(address(receiver)), amount);
 
@@ -1491,17 +1488,11 @@ abstract contract PToken is
         uint256 balanceAfter = getCashPrior();
 
         // Compute the actual fee paid as the delta of cash
-        require(
-            balanceAfter >= balanceBefore,
-            "FlashLoan: loan not repaid"
-        );
+        require(balanceAfter >= balanceBefore, "FlashLoan: loan not repaid");
         uint256 actualFee = balanceAfter - balanceBefore;
 
         // Require borrower paid at least the minimum fee
-        require(
-            actualFee >= minFee,
-            "FlashLoan: loan not repaid"
-        );
+        require(actualFee >= minFee, "FlashLoan: loan not repaid");
 
         // Update reserves with the actual fee to avoid inflating available cash
         if (actualFee > 0) {

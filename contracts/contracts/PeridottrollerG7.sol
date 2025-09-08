@@ -19,7 +19,6 @@ contract PeridottrollerG7 is
     PeridottrollerErrorReporter,
     ExponentialNoError
 {
-
     /// @notice Emitted when an admin supports a market
     event MarketListed(PToken pToken);
 
@@ -30,16 +29,29 @@ contract PeridottrollerG7 is
     event MarketExited(PToken pToken, address account);
 
     /// @notice Emitted when close factor is changed by admin
-    event NewCloseFactor(uint256 oldCloseFactorMantissa, uint256 newCloseFactorMantissa);
+    event NewCloseFactor(
+        uint256 oldCloseFactorMantissa,
+        uint256 newCloseFactorMantissa
+    );
 
     /// @notice Emitted when a collateral factor is changed by admin
-    event NewCollateralFactor(PToken pToken, uint256 oldCollateralFactorMantissa, uint256 newCollateralFactorMantissa);
+    event NewCollateralFactor(
+        PToken pToken,
+        uint256 oldCollateralFactorMantissa,
+        uint256 newCollateralFactorMantissa
+    );
 
     /// @notice Emitted when liquidation incentive is changed by admin
-    event NewLiquidationIncentive(uint256 oldLiquidationIncentiveMantissa, uint256 newLiquidationIncentiveMantissa);
+    event NewLiquidationIncentive(
+        uint256 oldLiquidationIncentiveMantissa,
+        uint256 newLiquidationIncentiveMantissa
+    );
 
     /// @notice Emitted when price oracle is changed
-    event NewPriceOracle(PriceOracle oldPriceOracle, PriceOracle newPriceOracle);
+    event NewPriceOracle(
+        PriceOracle oldPriceOracle,
+        PriceOracle newPriceOracle
+    );
 
     /// @notice Emitted when pause guardian is changed
     event NewPauseGuardian(address oldPauseGuardian, address newPauseGuardian);
@@ -54,23 +66,35 @@ contract PeridottrollerG7 is
     event PeridotSpeedUpdated(PToken indexed pToken, uint256 newSpeed);
 
     /// @notice Emitted when a new PERIDOT speed is set for a contributor
-    event ContributorPeridotSpeedUpdated(address indexed contributor, uint256 newSpeed);
+    event ContributorPeridotSpeedUpdated(
+        address indexed contributor,
+        uint256 newSpeed
+    );
 
     /// @notice Emitted when PERIDOT is distributed to a supplier
     event DistributedSupplierPeridot(
-        PToken indexed pToken, address indexed supplier, uint256 peridotDelta, uint256 peridotSupplyIndex
+        PToken indexed pToken,
+        address indexed supplier,
+        uint256 peridotDelta,
+        uint256 peridotSupplyIndex
     );
 
     /// @notice Emitted when PERIDOT is distributed to a borrower
     event DistributedBorrowerPeridot(
-        PToken indexed pToken, address indexed borrower, uint256 peridotDelta, uint256 peridotBorrowIndex
+        PToken indexed pToken,
+        address indexed borrower,
+        uint256 peridotDelta,
+        uint256 peridotBorrowIndex
     );
 
     /// @notice Emitted when borrow cap for a pToken is changed
     event NewBorrowCap(PToken indexed pToken, uint256 newBorrowCap);
 
     /// @notice Emitted when borrow cap guardian is changed
-    event NewBorrowCapGuardian(address oldBorrowCapGuardian, address newBorrowCapGuardian);
+    event NewBorrowCapGuardian(
+        address oldBorrowCapGuardian,
+        address newBorrowCapGuardian
+    );
 
     /// @notice Emitted when PERIDOT is granted by admin
     event PeridotGranted(address recipient, uint256 amount);
@@ -91,7 +115,6 @@ contract PeridottrollerG7 is
         admin = msg.sender;
     }
 
-
     /**
      * Assets You Are In **
      */
@@ -101,7 +124,9 @@ contract PeridottrollerG7 is
      * @param account The address of the account to pull assets for
      * @return A dynamic list with the assets the account has entered
      */
-    function getAssetsIn(address account) external view returns (PToken[] memory) {
+    function getAssetsIn(
+        address account
+    ) external view returns (PToken[] memory) {
         PToken[] memory assetsIn = accountAssets[account];
 
         return assetsIn;
@@ -113,7 +138,10 @@ contract PeridottrollerG7 is
      * @param pToken The pToken to check
      * @return True if the account is in the asset, otherwise false.
      */
-    function checkMembership(address account, PToken pToken) external view returns (bool) {
+    function checkMembership(
+        address account,
+        PToken pToken
+    ) external view returns (bool) {
         return markets[address(pToken)].accountMembership[account];
     }
 
@@ -122,7 +150,9 @@ contract PeridottrollerG7 is
      * @param pTokens The list of addresses of the pToken markets to be enabled
      * @return Success indicator for whether each corresponding market was entered
      */
-    function enterMarkets(address[] memory pTokens) public override returns (uint256[] memory) {
+    function enterMarkets(
+        address[] memory pTokens
+    ) public override returns (uint256[] memory) {
         uint256 len = pTokens.length;
 
         uint256[] memory results = new uint256[](len);
@@ -141,7 +171,10 @@ contract PeridottrollerG7 is
      * @param borrower The address of the account to modify
      * @return Success indicator for whether the market was entered
      */
-    function addToMarketInternal(PToken pToken, address borrower) internal returns (Error) {
+    function addToMarketInternal(
+        PToken pToken,
+        address borrower
+    ) internal returns (Error) {
         Market storage marketToJoin = markets[address(pToken)];
 
         if (!marketToJoin.isListed) {
@@ -174,21 +207,37 @@ contract PeridottrollerG7 is
      * @param pTokenAddress The address of the asset to be removed
      * @return Whether or not the account successfully exited the market
      */
-    function exitMarket(address pTokenAddress) external override returns (uint256) {
+    function exitMarket(
+        address pTokenAddress
+    ) external override returns (uint256) {
         PToken pToken = PToken(pTokenAddress);
         /* Get sender tokensHeld and amountOwed underlying from the pToken */
-        (uint256 oErr, uint256 tokensHeld, uint256 amountOwed,) = pToken.getAccountSnapshot(msg.sender);
+        (uint256 oErr, uint256 tokensHeld, uint256 amountOwed, ) = pToken
+            .getAccountSnapshot(msg.sender);
         require(oErr == 0, "exitMarket: getAccountSnapshot failed"); // semi-opaque error code
 
         /* Fail if the sender has a borrow balance */
         if (amountOwed != 0) {
-            return fail(Error.NONZERO_BORROW_BALANCE, FailureInfo.EXIT_MARKET_BALANCE_OWED);
+            return
+                fail(
+                    Error.NONZERO_BORROW_BALANCE,
+                    FailureInfo.EXIT_MARKET_BALANCE_OWED
+                );
         }
 
         /* Fail if the sender is not permitted to redeem all of their tokens */
-        uint256 allowed = redeemAllowedInternal(pTokenAddress, msg.sender, tokensHeld);
+        uint256 allowed = redeemAllowedInternal(
+            pTokenAddress,
+            msg.sender,
+            tokensHeld
+        );
         if (allowed != 0) {
-            return failOpaque(Error.REJECTION, FailureInfo.EXIT_MARKET_REJECTION, allowed);
+            return
+                failOpaque(
+                    Error.REJECTION,
+                    FailureInfo.EXIT_MARKET_REJECTION,
+                    allowed
+                );
         }
 
         Market storage marketToExit = markets[address(pToken)];
@@ -237,7 +286,11 @@ contract PeridottrollerG7 is
      * @param mintAmount The amount of underlying being supplied to the market in exchange for tokens
      * @return 0 if the mint is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function mintAllowed(address pToken, address minter, uint256 mintAmount) external override returns (uint256) {
+    function mintAllowed(
+        address pToken,
+        address minter,
+        uint256 mintAmount
+    ) external override returns (uint256) {
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!mintGuardianPaused[pToken], "mint is paused");
 
@@ -263,10 +316,12 @@ contract PeridottrollerG7 is
      * @param actualMintAmount The amount of the underlying asset being minted
      * @param mintTokens The number of tokens being minted
      */
-    function mintVerify(address pToken, address minter, uint256 actualMintAmount, uint256 mintTokens)
-        external
-        override
-    {
+    function mintVerify(
+        address pToken,
+        address minter,
+        uint256 actualMintAmount,
+        uint256 mintTokens
+    ) external override {
         // Shh - currently unused
         pToken;
         minter;
@@ -286,11 +341,11 @@ contract PeridottrollerG7 is
      * @param redeemTokens The number of pTokens to exchange for the underlying asset in the market
      * @return 0 if the redeem is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function redeemAllowed(address pToken, address redeemer, uint256 redeemTokens)
-        external
-        override
-        returns (uint256)
-    {
+    function redeemAllowed(
+        address pToken,
+        address redeemer,
+        uint256 redeemTokens
+    ) external override returns (uint256) {
         uint256 allowed = redeemAllowedInternal(pToken, redeemer, redeemTokens);
         if (allowed != uint256(Error.NO_ERROR)) {
             return allowed;
@@ -303,11 +358,11 @@ contract PeridottrollerG7 is
         return uint256(Error.NO_ERROR);
     }
 
-    function redeemAllowedInternal(address pToken, address redeemer, uint256 redeemTokens)
-        internal
-        view
-        returns (uint256)
-    {
+    function redeemAllowedInternal(
+        address pToken,
+        address redeemer,
+        uint256 redeemTokens
+    ) internal view returns (uint256) {
         if (!markets[pToken].isListed) {
             return uint256(Error.MARKET_NOT_LISTED);
         }
@@ -318,8 +373,16 @@ contract PeridottrollerG7 is
         }
 
         /* Otherwise, perform a hypothetical liquidity check to guard against shortfall */
-        (Error err,, uint256 shortfall) =
-            getHypotheticalAccountLiquidityInternal(redeemer, PToken(pToken), redeemTokens, 0);
+        (
+            Error err,
+            ,
+            uint256 shortfall
+        ) = getHypotheticalAccountLiquidityInternal(
+                redeemer,
+                PToken(pToken),
+                redeemTokens,
+                0
+            );
         if (err != Error.NO_ERROR) {
             return uint256(err);
         }
@@ -337,10 +400,12 @@ contract PeridottrollerG7 is
      * @param redeemAmount The amount of the underlying asset being redeemed
      * @param redeemTokens The number of tokens being redeemed
      */
-    function redeemVerify(address pToken, address redeemer, uint256 redeemAmount, uint256 redeemTokens)
-        external
-        override
-    {
+    function redeemVerify(
+        address pToken,
+        address redeemer,
+        uint256 redeemAmount,
+        uint256 redeemTokens
+    ) external override {
         // Shh - currently unused
         pToken;
         redeemer;
@@ -358,11 +423,11 @@ contract PeridottrollerG7 is
      * @param borrowAmount The amount of underlying the account would borrow
      * @return 0 if the borrow is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function borrowAllowed(address pToken, address borrower, uint256 borrowAmount)
-        external
-        override
-        returns (uint256)
-    {
+    function borrowAllowed(
+        address pToken,
+        address borrower,
+        uint256 borrowAmount
+    ) external override returns (uint256) {
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!borrowGuardianPaused[pToken], "borrow is paused");
 
@@ -375,7 +440,10 @@ contract PeridottrollerG7 is
             require(msg.sender == pToken, "sender must be pToken");
 
             // attempt to add borrower to the market
-            Error addMarketErr = addToMarketInternal(PToken(msg.sender), borrower);
+            Error addMarketErr = addToMarketInternal(
+                PToken(msg.sender),
+                borrower
+            );
             if (addMarketErr != Error.NO_ERROR) {
                 return uint256(addMarketErr);
             }
@@ -396,8 +464,16 @@ contract PeridottrollerG7 is
             require(nextTotalBorrows < borrowCap, "market borrow cap reached");
         }
 
-        (Error err,, uint256 shortfall) =
-            getHypotheticalAccountLiquidityInternal(borrower, PToken(pToken), 0, borrowAmount);
+        (
+            Error err,
+            ,
+            uint256 shortfall
+        ) = getHypotheticalAccountLiquidityInternal(
+                borrower,
+                PToken(pToken),
+                0,
+                borrowAmount
+            );
         if (err != Error.NO_ERROR) {
             return uint256(err);
         }
@@ -419,7 +495,11 @@ contract PeridottrollerG7 is
      * @param borrower The address borrowing the underlying
      * @param borrowAmount The amount of the underlying asset requested to borrow
      */
-    function borrowVerify(address pToken, address borrower, uint256 borrowAmount) external override {
+    function borrowVerify(
+        address pToken,
+        address borrower,
+        uint256 borrowAmount
+    ) external override {
         // Shh - currently unused
         pToken;
         borrower;
@@ -439,11 +519,12 @@ contract PeridottrollerG7 is
      * @param repayAmount The amount of the underlying asset the account would repay
      * @return 0 if the repay is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function repayBorrowAllowed(address pToken, address payer, address borrower, uint256 repayAmount)
-        external
-        override
-        returns (uint256)
-    {
+    function repayBorrowAllowed(
+        address pToken,
+        address payer,
+        address borrower,
+        uint256 repayAmount
+    ) external override returns (uint256) {
         // Shh - currently unused
         payer;
         borrower;
@@ -506,12 +587,17 @@ contract PeridottrollerG7 is
         // Shh - currently unused
         liquidator;
 
-        if (!markets[pTokenBorrowed].isListed || !markets[pTokenCollateral].isListed) {
+        if (
+            !markets[pTokenBorrowed].isListed ||
+            !markets[pTokenCollateral].isListed
+        ) {
             return uint256(Error.MARKET_NOT_LISTED);
         }
 
         /* The borrower must have shortfall in order to be liquidatable */
-        (Error err,, uint256 shortfall) = getAccountLiquidityInternal(borrower);
+        (Error err, , uint256 shortfall) = getAccountLiquidityInternal(
+            borrower
+        );
         if (err != Error.NO_ERROR) {
             return uint256(err);
         }
@@ -520,8 +606,13 @@ contract PeridottrollerG7 is
         }
 
         /* The liquidator may not repay more than what is allowed by the closeFactor */
-        uint256 borrowBalance = PToken(pTokenBorrowed).borrowBalanceStored(borrower);
-        uint256 maxClose = mul_ScalarTruncate(Exp({mantissa: closeFactorMantissa}), borrowBalance);
+        uint256 borrowBalance = PToken(pTokenBorrowed).borrowBalanceStored(
+            borrower
+        );
+        uint256 maxClose = mul_ScalarTruncate(
+            Exp({mantissa: closeFactorMantissa}),
+            borrowBalance
+        );
         if (repayAmount > maxClose) {
             return uint256(Error.TOO_MUCH_REPAY);
         }
@@ -580,11 +671,17 @@ contract PeridottrollerG7 is
         // Shh - currently unused
         seizeTokens;
 
-        if (!markets[pTokenCollateral].isListed || !markets[pTokenBorrowed].isListed) {
+        if (
+            !markets[pTokenCollateral].isListed ||
+            !markets[pTokenBorrowed].isListed
+        ) {
             return uint256(Error.MARKET_NOT_LISTED);
         }
 
-        if (PToken(pTokenCollateral).peridottroller() != PToken(pTokenBorrowed).peridottroller()) {
+        if (
+            PToken(pTokenCollateral).peridottroller() !=
+            PToken(pTokenBorrowed).peridottroller()
+        ) {
             return uint256(Error.COMPTROLLER_MISMATCH);
         }
 
@@ -632,11 +729,12 @@ contract PeridottrollerG7 is
      * @param transferTokens The number of pTokens to transfer
      * @return 0 if the transfer is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function transferAllowed(address pToken, address src, address dst, uint256 transferTokens)
-        external
-        override
-        returns (uint256)
-    {
+    function transferAllowed(
+        address pToken,
+        address src,
+        address dst,
+        uint256 transferTokens
+    ) external override returns (uint256) {
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!transferGuardianPaused, "transfer is paused");
 
@@ -662,7 +760,12 @@ contract PeridottrollerG7 is
      * @param dst The account which receives the tokens
      * @param transferTokens The number of pTokens to transfer
      */
-    function transferVerify(address pToken, address src, address dst, uint256 transferTokens) external override {
+    function transferVerify(
+        address pToken,
+        address src,
+        address dst,
+        uint256 transferTokens
+    ) external override {
         // Shh - currently unused
         pToken;
         src;
@@ -703,9 +806,19 @@ contract PeridottrollerG7 is
      *             account liquidity in excess of collateral requirements,
      *          account shortfall below collateral requirements)
      */
-    function getAccountLiquidity(address account) public view override returns (uint256, uint256, uint256) {
-        (Error err, uint256 liquidity, uint256 shortfall) =
-            getHypotheticalAccountLiquidityInternal(account, PToken(address(0)), 0, 0);
+    function getAccountLiquidity(
+        address account
+    ) public view override returns (uint256, uint256, uint256) {
+        (
+            Error err,
+            uint256 liquidity,
+            uint256 shortfall
+        ) = getHypotheticalAccountLiquidityInternal(
+                account,
+                PToken(address(0)),
+                0,
+                0
+            );
 
         return (uint256(err), liquidity, shortfall);
     }
@@ -716,8 +829,16 @@ contract PeridottrollerG7 is
      *             account liquidity in excess of collateral requirements,
      *          account shortfall below collateral requirements)
      */
-    function getAccountLiquidityInternal(address account) internal view returns (Error, uint256, uint256) {
-        return getHypotheticalAccountLiquidityInternal(account, PToken(address(0)), 0, 0);
+    function getAccountLiquidityInternal(
+        address account
+    ) internal view returns (Error, uint256, uint256) {
+        return
+            getHypotheticalAccountLiquidityInternal(
+                account,
+                PToken(address(0)),
+                0,
+                0
+            );
     }
 
     /**
@@ -736,8 +857,16 @@ contract PeridottrollerG7 is
         uint256 redeemTokens,
         uint256 borrowAmount
     ) public view returns (uint256, uint256, uint256) {
-        (Error err, uint256 liquidity, uint256 shortfall) =
-            getHypotheticalAccountLiquidityInternal(account, PToken(pTokenModify), redeemTokens, borrowAmount);
+        (
+            Error err,
+            uint256 liquidity,
+            uint256 shortfall
+        ) = getHypotheticalAccountLiquidityInternal(
+                account,
+                PToken(pTokenModify),
+                redeemTokens,
+                borrowAmount
+            );
         return (uint256(err), liquidity, shortfall);
     }
 
@@ -768,13 +897,19 @@ contract PeridottrollerG7 is
             PToken asset = assets[i];
 
             // Read the balances and exchange rate from the pToken
-            (oErr, vars.pTokenBalance, vars.borrowBalance, vars.exchangeRateMantissa) =
-                asset.getAccountSnapshot(account);
+            (
+                oErr,
+                vars.pTokenBalance,
+                vars.borrowBalance,
+                vars.exchangeRateMantissa
+            ) = asset.getAccountSnapshot(account);
             if (oErr != 0) {
                 // semi-opaque error code, we assume NO_ERROR == 0 is invariant between upgrades
                 return (Error.SNAPSHOT_ERROR, 0, 0);
             }
-            vars.collateralFactor = Exp({mantissa: markets[address(asset)].collateralFactorMantissa});
+            vars.collateralFactor = Exp({
+                mantissa: markets[address(asset)].collateralFactorMantissa
+            });
             vars.exchangeRate = Exp({mantissa: vars.exchangeRateMantissa});
 
             // Get the normalized price of the asset
@@ -785,34 +920,58 @@ contract PeridottrollerG7 is
             vars.oraclePrice = Exp({mantissa: vars.oraclePriceMantissa});
 
             // Pre-peridotute a conversion factor from tokens -> ether (normalized price value)
-            vars.tokensToDenom = mul_(mul_(vars.collateralFactor, vars.exchangeRate), vars.oraclePrice);
+            vars.tokensToDenom = mul_(
+                mul_(vars.collateralFactor, vars.exchangeRate),
+                vars.oraclePrice
+            );
 
             // sumCollateral += tokensToDenom * pTokenBalance
-            vars.sumCollateral = mul_ScalarTruncateAddUInt(vars.tokensToDenom, vars.pTokenBalance, vars.sumCollateral);
+            vars.sumCollateral = mul_ScalarTruncateAddUInt(
+                vars.tokensToDenom,
+                vars.pTokenBalance,
+                vars.sumCollateral
+            );
 
             // sumBorrowPlusEffects += oraclePrice * borrowBalance
-            vars.sumBorrowPlusEffects =
-                mul_ScalarTruncateAddUInt(vars.oraclePrice, vars.borrowBalance, vars.sumBorrowPlusEffects);
+            vars.sumBorrowPlusEffects = mul_ScalarTruncateAddUInt(
+                vars.oraclePrice,
+                vars.borrowBalance,
+                vars.sumBorrowPlusEffects
+            );
 
             // Calculate effects of interacting with pTokenModify
             if (asset == pTokenModify) {
                 // redeem effect
                 // sumBorrowPlusEffects += tokensToDenom * redeemTokens
-                vars.sumBorrowPlusEffects =
-                    mul_ScalarTruncateAddUInt(vars.tokensToDenom, redeemTokens, vars.sumBorrowPlusEffects);
+                vars.sumBorrowPlusEffects = mul_ScalarTruncateAddUInt(
+                    vars.tokensToDenom,
+                    redeemTokens,
+                    vars.sumBorrowPlusEffects
+                );
 
                 // borrow effect
                 // sumBorrowPlusEffects += oraclePrice * borrowAmount
-                vars.sumBorrowPlusEffects =
-                    mul_ScalarTruncateAddUInt(vars.oraclePrice, borrowAmount, vars.sumBorrowPlusEffects);
+                vars.sumBorrowPlusEffects = mul_ScalarTruncateAddUInt(
+                    vars.oraclePrice,
+                    borrowAmount,
+                    vars.sumBorrowPlusEffects
+                );
             }
         }
 
         // These are safe, as the underflow condition is checked first
         if (vars.sumCollateral > vars.sumBorrowPlusEffects) {
-            return (Error.NO_ERROR, vars.sumCollateral - vars.sumBorrowPlusEffects, 0);
+            return (
+                Error.NO_ERROR,
+                vars.sumCollateral - vars.sumBorrowPlusEffects,
+                0
+            );
         } else {
-            return (Error.NO_ERROR, 0, vars.sumBorrowPlusEffects - vars.sumCollateral);
+            return (
+                Error.NO_ERROR,
+                0,
+                vars.sumBorrowPlusEffects - vars.sumCollateral
+            );
         }
     }
 
@@ -824,15 +983,18 @@ contract PeridottrollerG7 is
      * @param actualRepayAmount The amount of pTokenBorrowed underlying to convert into pTokenCollateral tokens
      * @return (errorCode, number of pTokenCollateral tokens to be seized in a liquidation)
      */
-    function liquidateCalculateSeizeTokens(address pTokenBorrowed, address pTokenCollateral, uint256 actualRepayAmount)
-        external
-        view
-        override
-        returns (uint256, uint256)
-    {
+    function liquidateCalculateSeizeTokens(
+        address pTokenBorrowed,
+        address pTokenCollateral,
+        uint256 actualRepayAmount
+    ) external view override returns (uint256, uint256) {
         /* Read oracle prices for borrowed and collateral markets */
-        uint256 priceBorrowedMantissa = oracle.getUnderlyingPrice(PToken(pTokenBorrowed));
-        uint256 priceCollateralMantissa = oracle.getUnderlyingPrice(PToken(pTokenCollateral));
+        uint256 priceBorrowedMantissa = oracle.getUnderlyingPrice(
+            PToken(pTokenBorrowed)
+        );
+        uint256 priceCollateralMantissa = oracle.getUnderlyingPrice(
+            PToken(pTokenCollateral)
+        );
         if (priceBorrowedMantissa == 0 || priceCollateralMantissa == 0) {
             return (uint256(Error.PRICE_ERROR), 0);
         }
@@ -843,14 +1005,21 @@ contract PeridottrollerG7 is
          *  seizeTokens = seizeAmount / exchangeRate
          *   = actualRepayAmount * (liquidationIncentive * priceBorrowed) / (priceCollateral * exchangeRate)
          */
-        uint256 exchangeRateMantissa = PToken(pTokenCollateral).exchangeRateStored(); // Note: reverts on error
+        uint256 exchangeRateMantissa = PToken(pTokenCollateral)
+            .exchangeRateStored(); // Note: reverts on error
         uint256 seizeTokens;
         Exp memory numerator;
         Exp memory denominator;
         Exp memory ratio;
 
-        numerator = mul_(Exp({mantissa: liquidationIncentiveMantissa}), Exp({mantissa: priceBorrowedMantissa}));
-        denominator = mul_(Exp({mantissa: priceCollateralMantissa}), Exp({mantissa: exchangeRateMantissa}));
+        numerator = mul_(
+            Exp({mantissa: liquidationIncentiveMantissa}),
+            Exp({mantissa: priceBorrowedMantissa})
+        );
+        denominator = mul_(
+            Exp({mantissa: priceCollateralMantissa}),
+            Exp({mantissa: exchangeRateMantissa})
+        );
         ratio = div_(numerator, denominator);
 
         seizeTokens = mul_ScalarTruncate(ratio, actualRepayAmount);
@@ -870,7 +1039,11 @@ contract PeridottrollerG7 is
     function _setPriceOracle(PriceOracle newOracle) public returns (uint256) {
         // Check caller is admin
         if (msg.sender != admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.SET_PRICE_ORACLE_OWNER_CHECK);
+            return
+                fail(
+                    Error.UNAUTHORIZED,
+                    FailureInfo.SET_PRICE_ORACLE_OWNER_CHECK
+                );
         }
 
         // Track the old oracle for the peridottroller
@@ -891,7 +1064,9 @@ contract PeridottrollerG7 is
      * @param newCloseFactorMantissa New close factor, scaled by 1e18
      * @return uint 0=success, otherwise a failure
      */
-    function _setCloseFactor(uint256 newCloseFactorMantissa) external returns (uint256) {
+    function _setCloseFactor(
+        uint256 newCloseFactorMantissa
+    ) external returns (uint256) {
         // Check caller is admin
         require(msg.sender == admin, "only admin can set close factor");
 
@@ -909,29 +1084,53 @@ contract PeridottrollerG7 is
      * @param newCollateralFactorMantissa The new collateral factor, scaled by 1e18
      * @return uint 0=success, otherwise a failure. (See ErrorReporter for details)
      */
-    function _setCollateralFactor(PToken pToken, uint256 newCollateralFactorMantissa) external returns (uint256) {
+    function _setCollateralFactor(
+        PToken pToken,
+        uint256 newCollateralFactorMantissa
+    ) external returns (uint256) {
         // Check caller is admin
         if (msg.sender != admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.SET_COLLATERAL_FACTOR_OWNER_CHECK);
+            return
+                fail(
+                    Error.UNAUTHORIZED,
+                    FailureInfo.SET_COLLATERAL_FACTOR_OWNER_CHECK
+                );
         }
 
         // Verify market is listed
         Market storage market = markets[address(pToken)];
         if (!market.isListed) {
-            return fail(Error.MARKET_NOT_LISTED, FailureInfo.SET_COLLATERAL_FACTOR_NO_EXISTS);
+            return
+                fail(
+                    Error.MARKET_NOT_LISTED,
+                    FailureInfo.SET_COLLATERAL_FACTOR_NO_EXISTS
+                );
         }
 
-        Exp memory newCollateralFactorExp = Exp({mantissa: newCollateralFactorMantissa});
+        Exp memory newCollateralFactorExp = Exp({
+            mantissa: newCollateralFactorMantissa
+        });
 
         // Check collateral factor <= 0.9
         Exp memory highLimit = Exp({mantissa: collateralFactorMaxMantissa});
         if (lessThanExp(highLimit, newCollateralFactorExp)) {
-            return fail(Error.INVALID_COLLATERAL_FACTOR, FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION);
+            return
+                fail(
+                    Error.INVALID_COLLATERAL_FACTOR,
+                    FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION
+                );
         }
 
         // If collateral factor != 0, fail if price == 0
-        if (newCollateralFactorMantissa != 0 && oracle.getUnderlyingPrice(pToken) == 0) {
-            return fail(Error.PRICE_ERROR, FailureInfo.SET_COLLATERAL_FACTOR_WITHOUT_PRICE);
+        if (
+            newCollateralFactorMantissa != 0 &&
+            oracle.getUnderlyingPrice(pToken) == 0
+        ) {
+            return
+                fail(
+                    Error.PRICE_ERROR,
+                    FailureInfo.SET_COLLATERAL_FACTOR_WITHOUT_PRICE
+                );
         }
 
         // Set market's collateral factor to new collateral factor, remember old value
@@ -939,7 +1138,11 @@ contract PeridottrollerG7 is
         market.collateralFactorMantissa = newCollateralFactorMantissa;
 
         // Emit event with asset, old collateral factor, and new collateral factor
-        emit NewCollateralFactor(pToken, oldCollateralFactorMantissa, newCollateralFactorMantissa);
+        emit NewCollateralFactor(
+            pToken,
+            oldCollateralFactorMantissa,
+            newCollateralFactorMantissa
+        );
 
         return uint256(Error.NO_ERROR);
     }
@@ -950,10 +1153,16 @@ contract PeridottrollerG7 is
      * @param newLiquidationIncentiveMantissa New liquidationIncentive scaled by 1e18
      * @return uint 0=success, otherwise a failure. (See ErrorReporter for details)
      */
-    function _setLiquidationIncentive(uint256 newLiquidationIncentiveMantissa) external returns (uint256) {
+    function _setLiquidationIncentive(
+        uint256 newLiquidationIncentiveMantissa
+    ) external returns (uint256) {
         // Check caller is admin
         if (msg.sender != admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.SET_LIQUIDATION_INCENTIVE_OWNER_CHECK);
+            return
+                fail(
+                    Error.UNAUTHORIZED,
+                    FailureInfo.SET_LIQUIDATION_INCENTIVE_OWNER_CHECK
+                );
         }
 
         // Save current value for use in log
@@ -963,7 +1172,10 @@ contract PeridottrollerG7 is
         liquidationIncentiveMantissa = newLiquidationIncentiveMantissa;
 
         // Emit event with old incentive, new incentive
-        emit NewLiquidationIncentive(oldLiquidationIncentiveMantissa, newLiquidationIncentiveMantissa);
+        emit NewLiquidationIncentive(
+            oldLiquidationIncentiveMantissa,
+            newLiquidationIncentiveMantissa
+        );
 
         return uint256(Error.NO_ERROR);
     }
@@ -976,11 +1188,19 @@ contract PeridottrollerG7 is
      */
     function _supportMarket(PToken pToken) external returns (uint256) {
         if (msg.sender != admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.SUPPORT_MARKET_OWNER_CHECK);
+            return
+                fail(
+                    Error.UNAUTHORIZED,
+                    FailureInfo.SUPPORT_MARKET_OWNER_CHECK
+                );
         }
 
         if (markets[address(pToken)].isListed) {
-            return fail(Error.MARKET_ALREADY_LISTED, FailureInfo.SUPPORT_MARKET_EXISTS);
+            return
+                fail(
+                    Error.MARKET_ALREADY_LISTED,
+                    FailureInfo.SUPPORT_MARKET_EXISTS
+                );
         }
 
         pToken.isPToken(); // Sanity check to make sure its really a PToken
@@ -1011,7 +1231,10 @@ contract PeridottrollerG7 is
      * @param pTokens The addresses of the markets (tokens) to change the borrow caps for
      * @param newBorrowCaps The new borrow cap values in underlying to be set. A value of 0 corresponds to unlimited borrowing.
      */
-    function _setMarketBorrowCaps(PToken[] calldata pTokens, uint256[] calldata newBorrowCaps) external {
+    function _setMarketBorrowCaps(
+        PToken[] calldata pTokens,
+        uint256[] calldata newBorrowCaps
+    ) external {
         require(
             msg.sender == admin || msg.sender == borrowCapGuardian,
             "only admin or borrow cap guardian can set borrow caps"
@@ -1020,7 +1243,10 @@ contract PeridottrollerG7 is
         uint256 numMarkets = pTokens.length;
         uint256 numBorrowCaps = newBorrowCaps.length;
 
-        require(numMarkets != 0 && numMarkets == numBorrowCaps, "invalid input");
+        require(
+            numMarkets != 0 && numMarkets == numBorrowCaps,
+            "invalid input"
+        );
 
         for (uint256 i = 0; i < numMarkets; i++) {
             borrowCaps[address(pTokens[i])] = newBorrowCaps[i];
@@ -1050,9 +1276,15 @@ contract PeridottrollerG7 is
      * @param newPauseGuardian The address of the new Pause Guardian
      * @return uint 0=success, otherwise a failure. (See enum Error for details)
      */
-    function _setPauseGuardian(address newPauseGuardian) public returns (uint256) {
+    function _setPauseGuardian(
+        address newPauseGuardian
+    ) public returns (uint256) {
         if (msg.sender != admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.SET_PAUSE_GUARDIAN_OWNER_CHECK);
+            return
+                fail(
+                    Error.UNAUTHORIZED,
+                    FailureInfo.SET_PAUSE_GUARDIAN_OWNER_CHECK
+                );
         }
 
         // Save current value for inclusion in log
@@ -1068,8 +1300,14 @@ contract PeridottrollerG7 is
     }
 
     function _setMintPaused(PToken pToken, bool state) public returns (bool) {
-        require(markets[address(pToken)].isListed, "cannot pause a market that is not listed");
-        require(msg.sender == pauseGuardian || msg.sender == admin, "only pause guardian and admin can pause");
+        require(
+            markets[address(pToken)].isListed,
+            "cannot pause a market that is not listed"
+        );
+        require(
+            msg.sender == pauseGuardian || msg.sender == admin,
+            "only pause guardian and admin can pause"
+        );
         require(msg.sender == admin || state == true, "only admin can unpause");
 
         mintGuardianPaused[address(pToken)] = state;
@@ -1078,8 +1316,14 @@ contract PeridottrollerG7 is
     }
 
     function _setBorrowPaused(PToken pToken, bool state) public returns (bool) {
-        require(markets[address(pToken)].isListed, "cannot pause a market that is not listed");
-        require(msg.sender == pauseGuardian || msg.sender == admin, "only pause guardian and admin can pause");
+        require(
+            markets[address(pToken)].isListed,
+            "cannot pause a market that is not listed"
+        );
+        require(
+            msg.sender == pauseGuardian || msg.sender == admin,
+            "only pause guardian and admin can pause"
+        );
         require(msg.sender == admin || state == true, "only admin can unpause");
 
         borrowGuardianPaused[address(pToken)] = state;
@@ -1088,7 +1332,10 @@ contract PeridottrollerG7 is
     }
 
     function _setTransferPaused(bool state) public returns (bool) {
-        require(msg.sender == pauseGuardian || msg.sender == admin, "only pause guardian and admin can pause");
+        require(
+            msg.sender == pauseGuardian || msg.sender == admin,
+            "only pause guardian and admin can pause"
+        );
         require(msg.sender == admin || state == true, "only admin can unpause");
 
         transferGuardianPaused = state;
@@ -1097,7 +1344,10 @@ contract PeridottrollerG7 is
     }
 
     function _setSeizePaused(bool state) public returns (bool) {
-        require(msg.sender == pauseGuardian || msg.sender == admin, "only pause guardian and admin can pause");
+        require(
+            msg.sender == pauseGuardian || msg.sender == admin,
+            "only pause guardian and admin can pause"
+        );
         require(msg.sender == admin || state == true, "only admin can unpause");
 
         seizeGuardianPaused = state;
@@ -1106,15 +1356,22 @@ contract PeridottrollerG7 is
     }
 
     function _become(Unitroller unitroller) public {
-        require(msg.sender == unitroller.admin(), "only unitroller admin can change brains");
-        require(unitroller._acceptImplementation() == 0, "change not authorized");
+        require(
+            msg.sender == unitroller.admin(),
+            "only unitroller admin can change brains"
+        );
+        require(
+            unitroller._acceptImplementation() == 0,
+            "change not authorized"
+        );
     }
 
     /**
      * @notice Checks caller is admin, or this contract is becoming the new implementation
      */
     function adminOrInitializing() internal view returns (bool) {
-        return msg.sender == admin || msg.sender == peridottrollerImplementation;
+        return
+            msg.sender == admin || msg.sender == peridottrollerImplementation;
     }
 
     /**
@@ -1126,7 +1383,10 @@ contract PeridottrollerG7 is
      * @param pToken The market whose PERIDOT speed to update
      * @param peridotSpeed New PERIDOT speed for market
      */
-    function setPeridotSpeedInternal(PToken pToken, uint256 peridotSpeed) internal {
+    function setPeridotSpeedInternal(
+        PToken pToken,
+        uint256 peridotSpeed
+    ) internal {
         uint256 currentPeridotSpeed = peridotSpeeds[address(pToken)];
         if (currentPeridotSpeed != 0) {
             // note that PERIDOT speed could be set to 0 to halt liquidity rewards for a market
@@ -1138,17 +1398,29 @@ contract PeridottrollerG7 is
             Market storage market = markets[address(pToken)];
             require(market.isListed == true, "peridot market is not listed");
 
-            if (peridotSupplyState[address(pToken)].index == 0 && peridotSupplyState[address(pToken)].block == 0) {
+            if (
+                peridotSupplyState[address(pToken)].index == 0 &&
+                peridotSupplyState[address(pToken)].block == 0
+            ) {
                 peridotSupplyState[address(pToken)] = PeridotMarketState({
                     index: peridotInitialIndex,
-                    block: safe32(getBlockNumber(), "block number exceeds 32 bits")
+                    block: safe32(
+                        getBlockNumber(),
+                        "block number exceeds 32 bits"
+                    )
                 });
             }
 
-            if (peridotBorrowState[address(pToken)].index == 0 && peridotBorrowState[address(pToken)].block == 0) {
+            if (
+                peridotBorrowState[address(pToken)].index == 0 &&
+                peridotBorrowState[address(pToken)].block == 0
+            ) {
                 peridotBorrowState[address(pToken)] = PeridotMarketState({
                     index: peridotInitialIndex,
-                    block: safe32(getBlockNumber(), "block number exceeds 32 bits")
+                    block: safe32(
+                        getBlockNumber(),
+                        "block number exceeds 32 bits"
+                    )
                 });
             }
         }
@@ -1171,14 +1443,22 @@ contract PeridottrollerG7 is
         if (deltaBlocks > 0 && supplySpeed > 0) {
             uint256 supplyTokens = PToken(pToken).totalSupply();
             uint256 peridotAccrued = mul_(deltaBlocks, supplySpeed);
-            Double memory ratio = supplyTokens > 0 ? fraction(peridotAccrued, supplyTokens) : Double({mantissa: 0});
-            Double memory index = add_(Double({mantissa: supplyState.index}), ratio);
+            Double memory ratio = supplyTokens > 0
+                ? fraction(peridotAccrued, supplyTokens)
+                : Double({mantissa: 0});
+            Double memory index = add_(
+                Double({mantissa: supplyState.index}),
+                ratio
+            );
             peridotSupplyState[pToken] = PeridotMarketState({
                 index: safe224(index.mantissa, "new index exceeds 224 bits"),
                 block: safe32(blockNumber, "block number exceeds 32 bits")
             });
         } else if (deltaBlocks > 0) {
-            supplyState.block = safe32(blockNumber, "block number exceeds 32 bits");
+            supplyState.block = safe32(
+                blockNumber,
+                "block number exceeds 32 bits"
+            );
         }
     }
 
@@ -1186,22 +1466,36 @@ contract PeridottrollerG7 is
      * @notice Accrue PERIDOT to the market by updating the borrow index
      * @param pToken The market whose borrow index to update
      */
-    function updatePeridotBorrowIndex(address pToken, Exp memory marketBorrowIndex) internal {
+    function updatePeridotBorrowIndex(
+        address pToken,
+        Exp memory marketBorrowIndex
+    ) internal {
         PeridotMarketState storage borrowState = peridotBorrowState[pToken];
         uint256 borrowSpeed = peridotSpeeds[pToken];
         uint256 blockNumber = getBlockNumber();
         uint256 deltaBlocks = sub_(blockNumber, uint256(borrowState.block));
         if (deltaBlocks > 0 && borrowSpeed > 0) {
-            uint256 borrowAmount = div_(PToken(pToken).totalBorrows(), marketBorrowIndex);
+            uint256 borrowAmount = div_(
+                PToken(pToken).totalBorrows(),
+                marketBorrowIndex
+            );
             uint256 peridotAccrued = mul_(deltaBlocks, borrowSpeed);
-            Double memory ratio = borrowAmount > 0 ? fraction(peridotAccrued, borrowAmount) : Double({mantissa: 0});
-            Double memory index = add_(Double({mantissa: borrowState.index}), ratio);
+            Double memory ratio = borrowAmount > 0
+                ? fraction(peridotAccrued, borrowAmount)
+                : Double({mantissa: 0});
+            Double memory index = add_(
+                Double({mantissa: borrowState.index}),
+                ratio
+            );
             peridotBorrowState[pToken] = PeridotMarketState({
                 index: safe224(index.mantissa, "new index exceeds 224 bits"),
                 block: safe32(blockNumber, "block number exceeds 32 bits")
             });
         } else if (deltaBlocks > 0) {
-            borrowState.block = safe32(blockNumber, "block number exceeds 32 bits");
+            borrowState.block = safe32(
+                blockNumber,
+                "block number exceeds 32 bits"
+            );
         }
     }
 
@@ -1210,10 +1504,15 @@ contract PeridottrollerG7 is
      * @param pToken The market in which the supplier is interacting
      * @param supplier The address of the supplier to distribute PERIDOT to
      */
-    function distributeSupplierPeridot(address pToken, address supplier) internal {
+    function distributeSupplierPeridot(
+        address pToken,
+        address supplier
+    ) internal {
         PeridotMarketState storage supplyState = peridotSupplyState[pToken];
         Double memory supplyIndex = Double({mantissa: supplyState.index});
-        Double memory supplierIndex = Double({mantissa: peridotSupplierIndex[pToken][supplier]});
+        Double memory supplierIndex = Double({
+            mantissa: peridotSupplierIndex[pToken][supplier]
+        });
         peridotSupplierIndex[pToken][supplier] = supplyIndex.mantissa;
 
         if (supplierIndex.mantissa == 0 && supplyIndex.mantissa > 0) {
@@ -1225,7 +1524,12 @@ contract PeridottrollerG7 is
         uint256 supplierDelta = mul_(supplierTokens, deltaIndex);
         uint256 supplierAccrued = add_(peridotAccrued[supplier], supplierDelta);
         peridotAccrued[supplier] = supplierAccrued;
-        emit DistributedSupplierPeridot(PToken(pToken), supplier, supplierDelta, supplyIndex.mantissa);
+        emit DistributedSupplierPeridot(
+            PToken(pToken),
+            supplier,
+            supplierDelta,
+            supplyIndex.mantissa
+        );
     }
 
     /**
@@ -1234,19 +1538,36 @@ contract PeridottrollerG7 is
      * @param pToken The market in which the borrower is interacting
      * @param borrower The address of the borrower to distribute PERIDOT to
      */
-    function distributeBorrowerPeridot(address pToken, address borrower, Exp memory marketBorrowIndex) internal {
+    function distributeBorrowerPeridot(
+        address pToken,
+        address borrower,
+        Exp memory marketBorrowIndex
+    ) internal {
         PeridotMarketState storage borrowState = peridotBorrowState[pToken];
         Double memory borrowIndex = Double({mantissa: borrowState.index});
-        Double memory borrowerIndex = Double({mantissa: peridotBorrowerIndex[pToken][borrower]});
+        Double memory borrowerIndex = Double({
+            mantissa: peridotBorrowerIndex[pToken][borrower]
+        });
         peridotBorrowerIndex[pToken][borrower] = borrowIndex.mantissa;
 
         if (borrowerIndex.mantissa > 0) {
             Double memory deltaIndex = sub_(borrowIndex, borrowerIndex);
-            uint256 borrowerAmount = div_(PToken(pToken).borrowBalanceStored(borrower), marketBorrowIndex);
+            uint256 borrowerAmount = div_(
+                PToken(pToken).borrowBalanceStored(borrower),
+                marketBorrowIndex
+            );
             uint256 borrowerDelta = mul_(borrowerAmount, deltaIndex);
-            uint256 borrowerAccrued = add_(peridotAccrued[borrower], borrowerDelta);
+            uint256 borrowerAccrued = add_(
+                peridotAccrued[borrower],
+                borrowerDelta
+            );
             peridotAccrued[borrower] = borrowerAccrued;
-            emit DistributedBorrowerPeridot(PToken(pToken), borrower, borrowerDelta, borrowIndex.mantissa);
+            emit DistributedBorrowerPeridot(
+                PToken(pToken),
+                borrower,
+                borrowerDelta,
+                borrowIndex.mantissa
+            );
         }
     }
 
@@ -1257,10 +1578,16 @@ contract PeridottrollerG7 is
     function updateContributorRewards(address contributor) public {
         uint256 peridotSpeed = peridotContributorSpeeds[contributor];
         uint256 blockNumber = getBlockNumber();
-        uint256 deltaBlocks = sub_(blockNumber, lastContributorBlock[contributor]);
+        uint256 deltaBlocks = sub_(
+            blockNumber,
+            lastContributorBlock[contributor]
+        );
         if (deltaBlocks > 0 && peridotSpeed > 0) {
             uint256 newAccrued = mul_(deltaBlocks, peridotSpeed);
-            uint256 contributorAccrued = add_(peridotAccrued[contributor], newAccrued);
+            uint256 contributorAccrued = add_(
+                peridotAccrued[contributor],
+                newAccrued
+            );
 
             peridotAccrued[contributor] = contributorAccrued;
             lastContributorBlock[contributor] = blockNumber;
@@ -1293,7 +1620,12 @@ contract PeridottrollerG7 is
      * @param borrowers Whether or not to claim PERIDOT earned by borrowing
      * @param suppliers Whether or not to claim PERIDOT earned by supplying
      */
-    function claimPeridot(address[] memory holders, PToken[] memory pTokens, bool borrowers, bool suppliers) public {
+    function claimPeridot(
+        address[] memory holders,
+        PToken[] memory pTokens,
+        bool borrowers,
+        bool suppliers
+    ) public {
         for (uint256 i = 0; i < pTokens.length; i++) {
             PToken pToken = pTokens[i];
             require(markets[address(pToken)].isListed, "market must be listed");
@@ -1301,15 +1633,25 @@ contract PeridottrollerG7 is
                 Exp memory borrowIndex = Exp({mantissa: pToken.borrowIndex()});
                 updatePeridotBorrowIndex(address(pToken), borrowIndex);
                 for (uint256 j = 0; j < holders.length; j++) {
-                    distributeBorrowerPeridot(address(pToken), holders[j], borrowIndex);
-                    peridotAccrued[holders[j]] = grantPeridotInternal(holders[j], peridotAccrued[holders[j]]);
+                    distributeBorrowerPeridot(
+                        address(pToken),
+                        holders[j],
+                        borrowIndex
+                    );
+                    peridotAccrued[holders[j]] = grantPeridotInternal(
+                        holders[j],
+                        peridotAccrued[holders[j]]
+                    );
                 }
             }
             if (suppliers == true) {
                 updatePeridotSupplyIndex(address(pToken));
                 for (uint256 j = 0; j < holders.length; j++) {
                     distributeSupplierPeridot(address(pToken), holders[j]);
-                    peridotAccrued[holders[j]] = grantPeridotInternal(holders[j], peridotAccrued[holders[j]]);
+                    peridotAccrued[holders[j]] = grantPeridotInternal(
+                        holders[j],
+                        peridotAccrued[holders[j]]
+                    );
                 }
             }
         }
@@ -1322,7 +1664,10 @@ contract PeridottrollerG7 is
      * @param amount The amount of PERIDOT to (possibly) transfer
      * @return The amount of PERIDOT which was NOT transferred to the user
      */
-    function grantPeridotInternal(address user, uint256 amount) internal returns (uint256) {
+    function grantPeridotInternal(
+        address user,
+        uint256 amount
+    ) internal returns (uint256) {
         Peridot peridot = Peridot(getPeridotAddress());
         uint256 peridotRemaining = peridot.balanceOf(address(this));
         if (amount > 0 && amount <= peridotRemaining) {
@@ -1364,7 +1709,10 @@ contract PeridottrollerG7 is
      * @param contributor The contributor whose PERIDOT speed to update
      * @param peridotSpeed New PERIDOT speed for contributor
      */
-    function _setContributorPeridotSpeed(address contributor, uint256 peridotSpeed) public {
+    function _setContributorPeridotSpeed(
+        address contributor,
+        uint256 peridotSpeed
+    ) public {
         require(adminOrInitializing(), "only admin can set peridot speed");
 
         // note that PERIDOT speed could be set to 0 to halt liquidity rewards for a contributor
@@ -1398,6 +1746,6 @@ contract PeridottrollerG7 is
      * @return The address of PERIDOT
      */
     function getPeridotAddress() public view virtual returns (address) {
-        return 0x507f0F5E58d21f07d133722e038067248fe4ecBE;
+        return 0x96650BebC549456F253974c11Fc6cBE28172A2d2;
     }
 }

@@ -16,22 +16,22 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0xaEef2f6B429Cb59C9B2D7bB2141ADa993E8571c3;
+        0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a;
     address constant COMPTROLLER_ADDRESS =
-        0xa41D586530BC7BC872095950aE03a780d5114445;
+        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x2d271dEb2596d78aaa2551695Ebfa9Cd440713aC;
+        0x8334A3ec5c9Cf105E57B8b4B68386B8A8043DD36;
 
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26;
-    string constant PTOKEN_NAME = "Peridot gMON";
-    string constant PTOKEN_SYMBOL = "pgMON";
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e14;
+    string constant PTOKEN_NAME = "Peridot Agora USD";
+    string constant PTOKEN_SYMBOL = "pAUSD"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
     uint8 constant PTOKEN_DECIMALS = 8;
 
-    // Reserve factor (15% = 0.15 * 1e18)
-    uint256 constant RESERVE_FACTOR = 0.08 * 1e18;
+    // Reserve factor (5% = 0.05 * 1e18)
+    uint256 constant RESERVE_FACTOR = 0.05 * 1e18;
 
     function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");
         address deployer = vm.addr(deployerPrivateKey);
 
         console.log("=== Deploying PErc20 with Fixed Admin ===");
@@ -93,10 +93,10 @@ contract DeployPErc20Fixed is Script {
         }
 
         // 4. Set reserve factor
-        console.log("Setting reserve factor to 15%...");
+        console.log("Setting reserve factor to 5%...");
         uint256 reserveResult = delegator._setReserveFactor(RESERVE_FACTOR);
         if (reserveResult == 0) {
-            console.log(" Successfully set reserve factor to 15%");
+            console.log(" Successfully set reserve factor to 5%");
         } else {
             console.log(
                 " Failed to set reserve factor, error code:",

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.20; // moved to cross-chain folder
 
-import {PErc20} from "./PErc20.sol";
-import {EIP20Interface} from "./EIP20Interface.sol";
-import {PeridottrollerInterface} from "./PeridottrollerInterface.sol";
-import {InterestRateModel} from "./InterestRateModel.sol";
+import {PErc20} from "../PErc20.sol";
+import {EIP20Interface} from "../EIP20Interface.sol";
+import {PeridottrollerInterface} from "../PeridottrollerInterface.sol";
+import {InterestRateModel} from "../InterestRateModel.sol";
 
 /**
  * @title PErc20CrossChain

@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
-import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
+import {PeridotHubHandler} from "../contracts/cross-chain/PeridotHubHandler.sol";
 import {PeridotForwarder} from "../contracts/PeridotForwarder.sol";
-import {PeridotSpoke} from "../contracts/PeridotSpoke.sol";
+import {PeridotSpoke} from "../contracts/cross-chain/PeridotSpoke.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import "forge-std/console.sol";
 

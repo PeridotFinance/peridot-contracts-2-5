@@ -12,6 +12,7 @@ contract DeploySimplePriceOracle is Script {
         address usdcUsd;
         address usdtUsd;
         address linkUsd;
+        address daiUsd;
     }
 
     // Asset addresses for different networks
@@ -21,6 +22,7 @@ contract DeploySimplePriceOracle is Script {
         address usdc;
         address usdt;
         address link;
+        address dai;
     }
 
     SimplePriceOracle public oracle;
@@ -29,7 +31,7 @@ contract DeploySimplePriceOracle is Script {
     uint256 public constant DEFAULT_STALE_THRESHOLD = 3600; // 1 hour
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");
         address deployer = vm.addr(deployerPrivateKey);
 
         console.log("Deploying SimplePriceOracle...");
@@ -57,7 +59,7 @@ contract DeploySimplePriceOracle is Script {
 
         console.log("Configuring for network:", chainId);
 
-        if (chainId == 10143) {
+        if (chainId == 56) {
             _configureMainnet(deployer);
         } else if (chainId == 97) {
             _configureGoerli(deployer);
@@ -71,35 +73,24 @@ contract DeploySimplePriceOracle is Script {
         console.log("Configuring for Monad Testnet");
 
         ChainlinkFeeds memory feeds = ChainlinkFeeds({
-            ethUsd: 0x143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7, // ETH/USD Chainlink feed
-            btcUsd: 0x5741306c21795FdCBb9b265Ea0255F499DFe515C, // BTC/USD Chainlink feed
-            usdcUsd: 0x90c069C4538adAc136E051052E14c1cD799C41B7, // USDC/USD Chainlink feed
-            usdtUsd: 0xEca2605f0BCF2BA5966372C99837b1F182d3D620, // USDT/USD Chainlink feed
-            linkUsd: 0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f // Skip LINK - will be handled by your script
+            ethUsd: 0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e, // ETH/USD Chainlink feed
+            btcUsd: 0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf, // BTC/USD Chainlink feed
+            usdcUsd: 0x51597f405303C4377E36123cBc172b13269EA163, // USDC/USD Chainlink feed
+            usdtUsd: 0xB97Ad0E74fa7d920791E90258A6E2085088b4320, // USDT/USD Chainlink feed
+            linkUsd: 0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE, // WBNB
+            daiUsd: 0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA
         });
 
         AssetAddresses memory assets = AssetAddresses({
-            weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37, // WETH from addresses.MD
-            wbtc: 0x6ce8dA28E2f864420840cF74474eFf5fD80E65B8, // WBTC from addresses.MD
-            usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea, // USDC from addresses.MD
-            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // USDT from addresses.MD
-            link: 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06 // Skip LINK - will be handled by your script
+            weth: 0x2170Ed0880ac9A755fd29B2688956BD959F933F8, // WETH from addresses.MD
+            wbtc: 0x0555E30da8f98308EdB960aa94C0Db47230d2B9c, // WBTC from addresses.MD
+            usdc: 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d, // USDC from addresses.MD
+            usdt: 0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a, // USDT from addresses.MD
+            link: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, // Skip LINK - will be handled by your script
+            dai: 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3
         });
 
         _registerChainlinkFeeds(feeds, assets);
-
-        // Set USD stablecoins to $1.00 (1e18 = $1.00 with 18 decimals)
-        console.log("Setting USD stablecoins to $1.00...");
-        oracle.setDirectPrice(assets.usdc, 1e18); // $1.00 for USDC
-        oracle.setDirectPrice(assets.usdt, 1e18); // $1.00 for USDT
-
-        // Set PUSD to $1.00 as well
-        address pusd = 0xc55c86ef14Dc7A058895659CC11c97C344bF6e7B; // PUSD from addresses.MD
-        oracle.setDirectPrice(pusd, 1e18); // $1.00 for PUSD
-
-        // Set rUSDC to $1.00 as well
-        address rUsdc = 0x400A417fEDEef43Fc5b8be0D8cD6DF687847Ee8D; // rUSDC from addresses.MD
-        oracle.setDirectPrice(rUsdc, 1e18); // $1.00 for rUSDC
 
         console.log("USD stablecoins set to $1.00");
         console.log(
@@ -118,15 +109,17 @@ contract DeploySimplePriceOracle is Script {
             btcUsd: 0x5741306c21795FdCBb9b265Ea0255F499DFe515C, // BTC/USD Chainlink feed
             usdcUsd: 0x90c069C4538adAc136E051052E14c1cD799C41B7, // USDC/USD Chainlink feed
             usdtUsd: 0xEca2605f0BCF2BA5966372C99837b1F182d3D620, // USDT/USD Chainlink feed
-            linkUsd: 0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f // Skip LINK - will be handled by your script
+            linkUsd: 0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f, // Skip LINK - will be handled by your script
+            daiUsd: 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3
         });
 
         AssetAddresses memory assets = AssetAddresses({
             weth: 0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37, // WETH from addresses.MD
             wbtc: 0x6ce8dA28E2f864420840cF74474eFf5fD80E65B8, // WBTC from addresses.MD
             usdc: 0xf817257fed379853cDe0fa4F97AB987181B1E5Ea, // USDC from addresses.MD
-            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // USDT from addresses.MD
-            link: 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06 // Skip LINK - will be handled by your script
+            usdt: 0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D, // AUSD from addresses.MD
+            link: 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06, // Skip LINK - will be handled by your script
+            dai: 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3
         });
 
         _registerChainlinkFeeds(feeds, assets);
@@ -178,6 +171,11 @@ contract DeploySimplePriceOracle is Script {
         if (feeds.linkUsd != address(0) && assets.link != address(0)) {
             oracle.registerChainlinkFeed(assets.link, feeds.linkUsd);
             console.log("Registered LINK/USD feed");
+        }
+
+        if (feeds.daiUsd != address(0) && assets.dai != address(0)) {
+            oracle.registerChainlinkFeed(assets.dai, feeds.daiUsd);
+            console.log("Registered DAI/USD feed");
         }
 
         console.log("Chainlink feed registration completed");

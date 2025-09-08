@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
-import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
+import {PeridotHubHandler} from "../contracts/cross-chain/PeridotHubHandler.sol";
 
 contract ConfigureHubToken is Script {
     // Hardcode values here, or use the parameterized run(...) below

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.10; // moved to xperidot folder
 
-import "./PToken.sol";
-import "./PriceOracle.sol";
-import "./Governance/Peridot.sol";
-import "./PeridottrollerInterface.sol";
+import "../PToken.sol";
+import "../PriceOracle.sol";
+import "../Governance/Peridot.sol";
+import "../PeridottrollerInterface.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**

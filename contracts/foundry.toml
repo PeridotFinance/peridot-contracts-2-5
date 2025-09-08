@@ -17,3 +17,14 @@ remappings = [
     "@chainlink/contracts/=node_modules/@chainlink/contracts/",
     "solidity-bytes-utils/=lib/solidity-bytes-utils/"
 ]
+
+# Use this profile when verifying on BscScan to avoid IR/cancun issues
+[profile.verify]
+src = 'contracts'
+out = 'out'
+libs = ['node_modules', 'lib']
+cache_path  = 'cache_forge'
+via_ir = false
+evm_version = 'paris'
+optimizer = true
+optimizer_runs = 200

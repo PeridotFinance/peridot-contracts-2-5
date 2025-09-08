@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
-import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
+import {PeridotHubHandler} from "../contracts/cross-chain/PeridotHubHandler.sol";
 import {PeridotProxyAdmin} from "../contracts/proxy/PeridotProxyAdmin.sol";
 import {PeridotTransparentProxy} from "../contracts/proxy/PeridotTransparentProxy.sol";
 import "forge-std/console.sol";

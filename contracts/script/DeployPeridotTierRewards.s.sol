@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
-import "../contracts/PeridotTierRewards.sol";
+import "../contracts/xperidot/PeridotTierRewards.sol";
 import "../contracts/Governance/Peridot.sol";
 import "../contracts/PeridottrollerInterface.sol";
 import "../contracts/SimplePriceOracle.sol";

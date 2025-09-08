@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../contracts/PeridotTierRewards.sol";
+import "../contracts/xperidot/PeridotTierRewards.sol";
 import "../contracts/Governance/Peridot.sol";
 
 /**

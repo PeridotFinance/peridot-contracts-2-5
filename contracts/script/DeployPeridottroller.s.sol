@@ -20,9 +20,10 @@ import "../contracts/PriceOracle.sol"; // Interface for the oracle
 contract DeployPeridottroller is Script {
     // !!! IMPORTANT: Replace with your deployed SimplePriceOracle address !!!
     address constant ORACLE_ADDRESS =
-        0xeAEdaF63CbC1d00cB6C14B5c4DE161d68b7C63A0;
+        0x42D5B37CD3682eDD0a3dBb242C579bDCB108f47C;
+    // Note: PeridottrollerG7 hardcodes the PERIDOT token via getPeridotAddress().
     address constant PERIDOT_ADDRESS =
-        0x28fE679719e740D15FC60325416bB43eAc50cD15;
+        0x96650BebC549456F253974c11Fc6cBE28172A2d2;
 
     // Interest Rate Model Parameters (Example values, adjust as needed)
     // uint baseRatePerYear = 0.02e18; // 2%
@@ -32,10 +33,10 @@ contract DeployPeridottroller is Script {
 
     // Using Mantissa scalar 1e18 for calculations
     // 1e18; Represents 1.0 or 100%
-    uint baseRatePerYear = 0.03 * 1e18; // 3% APR
+    uint baseRatePerYear = 0.01 * 1e18; // 3% APR
     uint multiplierPerYear = 0.12 * 1e18; // 12% APR slope
-    uint jumpMultiplierPerYear = 2 * 1e18; // 200% APR slope after kink
-    uint kink_ = 0.85 * 1e18; // 85% utilization threshold
+    uint jumpMultiplierPerYear = 0.36 * 1e18; // 200% APR slope after kink
+    uint kink_ = 0.5 * 1e18; // 85% utilization threshold
 
     // Close factor and liquidation incentive (Example values, adjust as needed)
     uint closeFactorMantissa = 0.5e18; // 50%
@@ -67,9 +68,7 @@ contract DeployPeridottroller is Script {
         console.log("Unitroller (Proxy) deployed at:", address(unitroller));
 
         // 2. Deploy Peridottroller (Implementation)
-        PeridottrollerG7 peridotTrollerImpl = new PeridottrollerG7(
-            PERIDOT_ADDRESS
-        );
+        PeridottrollerG7 peridotTrollerImpl = new PeridottrollerG7();
         console.log(
             "PeridottrollerG7 (Implementation) deployed at:",
             address(peridotTrollerImpl)
@@ -116,6 +115,11 @@ contract DeployPeridottroller is Script {
 
         // 7. Initialize Comptroller settings
         console.log("Initializing Comptroller settings...");
+        // Log PERIDOT token the implementation uses (hardcoded in PeridottrollerG7)
+        console.log(
+            "  PERIDOT Token (from implementation):",
+            peridotTrollerProxy.getPeridotAddress()
+        );
 
         // Set Price Oracle
         // function _setPriceOracle(PriceOracle newOracle) public returns (uint)
@@ -181,5 +185,7 @@ contract DeployPeridottroller is Script {
         PriceOracle oracleInstance = peridotTrollerProxy.oracle(); // Changed type from address to PriceOracle
         console.log("Oracle Address Set:");
         console.log(address(oracleInstance)); // Cast to address for logging
+        console.log("PERIDOT Address Used (from controller):");
+        console.log(peridotTrollerProxy.getPeridotAddress());
     }
 }

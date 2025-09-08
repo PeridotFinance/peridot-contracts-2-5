@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
-import {PeridotSpoke} from "../contracts/PeridotSpoke.sol";
+import {PeridotSpoke} from "../contracts/cross-chain/PeridotSpoke.sol";
 
 /*
 forge script /home/josh/peridot-ccip/contracts/script/CrossChainBorrow.s.sol:CrossChainBorrow \

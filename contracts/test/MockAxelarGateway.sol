@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IAxelarGateway, IAxelarGasService, IAxelarExecutable} from "../contracts/interfaces/AxelarInterfaces.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {PeridotHubHandler} from "../contracts/PeridotHubHandler.sol";
+import {PeridotHubHandler} from "../contracts/cross-chain/PeridotHubHandler.sol";
 
 contract MockAxelarGateway is IAxelarGateway, IAxelarGasService {
     address public gasService;

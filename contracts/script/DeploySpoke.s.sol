@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
-import {PeridotSpoke} from "../contracts/PeridotSpoke.sol";
+import {PeridotSpoke} from "../contracts/cross-chain/PeridotSpoke.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {PeridotProxyAdmin} from "../contracts/proxy/PeridotProxyAdmin.sol";
 import {PeridotTransparentProxy} from "../contracts/proxy/PeridotTransparentProxy.sol";

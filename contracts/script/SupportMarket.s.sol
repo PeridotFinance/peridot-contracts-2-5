@@ -8,12 +8,12 @@ import "../contracts/PToken.sol";
 contract SupportMarket is Script {
     // Update these with your deployed addresses
     address constant PERIDOTTROLLER_ADDRESS =
-        0xe8F09917d56Cc5B634f4DE091A2c82189dc41b54;
+        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
     address constant PTOKEN_ADDRESS =
-        0x39e955B2Dc405062b4212026EEC24CCBB81b9065; // PErc20Delegator (Proxy) address
+        0x7A9940B77c0B6DFCcA2028b9F3CCa88E5DC36ebb; // PErc20Delegator (Proxy) address
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");
 
         vm.startBroadcast(deployerPrivateKey);
 

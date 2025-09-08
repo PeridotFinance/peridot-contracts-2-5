@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
-import {PErc20CrossChain} from "../contracts/PErc20CrossChain.sol";
+import {PErc20CrossChain} from "../contracts/cross-chain/PErc20CrossChain.sol";
 import {PeridottrollerInterface} from "../contracts/PeridottrollerInterface.sol";
 import {InterestRateModel} from "../contracts/InterestRateModel.sol";
 import {EIP20Interface} from "../contracts/EIP20Interface.sol";
