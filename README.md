@@ -1,290 +1,71 @@
-# 🧿 Peridot DeFi Bot
+# Peridot Protocol
 
-A sophisticated Telegram bot for interacting with the Peridot Protocol (Compound V2 fork) on Arbitrum. Get real-time market data, manage your positions, and receive AI-powered DeFi advice through Telegram.
+A cross-chain lending and rewards protocol built on **BNB Smart Chain (BSC)** and compatible with other EVM networks.
 
-## ✨ Features
+## Technology Stack
 
-### 🤖 AI-Powered Assistant
+- Blockchain: BNB Smart Chain + EVM-compatible chains
+- Smart Contracts: Solidity ^0.8.x
+- Development: Foundry, OpenZeppelin libraries, Chainlink price feeds, Axelar GMP (cross-chain)
 
-- Natural language processing for DeFi queries
-- Position analysis and risk assessment
-- Personalized investment advice
-- Market insights and trends
+## Supported Networks
 
-### 📊 Market Data
+- BNB Smart Chain Mainnet (Chain ID: 56)
+- BNB Smart Chain Testnet (Chain ID: 97)
+- Arbitrum Sepolia / other EVM testnets for spokes
 
-- Real-time market information
-- APY calculations (supply/borrow rates)
-- Utilization rates and liquidity data
-- Market health indicators
+## Contract Addresses
 
-### 💼 Portfolio Management
+| Network     | Core Comptroller (Proxy)                   | PERIDOT Token ($P)                         | Optional (Oracle / Rate Model)                                                                      |
+| ----------- | ------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| BNB Mainnet | 0xc1306A30490C8566D09f617e85BB503B55B547eC | 0x96650BebC549456F253974c11Fc6cBE28172A2d2 | Oracle: 0x42D5B37CD3682eDD0a3dBb242C579bDCB108f47C, IRM: 0x16d8e28777581d8A4bf282aDB694e9F987019111 |
+| BNB Testnet | 0xe8F09917d56Cc5B634f4DE091A2c82189dc41b54 | 0x5A5063a749fCF050CE58Cae6bB76A29bb37BA4Ed | —                                                                                                   |
 
-- Multi-token position tracking
-- Account health monitoring
-- Liquidation risk warnings
-- Historical performance (coming soon)
+See `addresses.MD` for the full list (spokes, markets, adapters).
 
-### 🎯 User Experience
+## Features
 
-- Natural language commands
-- Intuitive keyboard interface
-- Personalized settings
-- Multi-language support (coming soon)
+- Compound-style lending markets (PToken, PEther) on BNB Chain
+- Cross-chain supply/borrow via Axelar (Hub/Spoke architecture)
+- PERIDOT incentives (supply/borrow rewards) with on-chain claiming
+- xPeridot vault + staking with APR and tiered rewards (V2)
+- Chainlink-integrated price oracle with staleness fallback
 
-## 🚀 Quick Start
+## Repository Layout
 
-### Prerequisites
+- `contracts/`
+  - `core/`: Core lending and protocol contracts (PTokens, Peridottroller, models, oracle)
+  - `cross-chain/`: Hub/Spoke and PErc20CrossChain for Axelar flows
+  - `xperidot/`: xPeridot vault, staking, tier rewards
+  - `interfaces/`, `helpers/`, `proxy/`, `utils/`: supporting modules
+- `script/`: Foundry scripts for deployment and ops on BNB Chain + spokes
+- `test/`: Foundry tests (forge-std)
+- `docs/`: Design notes and integration guides (Axelar flows, APYs)
 
-- Node.js 18+ installed
-- Telegram Bot Token (from @BotFather)
-- OpenAI API key (optional, for AI features)
-- RPC endpoint for Arbitrum Sepolia
+## Build, Test, and Deploy
 
-### Installation
+- Compile: `forge build`
+- Run tests: `forge test`
+- Local node: `anvil`
+- Deploy Comptroller (BNB): `forge script script/DeployPeridottroller.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`
+- Deploy pToken: `forge script script/DeployPErc20Fixed.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`
+- Verify (BscScan): `forge verify-contract --chain bsc <address> <path:Contract> --etherscan-api-key $BNB_KEY`
 
-1. **Clone and Install**
+Environment
 
-```bash
-git clone <your-repo>
-cd peridot-defi-bot
-npm install
-```
+- Set envs in `.env` (see `.env.example`): `BNBMAIN_RPC`, `BNB_TESTNET_RPC_URL`, `PRIVATE_KEY`, `BNB_KEY`, etc.
 
-2. **Environment Setup**
+## BNB Chain Repository Submission Guidelines
 
-```bash
-cp env.example .env
-# Edit .env with your configuration
-```
+This repository is intended for deployment on BNB Chain and includes strong indicators:
 
-3. **Required Environment Variables**
+- README and scripts explicitly target BNB Chain
+- BNB Chain addresses in `addresses.MD`
+- Axelar hub on BNB and spokes on other EVM chains
+- Chainlink feeds configured for BNB
 
-```bash
-# Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+## Security
 
-# Blockchain Configuration
-RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
-PERIDOTTROLLER_ADDRESS=0xfB3f8837B1Ad7249C1B253898b3aa7FaB22E68aD
-
-# Market Addresses
-PUSDC_ADDRESS=0xFb08502090318eA69595ad5D80Ff854B87f457eb
-PUSDT_ADDRESS=0x3ed59D5D0a2236cDAd22aDFFC5414df74Ccb3040
-
-# AI Configuration (Optional)
-OPENAI_API_KEY=your_openai_api_key
-```
-
-4. **Start the Bot**
-
-```bash
-# Development
-npm run dev
-
-# Production
-npm run build
-npm start
-```
-
-## 🎮 Bot Commands
-
-### 💼 Wallet & Position Commands
-
-- `/wallet <address>` - Connect your wallet
-- `/position` - View your current positions
-- `/liquidity` - Check account health
-- `/balance <address>` - Check ETH balance
-
-### 📊 Market Commands
-
-- `/markets` - List all available markets
-- `/market <symbol>` - Get detailed market info
-- `/rates` - Current supply/borrow rates
-
-### 🤖 AI Assistant Commands
-
-- `/ask <question>` - Ask anything about DeFi
-- `/analyze` - AI-powered position analysis
-- `/advice` - Get personalized recommendations
-
-### 🎯 Natural Language Examples
-
-The bot understands natural language! Try:
-
-- "Show me USDC market info"
-- "What's my position?"
-- "Is my account healthy?"
-- "How much can I borrow?"
-- "What are the best rates?"
-
-## 🏗️ Architecture
-
-### Core Services
-
-#### `BlockchainService`
-
-- Ethereum/Arbitrum blockchain interactions
-- Address validation
-- Balance queries
-- Gas price estimation
-
-#### `PeridotService`
-
-- Peridot protocol interactions
-- Market data retrieval
-- User position analysis
-- APY calculations
-
-#### `AIService`
-
-- OpenAI integration
-- Natural language processing
-- Position analysis
-- Market insights
-
-#### `UserSessionService`
-
-- User state management
-- Wallet address storage
-- Preferences handling
-- Alert management
-
-### Key Adaptations for Peridot
-
-This bot is specifically adapted for the Peridot protocol:
-
-- **pTokens** instead of cTokens (e.g., pUSDC, pUSDT)
-- **Peridottroller** instead of Comptroller
-- Custom market addresses on Arbitrum Sepolia
-- Peridot-specific terminology and branding
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-src/
-├── bot.ts                 # Main bot logic
-├── services/
-│   ├── blockchain.ts      # Blockchain interactions
-│   ├── peridot.ts        # Peridot protocol service
-│   ├── ai.ts             # OpenAI integration
-│   └── userSession.ts    # User state management
-├── types/                # TypeScript type definitions
-└── utils/                # Utility functions
-```
-
-### Available Scripts
-
-```bash
-npm run dev        # Development with hot reload
-npm run build      # Build TypeScript
-npm start          # Start production bot
-npm test           # Run tests
-npm run lint       # Lint code
-```
-
-### Environment Variables
-
-| Variable                 | Description                    | Required |
-| ------------------------ | ------------------------------ | -------- |
-| `TELEGRAM_BOT_TOKEN`     | Bot token from @BotFather      | ✅       |
-| `RPC_URL`                | Arbitrum Sepolia RPC endpoint  | ✅       |
-| `PERIDOTTROLLER_ADDRESS` | Peridottroller proxy address   | ✅       |
-| `PUSDC_ADDRESS`          | pUSDC token address            | ✅       |
-| `PUSDT_ADDRESS`          | pUSDT token address            | ✅       |
-| `OPENAI_API_KEY`         | OpenAI API key for AI features | ❌       |
-
-## 🔒 Security Considerations
-
-- **No Private Keys**: Bot only reads blockchain data
-- **Rate Limiting**: Built-in protection against spam
-- **Input Validation**: All user inputs are validated
-- **Error Handling**: Graceful error management
-- **Session Management**: Secure user data handling
-
-## 📊 Supported Networks
-
-Currently supports:
-
-- **Arbitrum Sepolia** (Testnet)
-
-Coming soon:
-
-- Arbitrum One (Mainnet)
-- Additional networks where Peridot is deployed
-
-## 🎯 Peridot Protocol Integration
-
-### Supported Markets
-
-- **USDC** - USD Coin lending/borrowing
-- **USDT** - Tether lending/borrowing
-- More markets coming soon!
-
-### Key Features
-
-- Real-time APY calculations
-- Health factor monitoring
-- Liquidation risk warnings
-- Market utilization tracking
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow TypeScript best practices
-- Add tests for new features
-- Update documentation
-- Ensure backwards compatibility
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Telegram**: [@peridot_support](https://t.me/peridot_support)
-- **Discord**: [Peridot Community](https://discord.gg/peridot)
-- **GitHub Issues**: For bug reports and feature requests
-
-## 🗺️ Roadmap
-
-### Phase 1: Core Features ✅
-
-- [x] Basic bot functionality
-- [x] Market data integration
-- [x] Position tracking
-- [x] AI assistant
-
-### Phase 2: Advanced Features 🔄
-
-- [ ] Transaction execution
-- [ ] Price alerts
-- [ ] Historical analytics
-- [ ] Advanced trading strategies
-
-### Phase 3: Enterprise Features 📋
-
-- [ ] Multi-chain support
-- [ ] Advanced risk management
-- [ ] Institutional features
-- [ ] API access
-
-## 🎉 Acknowledgments
-
-- [Peridot Protocol](https://peridot.finance) - The underlying DeFi protocol
-- [Compound V2](https://compound.finance) - Protocol inspiration
-- [Telegraf](https://telegraf.js.org) - Telegram bot framework
-- [OpenAI](https://openai.com) - AI assistance capabilities
-
----
-
-**Built with ❤️ for the Peridot community**
+- Follows checks-effects-interactions; reentrancy guards where appropriate
+- Admin-controlled parameters are isolated and validated
+- Never commit secrets; use `.env`

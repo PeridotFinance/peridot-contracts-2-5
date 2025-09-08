@@ -171,3 +171,7 @@ ELIZA_OS_INTEGRATION.md
 GEMINI.md
 QUICKSTART_ELIZAOS.md
 examples
+mock-eliza 
+icp-chain-fusion
+.eliza
+Dockerfile
