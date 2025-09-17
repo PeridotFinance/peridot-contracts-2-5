@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PeridotSpoke} from "../contracts/cross-chain/PeridotSpoke.sol";
 import {PeridotHubHandler} from "../contracts/cross-chain/PeridotHubHandler.sol";
 import {MockAxelarGateway} from "./MockAxelarGateway.sol";
-import {MockErc20} from "../contracts/MockErc20.sol";
+import {MockErc20} from "./MockErc20.sol";
 import {PErc20CrossChain} from "../contracts/cross-chain/PErc20CrossChain.sol";
 import {MockPeridottroller} from "./MockPeridottroller.sol";
 import {MockInterestRateModel} from "./MockInterestRateModel.sol";

@@ -3,7 +3,7 @@ pragma solidity ^0.8.10;
 
 import "../contracts/SimplePriceOracle.sol";
 import "../contracts/PErc20Immutable.sol";
-import "../contracts/MockErc20.sol";
+import "./MockErc20.sol";
 import "../contracts/Peridottroller.sol";
 import "../contracts/JumpRateModel.sol";
 import "../contracts/Unitroller.sol";

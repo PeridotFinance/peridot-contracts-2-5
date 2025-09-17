@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {xPeridotVault} from "../contracts/xperidot/xPeridotVault.sol";
 import {xPStaking} from "../contracts/xperidot/xPStaking.sol";
 import {PeridotTierRewardsV2} from "../contracts/xperidot/PeridotTierRewardsV2.sol";
-import {MockErc20} from "../contracts/MockErc20.sol";
+import {MockErc20} from "./MockErc20.sol";
 import {MockPeridottroller} from "./MockPeridottroller.sol";
 import {MockOracle} from "./MockOracle.sol";
 

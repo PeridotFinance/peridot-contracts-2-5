@@ -18,7 +18,7 @@ import "../contracts/InterestRateModel.sol";
 import "../contracts/JumpRateModelV2.sol";
 
 // Mock contracts
-import "../contracts/MockErc20.sol";
+import "./MockErc20.sol";
 import "./MockPeridottroller.sol";
 import "./MockInterestRateModel.sol";
 import "./MockPErc20.sol";

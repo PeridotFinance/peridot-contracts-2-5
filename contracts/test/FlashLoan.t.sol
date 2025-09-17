@@ -6,7 +6,7 @@ import "forge-std/console.sol";
 
 import {PToken} from "../contracts/PToken.sol";
 import {PTokenInterface, IERC3156FlashBorrower, IERC3156FlashLender} from "../contracts/PTokenInterfaces.sol";
-import {MockErc20} from "../contracts/MockErc20.sol";
+import {MockErc20} from "./MockErc20.sol";
 import {MockPeridottroller} from "./MockPeridottroller.sol";
 import {MockInterestRateModel} from "./MockInterestRateModel.sol";
 
