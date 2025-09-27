@@ -8,19 +8,29 @@ import "./ErrorReporter.sol";
 
 // Add ERC-3156 imports
 interface IERC3156FlashBorrower {
-    function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)
-        external
-        returns (bytes32);
+    function onFlashLoan(
+        address initiator,
+        address token,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata data
+    ) external returns (bytes32);
 }
 
 interface IERC3156FlashLender {
     function maxFlashLoan(address token) external view returns (uint256);
 
-    function flashFee(address token, uint256 amount) external view returns (uint256);
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view returns (uint256);
 
-    function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
-        external
-        returns (bool);
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool);
 }
 
 contract PTokenStorage {
@@ -123,6 +133,11 @@ contract PTokenStorage {
     mapping(address => BorrowSnapshot) internal accountBorrows;
 
     /**
+     * @notice Last recorded exchange rate after accrual; used for anomaly detection
+     */
+    uint256 public lastExchangeRate;
+
+    /**
      * @notice Share of seized collateral that is added to reserves
      */
     uint256 public constant protocolSeizeShareMantissa = 2.8e16; //2.8%
@@ -161,7 +176,12 @@ abstract contract PTokenInterface is PTokenStorage {
     /**
      * @notice Event emitted when interest is accrued
      */
-    event AccrueInterest(uint256 cashPrior, uint256 interestAccumulated, uint256 borrowIndex, uint256 totalBorrows);
+    event AccrueInterest(
+        uint256 cashPrior,
+        uint256 interestAccumulated,
+        uint256 borrowIndex,
+        uint256 totalBorrows
+    );
 
     /**
      * @notice Event emitted when tokens are minted
@@ -176,20 +196,33 @@ abstract contract PTokenInterface is PTokenStorage {
     /**
      * @notice Event emitted when underlying is borrowed
      */
-    event Borrow(address borrower, uint256 borrowAmount, uint256 accountBorrows, uint256 totalBorrows);
+    event Borrow(
+        address borrower,
+        uint256 borrowAmount,
+        uint256 accountBorrows,
+        uint256 totalBorrows
+    );
 
     /**
      * @notice Event emitted when a borrow is repaid
      */
     event RepayBorrow(
-        address payer, address borrower, uint256 repayAmount, uint256 accountBorrows, uint256 totalBorrows
+        address payer,
+        address borrower,
+        uint256 repayAmount,
+        uint256 accountBorrows,
+        uint256 totalBorrows
     );
 
     /**
      * @notice Event emitted when a borrow is liquidated
      */
     event LiquidateBorrow(
-        address liquidator, address borrower, uint256 repayAmount, address pTokenCollateral, uint256 seizeTokens
+        address liquidator,
+        address borrower,
+        uint256 repayAmount,
+        address pTokenCollateral,
+        uint256 seizeTokens
     );
 
     /**
@@ -209,27 +242,44 @@ abstract contract PTokenInterface is PTokenStorage {
     /**
      * @notice Event emitted when peridottroller is changed
      */
-    event NewPeridottroller(PeridottrollerInterface oldPeridottroller, PeridottrollerInterface newPeridottroller);
+    event NewPeridottroller(
+        PeridottrollerInterface oldPeridottroller,
+        PeridottrollerInterface newPeridottroller
+    );
 
     /**
      * @notice Event emitted when interestRateModel is changed
      */
-    event NewMarketInterestRateModel(InterestRateModel oldInterestRateModel, InterestRateModel newInterestRateModel);
+    event NewMarketInterestRateModel(
+        InterestRateModel oldInterestRateModel,
+        InterestRateModel newInterestRateModel
+    );
 
     /**
      * @notice Event emitted when the reserve factor is changed
      */
-    event NewReserveFactor(uint256 oldReserveFactorMantissa, uint256 newReserveFactorMantissa);
+    event NewReserveFactor(
+        uint256 oldReserveFactorMantissa,
+        uint256 newReserveFactorMantissa
+    );
 
     /**
      * @notice Event emitted when the reserves are added
      */
-    event ReservesAdded(address benefactor, uint256 addAmount, uint256 newTotalReserves);
+    event ReservesAdded(
+        address benefactor,
+        uint256 addAmount,
+        uint256 newTotalReserves
+    );
 
     /**
      * @notice Event emitted when the reserves are reduced
      */
-    event ReservesReduced(address admin, uint256 reduceAmount, uint256 newTotalReserves);
+    event ReservesReduced(
+        address admin,
+        uint256 reduceAmount,
+        uint256 newTotalReserves
+    );
 
     /**
      * @notice EIP20 Transfer event
@@ -239,7 +289,11 @@ abstract contract PTokenInterface is PTokenStorage {
     /**
      * @notice EIP20 Approval event
      */
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 amount
+    );
 
     /**
      * Flash Loan Events **
@@ -248,7 +302,12 @@ abstract contract PTokenInterface is PTokenStorage {
     /**
      * @notice Event emitted when a flash loan is executed
      */
-    event FlashLoan(address indexed receiver, address indexed token, uint256 amount, uint256 fee);
+    event FlashLoan(
+        address indexed receiver,
+        address indexed token,
+        uint256 amount,
+        uint256 fee
+    );
 
     /**
      * @notice Event emitted when flash loan fee is changed
@@ -266,21 +325,47 @@ abstract contract PTokenInterface is PTokenStorage {
     event FlashLoansPaused(bool paused);
 
     /**
+     * @notice Event emitted when a circuit anomaly is detected (exchange rate spike)
+     */
+    event ExchangeRateAnomaly(
+        uint256 previousRate,
+        uint256 currentRate,
+        uint256 changeBps
+    );
+
+    /**
      * User Interface **
      */
-    function transfer(address dst, uint256 amount) external virtual returns (bool);
+    function transfer(
+        address dst,
+        uint256 amount
+    ) external virtual returns (bool);
 
-    function transferFrom(address src, address dst, uint256 amount) external virtual returns (bool);
+    function transferFrom(
+        address src,
+        address dst,
+        uint256 amount
+    ) external virtual returns (bool);
 
-    function approve(address spender, uint256 amount) external virtual returns (bool);
+    function approve(
+        address spender,
+        uint256 amount
+    ) external virtual returns (bool);
 
-    function allowance(address owner, address spender) external view virtual returns (uint256);
+    function allowance(
+        address owner,
+        address spender
+    ) external view virtual returns (uint256);
 
     function balanceOf(address owner) external view virtual returns (uint256);
 
-    function balanceOfUnderlying(address owner) external virtual returns (uint256);
+    function balanceOfUnderlying(
+        address owner
+    ) external virtual returns (uint256);
 
-    function getAccountSnapshot(address account) external view virtual returns (uint256, uint256, uint256, uint256);
+    function getAccountSnapshot(
+        address account
+    ) external view virtual returns (uint256, uint256, uint256, uint256);
 
     function borrowRatePerBlock() external view virtual returns (uint256);
 
@@ -288,9 +373,13 @@ abstract contract PTokenInterface is PTokenStorage {
 
     function totalBorrowsCurrent() external virtual returns (uint256);
 
-    function borrowBalanceCurrent(address account) external virtual returns (uint256);
+    function borrowBalanceCurrent(
+        address account
+    ) external virtual returns (uint256);
 
-    function borrowBalanceStored(address account) external view virtual returns (uint256);
+    function borrowBalanceStored(
+        address account
+    ) external view virtual returns (uint256);
 
     function exchangeRateCurrent() external virtual returns (uint256);
 
@@ -300,34 +389,55 @@ abstract contract PTokenInterface is PTokenStorage {
 
     function accrueInterest() external virtual returns (uint256);
 
-    function seize(address liquidator, address borrower, uint256 seizeTokens) external virtual returns (uint256);
+    function seize(
+        address liquidator,
+        address borrower,
+        uint256 seizeTokens
+    ) external virtual returns (uint256);
 
     /**
      * Admin Functions **
      */
-    function _setPendingAdmin(address payable newPendingAdmin) external virtual returns (uint256);
+    function _setPendingAdmin(
+        address payable newPendingAdmin
+    ) external virtual returns (uint256);
 
     function _acceptAdmin() external virtual returns (uint256);
 
-    function _setPeridottroller(PeridottrollerInterface newPeridottroller) external virtual returns (uint256);
+    function _setPeridottroller(
+        PeridottrollerInterface newPeridottroller
+    ) external virtual returns (uint256);
 
-    function _setReserveFactor(uint256 newReserveFactorMantissa) external virtual returns (uint256);
+    function _setReserveFactor(
+        uint256 newReserveFactorMantissa
+    ) external virtual returns (uint256);
 
-    function _reduceReserves(uint256 reduceAmount) external virtual returns (uint256);
+    function _reduceReserves(
+        uint256 reduceAmount
+    ) external virtual returns (uint256);
 
-    function _setInterestRateModel(InterestRateModel newInterestRateModel) external virtual returns (uint256);
+    function _setInterestRateModel(
+        InterestRateModel newInterestRateModel
+    ) external virtual returns (uint256);
 
     /**
      * Flash Loan Functions **
      */
-    function maxFlashLoan(address token) external view virtual returns (uint256);
+    function maxFlashLoan(
+        address token
+    ) external view virtual returns (uint256);
 
-    function flashFee(address token, uint256 amount) external view virtual returns (uint256);
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view virtual returns (uint256);
 
-    function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
-        external
-        virtual
-        returns (bool);
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external virtual returns (bool);
 }
 
 contract PErc20Storage {
@@ -345,18 +455,26 @@ abstract contract PErc20Interface is PErc20Storage {
 
     function redeem(uint256 redeemTokens) external virtual returns (uint256);
 
-    function redeemUnderlying(uint256 redeemAmount) external virtual returns (uint256);
+    function redeemUnderlying(
+        uint256 redeemAmount
+    ) external virtual returns (uint256);
 
     function borrow(uint256 borrowAmount) external virtual returns (uint256);
 
-    function repayBorrow(uint256 repayAmount) external virtual returns (uint256);
+    function repayBorrow(
+        uint256 repayAmount
+    ) external virtual returns (uint256);
 
-    function repayBorrowBehalf(address borrower, uint256 repayAmount) external virtual returns (uint256);
+    function repayBorrowBehalf(
+        address borrower,
+        uint256 repayAmount
+    ) external virtual returns (uint256);
 
-    function liquidateBorrow(address borrower, uint256 repayAmount, PTokenInterface pTokenCollateral)
-        external
-        virtual
-        returns (uint256);
+    function liquidateBorrow(
+        address borrower,
+        uint256 repayAmount,
+        PTokenInterface pTokenCollateral
+    ) external virtual returns (uint256);
 
     function sweepToken(EIP20NonStandardInterface token) external virtual;
 
@@ -377,7 +495,10 @@ abstract contract CDelegatorInterface is CDelegationStorage {
     /**
      * @notice Emitted when implementation is changed
      */
-    event NewImplementation(address oldImplementation, address newImplementation);
+    event NewImplementation(
+        address oldImplementation,
+        address newImplementation
+    );
 
     /**
      * @notice Called by the admin to update the implementation of the delegator
@@ -385,9 +506,11 @@ abstract contract CDelegatorInterface is CDelegationStorage {
      * @param allowResign Flag to indicate whether to call _resignImplementation on the old implementation
      * @param becomeImplementationData The encoded bytes data to be passed to _becomeImplementation
      */
-    function _setImplementation(address implementation_, bool allowResign, bytes memory becomeImplementationData)
-        external
-        virtual;
+    function _setImplementation(
+        address implementation_,
+        bool allowResign,
+        bytes memory becomeImplementationData
+    ) external virtual;
 }
 
 abstract contract CDelegateInterface is CDelegationStorage {

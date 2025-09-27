@@ -10,31 +10,59 @@ abstract contract PeridottrollerInterface {
     /**
      * Assets You Are In **
      */
-    function enterMarkets(address[] calldata pTokens) external virtual returns (uint256[] memory);
+    function enterMarkets(
+        address[] calldata pTokens
+    ) external virtual returns (uint256[] memory);
 
     function exitMarket(address pToken) external virtual returns (uint256);
 
     /**
      * Policy Hooks **
      */
-    function mintAllowed(address pToken, address minter, uint256 mintAmount) external virtual returns (uint256);
+    function mintAllowed(
+        address pToken,
+        address minter,
+        uint256 mintAmount
+    ) external virtual returns (uint256);
 
-    function mintVerify(address pToken, address minter, uint256 mintAmount, uint256 mintTokens) external virtual;
+    function mintVerify(
+        address pToken,
+        address minter,
+        uint256 mintAmount,
+        uint256 mintTokens
+    ) external virtual;
 
-    function redeemAllowed(address pToken, address redeemer, uint256 redeemTokens) external virtual returns (uint256);
+    function redeemAllowed(
+        address pToken,
+        address redeemer,
+        uint256 redeemTokens
+    ) external virtual returns (uint256);
 
-    function redeemVerify(address pToken, address redeemer, uint256 redeemAmount, uint256 redeemTokens)
-        external
-        virtual;
+    function redeemVerify(
+        address pToken,
+        address redeemer,
+        uint256 redeemAmount,
+        uint256 redeemTokens
+    ) external virtual;
 
-    function borrowAllowed(address pToken, address borrower, uint256 borrowAmount) external virtual returns (uint256);
+    function borrowAllowed(
+        address pToken,
+        address borrower,
+        uint256 borrowAmount
+    ) external virtual returns (uint256);
 
-    function borrowVerify(address pToken, address borrower, uint256 borrowAmount) external virtual;
+    function borrowVerify(
+        address pToken,
+        address borrower,
+        uint256 borrowAmount
+    ) external virtual;
 
-    function repayBorrowAllowed(address pToken, address payer, address borrower, uint256 repayAmount)
-        external
-        virtual
-        returns (uint256);
+    function repayBorrowAllowed(
+        address pToken,
+        address payer,
+        address borrower,
+        uint256 repayAmount
+    ) external virtual returns (uint256);
 
     function repayBorrowVerify(
         address pToken,
@@ -77,23 +105,32 @@ abstract contract PeridottrollerInterface {
         uint256 seizeTokens
     ) external virtual;
 
-    function transferAllowed(address pToken, address src, address dst, uint256 transferTokens)
-        external
-        virtual
-        returns (uint256);
+    function transferAllowed(
+        address pToken,
+        address src,
+        address dst,
+        uint256 transferTokens
+    ) external virtual returns (uint256);
 
-    function transferVerify(address pToken, address src, address dst, uint256 transferTokens) external virtual;
+    function transferVerify(
+        address pToken,
+        address src,
+        address dst,
+        uint256 transferTokens
+    ) external virtual;
 
     /**
      * Liquidity/Liquidation Calculations **
      */
-    function liquidateCalculateSeizeTokens(address pTokenBorrowed, address pTokenCollateral, uint256 repayAmount)
-        external
-        view
-        virtual
-        returns (uint256, uint256);
+    function liquidateCalculateSeizeTokens(
+        address pTokenBorrowed,
+        address pTokenCollateral,
+        uint256 repayAmount
+    ) external view virtual returns (uint256, uint256);
 
-    function getAccountLiquidity(address account) external view virtual returns (uint256, uint256, uint256);
+    function getAccountLiquidity(
+        address account
+    ) external view virtual returns (uint256, uint256, uint256);
 
     function getAllMarkets() external view virtual returns (PToken[] memory);
 }

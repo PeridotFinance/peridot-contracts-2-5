@@ -9,6 +9,11 @@ import "./InterestRateModel.sol";
 import "./ExponentialNoError.sol";
 import "./PeridottrollerStorage.sol";
 
+// Local minimal interface for breaker call to avoid broad interface coupling
+interface IPeridotBreaker {
+    function tripCircuitBreaker(address pToken) external;
+}
+
 /**
  * @title Peridot's PToken Contract
  * @notice Abstract base for PTokens
@@ -483,6 +488,29 @@ abstract contract PToken is
             totalBorrowsNew
         );
 
+        // Post-accrual exchange rate drift check
+        if (address(peridottroller) != address(0)) {
+            uint256 prev = lastExchangeRate;
+            uint256 curr = exchangeRateStoredInternal();
+            if (prev != 0 && curr != 0) {
+                uint256 changeBps = curr > prev
+                    ? ((curr - prev) * 10000) / prev
+                    : ((prev - curr) * 10000) / prev;
+                if (
+                    changeBps >
+                    PeridottrollerV8Storage(address(peridottroller))
+                        .maxExchangeRateChangeBps()
+                ) {
+                    // Trip breaker on controller and emit anomaly
+                    IPeridotBreaker(address(peridottroller)).tripCircuitBreaker(
+                            address(this)
+                        );
+                    emit ExchangeRateAnomaly(prev, curr, changeBps);
+                }
+            }
+            lastExchangeRate = curr;
+        }
+
         return NO_ERROR;
     }
 
@@ -617,11 +645,15 @@ abstract contract PToken is
             redeemAmount = mul_ScalarTruncate(exchangeRate, redeemTokensIn);
         } else {
             /*
-             * We get the current exchange rate and calculate the amount to be redeemed:
-             *  redeemTokens = redeemAmountIn / exchangeRate
+             * We get the current exchange rate and calculate the amount to be redeemed using ceiling division:
+             *  redeemTokens = ceil(redeemAmountIn / exchangeRate)
              *  redeemAmount = redeemAmountIn
              */
-            redeemTokens = div_(redeemAmountIn, exchangeRate);
+            // ceilDiv for scaled values: ceil( redeemAmountIn * 1e18 / exchangeRateMantissa )
+            uint256 num = redeemAmountIn * 1e18;
+            uint256 den = exchangeRate.mantissa;
+            uint256 tokensCeil = (num + den - 1) / den;
+            redeemTokens = tokensCeil;
             redeemAmount = redeemAmountIn;
         }
 
@@ -644,6 +676,14 @@ abstract contract PToken is
         if (getCashPrior() < redeemAmount) {
             revert RedeemTransferOutNotPossible();
         }
+
+        // Enforce supply floor unless caller is admin
+        uint256 minSupply = PeridottrollerV8Storage(address(peridottroller))
+            .minCTokenSupply();
+        require(
+            msg.sender == admin || (totalSupply - redeemTokens) >= minSupply,
+            "supply floor"
+        );
 
         /////////////////////////
         // EFFECTS & INTERACTIONS
@@ -1461,6 +1501,24 @@ abstract contract PToken is
 
         // Check if flash loans are paused
         require(!flashLoansPaused, "FlashLoan: flash loans are paused");
+        // Additional guards: require market seeded, sufficient cash, and not circuit-broken
+        require(
+            PeridottrollerV8Storage(address(peridottroller)).marketSeeded(
+                address(this)
+            ),
+            "FlashLoan: market not seeded"
+        );
+        require(
+            getCashPrior() >=
+                PeridottrollerV8Storage(address(peridottroller)).minCash(),
+            "FlashLoan: low liquidity"
+        );
+        require(
+            !PeridottrollerV8Storage(address(peridottroller)).circuitBroken(
+                address(this)
+            ),
+            "FlashLoan: circuit"
+        );
 
         // Check if amount is within limits
         require(

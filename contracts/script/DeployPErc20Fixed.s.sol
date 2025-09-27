@@ -9,6 +9,12 @@ import "../contracts/InterestRateModel.sol";
 import "../contracts/PErc20Delegate.sol";
 import "../contracts/PErc20Delegator.sol";
 
+// PToken Parameters (Adjust as needed)
+// Initial exchange rate = (underlying / pToken) * 10^(18 + underlyingDecimals - pTokenDecimals)
+// Example USDC (6 dec), pUSDC (8 dec): 2 * 10^(18 + 6 - 8) = 2 * 10^16 = 2e16
+// A common starting point: initial exchange rate of 0.02 corresponds to 2e16 mantissa (assuming 18 decimals for mantissa)
+// Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+
 /**
  * @title DeployPErc20Fixed
  * @dev Fixed deployment script that properly handles admin assignment and sets reserve factor
@@ -16,15 +22,15 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a;
+        0xbA2aE424d960c26247Dd6c32edC70B295c744C43;
     address constant COMPTROLLER_ADDRESS =
         0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
     address constant INTEREST_RATE_MODEL_ADDRESS =
         0x8334A3ec5c9Cf105E57B8b4B68386B8A8043DD36;
 
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e14;
-    string constant PTOKEN_NAME = "Peridot Agora USD";
-    string constant PTOKEN_SYMBOL = "pAUSD"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e16;
+    string constant PTOKEN_NAME = "Peridot Dogecoin";
+    string constant PTOKEN_SYMBOL = "pDOGE"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
     uint8 constant PTOKEN_DECIMALS = 8;
 
     // Reserve factor (5% = 0.05 * 1e18)

@@ -151,3 +151,20 @@ contract PeridottrollerV7Storage is PeridottrollerV6Storage {
     /// @notice Accounting storage mapping account addresses to how much PERIDOT they owe the protocol.
     mapping(address => uint256) public peridotReceivable;
 }
+
+contract PeridottrollerV8Storage is PeridottrollerV7Storage {
+    /// @notice Whether a market has been seeded and is allowed to have non-zero collateral factor
+    mapping(address => bool) public marketSeeded;
+
+    /// @notice Whether a market is circuit-broken due to abnormal exchange rate movement
+    mapping(address => bool) public circuitBroken;
+
+    /// @notice Minimum cToken totalSupply required before a market can be used as collateral
+    uint256 public minCTokenSupply;
+
+    /// @notice Minimum cash liquidity required before a market can be used as collateral or flashloaned
+    uint256 public minCash;
+
+    /// @notice Maximum allowed exchange rate change per accrual in basis points (10000 = 100%)
+    uint256 public maxExchangeRateChangeBps;
+}
