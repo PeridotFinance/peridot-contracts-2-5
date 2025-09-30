@@ -5,13 +5,6 @@ import {PeridottrollerInterface} from "../contracts/PeridottrollerInterface.sol"
 import {PToken} from "../contracts/PToken.sol";
 
 contract MockPeridottroller is PeridottrollerInterface {
-    // Safety defaults used by new guards
-    bool public seededDefault = true;
-    bool public circuitDefault = false;
-    uint256 public minCTokenSupplyDefault = 0;
-    uint256 public minCashDefault = 0;
-    uint256 public maxExchangeRateChangeBpsDefault = 10_000; // effectively no cap in tests
-
     function enterMarkets(
         address[] calldata pTokens
     ) external override returns (uint256[] memory) {
@@ -152,47 +145,5 @@ contract MockPeridottroller is PeridottrollerInterface {
 
     function getAllMarkets() external view override returns (PToken[] memory) {
         return new PToken[](0);
-    }
-
-    // Helper setters for tests
-    function __setSeededDefault(bool v) external {
-        seededDefault = v;
-    }
-
-    function __setCircuitDefault(bool v) external {
-        circuitDefault = v;
-    }
-
-    function __setMinCTokenSupply(uint256 v) external {
-        minCTokenSupplyDefault = v;
-    }
-
-    function __setMinCash(uint256 v) external {
-        minCashDefault = v;
-    }
-
-    function __setMaxRateBps(uint256 v) external {
-        maxExchangeRateChangeBpsDefault = v;
-    }
-
-    // Expose storage-like getters so PToken guards pass in tests via PeridottrollerV8Storage-compatible names
-    function marketSeeded(address) external view returns (bool) {
-        return seededDefault;
-    }
-
-    function circuitBroken(address) external view returns (bool) {
-        return circuitDefault;
-    }
-
-    function minCTokenSupply() external view returns (uint256) {
-        return minCTokenSupplyDefault;
-    }
-
-    function minCash() external view returns (uint256) {
-        return minCashDefault;
-    }
-
-    function maxExchangeRateChangeBps() external view returns (uint256) {
-        return maxExchangeRateChangeBpsDefault;
     }
 }

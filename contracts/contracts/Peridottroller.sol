@@ -14,7 +14,7 @@ import "./Governance/Peridot.sol";
  * @author Peridot
  */
 contract Peridottroller is
-    PeridottrollerV8Storage,
+    PeridottrollerV7Storage,
     PeridottrollerInterface,
     PeridottrollerErrorReporter,
     ExponentialNoError
@@ -130,10 +130,6 @@ contract Peridottroller is
 
     constructor() {
         admin = msg.sender;
-        // Safety defaults; admin can adjust via setSafetyParams
-        minCTokenSupply = 1e8;
-        minCash = 1e18;
-        maxExchangeRateChangeBps = 5000;
     }
 
     /**
@@ -937,18 +933,9 @@ contract Peridottroller is
                 // semi-opaque error code, we assume NO_ERROR == 0 is invariant between upgrades
                 return (Error.SNAPSHOT_ERROR, 0, 0);
             }
-            uint256 cfMantissa = markets[address(asset)]
-                .collateralFactorMantissa;
-            if (
-                cfMantissa != 0 &&
-                (!marketSeeded[address(asset)] ||
-                    circuitBroken[address(asset)] ||
-                    asset.totalSupply() < minCTokenSupply ||
-                    asset.getCash() < minCash)
-            ) {
-                cfMantissa = 0;
-            }
-            vars.collateralFactor = Exp({mantissa: cfMantissa});
+            vars.collateralFactor = Exp({
+                mantissa: markets[address(asset)].collateralFactorMantissa
+            });
             vars.exchangeRate = Exp({mantissa: vars.exchangeRateMantissa});
 
             // Get the normalized price of the asset
@@ -1098,58 +1085,6 @@ contract Peridottroller is
     }
 
     /**
-     * @notice Mark a market as seeded (admin only)
-     */
-    function markSeeded(PToken pToken) external returns (uint256) {
-        if (msg.sender != admin) {
-            return
-                fail(
-                    Error.UNAUTHORIZED,
-                    FailureInfo.SUPPORT_MARKET_OWNER_CHECK
-                );
-        }
-        require(markets[address(pToken)].isListed, "market not listed");
-        require(pToken.totalSupply() >= minCTokenSupply, "too small supply");
-        require(pToken.getCash() >= minCash, "too little cash");
-        marketSeeded[address(pToken)] = true;
-        return uint256(Error.NO_ERROR);
-    }
-
-    /**
-     * @notice Trip circuit breaker for a market
-     */
-    function tripCircuitBreaker(address pToken) external {
-        require(msg.sender == admin || msg.sender == pToken, "unauthorized");
-        circuitBroken[pToken] = true;
-        if (!borrowGuardianPaused[pToken]) {
-            borrowGuardianPaused[pToken] = true;
-            emit ActionPaused(PToken(pToken), "Borrow", true);
-        }
-    }
-
-    /**
-     * @notice Reset circuit breaker (admin only)
-     */
-    function resetCircuitBreaker(address pToken) external {
-        require(msg.sender == admin, "only admin");
-        circuitBroken[pToken] = false;
-    }
-
-    /**
-     * @notice Set safety params (admin only)
-     */
-    function setSafetyParams(
-        uint256 newMinCTokenSupply,
-        uint256 newMinCash,
-        uint256 newMaxExchangeRateChangeBps
-    ) external {
-        require(msg.sender == admin, "only admin");
-        minCTokenSupply = newMinCTokenSupply;
-        minCash = newMinCash;
-        maxExchangeRateChangeBps = newMaxExchangeRateChangeBps;
-    }
-
-    /**
      * @notice Sets the closeFactor used when liquidating borrows
      * @dev Admin function to set closeFactor
      * @param newCloseFactorMantissa New close factor, scaled by 1e18
@@ -1222,38 +1157,6 @@ contract Peridottroller is
                     Error.PRICE_ERROR,
                     FailureInfo.SET_COLLATERAL_FACTOR_WITHOUT_PRICE
                 );
-        }
-
-        // If setting CF > 0, enforce safety conditions
-        if (newCollateralFactorMantissa != 0) {
-            if (!marketSeeded[address(pToken)]) {
-                return
-                    fail(
-                        Error.INVALID_COLLATERAL_FACTOR,
-                        FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION
-                    );
-            }
-            if (pToken.totalSupply() < minCTokenSupply) {
-                return
-                    fail(
-                        Error.INVALID_COLLATERAL_FACTOR,
-                        FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION
-                    );
-            }
-            if (pToken.getCash() < minCash) {
-                return
-                    fail(
-                        Error.INVALID_COLLATERAL_FACTOR,
-                        FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION
-                    );
-            }
-            if (circuitBroken[address(pToken)]) {
-                return
-                    fail(
-                        Error.INVALID_COLLATERAL_FACTOR,
-                        FailureInfo.SET_COLLATERAL_FACTOR_VALIDATION
-                    );
-            }
         }
 
         // Set market's collateral factor to new collateral factor, remember old value

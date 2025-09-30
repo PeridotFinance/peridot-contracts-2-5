@@ -133,11 +133,6 @@ contract PTokenStorage {
     mapping(address => BorrowSnapshot) internal accountBorrows;
 
     /**
-     * @notice Last recorded exchange rate after accrual; used for anomaly detection
-     */
-    uint256 public lastExchangeRate;
-
-    /**
      * @notice Share of seized collateral that is added to reserves
      */
     uint256 public constant protocolSeizeShareMantissa = 2.8e16; //2.8%
@@ -323,15 +318,6 @@ abstract contract PTokenInterface is PTokenStorage {
      * @notice Event emitted when flash loans are paused/unpaused
      */
     event FlashLoansPaused(bool paused);
-
-    /**
-     * @notice Event emitted when a circuit anomaly is detected (exchange rate spike)
-     */
-    event ExchangeRateAnomaly(
-        uint256 previousRate,
-        uint256 currentRate,
-        uint256 changeBps
-    );
 
     /**
      * User Interface **
