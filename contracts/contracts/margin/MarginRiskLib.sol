@@ -17,6 +17,8 @@ library MarginRiskLib {
     uint256 internal constant EXP_SCALE = 1e18;
     uint256 internal constant BPS_SCALE = 1e4;
 
+    error PriceUnavailable(address cToken);
+
     struct AccountMetrics {
         uint256 collateralValue; // Sum of collateral * collateralFactor (USD 1e18)
         uint256 grossCollateralValue; // Sum of collateral USD without factor (1e18)
@@ -68,6 +70,10 @@ library MarginRiskLib {
             uint256 cTokenBalance = pToken.balanceOf(account);
             uint256 price = oracle.getUnderlyingPrice(PToken(cToken));
             if (price == 0) {
+                uint256 borrowBalanceZeroPrice = pToken.borrowBalanceStored(account);
+                if (cTokenBalance > 0 || borrowBalanceZeroPrice > 0) {
+                    revert PriceUnavailable(cToken);
+                }
                 continue;
             }
 
