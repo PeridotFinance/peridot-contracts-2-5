@@ -5,6 +5,46 @@ import {PeridottrollerInterface} from "../contracts/PeridottrollerInterface.sol"
 import {PToken} from "../contracts/PToken.sol";
 
 contract MockPeridottroller is PeridottrollerInterface {
+    struct MarketData {
+        bool isListed;
+        uint256 collateralFactorMantissa;
+        bool isPeridoted;
+    }
+
+    mapping(address => MarketData) internal marketData;
+    address[] internal marketList;
+    mapping(address => bool) internal marketInList;
+
+    mapping(address => uint256) internal accountLiquidityValue;
+    mapping(address => uint256) internal accountShortfallValue;
+    mapping(address => bool) internal liquiditySet;
+    mapping(address => bool) internal shortfallSet;
+
+    function setMarket(address cToken, bool isListed, uint256 collateralFactorMantissa) external {
+        marketData[cToken] = MarketData({
+            isListed: isListed,
+            collateralFactorMantissa: collateralFactorMantissa,
+            isPeridoted: false
+        });
+
+        if (isListed && !marketInList[cToken]) {
+            marketList.push(cToken);
+            marketInList[cToken] = true;
+        }
+    }
+
+    function setAccountLiquidity(address account, uint256 liquidity, uint256 shortfall) external {
+        accountLiquidityValue[account] = liquidity;
+        accountShortfallValue[account] = shortfall;
+        liquiditySet[account] = true;
+        shortfallSet[account] = true;
+    }
+
+    function markets(address cToken) external view returns (bool, uint256, bool) {
+        MarketData memory data = marketData[cToken];
+        return (data.isListed, data.collateralFactorMantissa, data.isPeridoted);
+    }
+
     function enterMarkets(
         address[] calldata pTokens
     ) external override returns (uint256[] memory) {
@@ -140,10 +180,20 @@ contract MockPeridottroller is PeridottrollerInterface {
     function getAccountLiquidity(
         address account
     ) external view override returns (uint256, uint256, uint256) {
-        return (0, 10000e18, 0); // $10,000 liquidity
+        uint256 liquidity = accountLiquidityValue[account];
+        uint256 shortfall = accountShortfallValue[account];
+        if (!liquiditySet[account] && !shortfallSet[account]) {
+            liquidity = 10000e18;
+        }
+        return (0, liquidity, shortfall);
     }
 
     function getAllMarkets() external view override returns (PToken[] memory) {
-        return new PToken[](0);
+        uint256 len = marketList.length;
+        PToken[] memory marketsArray = new PToken[](len);
+        for (uint256 i = 0; i < len; i++) {
+            marketsArray[i] = PToken(marketList[i]);
+        }
+        return marketsArray;
     }
 }

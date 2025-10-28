@@ -3,11 +3,32 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
-import "../contracts/PErc20Delegator.sol";
-import "../contracts/PeridottrollerG7.sol";
 import "../contracts/InterestRateModel.sol";
-import "../contracts/PriceOracle.sol";
-import "../contracts/Governance/Peridot.sol";
+
+// Minimal interfaces to avoid pulling core contracts (and circular deps)
+interface ComptrollerLike {
+    function peridotSpeeds(address pToken) external view returns (uint256);
+}
+
+interface PriceOracleLike {
+    function getUnderlyingPrice(address pToken) external view returns (uint256);
+}
+
+interface PTokenLike {
+    function totalSupply() external view returns (uint256);
+
+    function totalBorrows() external view returns (uint256);
+
+    function exchangeRateStored() external view returns (uint256);
+
+    function reserveFactorMantissa() external view returns (uint256);
+
+    function interestRateModel() external view returns (address);
+
+    function getCash() external view returns (uint256);
+
+    function totalReserves() external view returns (uint256);
+}
 
 /**
  * @title CalculateAPY
@@ -18,28 +39,28 @@ import "../contracts/Governance/Peridot.sol";
 contract CalculateAPY is Script {
     // === MONAD TESTNET ADDRESSES ===
     address constant PERIDOTTROLLER =
-        0xa41D586530BC7BC872095950aE03a780d5114445;
-    address constant PERIDOT_TOKEN = 0x28fE679719e740D15FC60325416bB43eAc50cD15;
-    address constant ORACLE = 0xeAEdaF63CbC1d00cB6C14B5c4DE161d68b7C63A0;
+        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
+    address constant PERIDOT_TOKEN = 0x96650BebC549456F253974c11Fc6cBE28172A2d2;
+    address constant ORACLE = 0x42D5B37CD3682eDD0a3dBb242C579bDCB108f47C;
 
     // PToken addresses
     address payable constant PUSDC =
-        payable(0xA72b43Bd60E5a9a13B99d0bDbEd36a9041269246);
+        payable(0x1A726369Bfc60198A0ce19C66726C8046c0eC17e);
     address payable constant PWMON =
-        payable(0x8b5055bff2f35FE6d4C84585901A4FeF9803aabe);
+        payable(0xD9fDF5E2c7a2e7916E7f10Da276D95d4daC5a3c3);
     address payable constant PUSDT =
-        payable(0xa568bD70068A940910d04117c36Ab1A0225FD140);
+        payable(0xc37f3869720B672addFE5F9E22a9459e0E851372);
     address payable constant PLINK =
-        payable(0x06827a2dB9047219b3989E926e811808233C95AC);
+        payable(0x8D31F6b1D8076f13B6A04a977F5919f6EF21eC6E);
     address payable constant PWBTC =
-        payable(0x8f11d42EeaA6B454A040c2390501AFE16D150eB4);
+        payable(0xdCAbDc1F0B5e603b9191be044a912A8A2949e212);
     address payable constant PWETH =
-        payable(0xd3167fBADd8Eac1b1b60A5adfCF504d15dC56005);
+        payable(0x28E4F2Bb64ac79500ec3CAa074A3C30721B6bC84);
     address payable constant PPERIDOT =
-        payable(0xF73e2d1B5C7fe43351212f6559DabB32da71F237);
+        payable(0x5c013C8Ee5B99fAaD3Af336E9142451F89eF7774);
 
     // Monad network constants
-    uint256 constant BLOCKS_PER_YEAR = 63_072_000;
+    uint256 constant BLOCKS_PER_YEAR = 42_048_000;
     uint256 constant MANTISSA = 1e18;
 
     struct APYData {
@@ -63,6 +84,8 @@ contract CalculateAPY is Script {
         uint256 totalSupply;
         uint256 totalBorrows;
         uint256 exchangeRate;
+        uint256 cash;
+        uint256 reserves;
         uint256 underlyingPrice;
         uint256 utilization;
         uint256 supplyRatePerBlock;
@@ -81,13 +104,12 @@ contract CalculateAPY is Script {
         console.log("Blocks per year:", BLOCKS_PER_YEAR);
         console.log("");
 
-        // Initialize contracts
-        PeridottrollerG7 comptroller = PeridottrollerG7(PERIDOTTROLLER);
-        PriceOracle oracle = PriceOracle(ORACLE);
-        Peridot peridotToken = Peridot(PERIDOT_TOKEN);
+        // Initialize contracts via lightweight interfaces
+        ComptrollerLike comptroller = ComptrollerLike(PERIDOTTROLLER);
+        PriceOracleLike oracle = PriceOracleLike(ORACLE);
 
         // Get PERIDOT price
-        uint256 peridotPrice = oracle.getUnderlyingPrice(PToken(PPERIDOT));
+        uint256 peridotPrice = oracle.getUnderlyingPrice(PPERIDOT);
         console.log("PERIDOT Price: $", formatPrice(peridotPrice));
         console.log("");
 
@@ -134,18 +156,20 @@ contract CalculateAPY is Script {
     function calculateTokenAPY(
         address payable pTokenAddress,
         string memory symbol,
-        PeridottrollerG7 comptroller,
-        PriceOracle oracle,
+        ComptrollerLike comptroller,
+        PriceOracleLike oracle,
         uint256 peridotPrice
     ) internal view returns (APYData memory) {
         CalculationVars memory vars;
-        PErc20Delegator pToken = PErc20Delegator(pTokenAddress);
+        PTokenLike pToken = PTokenLike(pTokenAddress);
 
         // Get basic token data
         vars.totalSupply = pToken.totalSupply();
         vars.totalBorrows = pToken.totalBorrows();
         vars.exchangeRate = pToken.exchangeRateStored();
-        vars.underlyingPrice = oracle.getUnderlyingPrice(PToken(pTokenAddress));
+        vars.cash = pToken.getCash();
+        vars.reserves = pToken.totalReserves();
+        vars.underlyingPrice = oracle.getUnderlyingPrice(pTokenAddress);
 
         // Calculate utilization rate
         vars.utilization = 0;
@@ -162,23 +186,24 @@ contract CalculateAPY is Script {
 
         // Calculate current rates
         vars.borrowRatePerBlock = interestRateModel.getBorrowRate(
-            0,
+            vars.cash,
             vars.totalBorrows,
-            0
+            vars.reserves
         );
         vars.supplyRatePerBlock = interestRateModel.getSupplyRate(
-            0,
+            vars.cash,
             vars.totalBorrows,
-            0,
+            vars.reserves,
             pToken.reserveFactorMantissa()
         );
 
         // Calculate base APY
+        // Scale by 10000 to get two-decimal percent output in formatter
         vars.supplyAPY =
-            (vars.supplyRatePerBlock * BLOCKS_PER_YEAR * 100) /
+            (vars.supplyRatePerBlock * BLOCKS_PER_YEAR * 10000) /
             MANTISSA;
         vars.borrowAPY =
-            (vars.borrowRatePerBlock * BLOCKS_PER_YEAR * 100) /
+            (vars.borrowRatePerBlock * BLOCKS_PER_YEAR * 10000) /
             MANTISSA;
 
         // Get PERIDOT rewards data
@@ -195,7 +220,10 @@ contract CalculateAPY is Script {
                 vars.underlyingPrice) / (MANTISSA * MANTISSA);
             if (totalSupplyValue > 0) {
                 vars.peridotSupplyAPY =
-                    (vars.peridotSpeed * BLOCKS_PER_YEAR * peridotPrice * 100) /
+                    (vars.peridotSpeed *
+                        BLOCKS_PER_YEAR *
+                        peridotPrice *
+                        10000) /
                     (totalSupplyValue * MANTISSA);
             }
         }
@@ -206,7 +234,10 @@ contract CalculateAPY is Script {
                 vars.underlyingPrice) / MANTISSA;
             if (totalBorrowValue > 0) {
                 vars.peridotBorrowAPY =
-                    (vars.peridotSpeed * BLOCKS_PER_YEAR * peridotPrice * 100) /
+                    (vars.peridotSpeed *
+                        BLOCKS_PER_YEAR *
+                        peridotPrice *
+                        10000) /
                     (totalBorrowValue * MANTISSA);
             }
         }
@@ -222,7 +253,8 @@ contract CalculateAPY is Script {
                 totalSupplyAPY: vars.supplyAPY + vars.peridotSupplyAPY,
                 totalBorrowAPY: int256(vars.borrowAPY) -
                     int256(vars.peridotBorrowAPY), // Subtract because PERIDOT reduces net borrow cost
-                utilization: (vars.utilization * 100) / MANTISSA,
+                // Scale to two-decimal percent for formatter: 10000 => 100.00%
+                utilization: (vars.utilization * 10000) / MANTISSA,
                 totalSupply: vars.totalSupply,
                 totalBorrows: vars.totalBorrows,
                 underlyingPrice: vars.underlyingPrice,

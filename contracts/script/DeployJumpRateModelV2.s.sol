@@ -12,10 +12,10 @@ import "../contracts/JumpRateModelV2.sol";
  */
 contract DeployJumpRateModelV2 is Script {
     // Default interest rate model parameters from DeployPeridottroller.s.sol
-    uint baseRatePerYear = 0.03 * 1e18; // 3% APR
+    uint baseRatePerYear = 0.01 * 1e18; // 3% APR
     uint multiplierPerYear = 0.12 * 1e18; // 12% APR slope
-    uint jumpMultiplierPerYear = 2 * 1e18; // 200% APR slope after kink
-    uint kink_ = 0.85 * 1e18; // 85% utilization threshold
+    uint jumpMultiplierPerYear = 0.36 * 1e18; // 200% APR slope after kink
+    uint kink_ = 0.5 * 1e18; // 85% utilization threshold
 
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -46,7 +46,9 @@ contract DeployJumpRateModelV2 is Script {
         console.log("JumpRateModelV2 deployed at:", address(interestRateModel));
         console.log("Owner:", deployer);
         console.log("\nUsage:");
-        console.log("  Add this address to your PToken contracts as the interestRateModel");
+        console.log(
+            "  Add this address to your PToken contracts as the interestRateModel"
+        );
         console.log("  Address:", address(interestRateModel));
     }
 }

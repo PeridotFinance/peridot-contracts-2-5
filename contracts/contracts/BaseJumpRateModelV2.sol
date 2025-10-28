@@ -10,7 +10,10 @@ import "./InterestRateModel.sol";
  */
 abstract contract BaseJumpRateModelV2 is InterestRateModel {
     event NewInterestParams(
-        uint256 baseRatePerBlock, uint256 multiplierPerBlock, uint256 jumpMultiplierPerBlock, uint256 kink
+        uint256 baseRatePerBlock,
+        uint256 multiplierPerBlock,
+        uint256 jumpMultiplierPerBlock,
+        uint256 kink
     );
 
     uint256 private constant BASE = 1e18;
@@ -23,7 +26,7 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
     /**
      * @notice The approximate number of blocks per year that is assumed by the interest rate model
      */
-    uint256 public constant blocksPerYear = 2102400;
+    uint256 public constant blocksPerYear = 315360000;
 
     /**
      * @notice The multiplier of utilization rate that gives the slope of the interest rate
@@ -62,7 +65,12 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
     ) {
         owner = owner_;
 
-        updateJumpRateModelInternal(baseRatePerYear, multiplierPerYear, jumpMultiplierPerYear, kink_);
+        updateJumpRateModelInternal(
+            baseRatePerYear,
+            multiplierPerYear,
+            jumpMultiplierPerYear,
+            kink_
+        );
     }
 
     /**
@@ -80,7 +88,12 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
     ) external virtual {
         require(msg.sender == owner, "only the owner may call this function.");
 
-        updateJumpRateModelInternal(baseRatePerYear, multiplierPerYear, jumpMultiplierPerYear, kink_);
+        updateJumpRateModelInternal(
+            baseRatePerYear,
+            multiplierPerYear,
+            jumpMultiplierPerYear,
+            kink_
+        );
     }
 
     /**
@@ -90,7 +103,11 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
      * @param reserves The amount of reserves in the market (currently unused)
      * @return The utilization rate as a mantissa between [0, BASE]
      */
-    function utilizationRate(uint256 cash, uint256 borrows, uint256 reserves) public pure returns (uint256) {
+    function utilizationRate(
+        uint256 cash,
+        uint256 borrows,
+        uint256 reserves
+    ) public pure returns (uint256) {
         // Utilization rate is 0 when there are no borrows
         if (borrows == 0) {
             return 0;
@@ -106,13 +123,18 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
      * @param reserves The amount of reserves in the market
      * @return The borrow rate percentage per block as a mantissa (scaled by BASE)
      */
-    function getBorrowRateInternal(uint256 cash, uint256 borrows, uint256 reserves) internal view returns (uint256) {
+    function getBorrowRateInternal(
+        uint256 cash,
+        uint256 borrows,
+        uint256 reserves
+    ) internal view returns (uint256) {
         uint256 util = utilizationRate(cash, borrows, reserves);
 
         if (util <= kink) {
             return ((util * multiplierPerBlock) / BASE) + baseRatePerBlock;
         } else {
-            uint256 normalRate = ((kink * multiplierPerBlock) / BASE) + baseRatePerBlock;
+            uint256 normalRate = ((kink * multiplierPerBlock) / BASE) +
+                baseRatePerBlock;
             uint256 excessUtil = util - kink;
             return ((excessUtil * jumpMultiplierPerBlock) / BASE) + normalRate;
         }
@@ -126,13 +148,12 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
      * @param reserveFactorMantissa The current reserve factor for the market
      * @return The supply rate percentage per block as a mantissa (scaled by BASE)
      */
-    function getSupplyRate(uint256 cash, uint256 borrows, uint256 reserves, uint256 reserveFactorMantissa)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
+    function getSupplyRate(
+        uint256 cash,
+        uint256 borrows,
+        uint256 reserves,
+        uint256 reserveFactorMantissa
+    ) public view virtual override returns (uint256) {
         uint256 oneMinusReserveFactor = BASE - reserveFactorMantissa;
         uint256 borrowRate = getBorrowRateInternal(cash, borrows, reserves);
         uint256 rateToPool = (borrowRate * oneMinusReserveFactor) / BASE;
@@ -153,10 +174,17 @@ abstract contract BaseJumpRateModelV2 is InterestRateModel {
         uint256 kink_
     ) internal {
         baseRatePerBlock = baseRatePerYear / blocksPerYear;
-        multiplierPerBlock = (multiplierPerYear * BASE) / (blocksPerYear * kink_);
+        multiplierPerBlock =
+            (multiplierPerYear * BASE) /
+            (blocksPerYear * kink_);
         jumpMultiplierPerBlock = jumpMultiplierPerYear / blocksPerYear;
         kink = kink_;
 
-        emit NewInterestParams(baseRatePerBlock, multiplierPerBlock, jumpMultiplierPerBlock, kink);
+        emit NewInterestParams(
+            baseRatePerBlock,
+            multiplierPerBlock,
+            jumpMultiplierPerBlock,
+            kink
+        );
     }
 }

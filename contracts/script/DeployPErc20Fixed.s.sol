@@ -26,7 +26,7 @@ contract DeployPErc20Fixed is Script {
     address constant COMPTROLLER_ADDRESS =
         0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x8334A3ec5c9Cf105E57B8b4B68386B8A8043DD36;
+        0x22B129f93dfe3A63cBB644a86dBD695be5deE511;
 
     uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e16;
     string constant PTOKEN_NAME = "Peridot Dogecoin";

@@ -15,10 +15,16 @@ contract SimplePriceOracle is PriceOracle {
     uint256 public chainlinkPriceStaleThreshold; // Maximum age of price feed in seconds (default 3600 = 1 hour)
 
     event PricePosted(
-        address asset, uint256 previousPriceMantissa, uint256 requestedPriceMantissa, uint256 newPriceMantissa
+        address asset,
+        uint256 previousPriceMantissa,
+        uint256 requestedPriceMantissa,
+        uint256 newPriceMantissa
     );
     event ChainlinkFeedRegistered(address asset, address aggregator);
-    event LastChainlinkPriceUpdated(address indexed asset, uint256 priceMantissa);
+    event LastChainlinkPriceUpdated(
+        address indexed asset,
+        uint256 priceMantissa
+    );
 
     modifier onlyAdmin() {
         require(admin[msg.sender], "Only admin can call this function");
@@ -36,7 +42,9 @@ contract SimplePriceOracle is PriceOracle {
         chainlinkPriceStaleThreshold = _staleThreshold; // Default: 3600 seconds (1 hour)
     }
 
-    function _getUnderlyingAddress(PToken pToken) private view returns (address) {
+    function _getUnderlyingAddress(
+        PToken pToken
+    ) private view returns (address) {
         address asset;
         if (compareStrings(pToken.symbol(), "pETH")) {
             asset = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -46,20 +54,26 @@ contract SimplePriceOracle is PriceOracle {
         return asset;
     }
 
-    function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
+    function getUnderlyingPrice(
+        PToken pToken
+    ) public view override returns (uint256) {
         address asset = _getUnderlyingAddress(pToken);
         AggregatorV3Interface aggregator = assetToAggregator[asset];
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80, /* roundId */
+                uint80 /* roundId */,
                 int256 price,
-                uint256, /* startedAt */
+                uint256 /* startedAt */,
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
-                if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
+                if (
+                    block.timestamp - updatedAt <=
+                    chainlinkPriceStaleThreshold &&
+                    price > 0
+                ) {
                     // Price is fresh and valid, convert to 18 decimals
                     uint8 decimals = aggregator.decimals();
                     uint256 priceMantissa = uint256(price);
@@ -93,9 +107,17 @@ contract SimplePriceOracle is PriceOracle {
         return prices[asset];
     }
 
-    function setUnderlyingPrice(PToken pToken, uint256 underlyingPriceMantissa) public onlyAdmin {
+    function setUnderlyingPrice(
+        PToken pToken,
+        uint256 underlyingPriceMantissa
+    ) public onlyAdmin {
         address asset = _getUnderlyingAddress(pToken);
-        emit PricePosted(asset, prices[asset], underlyingPriceMantissa, underlyingPriceMantissa);
+        emit PricePosted(
+            asset,
+            prices[asset],
+            underlyingPriceMantissa,
+            underlyingPriceMantissa
+        );
         prices[asset] = underlyingPriceMantissa;
     }
 
@@ -105,7 +127,10 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // Register a Chainlink price feed for an asset
-    function registerChainlinkFeed(address asset, address aggregator) public onlyAdmin {
+    function registerChainlinkFeed(
+        address asset,
+        address aggregator
+    ) public onlyAdmin {
         require(aggregator != address(0), "Invalid aggregator address");
         assetToAggregator[asset] = AggregatorV3Interface(aggregator);
         emit ChainlinkFeedRegistered(asset, aggregator);
@@ -119,21 +144,29 @@ contract SimplePriceOracle is PriceOracle {
 
             if (address(aggregator) != address(0)) {
                 try aggregator.latestRoundData() returns (
-                    uint80, /* roundId */
+                    uint80 /* roundId */,
                     int256 price,
-                    uint256, /* startedAt */
+                    uint256 /* startedAt */,
                     uint256 updatedAt,
                     uint80 /* answeredInRound */
                 ) {
-                    if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
+                    if (
+                        block.timestamp - updatedAt <=
+                        chainlinkPriceStaleThreshold &&
+                        price > 0
+                    ) {
                         // Price is fresh and valid, update cache
                         uint8 decimals = aggregator.decimals();
                         uint256 priceMantissa = uint256(price);
 
                         if (decimals < 18) {
-                            priceMantissa = priceMantissa * (10 ** (18 - decimals));
+                            priceMantissa =
+                                priceMantissa *
+                                (10 ** (18 - decimals));
                         } else if (decimals > 18) {
-                            priceMantissa = priceMantissa / (10 ** (decimals - 18));
+                            priceMantissa =
+                                priceMantissa /
+                                (10 ** (decimals - 18));
                         }
 
                         lastValidChainlinkPrice[asset] = priceMantissa;
@@ -147,7 +180,9 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // Set the maximum age for Chainlink price feeds
-    function setChainlinkStaleThreshold(uint256 _newThreshold) public onlyOwner {
+    function setChainlinkStaleThreshold(
+        uint256 _newThreshold
+    ) public onlyOwner {
         chainlinkPriceStaleThreshold = _newThreshold;
     }
 
@@ -165,14 +200,21 @@ contract SimplePriceOracle is PriceOracle {
 
     // Remove a Chainlink price feed for an asset
     function removeChainlinkFeed(address asset) public onlyAdmin {
-        require(address(assetToAggregator[asset]) != address(0), "No feed exists for this asset");
+        require(
+            address(assetToAggregator[asset]) != address(0),
+            "No feed exists for this asset"
+        );
         delete assetToAggregator[asset];
         delete lastValidChainlinkPrice[asset];
         emit ChainlinkFeedRegistered(asset, address(0)); // Emit with zero address to indicate removal
     }
 
     // Withdraw LINK tokens from the contract (in case any are sent to this contract)
-    function withdrawLINK(address linkToken, address to, uint256 amount) public onlyOwner {
+    function withdrawLINK(
+        address linkToken,
+        address to,
+        uint256 amount
+    ) public onlyOwner {
         require(to != address(0), "Cannot withdraw to zero address");
         require(amount > 0, "Amount must be greater than zero");
 
@@ -197,14 +239,18 @@ contract SimplePriceOracle is PriceOracle {
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80, /* roundId */
+                uint80 /* roundId */,
                 int256 price,
-                uint256, /* startedAt */
+                uint256 /* startedAt */,
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
                 // Check if the price timestamp is within the allowed threshold
-                if (block.timestamp - updatedAt <= chainlinkPriceStaleThreshold && price > 0) {
+                if (
+                    block.timestamp - updatedAt <=
+                    chainlinkPriceStaleThreshold &&
+                    price > 0
+                ) {
                     // Price is fresh and valid, convert to 18 decimals
                     uint8 decimals = aggregator.decimals();
                     uint256 priceMantissa = uint256(price);
@@ -244,10 +290,18 @@ contract SimplePriceOracle is PriceOracle {
     }
 
     // Get the latest round data for an asset directly
-    function getLatestRoundData(address asset)
+    function getLatestRoundData(
+        address asset
+    )
         external
         view
-        returns (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+        returns (
+            uint80 roundId,
+            int256 price,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
     {
         AggregatorV3Interface aggregator = assetToAggregator[asset];
         require(address(aggregator) != address(0), "No aggregator for asset");
@@ -261,14 +315,26 @@ contract SimplePriceOracle is PriceOracle {
             return true; // No feed = stale
         }
 
-        try aggregator.latestRoundData() returns (uint80, int256 price, uint256, uint256 updatedAt, uint80) {
-            return (block.timestamp - updatedAt > chainlinkPriceStaleThreshold || price <= 0);
+        try aggregator.latestRoundData() returns (
+            uint80,
+            int256 price,
+            uint256,
+            uint256 updatedAt,
+            uint80
+        ) {
+            return (block.timestamp - updatedAt >
+                chainlinkPriceStaleThreshold ||
+                price <= 0);
         } catch {
             return true; // Failed call = stale
         }
     }
 
-    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
+    function compareStrings(
+        string memory a,
+        string memory b
+    ) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) ==
+            keccak256(abi.encodePacked((b))));
     }
 }

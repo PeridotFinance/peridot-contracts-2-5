@@ -77,7 +77,11 @@ contract DualInvestmentTest is Test {
         // Deploy core dual investment contracts
         positionToken = new ERC1155DualPosition();
         vaultExecutor = new VaultExecutor(protocolAccount);
-        settlementEngine = new SettlementEngine(address(positionToken), address(vaultExecutor), address(oracle));
+        settlementEngine = new SettlementEngine(
+            address(positionToken),
+            address(vaultExecutor),
+            address(oracle)
+        );
         // Create dummy addresses for Phase 2 components for backward compatibility
         address dummyBorrowRouter = makeAddr("dummyBorrowRouter");
         address dummyRiskGuard = makeAddr("dummyRiskGuard");
@@ -129,21 +133,39 @@ contract DualInvestmentTest is Test {
         assertGt(tokenId, 0, "Token ID should be non-zero");
 
         // Test that same parameters generate same token ID
-        uint256 tokenId2 =
-            positionToken.generateTokenId(address(weth), uint64(ETH_PRICE), uint64(block.timestamp + 1 days), 0, 1);
+        uint256 tokenId2 = positionToken.generateTokenId(
+            address(weth),
+            uint64(ETH_PRICE),
+            uint64(block.timestamp + 1 days),
+            0,
+            1
+        );
 
-        assertEq(tokenId, tokenId2, "Same parameters should generate same token ID");
+        assertEq(
+            tokenId,
+            tokenId2,
+            "Same parameters should generate same token ID"
+        );
     }
 
     function testVaultExecutorBasics() public {
         // Test authorization
-        assertFalse(vaultExecutor.authorizedManagers(user1), "User1 should not be authorized initially");
+        assertFalse(
+            vaultExecutor.authorizedManagers(user1),
+            "User1 should not be authorized initially"
+        );
 
         vaultExecutor.setAuthorizedManager(user1, true);
-        assertTrue(vaultExecutor.authorizedManagers(user1), "User1 should be authorized after setting");
+        assertTrue(
+            vaultExecutor.authorizedManagers(user1),
+            "User1 should be authorized after setting"
+        );
 
         vaultExecutor.setAuthorizedManager(user1, false);
-        assertFalse(vaultExecutor.authorizedManagers(user1), "User1 should not be authorized after removing");
+        assertFalse(
+            vaultExecutor.authorizedManagers(user1),
+            "User1 should not be authorized after removing"
+        );
     }
 
     function testOraclePriceRetrieval() public {
@@ -157,15 +179,24 @@ contract DualInvestmentTest is Test {
 
     function testManagerCTokenSupport() public {
         // Initially no cTokens should be supported
-        assertFalse(manager.supportedCTokens(address(pUSDC)), "pUSDC should not be supported initially");
+        assertFalse(
+            manager.supportedCTokens(address(pUSDC)),
+            "pUSDC should not be supported initially"
+        );
 
         // Add support for a cToken
         manager.setSupportedCToken(address(pUSDC), true);
-        assertTrue(manager.supportedCTokens(address(pUSDC)), "pUSDC should be supported after setting");
+        assertTrue(
+            manager.supportedCTokens(address(pUSDC)),
+            "pUSDC should be supported after setting"
+        );
 
         // Remove support
         manager.setSupportedCToken(address(pUSDC), false);
-        assertFalse(manager.supportedCTokens(address(pUSDC)), "pUSDC should not be supported after removing");
+        assertFalse(
+            manager.supportedCTokens(address(pUSDC)),
+            "pUSDC should not be supported after removing"
+        );
     }
 
     function testRiskParameterUpdates() public {
@@ -175,19 +206,44 @@ contract DualInvestmentTest is Test {
         uint256 newMaxExpiry = 60 days;
         uint256 newMinExpiry = 30 minutes;
 
-        manager.setRiskParameters(newMaxSize, newMinSize, newMaxExpiry, newMinExpiry);
+        manager.setRiskParameters(
+            newMaxSize,
+            newMinSize,
+            newMaxExpiry,
+            newMinExpiry
+        );
 
-        assertEq(manager.maxPositionSize(), newMaxSize, "Max position size should be updated");
-        assertEq(manager.minPositionSize(), newMinSize, "Min position size should be updated");
-        assertEq(manager.maxExpiry(), newMaxExpiry, "Max expiry should be updated");
-        assertEq(manager.minExpiry(), newMinExpiry, "Min expiry should be updated");
+        assertEq(
+            manager.maxPositionSize(),
+            newMaxSize,
+            "Max position size should be updated"
+        );
+        assertEq(
+            manager.minPositionSize(),
+            newMinSize,
+            "Min position size should be updated"
+        );
+        assertEq(
+            manager.maxExpiry(),
+            newMaxExpiry,
+            "Max expiry should be updated"
+        );
+        assertEq(
+            manager.minExpiry(),
+            newMinExpiry,
+            "Min expiry should be updated"
+        );
     }
 
     function testSettlementWindowUpdate() public {
         uint256 newWindow = 2 hours;
         settlementEngine.setSettlementWindow(newWindow);
 
-        assertEq(settlementEngine.settlementWindow(), newWindow, "Settlement window should be updated");
+        assertEq(
+            settlementEngine.settlementWindow(),
+            newWindow,
+            "Settlement window should be updated"
+        );
     }
 
     function testPositionTokenEvents() public {
@@ -195,19 +251,25 @@ contract DualInvestmentTest is Test {
         positionToken.setAuthorizedMinter(address(this), true);
 
         // Create a test position
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
-            user: user1,
-            cTokenIn: address(pETH),
-            cTokenOut: address(pUSDC),
-            notional: 1000e18,
-            expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
-            direction: 0, // CALL
-            settled: false
-        });
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition
+            .Position({
+                user: user1,
+                cTokenIn: address(pETH),
+                cTokenOut: address(pUSDC),
+                notional: 1000e18,
+                expiry: uint64(block.timestamp + 1 days),
+                strike: uint64(ETH_PRICE),
+                direction: 0, // CALL
+                settled: false
+            });
 
-        uint256 tokenId =
-            positionToken.generateTokenId(address(weth), position.strike, position.expiry, position.direction, 1);
+        uint256 tokenId = positionToken.generateTokenId(
+            address(weth),
+            position.strike,
+            position.expiry,
+            position.direction,
+            1
+        );
 
         // Test position creation event
         vm.expectEmit(true, true, false, true);
@@ -225,11 +287,20 @@ contract DualInvestmentTest is Test {
         positionToken.mintPosition(user1, tokenId, 1000e18, position);
 
         // Verify position data
-        ERC1155DualPosition.Position memory storedPosition = positionToken.getPosition(tokenId);
+        ERC1155DualPosition.Position memory storedPosition = positionToken
+            .getPosition(tokenId);
         assertEq(storedPosition.user, position.user, "User should match");
-        assertEq(storedPosition.notional, position.notional, "Notional should match");
+        assertEq(
+            storedPosition.notional,
+            position.notional,
+            "Notional should match"
+        );
         assertEq(storedPosition.strike, position.strike, "Strike should match");
-        assertEq(storedPosition.direction, position.direction, "Direction should match");
+        assertEq(
+            storedPosition.direction,
+            position.direction,
+            "Direction should match"
+        );
 
         // Verify token balance
         uint256 balance = positionToken.balanceOf(user1, tokenId);
@@ -239,39 +310,67 @@ contract DualInvestmentTest is Test {
     function testSettlementInfoQueries() public {
         // Test settlement info for non-existent position
         uint256 fakeTokenId = 999;
-        (bool settled, uint256 settlementPrice, bool canSettle) = settlementEngine.getSettlementInfo(fakeTokenId);
+        (
+            bool settled,
+            uint256 settlementPrice,
+            bool canSettle
+        ) = settlementEngine.getSettlementInfo(fakeTokenId);
 
         assertFalse(settled, "Non-existent position should not be settled");
-        assertEq(settlementPrice, 0, "Non-existent position should have zero settlement price");
-        assertFalse(canSettle, "Non-existent position should not be settleable");
+        assertEq(
+            settlementPrice,
+            0,
+            "Non-existent position should have zero settlement price"
+        );
+        assertFalse(
+            canSettle,
+            "Non-existent position should not be settleable"
+        );
     }
 
     function testCanSettlePosition() public {
         uint256 fakeTokenId = 999;
-        (bool canSettle, string memory reason) = settlementEngine.canSettlePosition(fakeTokenId);
+        (bool canSettle, string memory reason) = settlementEngine
+            .canSettlePosition(fakeTokenId);
 
-        assertFalse(canSettle, "Non-existent position should not be settleable");
+        assertFalse(
+            canSettle,
+            "Non-existent position should not be settleable"
+        );
         // Note: We can't easily test string equality in Solidity, but we can verify it's not empty
-        assertTrue(bytes(reason).length > 0, "Should provide reason for non-settleable position");
+        assertTrue(
+            bytes(reason).length > 0,
+            "Should provide reason for non-settleable position"
+        );
     }
 
     // Test helper functions
-    function _createTestPosition(address user, uint256 amount, uint64 strike, uint64 expiry, uint8 direction)
-        internal
-        returns (uint256 tokenId)
-    {
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
-            user: user,
-            cTokenIn: address(pETH),
-            cTokenOut: address(pUSDC),
-            notional: uint128(amount),
-            expiry: expiry,
-            strike: strike,
-            direction: direction,
-            settled: false
-        });
+    function _createTestPosition(
+        address user,
+        uint256 amount,
+        uint64 strike,
+        uint64 expiry,
+        uint8 direction
+    ) internal returns (uint256 tokenId) {
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition
+            .Position({
+                user: user,
+                cTokenIn: address(pETH),
+                cTokenOut: address(pUSDC),
+                notional: uint128(amount),
+                expiry: expiry,
+                strike: strike,
+                direction: direction,
+                settled: false
+            });
 
-        tokenId = positionToken.generateTokenId(address(weth), strike, expiry, direction, 1);
+        tokenId = positionToken.generateTokenId(
+            address(weth),
+            strike,
+            expiry,
+            direction,
+            1
+        );
 
         // Authorize this contract to mint
         positionToken.setAuthorizedMinter(address(this), true);
@@ -289,55 +388,69 @@ contract DualInvestmentTest is Test {
         uint256 tokenId = _createTestPosition(user1, amount, strike, expiry, 0);
 
         // Verify position exists
-        ERC1155DualPosition.Position memory position = positionToken.getPosition(tokenId);
+        ERC1155DualPosition.Position memory position = positionToken
+            .getPosition(tokenId);
         assertEq(position.user, user1, "Position user should match");
-        assertFalse(position.settled, "Position should not be settled initially");
+        assertFalse(
+            position.settled,
+            "Position should not be settled initially"
+        );
 
         // Verify user has tokens
         uint256 balance = positionToken.balanceOf(user1, tokenId);
         assertEq(balance, amount, "User should have correct balance");
 
         // Check if position is expired (should not be)
-        assertFalse(positionToken.isExpired(tokenId), "Position should not be expired yet");
-        assertFalse(positionToken.isSettled(tokenId), "Position should not be settled yet");
+        assertFalse(
+            positionToken.isExpired(tokenId),
+            "Position should not be expired yet"
+        );
+        assertFalse(
+            positionToken.isSettled(tokenId),
+            "Position should not be settled yet"
+        );
     }
 
     // Test edge cases and error conditions
-    function testFailUnauthorizedMint() public {
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
-            user: user1,
-            cTokenIn: address(pETH),
-            cTokenOut: address(pUSDC),
-            notional: 1000e18,
-            expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
-            direction: 0,
-            settled: false
-        });
+    function test_RevertWhen_UnauthorizedMint() public {
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition
+            .Position({
+                user: user1,
+                cTokenIn: address(pETH),
+                cTokenOut: address(pUSDC),
+                notional: 1000e18,
+                expiry: uint64(block.timestamp + 1 days),
+                strike: uint64(ETH_PRICE),
+                direction: 0,
+                settled: false
+            });
 
         uint256 tokenId = 1;
 
         // This should fail because we're not authorized
         vm.prank(user1);
+        vm.expectRevert(bytes("Not authorized to mint"));
         positionToken.mintPosition(user1, tokenId, 1000e18, position);
     }
 
-    function testFailInvalidDirection() public {
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
-            user: user1,
-            cTokenIn: address(pETH),
-            cTokenOut: address(pUSDC),
-            notional: 1000e18,
-            expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
-            direction: 5, // Invalid direction
-            settled: false
-        });
+    function test_RevertWhen_InvalidDirection() public {
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition
+            .Position({
+                user: user1,
+                cTokenIn: address(pETH),
+                cTokenOut: address(pUSDC),
+                notional: 1000e18,
+                expiry: uint64(block.timestamp + 1 days),
+                strike: uint64(ETH_PRICE),
+                direction: 5, // Invalid direction
+                settled: false
+            });
 
         positionToken.setAuthorizedMinter(address(this), true);
         uint256 tokenId = 1;
 
         // This should fail due to invalid direction
+        vm.expectRevert(bytes("Invalid direction"));
         positionToken.mintPosition(user1, tokenId, 1000e18, position);
     }
 }
