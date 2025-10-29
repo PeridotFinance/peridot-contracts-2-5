@@ -509,4 +509,41 @@ contract MarginManagerTest is Test {
         vm.expectRevert("Manager: trades paused");
         manager.trade(address(usdc), address(weth), amountIn, minOut, _tradeCalldata());
     }
+
+    function testDepositRevertsWhenOraclePriceZero() public {
+        _enable();
+
+        oracle.setDirectPrice(address(usdc), 0);
+
+        vm.prank(USER);
+        vm.expectRevert(abi.encodeWithSelector(MarginRiskLib.PriceUnavailable.selector, address(cUsdc)));
+        manager.deposit(address(usdc), 1_000e18);
+    }
+
+    function testRiskMetricsRevertWhenCollateralPriceZero() public {
+        _enable();
+
+        vm.prank(USER);
+        manager.deposit(address(usdc), 1_000e18);
+
+        oracle.setDirectPrice(address(usdc), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(MarginRiskLib.PriceUnavailable.selector, address(cUsdc)));
+        manager.getAccountState(USER);
+    }
+
+    function testRiskMetricsRevertWhenBorrowPriceZero() public {
+        _enable();
+
+        vm.prank(USER);
+        manager.deposit(address(usdc), 1_000e18);
+
+        vm.prank(USER);
+        manager.borrow(address(weth), 0.2e18, address(0));
+
+        oracle.setDirectPrice(address(weth), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(MarginRiskLib.PriceUnavailable.selector, address(cWeth)));
+        manager.getAccountMetrics(USER);
+    }
 }
