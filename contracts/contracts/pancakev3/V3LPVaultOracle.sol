@@ -8,6 +8,10 @@ import "../PErc20.sol";
 import "../PToken.sol";
 import "./interfaces/IV3LPVault4626.sol";
 import "./interfaces/IChainlinkAggregator.sol";
+import "./interfaces/IPancakeV3Pool.sol";
+import "./libraries/FullMath.sol";
+import "./libraries/FixedPoint96.sol";
+import "./libraries/TickMath.sol";
 
 /**
  * @title V3LPVaultOracle
@@ -23,6 +27,9 @@ contract V3LPVaultOracle is PriceOracle, Ownable {
         uint8 token0Decimals;
         uint8 token1Decimals;
         uint256 fallbackPrice; // 1e18 scaled price used when share supply is zero or valuation unavailable.
+        address pool;
+        uint256 maxDeviationBps;
+        uint32 twapWindow;
     }
 
     // share token => config
@@ -51,16 +58,31 @@ contract V3LPVaultOracle is PriceOracle, Ownable {
         require(shareToken != address(0), "share zero");
         require(token0 != address(0) && token1 != address(0), "token zero");
 
-        vaultConfigs[shareToken] = VaultConfig({
-            vault: vault,
-            token0: token0,
-            token1: token1,
-            token0Decimals: IERC20Metadata(token0).decimals(),
-            token1Decimals: IERC20Metadata(token1).decimals(),
-            fallbackPrice: fallbackPrice
-        });
+        VaultConfig storage cfg = vaultConfigs[shareToken];
+        cfg.vault = vault;
+        cfg.token0 = token0;
+        cfg.token1 = token1;
+        cfg.token0Decimals = IERC20Metadata(token0).decimals();
+        cfg.token1Decimals = IERC20Metadata(token1).decimals();
+        cfg.fallbackPrice = fallbackPrice;
+        cfg.pool = vault.pool();
+        if (cfg.maxDeviationBps == 0) cfg.maxDeviationBps = 500;
+        if (cfg.twapWindow == 0) cfg.twapWindow = 300;
 
         emit VaultRegistered(shareToken, address(vault), token0, token1, fallbackPrice);
+    }
+
+    function setShareDeviationBps(address shareToken, uint256 bps) external onlyOwner {
+        require(bps <= 10_000, "bps");
+        VaultConfig storage cfg = vaultConfigs[shareToken];
+        require(address(cfg.vault) != address(0), "vault missing");
+        cfg.maxDeviationBps = bps;
+    }
+
+    function setTwapWindow(address shareToken, uint32 window) external onlyOwner {
+        VaultConfig storage cfg = vaultConfigs[shareToken];
+        require(address(cfg.vault) != address(0), "vault missing");
+        cfg.twapWindow = window;
     }
 
     function setAssetPrice(address asset, uint256 price) external onlyOwner {
@@ -123,7 +145,48 @@ contract V3LPVaultOracle is PriceOracle, Ownable {
             return 0;
         }
 
-        return (totalValue * 1e18) / supply;
+        uint256 sharePrice = (totalValue * 1e18) / supply;
+        _validateDeviation(cfg, price0, price1);
+        return sharePrice;
+    }
+
+    function _validateDeviation(VaultConfig memory cfg, uint256 price0, uint256 price1) internal view {
+        if (cfg.maxDeviationBps == 0) {
+            return;
+        }
+
+        uint256 aggRatio = price0 == 0 ? 0 : FullMath.mulDiv(price1, 1e18, price0);
+
+        if (aggRatio == 0) {
+            return;
+        }
+
+        uint256 poolRatio = _getTwapRatio(cfg);
+        uint256 diff = aggRatio > poolRatio ? aggRatio - poolRatio : poolRatio - aggRatio;
+        uint256 bps = (diff * 10_000) / aggRatio;
+        require(bps <= cfg.maxDeviationBps, "price deviation");
+    }
+
+    function _getTwapRatio(VaultConfig memory cfg) internal view returns (uint256) {
+        if (cfg.twapWindow == 0) {
+            (uint160 currentSqrtPrice,,,,,,) = IPancakeV3Pool(cfg.pool).slot0();
+            uint256 priceX192Current = uint256(currentSqrtPrice) * uint256(currentSqrtPrice);
+            return FullMath.mulDiv(FixedPoint96.Q192, 1e18, priceX192Current);
+        }
+
+        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos[0] = cfg.twapWindow;
+        secondsAgos[1] = 0;
+        (int56[] memory tickCumulatives,) = IPancakeV3Pool(cfg.pool).observe(secondsAgos);
+        int56 delta = tickCumulatives[1] - tickCumulatives[0];
+        int24 meanTick = int24(delta / int56(uint56(cfg.twapWindow)));
+        if (delta < 0 && (delta % int56(uint56(cfg.twapWindow)) != 0)) {
+            meanTick--;
+        }
+
+        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(meanTick);
+        uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+        return FullMath.mulDiv(FixedPoint96.Q192, 1e18, priceX192);
     }
 
     function _getAssetPrice(address asset) internal view returns (uint256) {

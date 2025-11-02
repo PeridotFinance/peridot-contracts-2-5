@@ -323,6 +323,10 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
+    function pool() external view returns (address) {
+        return config.pool;
+    }
+
     function totalAssets() public view override returns (uint256) {
         return _valueOf(totalManagedToken0, totalManagedToken1);
     }

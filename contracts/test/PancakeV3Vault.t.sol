@@ -244,6 +244,8 @@ contract PancakeV3VaultOracleTest is Test {
         usdtUsdFeed = new MockAggregator(18, 1e18);
         oracle.setAssetFeed(address(token0), address(cakeUsdFeed));
         oracle.setAssetFeed(address(token1), address(usdtUsdFeed));
+        oracle.setShareDeviationBps(address(vault), 10_000);
+        oracle.setShareDeviationBps(address(vault), 10_000);
 
         pToken = new MockPErc20(address(vault), "pShare");
 
@@ -275,6 +277,30 @@ contract PancakeV3VaultOracleTest is Test {
         cakeUsdFeed.updateAnswer(2e18);
         uint256 increasedPrice = oracle.getUnderlyingPrice(PToken(address(pToken)));
         assertGt(increasedPrice, price, "price responds to feed updates");
+    }
+
+    function testOracleRejectsLargeDeviation() public {
+        vm.startPrank(user);
+        token0.approve(address(vault), type(uint256).max);
+        token1.approve(address(vault), type(uint256).max);
+        vault.depositDual(
+            Vault.DepositParams({
+                receiver: user,
+                refundReceiver: user,
+                amount0Desired: 2e18,
+                amount1Desired: 2e18,
+                amount0Min: 0,
+                amount1Min: 0,
+                minShares: 1,
+                deadline: block.timestamp + 1
+            })
+        );
+        vm.stopPrank();
+
+        oracle.setShareDeviationBps(address(vault), 200); // 2%
+        cakeUsdFeed.updateAnswer(5e18);
+        vm.expectRevert("price deviation");
+        oracle.getUnderlyingPrice(PToken(address(pToken)));
     }
 
     function testOracleFallsBackWithoutSupply() public {

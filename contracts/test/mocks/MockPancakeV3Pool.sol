@@ -26,4 +26,18 @@ contract MockPancakeV3Pool {
     function tickSpacing() external view returns (int24) {
         return spacing;
     }
+
+    function observe(uint32[] calldata secondsAgos)
+        external
+        view
+        returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s)
+    {
+        uint256 len = secondsAgos.length;
+        tickCumulatives = new int56[](len);
+        secondsPerLiquidityCumulativeX128s = new uint160[](len);
+        for (uint256 i = 0; i < len; i++) {
+            tickCumulatives[i] = int56(int256(tick) * int256(int32(secondsAgos[i])));
+            secondsPerLiquidityCumulativeX128s[i] = 0;
+        }
+    }
 }

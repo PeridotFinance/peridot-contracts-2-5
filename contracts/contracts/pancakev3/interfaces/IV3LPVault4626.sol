@@ -34,6 +34,8 @@ interface IV3LPVault4626 {
 
     function positionTokenId() external view returns (uint256);
 
+    function pool() external view returns (address);
+
     function totalSupply() external view returns (uint256);
 
     function previewDepositDual(uint256 amount0Desired, uint256 amount1Desired) external view returns (uint256 shares);

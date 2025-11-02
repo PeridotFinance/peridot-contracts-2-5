@@ -22,15 +22,15 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0xbA2aE424d960c26247Dd6c32edC70B295c744C43;
+        0x2494b603319d4D9F9715c9f4496d9E0364B59d93;
     address constant COMPTROLLER_ADDRESS =
         0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
     address constant INTEREST_RATE_MODEL_ADDRESS =
         0x22B129f93dfe3A63cBB644a86dBD695be5deE511;
 
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e16;
-    string constant PTOKEN_NAME = "Peridot Dogecoin";
-    string constant PTOKEN_SYMBOL = "pDOGE"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26;
+    string constant PTOKEN_NAME = "Peridot Tesla (Ondo Tokenized)";
+    string constant PTOKEN_SYMBOL = "pTSLAon"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
     uint8 constant PTOKEN_DECIMALS = 8;
 
     // Reserve factor (5% = 0.05 * 1e18)

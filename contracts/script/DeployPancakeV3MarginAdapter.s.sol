@@ -16,10 +16,12 @@ contract DeployPancakeV3MarginAdapter is Script {
 
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address router = vm.envAddress("PANCAKE_V3_ROUTER");
+        address router = 0x1b81D678ffb9C0263b24A97847620C99d213eB14;
         address manager = _tryEnvAddress("MARGIN_MANAGER");
-        address ownerOverride = _tryEnvAddress("ADAPTER_OWNER");
-        address owner = ownerOverride != address(0) ? ownerOverride : vm.addr(deployerKey);
+        address ownerOverride = 0xCED23360932B80d18fdEAEAa573202E80A584804;
+        address owner = ownerOverride != address(0)
+            ? ownerOverride
+            : vm.addr(deployerKey);
 
         PoolConfig[] memory pools = _loadPoolConfigs();
         address[] memory operators = _loadOperators();
@@ -30,7 +32,10 @@ contract DeployPancakeV3MarginAdapter is Script {
 
         vm.startBroadcast(deployerKey);
 
-        PancakeV3RouterAdapter adapter = new PancakeV3RouterAdapter(owner, router);
+        PancakeV3RouterAdapter adapter = new PancakeV3RouterAdapter(
+            owner,
+            router
+        );
         console.log("Adapter deployed:", address(adapter));
 
         if (manager != address(0)) {
@@ -45,7 +50,12 @@ contract DeployPancakeV3MarginAdapter is Script {
 
         for (uint256 i = 0; i < pools.length; i++) {
             PoolConfig memory pool = pools[i];
-            adapter.setPoolWhitelist(pool.token0, pool.token1, pool.fee, pool.allowed);
+            adapter.setPoolWhitelist(
+                pool.token0,
+                pool.token1,
+                pool.fee,
+                pool.allowed
+            );
             console.log("  Pool whitelist token0:", pool.token0);
             console.log("    token1:", pool.token1);
             console.log("    fee:", uint256(pool.fee));
@@ -62,7 +72,11 @@ contract DeployPancakeV3MarginAdapter is Script {
         }
         PoolConfig[] memory pools = new PoolConfig[](count);
         for (uint256 i = 0; i < count; i++) {
-            string memory prefix = string.concat("ADAPTER_POOL_", vm.toString(i), "_");
+            string memory prefix = string.concat(
+                "ADAPTER_POOL_",
+                vm.toString(i),
+                "_"
+            );
             pools[i] = PoolConfig({
                 token0: vm.envAddress(string.concat(prefix, "TOKEN0")),
                 token1: vm.envAddress(string.concat(prefix, "TOKEN1")),
@@ -80,7 +94,10 @@ contract DeployPancakeV3MarginAdapter is Script {
         }
         address[] memory operators = new address[](count);
         for (uint256 i = 0; i < count; i++) {
-            string memory key = string.concat("ADAPTER_OPERATOR_", vm.toString(i));
+            string memory key = string.concat(
+                "ADAPTER_OPERATOR_",
+                vm.toString(i)
+            );
             operators[i] = vm.envAddress(key);
         }
         return operators;
@@ -102,7 +119,10 @@ contract DeployPancakeV3MarginAdapter is Script {
         }
     }
 
-    function _tryEnvBool(string memory key, bool fallbackValue) internal view returns (bool) {
+    function _tryEnvBool(
+        string memory key,
+        bool fallbackValue
+    ) internal view returns (bool) {
         try vm.envBool(key) returns (bool value) {
             return value;
         } catch {

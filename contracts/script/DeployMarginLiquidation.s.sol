@@ -9,10 +9,12 @@ import {MarginLiquidation} from "../contracts/margin/MarginLiquidation.sol";
 contract DeployMarginLiquidation is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address manager = vm.envAddress("MARGIN_MANAGER");
+        address manager = 0x06624E8d03A13F28828b8523bACa9568D154044E;
 
-        address ownerOverride = _tryEnvAddress("LIQUIDATION_OWNER");
-        address owner = ownerOverride != address(0) ? ownerOverride : vm.addr(deployerKey);
+        address ownerOverride = 0xCED23360932B80d18fdEAEAa573202E80A584804;
+        address owner = ownerOverride != address(0)
+            ? ownerOverride
+            : vm.addr(deployerKey);
 
         address[] memory adaptersToAllow = _loadAllowedAdapters();
 
@@ -39,7 +41,10 @@ contract DeployMarginLiquidation is Script {
         }
         address[] memory adapters = new address[](count);
         for (uint256 i = 0; i < count; i++) {
-            string memory key = string.concat("LIQUIDATION_ALLOWED_ADAPTER_", vm.toString(i));
+            string memory key = string.concat(
+                "LIQUIDATION_ALLOWED_ADAPTER_",
+                vm.toString(i)
+            );
             adapters[i] = vm.envAddress(key);
         }
         return adapters;
