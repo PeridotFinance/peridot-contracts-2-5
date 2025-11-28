@@ -20,7 +20,7 @@ import "../contracts/PriceOracle.sol"; // Interface for the oracle
 contract DeployPeridottroller is Script {
     // !!! IMPORTANT: Replace with your deployed SimplePriceOracle address !!!
     address constant ORACLE_ADDRESS =
-        0xa41D586530BC7BC872095950aE03a780d5114445;
+        0x42D5B37CD3682eDD0a3dBb242C579bDCB108f47C;
     // Note: PeridottrollerG7 hardcodes the PERIDOT token via getPeridotAddress().
     address constant PERIDOT_ADDRESS =
         0x96650BebC549456F253974c11Fc6cBE28172A2d2;

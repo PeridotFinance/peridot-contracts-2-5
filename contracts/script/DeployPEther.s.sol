@@ -18,9 +18,9 @@ contract DeployPEther is Script {
     // --- CONFIGURATION ---
     // !!! IMPORTANT: Replace these placeholders !!!
     address constant COMPTROLLER_ADDRESS =
-        0xf79b3af6954bCbeDfE0F6BE34DD1153A391E8083; // Address of the deployed Unitroller proxy
+        0x6D208789f0a978aF789A3C8Ba515749598940716; // Address of the deployed Unitroller proxy
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x60a8BD81f90526560344C63279210BC067a489a5; // Address of the deployed InterestRateModel
+        0x1FB287E1c4F7B4c6b511f4d190523814593Ad84e; // Address of the deployed InterestRateModel
 
     // PToken Parameters (Adjust as needed)
     // Similar calculation as PErc20, but underlying decimals is always 18 for native currency
@@ -28,8 +28,8 @@ contract DeployPEther is Script {
     // Example pETH (8 dec): 2 * 10^(18 + 18 - 8) = 2 * 10^28 = 2e28
     // Use the standard initial exchange rate of 0.02, scaled by 1e18.
     uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26; // Example: Initial exchange rate of 0.02. Adjust if needed.
-    string constant PTOKEN_NAME = "Peridot Somnia"; // Example name
-    string constant PTOKEN_SYMBOL = "pSOMI"; // Example symbol
+    string constant PTOKEN_NAME = "Peridot MON"; // Example name
+    string constant PTOKEN_SYMBOL = "pETH"; // Example symbol
     uint8 constant PTOKEN_DECIMALS = 8; // Standard PToken decimals
 
     address admin; // Admin/Owner address

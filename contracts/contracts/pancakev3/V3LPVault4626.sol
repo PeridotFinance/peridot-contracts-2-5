@@ -134,11 +134,15 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         token1Decimals = token1_.decimals();
 
         config = config_;
-        if (config_.stakeWithMasterChef && address(config_.masterChef) == address(0)) {
-            revert InvalidConfiguration();
-        }
-        if (config_.routerAdapter == address(0) || address(config_.rewardToken) == address(0)) {
-            revert InvalidConfiguration();
+        if (config_.stakeWithMasterChef) {
+            if (address(config_.masterChef) == address(0) || address(config_.rewardToken) == address(0)) {
+                revert InvalidConfiguration();
+            }
+        } else {
+            // rewardToken can be zero when not staking
+            if (config_.routerAdapter == address(0)) {
+                revert InvalidConfiguration();
+            }
         }
         rewardToken = config_.rewardToken;
     }
@@ -268,6 +272,10 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
 
         if (address(config.masterChef) != address(0)) {
             config.masterChef.harvest(config.masterChefPid, address(this));
+        }
+
+        if (address(rewardToken) == address(0)) {
+            return 0;
         }
 
         uint256 rewardBalance = rewardToken.balanceOf(address(this));
@@ -488,9 +496,13 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
             })
         );
 
+        // capture collected fees from collect()
+        uint256 collected0 = token0.balanceOf(address(this)) - amount0;
+        uint256 collected1 = token1.balanceOf(address(this)) - amount1;
+
         totalLiquidity = liquidityBefore - liquidityBurned;
-        totalManagedToken0 = amount0 >= totalManagedToken0 ? 0 : totalManagedToken0 - amount0;
-        totalManagedToken1 = amount1 >= totalManagedToken1 ? 0 : totalManagedToken1 - amount1;
+        totalManagedToken0 = amount0 >= totalManagedToken0 ? collected0 : (totalManagedToken0 - amount0) + collected0;
+        totalManagedToken1 = amount1 >= totalManagedToken1 ? collected1 : (totalManagedToken1 - amount1) + collected1;
     }
 
     function _currentSqrtPrice() internal view returns (uint160 sqrtPriceX96, int24 tick) {

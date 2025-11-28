@@ -104,6 +104,15 @@ contract V3LPVaultOracle is PriceOracle, Ownable {
         emit FallbackPriceUpdated(shareToken, price);
     }
 
+    /// @notice Convenience helper to fetch price by share token address (for external oracles).
+    function getPrice(address shareToken) external view returns (uint256) {
+        VaultConfig memory cfg = vaultConfigs[shareToken];
+        if (address(cfg.vault) == address(0)) return 0;
+        uint256 price = _computeSharePrice(cfg);
+        if (price == 0) return cfg.fallbackPrice;
+        return price;
+    }
+
     /**
      * @inheritdoc PriceOracle
      */

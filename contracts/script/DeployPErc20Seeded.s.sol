@@ -20,16 +20,16 @@ contract DeployPErc20Seeded is Script {
     // --- CONFIGURATION ---
     // Required: set to underlying token, comptroller, and rate model
     address constant UNDERLYING_ERC20_ADDRESS =
-        0xA9eE28C80f960B889dFbd1902055218cBa016F75;
+        0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a;
     address constant COMPTROLLER_ADDRESS =
-        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
+        0x6D208789f0a978aF789A3C8Ba515749598940716;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x22B129f93dfe3A63cBB644a86dBD695be5deE511;
+        0x1FB287E1c4F7B4c6b511f4d190523814593Ad84e;
 
     // Initial exchange rate and metadata
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26; // 0.02
-    string constant PTOKEN_NAME = "Peridot Alphabet Class A (Ondo Tokenized)";
-    string constant PTOKEN_SYMBOL = "pGOOGLon";
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e14; // 0.02
+    string constant PTOKEN_NAME = "Peridot Agora USD";
+    string constant PTOKEN_SYMBOL = "pAUSD";
     uint8 constant PTOKEN_DECIMALS = 8;
 
     // Parameters
@@ -39,7 +39,7 @@ contract DeployPErc20Seeded is Script {
     // The seeding amount is transferred to the pToken and minted to the deployer to
     // establish a non-zero totalSupply and solid exchange rate baseline.
     // Adjust based on underlying token decimals.
-    uint256 constant SEED_UNDERLYING_AMOUNT = 480000000000000000; // example for 8 decimals: 10 DOGE = 1_000_000_000
+    uint256 constant SEED_UNDERLYING_AMOUNT = 100000; // example for 8 decimals: 10 DOGE = 1_000_000_000
 
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");

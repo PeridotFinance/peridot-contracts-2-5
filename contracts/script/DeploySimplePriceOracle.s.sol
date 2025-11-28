@@ -46,7 +46,7 @@ contract DeploySimplePriceOracle is Script {
         console.log("SimplePriceOracle deployed to:", address(oracle));
 
         // Configure the oracle based on the current network
-        _configureForNetwork(deployer);
+        //_configureForNetwork(deployer);
 
         vm.stopBroadcast();
 
@@ -54,7 +54,7 @@ contract DeploySimplePriceOracle is Script {
         _logDeploymentInfo();
     }
 
-    function _configureForNetwork(address deployer) internal {
+    /*function _configureForNetwork(address deployer) internal {
         uint256 chainId = block.chainid;
 
         console.log("Configuring for network:", chainId);
@@ -67,9 +67,9 @@ contract DeploySimplePriceOracle is Script {
             console.log("Unknown network, configuring with basic setup");
             _configureBasic(deployer);
         }
-    }
+    }*/
 
-    function _configureMainnet(address deployer) internal {
+    /* function _configureMainnet(address deployer) internal {
         console.log("Configuring for Monad Testnet");
 
         ChainlinkFeeds memory feeds = ChainlinkFeeds({
@@ -99,7 +99,7 @@ contract DeploySimplePriceOracle is Script {
         console.log(
             "Note: WMON prices should be set manually or via separate script"
         );
-    }
+    } 
 
     function _configureGoerli(address deployer) internal {
         console.log("Configuring for Goerli Testnet");
@@ -123,7 +123,7 @@ contract DeploySimplePriceOracle is Script {
         });
 
         _registerChainlinkFeeds(feeds, assets);
-    }
+    } */
 
     function _configureBasic(address deployer) internal {
         console.log("Configuring basic setup for unknown network");
@@ -137,7 +137,7 @@ contract DeploySimplePriceOracle is Script {
         );
     }
 
-    function _registerChainlinkFeeds(
+    /*function _registerChainlinkFeeds(
         ChainlinkFeeds memory feeds,
         AssetAddresses memory assets
     ) internal {
@@ -179,7 +179,7 @@ contract DeploySimplePriceOracle is Script {
         }
 
         console.log("Chainlink feed registration completed");
-    }
+    } */
 
     function _logDeploymentInfo() internal view {
         console.log("=== SimplePriceOracle Deployment Complete ===");

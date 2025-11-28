@@ -22,19 +22,16 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0x2494b603319d4D9F9715c9f4496d9E0364B59d93;
+        0x8498312A6B3CbD158bf0c93AbdCF29E6e4F55081;
     address constant COMPTROLLER_ADDRESS =
-        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
+        0x6D208789f0a978aF789A3C8Ba515749598940716;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x22B129f93dfe3A63cBB644a86dBD695be5deE511;
+        0x1FB287E1c4F7B4c6b511f4d190523814593Ad84e;
 
     uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26;
-    string constant PTOKEN_NAME = "Peridot Tesla (Ondo Tokenized)";
-    string constant PTOKEN_SYMBOL = "pTSLAon"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+    string constant PTOKEN_NAME = "Peridot gMON";
+    string constant PTOKEN_SYMBOL = "pgMON"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
     uint8 constant PTOKEN_DECIMALS = 8;
-
-    // Reserve factor (5% = 0.05 * 1e18)
-    uint256 constant RESERVE_FACTOR = 0.05 * 1e18;
 
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");
@@ -45,7 +42,6 @@ contract DeployPErc20Fixed is Script {
         console.log("Underlying ERC20:", UNDERLYING_ERC20_ADDRESS);
         console.log("Comptroller:", COMPTROLLER_ADDRESS);
         console.log("Interest Rate Model:", INTEREST_RATE_MODEL_ADDRESS);
-        console.log("Reserve Factor:", RESERVE_FACTOR);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -98,36 +94,12 @@ contract DeployPErc20Fixed is Script {
             console.log(" Admin is correctly set");
         }
 
-        // 4. Set reserve factor
-        console.log("Setting reserve factor to 5%...");
-        uint256 reserveResult = delegator._setReserveFactor(RESERVE_FACTOR);
-        if (reserveResult == 0) {
-            console.log(" Successfully set reserve factor to 5%");
-        } else {
-            console.log(
-                " Failed to set reserve factor, error code:",
-                reserveResult
-            );
-        }
-
-        // 5. Verify reserve factor
-        uint256 currentReserveFactor = delegator.reserveFactorMantissa();
-        console.log("Current reserve factor:", currentReserveFactor);
-        console.log("Expected reserve factor:", RESERVE_FACTOR);
-
-        if (currentReserveFactor == RESERVE_FACTOR) {
-            console.log(" Reserve factor correctly set");
-        } else {
-            console.log(" Reserve factor mismatch");
-        }
-
         vm.stopBroadcast();
 
         console.log("\n=== Deployment Summary ===");
         console.log("PErc20Delegator (Proxy):", address(delegator));
         console.log("PErc20Delegate (Implementation):", address(delegate));
         console.log("Admin:", delegator.admin());
-        console.log("Reserve Factor:", delegator.reserveFactorMantissa());
         console.log(
             "\n IMPORTANT: Remember to add this market to the Comptroller using _supportMarket"
         );

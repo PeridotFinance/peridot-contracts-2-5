@@ -13,6 +13,7 @@
     "@chainlink/contracts-ccip": "^1.6.0",
     "@openzeppelin/contracts": "^5.3.0",
     "@pythnetwork/pyth-sdk-solidity": "^4.0.0",
+    "@storknetwork/stork-evm-sdk": "^1.0.0",
     "@thirdweb-dev/contracts": "^3.15.0",
     "chai": "^4.4.1",
     "web3": "^4.16.0"
