@@ -18,8 +18,9 @@ contract DeployFolksBoosted is Script {
         address admin = vm.envAddress("ADMIN"); // protocol admin / multisig
 
         // Defaults; override via env if desired
-        uint256 initialExchangeRate = vm.envOr("INITIAL_EXCHANGE_RATE", uint256(1e18));
-        uint256 bufferMantissa = vm.envOr("VAULT_BUFFER_MANTISSA", uint256(1e17)); // 10% buffer
+        // Defaults for 6-decimal underlying (e.g., AUSD/USDC share tokens); adjust if your share token decimals differ
+        uint256 initialExchangeRate = 2e14; // 6d constant; use 2e26 for 18d
+        uint256 bufferMantissa = 0; // 0% buffer; set >0 to keep idle shares
         string memory name = vm.envOr("PTOKEN_NAME", string("Peridot Folks Boosted"));
         string memory symbol = vm.envOr("PTOKEN_SYMBOL", string("pfBoost"));
 

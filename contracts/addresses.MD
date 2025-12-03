@@ -219,6 +219,14 @@ PErc20Delegate (Implementation): 0x520b703fb54e4111187962EC4B540F27Ecd16723
 
 PEther (Monad) deployed at: 0x2FB2861402A22244464435773dd1C6951735CdF7
 
+JumpRateModelBoosted: 0x5710017eCdF44f39b5Ae885965140726B7d81099
+
+MorphoBoosted delegator Proxy Steakhouse AUSD(use this) deployed at: 0x4dd205ffc43627629B80A5FAC6feE421f3070ea9
+MorphoBoosted delegate Steakhouse AUSD implementation at: 0x38a9a4ef64cb4BFC4544bb219DCA117fb899f084
+
+RewardDistributorMulti implementation: 0xFcACD88B863449f07dB8f009B33883E9413740b5
+RewardDistributorMulti proxy: 0xFb4EdBcFdED37A0318b02095F2d3Db4A438DeA40
+
 USDC(6 decimals): 0x754704Bc059F8C67012fEd69BC8A327a5aafb603
 earnAUSD(6 decimals): 0x103222f020e98Bba0AD9809A011FDF8e6F067496
 gMon(18 decimals): 0x8498312A6B3CbD158bf0c93AbdCF29E6e4F55081

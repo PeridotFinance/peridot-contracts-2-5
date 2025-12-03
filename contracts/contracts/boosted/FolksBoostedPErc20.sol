@@ -166,7 +166,8 @@ contract FolksBoostedPErc20 is PErc20 {
 
     function _vaultWithdrawable() internal view returns (uint256) {
         try folksVault.maxWithdraw(address(this)) returns (uint256 amount) {
-            return amount;
+            if (amount > 0) return amount;
+            return _vaultAssets();
         } catch {
             return _vaultAssets();
         }

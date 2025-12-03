@@ -64,6 +64,7 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
     error SlippageExceeded();
     error InvalidConfiguration();
     error NotKeeperOrOwner();
+    error SingleAssetNotSupported();
 
     IERC20 public immutable token0;
     IERC20 public immutable token1;
@@ -329,6 +330,63 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
 
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    // ========== ERC4626 SINGLE-ASSET OVERRIDES (DISABLED) ==========
+    // V3 LP positions require dual-token deposits. Single-asset ERC4626
+    // functions are disabled to prevent misuse. Use depositDual/withdrawDual.
+
+    function deposit(uint256, address) public pure override returns (uint256) {
+        revert SingleAssetNotSupported();
+    }
+
+    function mint(uint256, address) public pure override returns (uint256) {
+        revert SingleAssetNotSupported();
+    }
+
+    function withdraw(uint256, address, address) public pure override returns (uint256) {
+        revert SingleAssetNotSupported();
+    }
+
+    function redeem(uint256, address, address) public pure override returns (uint256) {
+        revert SingleAssetNotSupported();
+    }
+
+    function maxDeposit(address) public pure override returns (uint256) {
+        return 0; // Single-asset deposit not supported
+    }
+
+    function maxMint(address) public pure override returns (uint256) {
+        return 0; // Single-asset mint not supported
+    }
+
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        // Return the token0-equivalent value that can be withdrawn via withdrawDual
+        uint256 shares = balanceOf(owner);
+        if (shares == 0) return 0;
+        (uint256 amount0,) = previewWithdrawDual(shares);
+        return amount0;
+    }
+
+    function maxRedeem(address owner) public view override returns (uint256) {
+        return balanceOf(owner);
+    }
+
+    function previewDeposit(uint256) public pure override returns (uint256) {
+        return 0; // Single-asset deposit not supported
+    }
+
+    function previewMint(uint256) public pure override returns (uint256) {
+        return 0; // Single-asset mint not supported
+    }
+
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        // Estimate shares needed to withdraw this amount of token0-equivalent value
+        return convertToShares(assets);
+    }
+
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        return convertToAssets(shares);
     }
 
     function pool() external view returns (address) {
