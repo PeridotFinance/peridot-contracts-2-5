@@ -8,23 +8,26 @@ import "../contracts/PToken.sol";
 contract SupportMarket is Script {
     // Update these with your deployed addresses
     address constant PERIDOTTROLLER_ADDRESS =
-        0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
+        0x6D208789f0a978aF789A3C8Ba515749598940716;
     address constant PTOKEN_ADDRESS =
-        0x66468B168Ea8289982EBEd6617dFCFA981d1EF0C; // PErc20Delegator (Proxy) address
+        0x085FbF880F88f861B8A09e6aaB1E4618d79Ba1D4; // PErc20Delegator (Proxy) address
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATEMAIN");
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
 
         vm.startBroadcast(deployerPrivateKey);
 
         Peridottroller comptroller = Peridottroller(PERIDOTTROLLER_ADDRESS);
 
-        // Support the market
+        // Support the market (error 9 = MARKET_ALREADY_LISTED, which is OK)
         uint256 result = comptroller._supportMarket(PToken(PTOKEN_ADDRESS));
-        require(result == 0, "Failed to support market");
+        require(result == 0 || result == 9, "Failed to support market");
+        if (result == 9) {
+            console.log("Market already supported, skipping...");
+        }
 
         // Set collateral factor (75% for USDC)
-        uint256 collateralFactor = 0.35 * 1e18;
+        uint256 collateralFactor = 0.10 * 1e18;
         uint256 collateralResult = comptroller._setCollateralFactor(
             PToken(PTOKEN_ADDRESS),
             collateralFactor

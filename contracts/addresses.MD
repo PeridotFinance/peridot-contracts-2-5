@@ -224,8 +224,22 @@ JumpRateModelBoosted: 0x5710017eCdF44f39b5Ae885965140726B7d81099
 MorphoBoosted delegator Proxy Steakhouse AUSD(use this) deployed at: 0x4dd205ffc43627629B80A5FAC6feE421f3070ea9
 MorphoBoosted delegate Steakhouse AUSD implementation at: 0x38a9a4ef64cb4BFC4544bb219DCA117fb899f084
 
+MorphoBoosted delegator Proxy Steakhouse USDC(use this) deployed at: 0x085FbF880F88f861B8A09e6aaB1E4618d79Ba1D4
+MorphoBoosted delegate Steakhouse USDC implementation at: 0x737DAEF1e65712C544b50320D12F89e3f0Ab6423
+
 RewardDistributorMulti implementation: 0xFcACD88B863449f07dB8f009B33883E9413740b5
 RewardDistributorMulti proxy: 0xFb4EdBcFdED37A0318b02095F2d3Db4A438DeA40
+
+USDC/AUSD 0.01%
+Name: Peridot Pancake V3 LP
+Decimals: 6
+PancakeBoostedPErc20: 0x76d0A860e020f99b68d36adA91f2ab143db4ABf1
+LP Vault: 0x26043eE1E8Fa30FA7e0fF9afC02135ab71c20339
+Oracle: 0x06624E8d03A13F28828b8523bACa9568D154044E
+
+USDC/AUSD 0.05%
+Vault: 0x7CE92906F4f688039d352709e0d51F20CF1CD5ef
+Oracle: 0xdE4B59a5D6c888eB3148656B2D0297a6806b7c0E
 
 USDC(6 decimals): 0x754704Bc059F8C67012fEd69BC8A327a5aafb603
 earnAUSD(6 decimals): 0x103222f020e98Bba0AD9809A011FDF8e6F067496

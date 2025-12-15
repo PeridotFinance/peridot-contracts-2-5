@@ -18,6 +18,10 @@ remappings = [
     "solidity-bytes-utils/=lib/solidity-bytes-utils/"
 ]
 
+metadata = true
+metadata_hash = "none"  # disable ipfs
+use_literal_content = true # store source code in the json file directly
+
 # Use this profile only when you explicitly need IR builds
 [profile.ir]
 via_ir = true
