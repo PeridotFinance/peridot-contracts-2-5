@@ -39,11 +39,7 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
 
     event SettlementPriceSet(uint256 indexed tokenId, uint256 price);
 
-    constructor(
-        address _positionToken,
-        address _vaultExecutor,
-        address _priceOracle
-    ) Ownable(msg.sender) {
+    constructor(address _positionToken, address _vaultExecutor, address _priceOracle) Ownable(msg.sender) {
         require(_positionToken != address(0), "Invalid position token");
         require(_vaultExecutor != address(0), "Invalid vault executor");
         require(_priceOracle != address(0), "Invalid price oracle");
@@ -58,10 +54,7 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param tokenId Token ID to settle
      * @param user User address holding the position
      */
-    function settlePosition(
-        uint256 tokenId,
-        address user
-    ) external nonReentrant {
+    function settlePosition(uint256 tokenId, address user) external nonReentrant {
         _settlePositionInternal(tokenId, user);
     }
 
@@ -69,28 +62,17 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
     function _settlePositionInternal(uint256 tokenId, address user) internal {
         require(!isSettled[tokenId], "Position already settled");
 
-        ERC1155DualPosition.Position memory position = positionToken
-            .getPosition(tokenId);
+        ERC1155DualPosition.Position memory position = positionToken.getPosition(tokenId);
         require(position.user != address(0), "Position does not exist");
         require(block.timestamp >= position.expiry, "Position not yet expired");
-        require(
-            block.timestamp <= position.expiry + settlementWindow,
-            "Settlement window closed"
-        );
+        require(block.timestamp <= position.expiry + settlementWindow, "Settlement window closed");
 
         uint256 userBalance = positionToken.balanceOf(user, tokenId);
         require(userBalance > 0, "User has no position balance");
 
-        uint256 settlementPrice = _getSettlementPrice(
-            position.cTokenIn,
-            tokenId
-        );
+        uint256 settlementPrice = _getSettlementPrice(position.cTokenIn, tokenId);
 
-        (address winningCToken, uint256 payoutAmount) = _calculatePayout(
-            position,
-            settlementPrice,
-            userBalance
-        );
+        (address winningCToken, uint256 payoutAmount) = _calculatePayout(position, settlementPrice, userBalance);
 
         isSettled[tokenId] = true;
         settlementPrices[tokenId] = settlementPrice;
@@ -123,18 +105,16 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param tokenIds Array of token IDs to settle
      * @param users Array of user addresses (must match tokenIds length)
      */
-    function batchSettlePositions(
-        uint256[] calldata tokenIds,
-        address[] calldata users
-    ) external nonReentrant {
+    function batchSettlePositions(uint256[] calldata tokenIds, address[] calldata users) external nonReentrant {
         require(tokenIds.length == users.length, "Array length mismatch");
         require(tokenIds.length > 0, "Empty arrays");
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
             // Use try-catch via self-call to non-guarded helper to continue on failures
             try this.__settleInternalExternal(tokenIds[i], users[i]) {
-                // Settlement succeeded
-            } catch {
+            // Settlement succeeded
+            }
+            catch {
                 // Settlement failed, continue with next position
                 continue;
             }
@@ -147,10 +127,7 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param tokenId Token ID (for potential future price caching)
      * @return price Settlement price in 18 decimals
      */
-    function _getSettlementPrice(
-        address cToken,
-        uint256 tokenId
-    ) internal returns (uint256 price) {
+    function _getSettlementPrice(address cToken, uint256 tokenId) internal returns (uint256 price) {
         // Check if we already cached the settlement price
         if (settlementPrices[tokenId] != 0) {
             return settlementPrices[tokenId];
@@ -175,11 +152,11 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @return winningCToken Address of the winning cToken
      * @return payoutAmount Amount to pay out
      */
-    function _calculatePayout(
-        ERC1155DualPosition.Position memory position,
-        uint256 settlementPrice,
-        uint256 balance
-    ) internal pure returns (address winningCToken, uint256 payoutAmount) {
+    function _calculatePayout(ERC1155DualPosition.Position memory position, uint256 settlementPrice, uint256 balance)
+        internal
+        pure
+        returns (address winningCToken, uint256 payoutAmount)
+    {
         bool aboveStrike = settlementPrice >= position.strike;
 
         if (position.direction == 0) {
@@ -224,14 +201,10 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         } catch {
             exchangeRateOut = PErc20(payoutCToken).exchangeRateStored();
         }
-        uint256 underlyingOutRequested = (cTokenAmount * exchangeRateOut) /
-            1e18;
+        uint256 underlyingOutRequested = (cTokenAmount * exchangeRateOut) / 1e18;
 
         // First attempt: withdraw directly from payout market if the vault holds it
-        uint256 withdrawnOut = vaultExecutor.withdrawUnderlyingFromProtocol(
-            payoutCToken,
-            underlyingOutRequested
-        );
+        uint256 withdrawnOut = vaultExecutor.withdrawUnderlyingFromProtocol(payoutCToken, underlyingOutRequested);
         if (withdrawnOut > 0) {
             // Mint payoutCToken directly to user
             vaultExecutor.mintCTokensTo(payoutCToken, user, withdrawnOut);
@@ -251,26 +224,16 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         require(priceIn > 0 && priceOut > 0, "Invalid oracle price");
 
         // requiredIn = ceil(underlyingOutNeeded * priceOut / priceIn)
-        uint256 requiredIn = (underlyingOutNeeded * priceOut + priceIn - 1) /
-            priceIn;
+        uint256 requiredIn = (underlyingOutNeeded * priceOut + priceIn - 1) / priceIn;
         // Add small buffer (1%) to account for swap slippage without overcomplicating
         requiredIn = (requiredIn * 1001) / 1000;
 
         // Withdraw as much as required (vault clamps to available)
-        uint256 withdrawnIn = vaultExecutor.withdrawUnderlyingFromProtocol(
-            sourceCToken,
-            requiredIn
-        );
+        uint256 withdrawnIn = vaultExecutor.withdrawUnderlyingFromProtocol(sourceCToken, requiredIn);
 
         if (withdrawnIn > 0) {
             // Swap to payout underlying and mint payoutCToken to user; accept any amountOut (minOut=0 for simplicity)
-            vaultExecutor.swapAndMintTo(
-                sourceCToken,
-                payoutCToken,
-                user,
-                withdrawnIn,
-                0
-            );
+            vaultExecutor.swapAndMintTo(sourceCToken, payoutCToken, user, withdrawnIn, 0);
         }
     }
 
@@ -280,15 +243,12 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @return canSettle True if position can be settled
      * @return reason Reason if cannot settle
      */
-    function canSettlePosition(
-        uint256 tokenId
-    ) external view returns (bool canSettle, string memory reason) {
+    function canSettlePosition(uint256 tokenId) external view returns (bool canSettle, string memory reason) {
         if (isSettled[tokenId]) {
             return (false, "Already settled");
         }
 
-        ERC1155DualPosition.Position memory position = positionToken
-            .getPosition(tokenId);
+        ERC1155DualPosition.Position memory position = positionToken.getPosition(tokenId);
         if (position.user == address(0)) {
             return (false, "Position does not exist");
         }
@@ -311,16 +271,14 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @return settlementPrice Price used for settlement (0 if not settled)
      * @return canSettle Whether position can currently be settled
      */
-    function getSettlementInfo(
-        uint256 tokenId
-    )
+    function getSettlementInfo(uint256 tokenId)
         external
         view
         returns (bool settled, uint256 settlementPrice, bool canSettle)
     {
         settled = isSettled[tokenId];
         settlementPrice = settlementPrices[tokenId];
-        (canSettle, ) = this.canSettlePosition(tokenId);
+        (canSettle,) = this.canSettlePosition(tokenId);
     }
 
     /**
@@ -339,10 +297,7 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param tokenId Token ID to set price for
      * @param price Price to set
      */
-    function emergencySetSettlementPrice(
-        uint256 tokenId,
-        uint256 price
-    ) external onlyOwner {
+    function emergencySetSettlementPrice(uint256 tokenId, uint256 price) external onlyOwner {
         require(price > 0, "Invalid price");
         require(!isSettled[tokenId], "Position already settled");
 

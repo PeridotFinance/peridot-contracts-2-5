@@ -42,23 +42,10 @@ contract HybridStorkPriceOracle is PriceOracle {
     address public owner;
     IStork public storkContract;
 
-    event ManualPricePosted(
-        address indexed asset,
-        uint256 previousPriceMantissa,
-        uint256 newPriceMantissa
-    );
-    event ChainlinkFeedRegistered(
-        address indexed asset,
-        address indexed aggregator
-    );
-    event StorkFeedRegistered(
-        address indexed asset,
-        bytes32 indexed storkEncodedAssetID
-    );
-    event LastChainlinkPriceUpdated(
-        address indexed asset,
-        uint256 priceMantissa
-    );
+    event ManualPricePosted(address indexed asset, uint256 previousPriceMantissa, uint256 newPriceMantissa);
+    event ChainlinkFeedRegistered(address indexed asset, address indexed aggregator);
+    event StorkFeedRegistered(address indexed asset, bytes32 indexed storkEncodedAssetID);
+    event LastChainlinkPriceUpdated(address indexed asset, uint256 priceMantissa);
     event LastStorkPriceUpdated(address indexed asset, uint256 priceMantissa);
     event FeedPreferenceUpdated(address indexed asset, bool preferStork);
     event ExternalOracleUpdated(address indexed asset, address indexed oracle);
@@ -73,11 +60,7 @@ contract HybridStorkPriceOracle is PriceOracle {
         _;
     }
 
-    constructor(
-        uint256 _chainlinkStaleThreshold,
-        address _storkContractAddress,
-        uint256 _storkStaleThresholdSeconds
-    ) {
+    constructor(uint256 _chainlinkStaleThreshold, address _storkContractAddress, uint256 _storkStaleThresholdSeconds) {
         owner = msg.sender;
         admin[msg.sender] = true;
         chainlinkStaleThreshold = _chainlinkStaleThreshold;
@@ -89,19 +72,13 @@ contract HybridStorkPriceOracle is PriceOracle {
                         CORE PRICE RETRIEVAL
     //////////////////////////////////////////////////////////////*/
 
-    function getUnderlyingPrice(
-        PToken pToken
-    ) public view override returns (uint256) {
+    function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
         address asset = _getUnderlyingAddress(pToken);
         FeedConfig memory config = feedConfig[asset];
 
-        uint256 price = config.preferStork
-            ? _getStorkPrice(asset)
-            : _getChainlinkPrice(asset);
+        uint256 price = config.preferStork ? _getStorkPrice(asset) : _getChainlinkPrice(asset);
         if (price == 0) {
-            price = config.preferStork
-                ? _getChainlinkPrice(asset)
-                : _getStorkPrice(asset);
+            price = config.preferStork ? _getChainlinkPrice(asset) : _getStorkPrice(asset);
         }
 
         if (price == 0) {
@@ -120,9 +97,7 @@ contract HybridStorkPriceOracle is PriceOracle {
         return price;
     }
 
-    function _getUnderlyingAddress(
-        PToken pToken
-    ) internal view returns (address) {
+    function _getUnderlyingAddress(PToken pToken) internal view returns (address) {
         if (_compareStrings(pToken.symbol(), "pETH")) {
             return 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
         }
@@ -134,13 +109,10 @@ contract HybridStorkPriceOracle is PriceOracle {
         if (storkEncodedAssetID == bytes32(0)) {
             return 0;
         }
-        try
-            storkContract.getTemporalNumericValueUnsafeV1(storkEncodedAssetID)
-        returns (StorkStructs.TemporalNumericValue memory value) {
-            if (
-                value.timestampNs / 1000000000 <
-                block.timestamp - storkStaleThreshold
-            ) {
+        try storkContract.getTemporalNumericValueUnsafeV1(
+            storkEncodedAssetID
+        ) returns (StorkStructs.TemporalNumericValue memory value) {
+            if (value.timestampNs / 1000000000 < block.timestamp - storkStaleThreshold) {
                 // check if the price is stale by converting nanoseconds to seconds
                 return 0;
             }
@@ -156,35 +128,27 @@ contract HybridStorkPriceOracle is PriceOracle {
     }
 
     function _getChainlinkPrice(address asset) internal view returns (uint256) {
-        return
-            _readFeed(
-                chainlinkFeeds[asset],
-                chainlinkStaleThreshold,
-                lastValidChainlinkPrice[asset]
-            );
+        return _readFeed(chainlinkFeeds[asset], chainlinkStaleThreshold, lastValidChainlinkPrice[asset]);
     }
 
-    function _readFeed(
-        AggregatorV3Interface aggregator,
-        uint256 staleThreshold,
-        uint256 cachedPrice
-    ) internal view returns (uint256) {
+    function _readFeed(AggregatorV3Interface aggregator, uint256 staleThreshold, uint256 cachedPrice)
+        internal
+        view
+        returns (uint256)
+    {
         if (address(aggregator) == address(0)) {
             return 0;
         }
 
         try aggregator.latestRoundData() returns (
-            uint80 /* roundId */,
+            uint80, /* roundId */
             int256 price,
-            uint256 /* startedAt */,
+            uint256, /* startedAt */
             uint256 updatedAt,
             uint80 /* answeredInRound */
         ) {
             if (price > 0 && block.timestamp - updatedAt <= staleThreshold) {
-                uint256 priceMantissa = _scalePrice(
-                    uint256(price),
-                    aggregator.decimals()
-                );
+                uint256 priceMantissa = _scalePrice(uint256(price), aggregator.decimals());
                 return priceMantissa;
             }
         } catch {
@@ -194,10 +158,7 @@ contract HybridStorkPriceOracle is PriceOracle {
         return cachedPrice;
     }
 
-    function _scalePrice(
-        uint256 price,
-        uint8 decimals
-    ) internal pure returns (uint256) {
+    function _scalePrice(uint256 price, uint8 decimals) internal pure returns (uint256) {
         if (decimals < 18) {
             return price * (10 ** (18 - decimals));
         } else if (decimals > 18) {
@@ -210,10 +171,7 @@ contract HybridStorkPriceOracle is PriceOracle {
                         FEED MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function setManualPrice(
-        address asset,
-        uint256 priceMantissa
-    ) external onlyAdmin {
+    function setManualPrice(address asset, uint256 priceMantissa) external onlyAdmin {
         emit ManualPricePosted(asset, manualPrices[asset], priceMantissa);
         manualPrices[asset] = priceMantissa;
     }
@@ -224,10 +182,7 @@ contract HybridStorkPriceOracle is PriceOracle {
         emit ExternalOracleUpdated(asset, oracle);
     }
 
-    function registerChainlinkFeed(
-        address asset,
-        address aggregator
-    ) external onlyAdmin {
+    function registerChainlinkFeed(address asset, address aggregator) external onlyAdmin {
         require(aggregator != address(0), "HybridOracle: zero aggregator");
         chainlinkFeeds[asset] = AggregatorV3Interface(aggregator);
         emit ChainlinkFeedRegistered(asset, aggregator);
@@ -239,14 +194,8 @@ contract HybridStorkPriceOracle is PriceOracle {
         emit ChainlinkFeedRegistered(asset, address(0));
     }
 
-    function registerStorkFeed(
-        address asset,
-        bytes32 storkEncodedAssetID
-    ) external onlyAdmin {
-        require(
-            storkEncodedAssetID != bytes32(0),
-            "HybridOracle: zero stork encoded asset ID"
-        );
+    function registerStorkFeed(address asset, bytes32 storkEncodedAssetID) external onlyAdmin {
+        require(storkEncodedAssetID != bytes32(0), "HybridOracle: zero stork encoded asset ID");
         storkFeeds[asset] = storkEncodedAssetID;
         emit StorkFeedRegistered(asset, storkEncodedAssetID);
     }
@@ -262,15 +211,10 @@ contract HybridStorkPriceOracle is PriceOracle {
             address asset = assets[i];
             bytes32 storkEncodedAssetID = storkFeeds[asset];
             if (storkEncodedAssetID == bytes32(0)) continue;
-            try
-                storkContract.getTemporalNumericValueUnsafeV1(
-                    storkEncodedAssetID
-                )
-            returns (StorkStructs.TemporalNumericValue memory value) {
-                if (
-                    value.timestampNs / 1000000000 <
-                    block.timestamp - storkStaleThreshold
-                ) {
+            try storkContract.getTemporalNumericValueUnsafeV1(
+                storkEncodedAssetID
+            ) returns (StorkStructs.TemporalNumericValue memory value) {
+                if (value.timestampNs / 1000000000 < block.timestamp - storkStaleThreshold) {
                     // check if the price is stale by converting nanoseconds to seconds
                     continue;
                 }
@@ -289,13 +233,7 @@ contract HybridStorkPriceOracle is PriceOracle {
     }
 
     function updateChainlinkCache(address[] calldata assets) external {
-        _updateFeedCache(
-            assets,
-            chainlinkFeeds,
-            chainlinkStaleThreshold,
-            lastValidChainlinkPrice,
-            true
-        );
+        _updateFeedCache(assets, chainlinkFeeds, chainlinkStaleThreshold, lastValidChainlinkPrice, true);
     }
 
     function _updateFeedCache(
@@ -311,19 +249,14 @@ contract HybridStorkPriceOracle is PriceOracle {
             if (address(aggregator) == address(0)) continue;
 
             try aggregator.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
-                if (
-                    price > 0 && block.timestamp - updatedAt <= staleThreshold
-                ) {
-                    uint256 priceMantissa = _scalePrice(
-                        uint256(price),
-                        aggregator.decimals()
-                    );
+                if (price > 0 && block.timestamp - updatedAt <= staleThreshold) {
+                    uint256 priceMantissa = _scalePrice(uint256(price), aggregator.decimals());
                     cache[asset] = priceMantissa;
                     if (isChainlink) {
                         emit LastChainlinkPriceUpdated(asset, priceMantissa);
@@ -335,17 +268,12 @@ contract HybridStorkPriceOracle is PriceOracle {
         }
     }
 
-    function setFeedPreference(
-        address asset,
-        bool preferStork
-    ) external onlyAdmin {
+    function setFeedPreference(address asset, bool preferStork) external onlyAdmin {
         feedConfig[asset].preferStork = preferStork;
         emit FeedPreferenceUpdated(asset, preferStork);
     }
 
-    function setChainlinkStaleThreshold(
-        uint256 newThreshold
-    ) external onlyOwner {
+    function setChainlinkStaleThreshold(uint256 newThreshold) external onlyOwner {
         chainlinkStaleThreshold = newThreshold;
     }
 
@@ -354,9 +282,7 @@ contract HybridStorkPriceOracle is PriceOracle {
         storkContract = IStork(newStorkContract);
     }
 
-    function setStorkStaleThreshold(
-        uint256 newThresholdSeconds
-    ) external onlyOwner {
+    function setStorkStaleThreshold(uint256 newThresholdSeconds) external onlyOwner {
         storkStaleThreshold = newThresholdSeconds;
     }
 
@@ -376,10 +302,7 @@ contract HybridStorkPriceOracle is PriceOracle {
                              UTILITIES
     //////////////////////////////////////////////////////////////*/
 
-    function _compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
+    function _compareStrings(string memory a, string memory b) internal pure returns (bool) {
         return (keccak256(bytes(a)) == keccak256(bytes(b)));
     }
 }

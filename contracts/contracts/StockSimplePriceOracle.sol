@@ -30,16 +30,10 @@ contract StockSimplePriceOracle is PriceOracle {
 
     // Events (mirrors SimplePriceOracle for compatibility)
     event PricePosted(
-        address asset,
-        uint256 previousPriceMantissa,
-        uint256 requestedPriceMantissa,
-        uint256 newPriceMantissa
+        address asset, uint256 previousPriceMantissa, uint256 requestedPriceMantissa, uint256 newPriceMantissa
     );
     event ChainlinkFeedRegistered(address asset, address aggregator);
-    event LastChainlinkPriceUpdated(
-        address indexed asset,
-        uint256 priceMantissa
-    );
+    event LastChainlinkPriceUpdated(address indexed asset, uint256 priceMantissa);
     event StockAssetSet(address indexed asset, bool isStock);
 
     modifier onlyAdmin() {
@@ -61,9 +55,7 @@ contract StockSimplePriceOracle is PriceOracle {
 
     // --- Internal helpers ---
 
-    function _getUnderlyingAddress(
-        PToken pToken
-    ) private view returns (address) {
+    function _getUnderlyingAddress(PToken pToken) private view returns (address) {
         address asset;
         if (compareStrings(pToken.symbol(), "pETH")) {
             asset = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -74,25 +66,20 @@ contract StockSimplePriceOracle is PriceOracle {
     }
 
     function _thresholdFor(address asset) internal view returns (uint256) {
-        return
-            isStockAsset[asset]
-                ? stockChainlinkPriceStaleThreshold
-                : chainlinkPriceStaleThreshold;
+        return isStockAsset[asset] ? stockChainlinkPriceStaleThreshold : chainlinkPriceStaleThreshold;
     }
 
     // --- Oracle view ---
 
-    function getUnderlyingPrice(
-        PToken pToken
-    ) public view override returns (uint256) {
+    function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
         address asset = _getUnderlyingAddress(pToken);
         AggregatorV3Interface aggregator = assetToAggregator[asset];
 
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
@@ -129,9 +116,9 @@ contract StockSimplePriceOracle is PriceOracle {
         AggregatorV3Interface aggregator = assetToAggregator[asset];
         if (address(aggregator) != address(0)) {
             try aggregator.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
@@ -166,13 +153,7 @@ contract StockSimplePriceOracle is PriceOracle {
         if (address(aggregator) == address(0)) {
             return true;
         }
-        try aggregator.latestRoundData() returns (
-            uint80,
-            int256 price,
-            uint256,
-            uint256 updatedAt,
-            uint80
-        ) {
+        try aggregator.latestRoundData() returns (uint80, int256 price, uint256, uint256 updatedAt, uint80) {
             uint256 threshold = _thresholdFor(asset);
             return (block.timestamp - updatedAt > threshold || price <= 0);
         } catch {
@@ -182,17 +163,9 @@ contract StockSimplePriceOracle is PriceOracle {
 
     // --- Admin setters ---
 
-    function setUnderlyingPrice(
-        PToken pToken,
-        uint256 underlyingPriceMantissa
-    ) public onlyAdmin {
+    function setUnderlyingPrice(PToken pToken, uint256 underlyingPriceMantissa) public onlyAdmin {
         address asset = _getUnderlyingAddress(pToken);
-        emit PricePosted(
-            asset,
-            prices[asset],
-            underlyingPriceMantissa,
-            underlyingPriceMantissa
-        );
+        emit PricePosted(asset, prices[asset], underlyingPriceMantissa, underlyingPriceMantissa);
         prices[asset] = underlyingPriceMantissa;
     }
 
@@ -201,10 +174,7 @@ contract StockSimplePriceOracle is PriceOracle {
         prices[asset] = price;
     }
 
-    function registerChainlinkFeed(
-        address asset,
-        address aggregator
-    ) public onlyAdmin {
+    function registerChainlinkFeed(address asset, address aggregator) public onlyAdmin {
         require(aggregator != address(0), "Invalid aggregator");
         assetToAggregator[asset] = AggregatorV3Interface(aggregator);
         emit ChainlinkFeedRegistered(asset, aggregator);
@@ -224,9 +194,9 @@ contract StockSimplePriceOracle is PriceOracle {
             AggregatorV3Interface aggregator = assetToAggregator[asset];
             if (address(aggregator) != address(0)) {
                 try aggregator.latestRoundData() returns (
-                    uint80 /* roundId */,
+                    uint80, /* roundId */
                     int256 price,
-                    uint256 /* startedAt */,
+                    uint256, /* startedAt */
                     uint256 updatedAt,
                     uint80 /* answeredInRound */
                 ) {
@@ -235,13 +205,9 @@ contract StockSimplePriceOracle is PriceOracle {
                         uint8 decimals = aggregator.decimals();
                         uint256 priceMantissa = uint256(price);
                         if (decimals < 18) {
-                            priceMantissa =
-                                priceMantissa *
-                                (10 ** (18 - decimals));
+                            priceMantissa = priceMantissa * (10 ** (18 - decimals));
                         } else if (decimals > 18) {
-                            priceMantissa =
-                                priceMantissa /
-                                (10 ** (decimals - 18));
+                            priceMantissa = priceMantissa / (10 ** (decimals - 18));
                         }
                         lastValidChainlinkPrice[asset] = priceMantissa;
                         emit LastChainlinkPriceUpdated(asset, priceMantissa);
@@ -252,15 +218,11 @@ contract StockSimplePriceOracle is PriceOracle {
     }
 
     // Roles & thresholds
-    function setChainlinkStaleThreshold(
-        uint256 _newThreshold
-    ) public onlyOwner {
+    function setChainlinkStaleThreshold(uint256 _newThreshold) public onlyOwner {
         chainlinkPriceStaleThreshold = _newThreshold;
     }
 
-    function setStockChainlinkStaleThreshold(
-        uint256 _newThreshold
-    ) public onlyOwner {
+    function setStockChainlinkStaleThreshold(uint256 _newThreshold) public onlyOwner {
         stockChainlinkPriceStaleThreshold = _newThreshold;
     }
 
@@ -282,11 +244,7 @@ contract StockSimplePriceOracle is PriceOracle {
     }
 
     // Utility
-    function compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) ==
-            keccak256(abi.encodePacked((b))));
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 }

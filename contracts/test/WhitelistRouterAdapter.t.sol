@@ -60,14 +60,8 @@ contract WhitelistRouterAdapterTest is Test {
         uint256 balanceInBefore = tokenIn.balanceOf(address(this));
         uint256 balanceOutBefore = tokenOut.balanceOf(address(this));
 
-        uint256 amountOut = adapter.swap(
-            address(this),
-            address(tokenIn),
-            address(tokenOut),
-            amountIn,
-            outputAmount,
-            data
-        );
+        uint256 amountOut =
+            adapter.swap(address(this), address(tokenIn), address(tokenOut), amountIn, outputAmount, data);
 
         assertEq(amountOut, outputAmount, "amount out");
         assertEq(tokenOut.balanceOf(address(this)), balanceOutBefore + outputAmount, "received output tokens");

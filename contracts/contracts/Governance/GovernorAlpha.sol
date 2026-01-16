@@ -151,7 +151,8 @@ contract GovernorAlpha {
             "GovernorAlpha::propose: proposer votes below proposal threshold"
         );
         require(
-            targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length,
+            targets.length == values.length && targets.length == signatures.length
+                && targets.length == calldatas.length,
             "GovernorAlpha::propose: proposal function information arity mismatch"
         );
         require(targets.length != 0, "GovernorAlpha::propose: must provide actions");
@@ -232,9 +233,9 @@ contract GovernorAlpha {
         Proposal storage proposal = proposals[proposalId];
         proposal.executed = true;
         for (uint256 i = 0; i < proposal.targets.length; i++) {
-            timelock.executeTransaction{value: proposal.values[i]}(
-                proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], proposal.eta
-            );
+            timelock.executeTransaction{
+                value: proposal.values[i]
+            }(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], proposal.eta);
         }
         emit ProposalExecuted(proposalId);
     }

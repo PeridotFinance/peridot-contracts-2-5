@@ -109,23 +109,16 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         bytes memory encoded = abi.encode(data);
 
         require(
-            PErc20(debtCToken).flashLoan(
-                IERC3156FlashBorrower(address(this)),
-                borrowUnderlying,
-                repayAmount,
-                encoded
-            ),
+            PErc20(debtCToken).flashLoan(IERC3156FlashBorrower(address(this)), borrowUnderlying, repayAmount, encoded),
             "Liquidation: flashloan failed"
         );
     }
 
-    function onFlashLoan(
-        address initiator,
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external override returns (bytes32) {
+    function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)
+        external
+        override
+        returns (bytes32)
+    {
         require(initiator == address(this), "Liquidation: bad initiator");
 
         FlashCallbackData memory params = abi.decode(data, (FlashCallbackData));
@@ -140,11 +133,8 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
 
         uint256 cTokenBalanceBefore = IERC20(params.collateralCToken).balanceOf(address(this));
 
-        uint256 liquidateResult = PErc20(params.debtCToken).liquidateBorrow(
-            params.sma,
-            amount,
-            PTokenInterface(params.collateralCToken)
-        );
+        uint256 liquidateResult =
+            PErc20(params.debtCToken).liquidateBorrow(params.sma, amount, PTokenInterface(params.collateralCToken));
         require(liquidateResult == 0, "Liquidation: liquidate failed");
         borrowToken.forceApprove(params.debtCToken, 0);
 
@@ -161,14 +151,15 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         if (params.swap.adapter != address(0)) {
             require(allowedAdapters[params.swap.adapter], "Liquidation: adapter not allowed");
             collateralToken.forceApprove(params.swap.adapter, collateralBalance);
-            uint256 amountOut = IMarginRouterAdapter(params.swap.adapter).swap(
-                address(this),
-                params.collateralUnderlying,
-                params.borrowUnderlying,
-                collateralBalance,
-                params.swap.minAmountOut,
-                params.swap.data
-            );
+            uint256 amountOut = IMarginRouterAdapter(params.swap.adapter)
+                .swap(
+                    address(this),
+                    params.collateralUnderlying,
+                    params.borrowUnderlying,
+                    collateralBalance,
+                    params.swap.minAmountOut,
+                    params.swap.data
+                );
             collateralToken.forceApprove(params.swap.adapter, 0);
             require(amountOut >= params.swap.minAmountOut, "Liquidation: swap min out");
         } else {
@@ -196,15 +187,7 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
             collateralToken.safeTransfer(params.recipient, residualCollateral);
         }
 
-        emit Liquidated(
-            params.caller,
-            params.user,
-            params.debtCToken,
-            params.collateralCToken,
-            amount,
-            fee,
-            profit
-        );
+        emit Liquidated(params.caller, params.user, params.debtCToken, params.collateralCToken, amount, fee, profit);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }

@@ -81,11 +81,7 @@ contract JumpRateModelBoosted is InterestRateModel {
     /**
      * @notice Calculates the utilization rate of the market: `borrows / (cash + borrows - reserves)`.
      */
-    function utilizationRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves
-    ) public pure returns (uint256) {
+    function utilizationRate(uint256 cash, uint256 borrows, uint256 reserves) public pure returns (uint256) {
         if (borrows == 0) {
             return 0;
         }
@@ -99,11 +95,7 @@ contract JumpRateModelBoosted is InterestRateModel {
     /**
      * @inheritdoc InterestRateModel
      */
-    function getBorrowRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves
-    ) public view override returns (uint256) {
+    function getBorrowRate(uint256 cash, uint256 borrows, uint256 reserves) public view override returns (uint256) {
         uint256 util = utilizationRate(cash, borrows, reserves);
         uint256 ratePerSecond;
 
@@ -126,12 +118,12 @@ contract JumpRateModelBoosted is InterestRateModel {
     /**
      * @inheritdoc InterestRateModel
      */
-    function getSupplyRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves,
-        uint256 reserveFactorMantissa_
-    ) external view override returns (uint256) {
+    function getSupplyRate(uint256 cash, uint256 borrows, uint256 reserves, uint256 reserveFactorMantissa_)
+        external
+        view
+        override
+        returns (uint256)
+    {
         uint256 util = utilizationRate(cash, borrows, reserves);
         uint256 borrowRate = getBorrowRate(cash, borrows, reserves);
 
@@ -143,17 +135,17 @@ contract JumpRateModelBoosted is InterestRateModel {
      * @notice View helper: approximate blended supplier APY including the external yield target.
      * @dev This is informational only; it assumes targetMorphoSupplyAPY as the external yield input.
      */
-    function getBoostedSupplyRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves,
-        uint256 reserveFactorMantissa_
-    ) external view returns (uint256) {
+    function getBoostedSupplyRate(uint256 cash, uint256 borrows, uint256 reserves, uint256 reserveFactorMantissa_)
+        external
+        view
+        returns (uint256)
+    {
         uint256 util = utilizationRate(cash, borrows, reserves);
         uint256 borrowRateYear = getBorrowRate(cash, borrows, reserves) * SECONDS_PER_YEAR;
 
         // Borrow-derived supply component
-        uint256 supplyFromBorrows = (util * borrowRateYear * (MANTISSA_ONE - reserveFactorMantissa_)) / (MANTISSA_ONE * MANTISSA_ONE);
+        uint256 supplyFromBorrows =
+            (util * borrowRateYear * (MANTISSA_ONE - reserveFactorMantissa_)) / (MANTISSA_ONE * MANTISSA_ONE);
 
         // Blended: (1 - U) * targetMorpho + U * supplyFromBorrows
         uint256 blended = ((MANTISSA_ONE - util) * targetMorphoSupplyAPY + util * supplyFromBorrows) / MANTISSA_ONE;

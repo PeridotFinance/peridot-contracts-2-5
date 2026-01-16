@@ -33,13 +33,14 @@ contract DeployPancakeBoostedDelegator is Script {
     address constant DEFAULT_PERIDOTTROLLER =
         0x6D208789f0a978aF789A3C8Ba515749598940716;
     address constant DEFAULT_IRM = 0x5710017eCdF44f39b5Ae885965140726B7d81099; // JumpRateModelBoosted
+    address constant DEFAULT_VAULT = 0x7CE92906F4f688039d352709e0d51F20CF1CD5ef; // AUSD/USDC 0.05% V3LPVault
 
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 
-        // Required
-        address vault = vm.envAddress("VAULT_ADDRESS");
+        // Vault address (with default for 0.05% pool)
+        address vault = _tryEnvAddress("VAULT_ADDRESS", DEFAULT_VAULT);
 
         // Optional with defaults
         address peridottroller = _tryEnvAddress(

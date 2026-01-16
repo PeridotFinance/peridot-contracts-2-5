@@ -6,10 +6,12 @@
   "scripts": {
     "bridge": "node axelar-bridge.js",
     "bridge:wbnb": "node axelar-bridge.js --token WBNB --amount 0.1 --recipient",
-    "bridge:bnb": "node axelar-bridge.js --token BNB --amount 0.1 --recipient"
+    "bridge:bnb": "node axelar-bridge.js --token BNB --amount 0.1 --recipient",
+    "wormhole:submit-vaa": "node wormhole-submit-vaa.js"
   },
   "dependencies": {
     "@axelar-network/axelarjs-sdk": "^0.15.0",
+    "@wormhole-foundation/sdk": "^4.7.3",
     "ethers": "^6.8.0"
   },
   "devDependencies": {

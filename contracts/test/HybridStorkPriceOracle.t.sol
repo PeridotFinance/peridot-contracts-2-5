@@ -52,31 +52,17 @@ contract MockAggregator is AggregatorV3Interface {
         public
         view
         override
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         require(!_shouldRevert, "MockAggregator: revert");
         return (_roundId, _answer, _updatedAt, _updatedAt, _roundId);
     }
 
-    function getRoundData(
-        uint80
-    )
+    function getRoundData(uint80)
         external
         view
         override
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return latestRoundData();
     }
@@ -100,14 +86,9 @@ contract MockStorkContract {
     mapping(bytes32 => StorkStructs.TemporalNumericValue) internal values;
     bool public shouldRevert;
 
-    function setValue(
-        bytes32 id,
-        int192 quantizedValue,
-        uint64 timestampSec
-    ) external {
+    function setValue(bytes32 id, int192 quantizedValue, uint64 timestampSec) external {
         values[id] = StorkStructs.TemporalNumericValue({
-            timestampNs: timestampSec * 1_000_000_000,
-            quantizedValue: quantizedValue
+            timestampNs: timestampSec * 1_000_000_000, quantizedValue: quantizedValue
         });
     }
 
@@ -115,9 +96,11 @@ contract MockStorkContract {
         shouldRevert = value;
     }
 
-    function getTemporalNumericValueUnsafeV1(
-        bytes32 id
-    ) external view returns (StorkStructs.TemporalNumericValue memory value) {
+    function getTemporalNumericValueUnsafeV1(bytes32 id)
+        external
+        view
+        returns (StorkStructs.TemporalNumericValue memory value)
+    {
         require(!shouldRevert, "MockStork: revert");
         value = values[id];
         require(value.timestampNs != 0, "MockStork: no value");
@@ -154,11 +137,7 @@ contract HybridStorkPriceOracleTest is Test {
     function testReturnsStorkPriceWhenPreferred() public {
         oracle.registerChainlinkFeed(asset, address(chainlinkFeed));
         oracle.registerStorkFeed(asset, STORK_ID);
-        storkContract.setValue(
-            STORK_ID,
-            int192(104e18),
-            uint64(block.timestamp)
-        );
+        storkContract.setValue(STORK_ID, int192(104e18), uint64(block.timestamp));
         oracle.setFeedPreference(asset, true);
 
         uint256 price = oracle.getUnderlyingPrice(PToken(address(pToken)));
@@ -168,35 +147,19 @@ contract HybridStorkPriceOracleTest is Test {
     function testFallsBackFromPreferredToSecondaryFeed() public {
         oracle.registerChainlinkFeed(asset, address(chainlinkFeed));
         oracle.registerStorkFeed(asset, STORK_ID);
-        storkContract.setValue(
-            STORK_ID,
-            int192(104e18),
-            uint64(block.timestamp)
-        );
+        storkContract.setValue(STORK_ID, int192(104e18), uint64(block.timestamp));
         oracle.setFeedPreference(asset, true);
 
         // make stork stale
-        storkContract.setValue(
-            STORK_ID,
-            int192(104e18),
-            uint64(block.timestamp - 4000)
-        );
+        storkContract.setValue(STORK_ID, int192(104e18), uint64(block.timestamp - 4000));
 
         uint256 price = oracle.getUnderlyingPrice(PToken(address(pToken)));
-        assertEq(
-            price,
-            105e18,
-            "should fall back to Chainlink price when Stork stale"
-        );
+        assertEq(price, 105e18, "should fall back to Chainlink price when Stork stale");
     }
 
     function testUsesCachedPriceWhenFeedReverts() public {
         oracle.registerStorkFeed(asset, STORK_ID);
-        storkContract.setValue(
-            STORK_ID,
-            int192(104e18),
-            uint64(block.timestamp)
-        );
+        storkContract.setValue(STORK_ID, int192(104e18), uint64(block.timestamp));
         oracle.setFeedPreference(asset, true);
 
         // prime cache
@@ -206,11 +169,7 @@ contract HybridStorkPriceOracleTest is Test {
         storkContract.setShouldRevert(true);
 
         uint256 price = oracle.getUnderlyingPrice(PToken(address(pToken)));
-        assertEq(
-            price,
-            104e18,
-            "should use cached Stork price when feed reverts"
-        );
+        assertEq(price, 104e18, "should use cached Stork price when feed reverts");
     }
 
     function testFallsBackToManualPrice() public {
@@ -220,10 +179,6 @@ contract HybridStorkPriceOracleTest is Test {
         oracle.setManualPrice(asset, 99e18);
 
         uint256 price = oracle.getUnderlyingPrice(PToken(address(pToken)));
-        assertEq(
-            price,
-            99e18,
-            "should return manual price when no feeds available"
-        );
+        assertEq(price, 99e18, "should return manual price when no feeds available");
     }
 }

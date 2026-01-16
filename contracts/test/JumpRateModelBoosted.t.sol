@@ -10,10 +10,10 @@ contract JumpRateModelBoostedTest is Test {
     // Params under test (stables baseline)
     uint256 internal constant BASE = 0;
     uint256 internal constant MULT = 0.08e18; // 8%/year
-    uint256 internal constant JUMP = 0.20e18; // 20%/year
+    uint256 internal constant JUMP = 0.2e18; // 20%/year
     uint256 internal constant KINK = 0.25e18; // 25% util
     uint256 internal constant TARGET_MORPHO = 0.05e18; // 5% target APY
-    uint256 internal constant RF = 0.10e18; // 10% reserve factor
+    uint256 internal constant RF = 0.1e18; // 10% reserve factor
     uint256 internal constant MARGIN = 0.05e18; // +5%
 
     function setUp() public {

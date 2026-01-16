@@ -19,9 +19,7 @@ interface IPancakeV3Router {
         uint160 sqrtPriceLimitX96;
     }
 
-    function exactInputSingle(
-        ExactInputSingleParams calldata params
-    ) external returns (uint256 amountOut);
+    function exactInputSingle(ExactInputSingleParams calldata params) external returns (uint256 amountOut);
 }
 
 contract PancakeV3RouterAdapter is IMarginRouterAdapter, Ownable {
@@ -39,12 +37,7 @@ contract PancakeV3RouterAdapter is IMarginRouterAdapter, Ownable {
 
     event ManagerUpdated(address indexed newManager);
     event RouterUpdated(address indexed newRouter);
-    event PoolWhitelistUpdated(
-        address indexed token0,
-        address indexed token1,
-        uint24 fee,
-        bool allowed
-    );
+    event PoolWhitelistUpdated(address indexed token0, address indexed token1, uint24 fee, bool allowed);
     event OperatorUpdated(address indexed operator, bool allowed);
     event SwapExecuted(
         address indexed fromAccount,
@@ -87,12 +80,7 @@ contract PancakeV3RouterAdapter is IMarginRouterAdapter, Ownable {
         emit RouterUpdated(newRouter);
     }
 
-    function setPoolWhitelist(
-        address tokenA,
-        address tokenB,
-        uint24 fee,
-        bool allowed
-    ) external onlyOwner {
+    function setPoolWhitelist(address tokenA, address tokenB, uint24 fee, bool allowed) external onlyOwner {
         bytes32 key = _poolKey(tokenA, tokenB, fee);
         poolWhitelist[key] = PoolConfig({allowed: allowed});
         poolWhitelist[_poolKey(tokenB, tokenA, fee)] = PoolConfig({allowed: allowed});
@@ -108,10 +96,7 @@ contract PancakeV3RouterAdapter is IMarginRouterAdapter, Ownable {
         bytes calldata data
     ) external override onlyOperator returns (uint256 amountOut) {
         require(amountIn > 0, "Adapter: zero amount");
-        (uint24 fee, uint160 sqrtPriceLimitX96) = abi.decode(
-            data,
-            (uint24, uint160)
-        );
+        (uint24 fee, uint160 sqrtPriceLimitX96) = abi.decode(data, (uint24, uint160));
 
         bytes32 key = _poolKey(tokenIn, tokenOut, fee);
         PoolConfig memory config = poolWhitelist[key];
@@ -148,11 +133,7 @@ contract PancakeV3RouterAdapter is IMarginRouterAdapter, Ownable {
         emit SwapExecuted(fromAccount, tokenIn, tokenOut, amountIn, amountOut);
     }
 
-    function _poolKey(
-        address tokenA,
-        address tokenB,
-        uint24 fee
-    ) private pure returns (bytes32) {
+    function _poolKey(address tokenA, address tokenB, uint24 fee) private pure returns (bytes32) {
         return keccak256(abi.encode(tokenA, tokenB, fee));
     }
 }

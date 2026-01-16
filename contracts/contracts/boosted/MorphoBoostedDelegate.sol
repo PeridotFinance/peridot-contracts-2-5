@@ -10,9 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./RewardDistributorMulti.sol";
 
 interface IMerklDistributor {
-    function claim(address account, address token, uint256 amount, bytes32[] calldata proof)
-        external
-        returns (uint256);
+    function claim(address account, address token, uint256 amount, bytes32[] calldata proof) external returns (uint256);
 }
 
 /**
@@ -48,11 +46,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     event RewardsHarvested(address[] rewardTokens);
     event RewardsConfigUpdated(address distributor);
     event RewardTokenAdded(address rewardToken);
-    event RewardClaimed(
-        address indexed user,
-        address indexed reward,
-        uint256 amount
-    );
+    event RewardClaimed(address indexed user, address indexed reward, uint256 amount);
 
     /**
      * @notice Called when becoming the implementation for a delegator.
@@ -61,10 +55,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     function _becomeImplementation(bytes memory data) public override {
         require(msg.sender == admin, "only admin");
         if (data.length > 0) {
-            (address vault_, uint256 buffer_) = abi.decode(
-                data,
-                (address, uint256)
-            );
+            (address vault_, uint256 buffer_) = abi.decode(data, (address, uint256));
             if (vault_ != address(0)) {
                 morphoVault = IERC4626(vault_);
                 vaultBufferMantissa = buffer_;
@@ -104,13 +95,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         vaultBufferMantissa = vaultBufferMantissa_;
 
         super.initialize(
-            underlying_,
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
+            underlying_, peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_
         );
     }
 
@@ -148,10 +133,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         emit RewardTokenAdded(rewardToken);
     }
 
-    function _setRewardDistributor(
-        address rewardToken,
-        address distributor
-    ) external {
+    function _setRewardDistributor(address rewardToken, address distributor) external {
         require(msg.sender == admin, "only admin");
         rewardDistributors[rewardToken] = distributor;
     }
@@ -174,31 +156,24 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     function harvestRewards() external nonReentrant {
         accrueInterest();
         if (rewardDistributor != address(0) && rewardTokens.length > 0) {
-            try
-                IRewardsDistributor(rewardDistributor).claim(
-                    address(this),
-                    rewardTokens
-                )
-            {} catch {}
+            try IRewardsDistributor(rewardDistributor).claim(address(this), rewardTokens) {} catch {}
         }
         _forwardRewardsToDistributors();
         emit RewardsHarvested(rewardTokens);
     }
 
     /// @notice Claim Merkl/URD rewards using provided proofs; forwards claimed balances to distributors.
-    function claimMerklRewards(
-        address[] calldata tokens,
-        uint256[] calldata amounts,
-        bytes32[][] calldata proofs
-    ) external nonReentrant {
+    function claimMerklRewards(address[] calldata tokens, uint256[] calldata amounts, bytes32[][] calldata proofs)
+        external
+        nonReentrant
+    {
         require(tokens.length == amounts.length && amounts.length == proofs.length, "length mismatch");
         require(rewardDistributor != address(0), "distributor not set");
         for (uint256 i = 0; i < tokens.length; i++) {
             address token = tokens[i];
             if (!isRewardToken[token]) continue;
-            try IMerklDistributor(rewardDistributor).claim(address(this), token, amounts[i], proofs[i]) returns (
-                uint256 claimed
-            ) {
+            try IMerklDistributor(rewardDistributor)
+                .claim(address(this), token, amounts[i], proofs[i]) returns (uint256 claimed) {
                 emit RewardClaimed(address(this), token, claimed);
             } catch {}
         }
@@ -215,13 +190,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
             uint256 bal = IERC20(rToken).balanceOf(address(this));
             if (bal == 0) continue;
             IERC20(rToken).forceApprove(dist, bal);
-            try
-                RewardDistributorMulti(dist).addReward(
-                    address(this),
-                    rToken,
-                    bal
-                )
-            {} catch {}
+            try RewardDistributorMulti(dist).addReward(address(this), rToken, bal) {} catch {}
         }
     }
 
@@ -230,19 +199,13 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         return super.getCashPrior() + _vaultWithdrawable();
     }
 
-    function doTransferIn(
-        address from,
-        uint256 amount
-    ) internal override returns (uint256) {
+    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         uint256 actual = super.doTransferIn(from, amount);
         _rebalanceVault();
         return actual;
     }
 
-    function doTransferOut(
-        address payable to,
-        uint256 amount
-    ) internal override {
+    function doTransferOut(address payable to, uint256 amount) internal override {
         _ensureLocalLiquidity(amount);
         super.doTransferOut(to, amount);
         _rebalanceVault();
@@ -282,9 +245,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         emit VaultDeposited(amount, shares);
     }
 
-    function _withdrawFromVault(
-        uint256 amount
-    ) internal returns (uint256 withdrawn) {
+    function _withdrawFromVault(uint256 amount) internal returns (uint256 withdrawn) {
         if (amount == 0) return 0;
         uint256 maxAvail = _vaultWithdrawable();
         require(maxAvail >= amount, "vault shortfall");

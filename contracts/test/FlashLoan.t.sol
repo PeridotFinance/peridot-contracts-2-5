@@ -27,25 +27,15 @@ contract TestPToken is PToken {
         return MockErc20(_underlying).balanceOf(address(this));
     }
 
-    function doTransferIn(
-        address from,
-        uint256 amount
-    ) internal override returns (uint256) {
+    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         uint256 balBefore = MockErc20(_underlying).balanceOf(address(this));
-        bool ok = MockErc20(_underlying).transferFrom(
-            from,
-            address(this),
-            amount
-        );
+        bool ok = MockErc20(_underlying).transferFrom(from, address(this), amount);
         require(ok, "transferFrom failed");
         uint256 balAfter = MockErc20(_underlying).balanceOf(address(this));
         return balAfter - balBefore;
     }
 
-    function doTransferOut(
-        address payable to,
-        uint256 amount
-    ) internal override {
+    function doTransferOut(address payable to, uint256 amount) internal override {
         bool ok = MockErc20(_underlying).transfer(to, amount);
         require(ok, "transfer failed");
     }
@@ -53,23 +43,17 @@ contract TestPToken is PToken {
 
 // Simple borrower that repays principal + fee in callback
 contract TestFlashBorrower is IERC3156FlashBorrower {
-    bytes32 private constant CALLBACK_SUCCESS =
-        keccak256("ERC3156FlashBorrower.onFlashLoan");
+    bytes32 private constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
-    function onFlashLoan(
-        address initiator,
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external override returns (bytes32) {
+    function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)
+        external
+        override
+        returns (bytes32)
+    {
         // Use funds according to test case, then repay lender (msg.sender)
         // For tests we just send the funds back immediately
         // Ensure we have enough to cover fee
-        require(
-            MockErc20(token).balanceOf(address(this)) >= amount + fee,
-            "insufficient for fee"
-        );
+        require(MockErc20(token).balanceOf(address(this)) >= amount + fee, "insufficient for fee");
         MockErc20(token).transfer(msg.sender, amount + fee);
         return CALLBACK_SUCCESS;
     }
@@ -104,12 +88,8 @@ contract FlashLoanTest is Test {
         uint256 amount = 1_000 ether;
 
         // Execute flash loan
-        bool ok = IERC3156FlashLender(address(pToken)).flashLoan(
-            IERC3156FlashBorrower(address(borrower)),
-            address(underlying),
-            amount,
-            bytes("")
-        );
+        bool ok = IERC3156FlashLender(address(pToken))
+            .flashLoan(IERC3156FlashBorrower(address(borrower)), address(underlying), amount, bytes(""));
         assertTrue(ok);
         // Fee added to reserves
         uint256 fee = (amount * pToken.flashLoanFeeBps()) / 10000;
@@ -121,12 +101,8 @@ contract FlashLoanTest is Test {
         pToken._setFlashLoansPaused(true);
         uint256 amount = 1 ether;
         vm.expectRevert(bytes("FlashLoan: flash loans are paused"));
-        IERC3156FlashLender(address(pToken)).flashLoan(
-            IERC3156FlashBorrower(address(borrower)),
-            address(underlying),
-            amount,
-            bytes("")
-        );
+        IERC3156FlashLender(address(pToken))
+            .flashLoan(IERC3156FlashBorrower(address(borrower)), address(underlying), amount, bytes(""));
     }
 
     function test_flashLoan_exceeds_max_reverts() public {
@@ -134,22 +110,14 @@ contract FlashLoanTest is Test {
         uint256 maxLoan = (cash * pToken.maxFlashLoanRatio()) / 10000;
         uint256 amount = maxLoan + 1;
         vm.expectRevert(bytes("FlashLoan: amount exceeds maximum"));
-        IERC3156FlashLender(address(pToken)).flashLoan(
-            IERC3156FlashBorrower(address(borrower)),
-            address(underlying),
-            amount,
-            bytes("")
-        );
+        IERC3156FlashLender(address(pToken))
+            .flashLoan(IERC3156FlashBorrower(address(borrower)), address(underlying), amount, bytes(""));
     }
 
     function test_flashLoan_wrong_token_reverts() public {
         MockErc20 other = new MockErc20("Other", "OTH", 18);
         vm.expectRevert(bytes("FlashLoan: token not supported"));
-        IERC3156FlashLender(address(pToken)).flashLoan(
-            IERC3156FlashBorrower(address(borrower)),
-            address(other),
-            1 ether,
-            bytes("")
-        );
+        IERC3156FlashLender(address(pToken))
+            .flashLoan(IERC3156FlashBorrower(address(borrower)), address(other), 1 ether, bytes(""));
     }
 }

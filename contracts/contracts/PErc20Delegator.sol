@@ -187,8 +187,9 @@ contract PErc20Delegator is PTokenInterface, PErc20Interface, CDelegatorInterfac
      * @return Whether or not the transfer succeeded
      */
     function transferFrom(address src, address dst, uint256 amount) external override returns (bool) {
-        bytes memory data =
-            delegateToImplementation(abi.encodeWithSignature("transferFrom(address,address,uint256)", src, dst, amount));
+        bytes memory data = delegateToImplementation(
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", src, dst, amount)
+        );
         return abi.decode(data, (bool));
     }
 

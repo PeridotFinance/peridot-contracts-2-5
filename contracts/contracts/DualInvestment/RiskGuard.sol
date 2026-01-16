@@ -35,16 +35,8 @@ contract RiskGuard is Ownable {
     mapping(address => bool) public marketsPaused;
 
     // Events
-    event RiskParameterUpdated(
-        string parameter,
-        uint256 oldValue,
-        uint256 newValue
-    );
-    event UserPositionValueUpdated(
-        address indexed user,
-        uint256 oldValue,
-        uint256 newValue
-    );
+    event RiskParameterUpdated(string parameter, uint256 oldValue, uint256 newValue);
+    event UserPositionValueUpdated(address indexed user, uint256 oldValue, uint256 newValue);
     event MarketUtilizationUpdated(address indexed market, uint256 utilization);
     event EmergencyPaused(bool paused);
     event MarketPaused(address indexed market, bool paused);
@@ -60,10 +52,7 @@ contract RiskGuard is Ownable {
         _;
     }
 
-    constructor(
-        address _peridottroller,
-        address _priceOracle
-    ) Ownable(msg.sender) {
+    constructor(address _peridottroller, address _priceOracle) Ownable(msg.sender) {
         require(_peridottroller != address(0), "Invalid peridottroller");
         require(_priceOracle != address(0), "Invalid price oracle");
         peridottroller = PeridottrollerInterface(_peridottroller);
@@ -79,12 +68,10 @@ contract RiskGuard is Ownable {
      * @return allowed Whether position is allowed
      * @return reason Reason if not allowed
      */
-    function checkPositionEntry(
-        address user,
-        address cTokenIn,
-        uint256 positionValue,
-        bool useCollateral
-    ) external returns (bool allowed, string memory reason) {
+    function checkPositionEntry(address user, address cTokenIn, uint256 positionValue, bool useCollateral)
+        external
+        returns (bool allowed, string memory reason)
+    {
         // Check emergency pause
         if (emergencyPaused) {
             return (false, "Emergency paused");
@@ -103,16 +90,13 @@ contract RiskGuard is Ownable {
 
         // Check user health factor (borrow path)
         uint256 healthFactor = _calculateHealthFactor(user);
-        if (
-            healthFactor < minHealthFactor && healthFactor != type(uint256).max
-        ) {
+        if (healthFactor < minHealthFactor && healthFactor != type(uint256).max) {
             return (false, "Health factor too low");
         }
 
         // Check position size limits (unless whitelisted)
         if (!whitelistedUsers[user]) {
-            uint256 newTotalPositionValue = userTotalPositionValue[user] +
-                positionValue;
+            uint256 newTotalPositionValue = userTotalPositionValue[user] + positionValue;
             uint256 maxAllowedPositionValue = _getMaxPositionValueForUser(user);
 
             if (newTotalPositionValue > maxAllowedPositionValue) {
@@ -123,8 +107,7 @@ contract RiskGuard is Ownable {
         // Check market utilization
         uint256 maxUtil = marketMaxUtilization[cTokenIn];
         if (maxUtil > 0) {
-            uint256 newUtilization = marketCurrentUtilization[cTokenIn] +
-                positionValue;
+            uint256 newUtilization = marketCurrentUtilization[cTokenIn] + positionValue;
             if (newUtilization > maxUtil) {
                 return (false, "Market utilization limit exceeded");
             }
@@ -140,18 +123,15 @@ contract RiskGuard is Ownable {
      * @param oldPositionValue Previous position value
      * @param newPositionValue New position value
      */
-    function updateUserPositionValue(
-        address user,
-        uint256 oldPositionValue,
-        uint256 newPositionValue
-    ) external onlyOwner {
+    function updateUserPositionValue(address user, uint256 oldPositionValue, uint256 newPositionValue)
+        external
+        onlyOwner
+    {
         uint256 currentTotal = userTotalPositionValue[user];
 
         // Subtract old value, add new value
         if (oldPositionValue > 0) {
-            currentTotal = currentTotal > oldPositionValue
-                ? currentTotal - oldPositionValue
-                : 0;
+            currentTotal = currentTotal > oldPositionValue ? currentTotal - oldPositionValue : 0;
         }
 
         uint256 newTotal = currentTotal + newPositionValue;
@@ -166,22 +146,14 @@ contract RiskGuard is Ownable {
      * @param utilizationChange Change in utilization (can be negative)
      * @param isIncrease Whether this is an increase or decrease
      */
-    function updateMarketUtilization(
-        address market,
-        uint256 utilizationChange,
-        bool isIncrease
-    ) external onlyOwner {
+    function updateMarketUtilization(address market, uint256 utilizationChange, bool isIncrease) external onlyOwner {
         uint256 currentUtilization = marketCurrentUtilization[market];
 
         if (isIncrease) {
-            marketCurrentUtilization[market] =
-                currentUtilization +
-                utilizationChange;
+            marketCurrentUtilization[market] = currentUtilization + utilizationChange;
         } else {
-            marketCurrentUtilization[market] = currentUtilization >
-                utilizationChange
-                ? currentUtilization - utilizationChange
-                : 0;
+            marketCurrentUtilization[market] =
+                currentUtilization > utilizationChange ? currentUtilization - utilizationChange : 0;
         }
 
         emit MarketUtilizationUpdated(market, marketCurrentUtilization[market]);
@@ -194,9 +166,7 @@ contract RiskGuard is Ownable {
      * @param user User address
      * @return maxPositionValue Maximum position value in USD
      */
-    function getMaxPositionValueForUser(
-        address user
-    ) external view returns (uint256 maxPositionValue) {
+    function getMaxPositionValueForUser(address user) external view returns (uint256 maxPositionValue) {
         return _getMaxPositionValueForUser(user);
     }
 
@@ -205,9 +175,7 @@ contract RiskGuard is Ownable {
      * @param user User address
      * @return healthFactor Health factor (type(uint256).max if no borrows)
      */
-    function getUserHealthFactor(
-        address user
-    ) external view returns (uint256 healthFactor) {
+    function getUserHealthFactor(address user) external view returns (uint256 healthFactor) {
         return _calculateHealthFactor(user);
     }
 
@@ -219,15 +187,12 @@ contract RiskGuard is Ownable {
      * @return allowed Whether allowed
      * @return reason Reason if not allowed
      */
-    function _checkBorrowPathRisks(
-        address user,
-        address cToken,
-        uint256 positionValue
-    ) internal returns (bool allowed, string memory reason) {
+    function _checkBorrowPathRisks(address user, address cToken, uint256 positionValue)
+        internal
+        returns (bool allowed, string memory reason)
+    {
         // Check if borrowing is allowed for this market (guard against reverting controllers)
-        try peridottroller.borrowAllowed(cToken, user, positionValue) returns (
-            uint256 borrowAllowed
-        ) {
+        try peridottroller.borrowAllowed(cToken, user, positionValue) returns (uint256 borrowAllowed) {
             if (borrowAllowed != 0) {
                 return (false, "Borrow not allowed by peridottroller");
             }
@@ -238,11 +203,7 @@ contract RiskGuard is Ownable {
         // Check user's liquidity (guard against reverting controllers)
         uint256 liquidity;
         uint256 shortfall;
-        try peridottroller.getAccountLiquidity(user) returns (
-            uint256,
-            uint256 l,
-            uint256 s
-        ) {
+        try peridottroller.getAccountLiquidity(user) returns (uint256, uint256 l, uint256 s) {
             liquidity = l;
             shortfall = s;
         } catch {
@@ -253,14 +214,8 @@ contract RiskGuard is Ownable {
         }
 
         // Convert position value to underlying tokens for liquidity check
-        uint256 positionValueInUnderlying = _convertUSDToUnderlying(
-            cToken,
-            positionValue
-        );
-        uint256 liquidityInUnderlying = _convertUSDToUnderlying(
-            cToken,
-            liquidity
-        );
+        uint256 positionValueInUnderlying = _convertUSDToUnderlying(cToken, positionValue);
+        uint256 liquidityInUnderlying = _convertUSDToUnderlying(cToken, liquidity);
 
         if (positionValueInUnderlying > liquidityInUnderlying) {
             return (false, "Insufficient liquidity for borrow");
@@ -274,17 +229,11 @@ contract RiskGuard is Ownable {
      * @param user User address
      * @return healthFactor Health factor (type(uint256).max if no borrows)
      */
-    function _calculateHealthFactor(
-        address user
-    ) internal view returns (uint256 healthFactor) {
+    function _calculateHealthFactor(address user) internal view returns (uint256 healthFactor) {
         uint256 liquidity;
         uint256 shortfall;
         // Guard against controllers that revert by treating user as healthy
-        try peridottroller.getAccountLiquidity(user) returns (
-            uint256,
-            uint256 l,
-            uint256 s
-        ) {
+        try peridottroller.getAccountLiquidity(user) returns (uint256, uint256 l, uint256 s) {
             liquidity = l;
             shortfall = s;
         } catch {
@@ -309,15 +258,9 @@ contract RiskGuard is Ownable {
      * @param user User address
      * @return maxValue Maximum position value in USD
      */
-    function _getMaxPositionValueForUser(
-        address user
-    ) internal view returns (uint256 maxValue) {
+    function _getMaxPositionValueForUser(address user) internal view returns (uint256 maxValue) {
         // If controller reverts, return a very high cap to avoid blocking collateral entries
-        try peridottroller.getAccountLiquidity(user) returns (
-            uint256,
-            uint256 liquidity,
-            uint256
-        ) {
+        try peridottroller.getAccountLiquidity(user) returns (uint256, uint256 liquidity, uint256) {
             return (liquidity * maxPositionSizeRatio) / 1e18;
         } catch {
             return type(uint256).max;
@@ -330,10 +273,11 @@ contract RiskGuard is Ownable {
      * @param usdValue Value in USD
      * @return underlyingAmount Amount in underlying tokens
      */
-    function _convertUSDToUnderlying(
-        address cToken,
-        uint256 usdValue
-    ) internal view returns (uint256 underlyingAmount) {
+    function _convertUSDToUnderlying(address cToken, uint256 usdValue)
+        internal
+        view
+        returns (uint256 underlyingAmount)
+    {
         PErc20 pToken = PErc20(cToken);
         uint256 pricePerToken = priceOracle.getUnderlyingPrice(pToken);
         return (usdValue * 1e18) / pricePerToken;
@@ -349,11 +293,7 @@ contract RiskGuard is Ownable {
         require(newMinHealthFactor >= 1e18, "Health factor must be >= 100%");
         uint256 oldValue = minHealthFactor;
         minHealthFactor = newMinHealthFactor;
-        emit RiskParameterUpdated(
-            "minHealthFactor",
-            oldValue,
-            newMinHealthFactor
-        );
+        emit RiskParameterUpdated("minHealthFactor", oldValue, newMinHealthFactor);
     }
 
     // Liquidation threshold setter removed - handled by Peridottroller
@@ -374,10 +314,7 @@ contract RiskGuard is Ownable {
      * @param market Market address
      * @param maxUtilization Maximum utilization for this market
      */
-    function setMarketMaxUtilization(
-        address market,
-        uint256 maxUtilization
-    ) external onlyOwner {
+    function setMarketMaxUtilization(address market, uint256 maxUtilization) external onlyOwner {
         marketMaxUtilization[market] = maxUtilization;
     }
 
@@ -386,10 +323,7 @@ contract RiskGuard is Ownable {
      * @param user User address
      * @param whitelisted Whether user is whitelisted
      */
-    function setWhitelistedUser(
-        address user,
-        bool whitelisted
-    ) external onlyOwner {
+    function setWhitelistedUser(address user, bool whitelisted) external onlyOwner {
         whitelistedUsers[user] = whitelisted;
     }
 

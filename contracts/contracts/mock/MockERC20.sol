@@ -8,10 +8,7 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract USDTether is ERC20, ERC20Burnable, Ownable, ERC20Permit {
-    constructor(
-        address recipient,
-        address initialOwner
-    )
+    constructor(address recipient, address initialOwner)
         ERC20("USD Tether", "USDT")
         Ownable(initialOwner)
         ERC20Permit("USD Tether")

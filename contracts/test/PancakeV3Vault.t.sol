@@ -47,9 +47,7 @@ contract PancakeV3VaultTest is Test {
         token1.mint(address(routerAdapter), 10_000e18);
 
         Vault.VaultConfig memory cfg = Vault.VaultConfig({
-            positionManager: INonfungiblePositionManager(
-                address(positionManager)
-            ),
+            positionManager: INonfungiblePositionManager(address(positionManager)),
             masterChef: masterChef,
             pool: address(pool),
             fee: 500,
@@ -61,12 +59,7 @@ contract PancakeV3VaultTest is Test {
             rewardToken: IERC20(address(reward))
         });
 
-        positionManager.configurePool(
-            address(token0),
-            address(token1),
-            cfg.fee,
-            address(pool)
-        );
+        positionManager.configurePool(address(token0), address(token1), cfg.fee, address(pool));
 
         vault = new V3LPVault4626(
             IERC20Metadata(address(token0)),
@@ -83,38 +76,36 @@ contract PancakeV3VaultTest is Test {
         token1.mint(bob, 1_000e18);
     }
 
-    function _defaultDepositParams(
-        address receiver,
-        uint256 amount0,
-        uint256 amount1
-    ) internal view returns (Vault.DepositParams memory) {
-        return
-            Vault.DepositParams({
-                receiver: receiver,
-                refundReceiver: receiver,
-                amount0Desired: amount0,
-                amount1Desired: amount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                minShares: 1,
-                deadline: block.timestamp + 1
-            });
+    function _defaultDepositParams(address receiver, uint256 amount0, uint256 amount1)
+        internal
+        view
+        returns (Vault.DepositParams memory)
+    {
+        return Vault.DepositParams({
+            receiver: receiver,
+            refundReceiver: receiver,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
+            minShares: 1,
+            deadline: block.timestamp + 1
+        });
     }
 
-    function _defaultWithdrawParams(
-        address receiver,
-        address owner,
-        uint256 shares
-    ) internal view returns (Vault.WithdrawParams memory) {
-        return
-            Vault.WithdrawParams({
-                receiver: receiver,
-                owner: owner,
-                shares: shares,
-                amount0Min: 0,
-                amount1Min: 0,
-                deadline: block.timestamp + 1
-            });
+    function _defaultWithdrawParams(address receiver, address owner, uint256 shares)
+        internal
+        view
+        returns (Vault.WithdrawParams memory)
+    {
+        return Vault.WithdrawParams({
+            receiver: receiver,
+            owner: owner,
+            shares: shares,
+            amount0Min: 0,
+            amount1Min: 0,
+            deadline: block.timestamp + 1
+        });
     }
 
     function testInitialMintAndShareAccounting() public {
@@ -123,32 +114,15 @@ contract PancakeV3VaultTest is Test {
         token1.approve(address(vault), type(uint256).max);
 
         uint256 expectedShares = vault.previewDepositDual(1e18, 1e18);
-        uint256 shares = vault.depositDual(
-            _defaultDepositParams(alice, 1e18, 1e18)
-        );
+        uint256 shares = vault.depositDual(_defaultDepositParams(alice, 1e18, 1e18));
         vm.stopPrank();
 
         assertEq(vault.balanceOf(alice), shares, "shares credited");
         assertApproxEqAbs(shares, expectedShares, 1, "matching preview");
-        assertApproxEqAbs(
-            vault.totalManagedToken0(),
-            1e18,
-            1,
-            "managed token0"
-        );
-        assertApproxEqAbs(
-            vault.totalManagedToken1(),
-            1e18,
-            1,
-            "managed token1"
-        );
+        assertApproxEqAbs(vault.totalManagedToken0(), 1e18, 1, "managed token0");
+        assertApproxEqAbs(vault.totalManagedToken1(), 1e18, 1, "managed token1");
         assertTrue(vault.positionTokenId() != 0, "position minted");
-        assertApproxEqAbs(
-            uint256(vault.totalLiquidity()),
-            expectedShares,
-            1,
-            "liquidity tracked"
-        );
+        assertApproxEqAbs(uint256(vault.totalLiquidity()), expectedShares, 1, "liquidity tracked");
     }
 
     function testSubsequentDepositMintsProportionalShares() public {
@@ -162,50 +136,27 @@ contract PancakeV3VaultTest is Test {
         token0.approve(address(vault), type(uint256).max);
         token1.approve(address(vault), type(uint256).max);
         uint256 expectedShares = vault.previewDepositDual(0.5e18, 0.5e18);
-        uint256 bobShares = vault.depositDual(
-            _defaultDepositParams(bob, 0.5e18, 0.5e18)
-        );
+        uint256 bobShares = vault.depositDual(_defaultDepositParams(bob, 0.5e18, 0.5e18));
         vm.stopPrank();
 
         assertApproxEqAbs(bobShares, expectedShares, 1, "proportional shares");
-        assertApproxEqAbs(
-            vault.totalManagedToken0(),
-            1.5e18,
-            2,
-            "token0 updated"
-        );
-        assertApproxEqAbs(
-            vault.totalManagedToken1(),
-            1.5e18,
-            2,
-            "token1 updated"
-        );
+        assertApproxEqAbs(vault.totalManagedToken0(), 1.5e18, 2, "token0 updated");
+        assertApproxEqAbs(vault.totalManagedToken1(), 1.5e18, 2, "token1 updated");
     }
 
     function testWithdrawReturnsProportionalTokens() public {
         vm.startPrank(alice);
         token0.approve(address(vault), type(uint256).max);
         token1.approve(address(vault), type(uint256).max);
-        uint256 shares = vault.depositDual(
-            _defaultDepositParams(alice, 1e18, 1e18)
-        );
+        uint256 shares = vault.depositDual(_defaultDepositParams(alice, 1e18, 1e18));
 
-        Vault.WithdrawParams memory params = _defaultWithdrawParams(
-            alice,
-            alice,
-            shares / 2
-        );
+        Vault.WithdrawParams memory params = _defaultWithdrawParams(alice, alice, shares / 2);
         (uint256 amount0, uint256 amount1) = vault.withdrawDual(params);
         vm.stopPrank();
 
         assertApproxEqAbs(amount0, 0.5e18, 1e6, "half token0 returned");
         assertApproxEqAbs(amount1, 0.5e18, 1e6, "half token1 returned");
-        assertApproxEqAbs(
-            vault.balanceOf(alice),
-            shares / 2,
-            1,
-            "remaining shares"
-        );
+        assertApproxEqAbs(vault.balanceOf(alice), shares / 2, 1, "remaining shares");
     }
 
     function testHarvestCompoundsRewards() public {
@@ -221,23 +172,18 @@ contract PancakeV3VaultTest is Test {
         masterChef.setRewardAmount(1e18);
         vault.configureHarvest(0, 0, 0);
 
-        V3LPVault4626.HarvestParams memory params = V3LPVault4626
-            .HarvestParams({
-                rewardForToken0: 5e17,
-                rewardForToken1: 5e17,
-                minToken0Out: 0,
-                minToken1Out: 0,
-                swapDataToken0: "",
-                swapDataToken1: ""
-            });
+        V3LPVault4626.HarvestParams memory params = V3LPVault4626.HarvestParams({
+            rewardForToken0: 5e17,
+            rewardForToken1: 5e17,
+            minToken0Out: 0,
+            minToken1Out: 0,
+            swapDataToken0: "",
+            swapDataToken1: ""
+        });
 
         vault.harvestAndCompound(params);
 
-        assertGt(
-            vault.totalLiquidity(),
-            liquidityBefore,
-            "liquidity increased"
-        );
+        assertGt(vault.totalLiquidity(), liquidityBefore, "liquidity increased");
         assertEq(vault.lastHarvest(), block.timestamp, "lastHarvest updated");
     }
 
@@ -282,9 +228,7 @@ contract PancakeV3VaultTest is Test {
         vm.startPrank(alice);
         token0.approve(address(vault), type(uint256).max);
         token1.approve(address(vault), type(uint256).max);
-        uint256 shares = vault.depositDual(
-            _defaultDepositParams(alice, 1e18, 1e18)
-        );
+        uint256 shares = vault.depositDual(_defaultDepositParams(alice, 1e18, 1e18));
 
         vm.expectRevert(V3LPVault4626.SingleAssetNotSupported.selector);
         vault.redeem(shares, alice, alice);
@@ -307,28 +251,18 @@ contract PancakeV3VaultTest is Test {
         vm.stopPrank();
 
         uint256 maxWithdraw = vault.maxWithdraw(alice);
-        (uint256 amount0, ) = vault.previewWithdrawDual(vault.balanceOf(alice));
-        assertEq(
-            maxWithdraw,
-            amount0,
-            "maxWithdraw should equal token0 portion"
-        );
+        (uint256 amount0,) = vault.previewWithdrawDual(vault.balanceOf(alice));
+        assertEq(maxWithdraw, amount0, "maxWithdraw should equal token0 portion");
     }
 
     function testMaxRedeemReturnsShareBalance() public {
         vm.startPrank(alice);
         token0.approve(address(vault), type(uint256).max);
         token1.approve(address(vault), type(uint256).max);
-        uint256 shares = vault.depositDual(
-            _defaultDepositParams(alice, 1e18, 1e18)
-        );
+        uint256 shares = vault.depositDual(_defaultDepositParams(alice, 1e18, 1e18));
         vm.stopPrank();
 
-        assertEq(
-            vault.maxRedeem(alice),
-            shares,
-            "maxRedeem should equal share balance"
-        );
+        assertEq(vault.maxRedeem(alice), shares, "maxRedeem should equal share balance");
     }
 
     function testPreviewDepositReturnsZero() public view {
@@ -367,9 +301,7 @@ contract PancakeV3VaultOracleTest is Test {
         token1.mint(address(routerAdapter), 10_000e18);
 
         Vault.VaultConfig memory cfg = Vault.VaultConfig({
-            positionManager: INonfungiblePositionManager(
-                address(positionManager)
-            ),
+            positionManager: INonfungiblePositionManager(address(positionManager)),
             masterChef: MockPancakeV3MasterChef(address(0)),
             pool: address(pool),
             fee: 500,
@@ -381,12 +313,7 @@ contract PancakeV3VaultOracleTest is Test {
             rewardToken: IERC20(address(reward))
         });
 
-        positionManager.configurePool(
-            address(token0),
-            address(token1),
-            cfg.fee,
-            address(pool)
-        );
+        positionManager.configurePool(address(token0), address(token1), cfg.fee, address(pool));
 
         vault = new V3LPVault4626(
             IERC20Metadata(address(token0)),
@@ -398,12 +325,7 @@ contract PancakeV3VaultOracleTest is Test {
         );
 
         oracle = new V3LPVaultOracle(admin);
-        oracle.registerVault(
-            IV3LPVault4626(address(vault)),
-            address(token0),
-            address(token1),
-            1e18
-        );
+        oracle.registerVault(IV3LPVault4626(address(vault)), address(token0), address(token1), 1e18);
         cakeUsdFeed = new MockAggregator(18, 1e18);
         usdtUsdFeed = new MockAggregator(18, 1e18);
         oracle.setAssetFeed(address(token0), address(cakeUsdFeed));
@@ -439,9 +361,7 @@ contract PancakeV3VaultOracleTest is Test {
         assertGt(price, 0, "oracle price set");
 
         cakeUsdFeed.updateAnswer(2e18);
-        uint256 increasedPrice = oracle.getUnderlyingPrice(
-            PToken(address(pToken))
-        );
+        uint256 increasedPrice = oracle.getUnderlyingPrice(PToken(address(pToken)));
         assertGt(increasedPrice, price, "price responds to feed updates");
     }
 

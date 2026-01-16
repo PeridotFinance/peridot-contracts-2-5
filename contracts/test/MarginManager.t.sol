@@ -16,9 +16,7 @@ contract TestCToken is MockErc20 {
     MockErc20 public immutable underlyingToken;
     mapping(address => uint256) public borrowBalance;
 
-    constructor(address underlying_, string memory name_, string memory symbol_)
-        MockErc20(name_, symbol_, 8)
-    {
+    constructor(address underlying_, string memory name_, string memory symbol_) MockErc20(name_, symbol_, 8) {
         underlyingToken = MockErc20(underlying_);
     }
 
@@ -201,7 +199,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         manager.withdraw(address(usdc), 500e18, USER);
 
-        (, , , , bool locked) = manager.getAccountState(USER);
+        (,,,, bool locked) = manager.getAccountState(USER);
         assertTrue(locked, "should be locked");
 
         usdc.mint(USER, 200e18);
@@ -212,7 +210,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         manager.repay(address(usdc), 100e18);
 
-        (, , , , bool lockedAfter) = manager.getAccountState(USER);
+        (,,,, bool lockedAfter) = manager.getAccountState(USER);
         assertFalse(lockedAfter, "should unlock");
     }
 
@@ -242,19 +240,13 @@ contract MarginManagerTest is Test {
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        uint256 collateralSupplied = manager.openLeveragedPosition(
-            address(usdc),
-            address(usdc),
-            500e18,
-            0,
-            bytes("")
-        );
+        uint256 collateralSupplied = manager.openLeveragedPosition(address(usdc), address(usdc), 500e18, 0, bytes(""));
 
         assertEq(collateralSupplied, 500e18, "collateral supplied");
         assertEq(cUsdc.balanceOf(sma), 1_500e18, "leveraged collateral");
         assertEq(cUsdc.borrowBalanceStored(sma), 500e18, "borrow balance");
 
-        (, , , uint256 hfAfter,) = manager.getAccountState(USER);
+        (,,, uint256 hfAfter,) = manager.getAccountState(USER);
         assertGe(hfAfter, uint256(manager.hfLockBps()), "hf after leverage");
     }
 
@@ -270,14 +262,7 @@ contract MarginManagerTest is Test {
         uint256 borrowBefore = cUsdc.borrowBalanceStored(sma);
 
         vm.prank(USER);
-        manager.closeLeveragedPosition(
-            address(usdc),
-            address(usdc),
-            300e18,
-            300e18,
-            0,
-            bytes("")
-        );
+        manager.closeLeveragedPosition(address(usdc), address(usdc), 300e18, 300e18, 0, bytes(""));
 
         uint256 borrowAfter = cUsdc.borrowBalanceStored(sma);
         assertEq(borrowBefore - borrowAfter, 300e18, "repay difference");
@@ -346,7 +331,7 @@ contract MarginManagerTest is Test {
         uint256 cTokenAfter = cWeth.balanceOf(sma);
         assertEq(cTokenAfter, cTokenBefore - 4e18, "cTokens reduced");
 
-        (, , , uint256 hfAfter,) = manager.getAccountState(USER);
+        (,,, uint256 hfAfter,) = manager.getAccountState(USER);
         assertGe(hfAfter, uint256(manager.hfLockBps()), "health factor intact");
     }
 

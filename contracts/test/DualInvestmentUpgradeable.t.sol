@@ -86,16 +86,9 @@ contract DualInvestmentUpgradeableTest is Test {
         // Deploy core contracts
         positionToken = new ERC1155DualPosition();
         vaultExecutor = new VaultExecutor(protocolAccount);
-        settlementEngine = new SettlementEngine(
-            address(positionToken),
-            address(vaultExecutor),
-            address(oracle)
-        );
+        settlementEngine = new SettlementEngine(address(positionToken), address(vaultExecutor), address(oracle));
 
-        borrowRouter = new CompoundBorrowRouter(
-            address(peridottroller),
-            address(oracle)
-        );
+        borrowRouter = new CompoundBorrowRouter(address(peridottroller), address(oracle));
         riskGuard = new RiskGuard(address(peridottroller), address(oracle));
 
         // Deploy upgradeable manager with simple initialization
@@ -127,10 +120,7 @@ contract DualInvestmentUpgradeableTest is Test {
         oracle.setDirectPrice(address(weth), ETH_PRICE);
         oracle.setDirectPrice(address(usdc), USDC_PRICE);
         // Set price for ETH placeholder address (used by pETH symbol)
-        oracle.setDirectPrice(
-            0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE,
-            ETH_PRICE
-        );
+        oracle.setDirectPrice(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE, ETH_PRICE);
         oracle.setDirectPrice(address(pETH), ETH_PRICE); // Set price for cToken too
         oracle.setDirectPrice(address(pUSDC), USDC_PRICE); // Set price for cToken too
 
@@ -170,14 +160,10 @@ contract DualInvestmentUpgradeableTest is Test {
         // Test that initialization was successful
         assertTrue(address(manager.positionToken()) == address(positionToken));
         assertTrue(address(manager.vaultExecutor()) == address(vaultExecutor));
-        assertTrue(
-            address(manager.settlementEngine()) == address(settlementEngine)
-        );
+        assertTrue(address(manager.settlementEngine()) == address(settlementEngine));
         assertTrue(address(manager.borrowRouter()) == address(borrowRouter));
         assertTrue(address(manager.riskGuard()) == address(riskGuard));
-        assertTrue(
-            address(manager.peridottroller()) == address(peridottroller)
-        );
+        assertTrue(address(manager.peridottroller()) == address(peridottroller));
 
         // Test protocol integration initialization
         assertEq(manager.protocolTreasury(), protocolTreasury);
@@ -204,16 +190,8 @@ contract DualInvestmentUpgradeableTest is Test {
         // Use configured minExpiry to ensure we meet the lower bound
         uint256 offset = manager.minExpiry();
         vm.prank(user1);
-        uint256 tokenId = manager.enterPositionWithOffset(
-            address(pETH),
-            address(pUSDC),
-            1e18,
-            0,
-            ETH_PRICE,
-            offset,
-            true,
-            false
-        );
+        uint256 tokenId =
+            manager.enterPositionWithOffset(address(pETH), address(pUSDC), 1e18, 0, ETH_PRICE, offset, true, false);
 
         assertGt(tokenId, 0);
         uint256 bal = positionToken.balanceOf(user1, tokenId);
@@ -230,16 +208,8 @@ contract DualInvestmentUpgradeableTest is Test {
         // Enter a larger position (5 ETH)
         uint256 offset = manager.minExpiry();
         vm.prank(user1);
-        uint256 tokenId = manager.enterPositionWithOffset(
-            address(pETH),
-            address(pUSDC),
-            5e18,
-            0,
-            ETH_PRICE,
-            offset,
-            true,
-            false
-        );
+        uint256 tokenId =
+            manager.enterPositionWithOffset(address(pETH), address(pUSDC), 5e18, 0, ETH_PRICE, offset, true, false);
 
         // Fast forward to expiry
         vm.warp(block.timestamp + offset + 1);
@@ -259,14 +229,7 @@ contract DualInvestmentUpgradeableTest is Test {
 
         uint256 expiry = block.timestamp + manager.minExpiry();
         vm.prank(user1);
-        uint256 tokenId = manager.enterPositionWithBorrowed(
-            address(pETH),
-            address(pUSDC),
-            2e18,
-            0,
-            ETH_PRICE,
-            expiry
-        );
+        uint256 tokenId = manager.enterPositionWithBorrowed(address(pETH), address(pUSDC), 2e18, 0, ETH_PRICE, expiry);
 
         assertGt(tokenId, 0);
     }
@@ -287,14 +250,7 @@ contract DualInvestmentUpgradeableTest is Test {
 
         // Borrow 1 ETH underlying and enter position in one call
         vm.prank(user1);
-        uint256 tokenId = manager.borrowAndEnterPosition(
-            address(pETH),
-            address(pUSDC),
-            1e18,
-            0,
-            ETH_PRICE,
-            expiry
-        );
+        uint256 tokenId = manager.borrowAndEnterPosition(address(pETH), address(pUSDC), 1e18, 0, ETH_PRICE, expiry);
         assertGt(tokenId, 0);
     }
 
@@ -316,16 +272,7 @@ contract DualInvestmentUpgradeableTest is Test {
         uint256 tooSmall = manager.minExpiry() - 1;
         vm.prank(user1);
         vm.expectRevert(bytes("Expiry too soon"));
-        manager.enterPositionWithOffset(
-            address(pETH),
-            address(pUSDC),
-            1e18,
-            0,
-            ETH_PRICE,
-            tooSmall,
-            true,
-            false
-        );
+        manager.enterPositionWithOffset(address(pETH), address(pUSDC), 1e18, 0, ETH_PRICE, tooSmall, true, false);
     }
 
     function testProtocolConfiguration() public {
@@ -434,15 +381,8 @@ contract DualInvestmentUpgradeableTest is Test {
 
         // Execute batch entry
         vm.prank(user1);
-        uint256[] memory tokenIds = manager.batchEnterPositions(
-            cTokensIn,
-            cTokensOut,
-            amounts,
-            directions,
-            strikes,
-            expiries,
-            useCollateral
-        );
+        uint256[] memory tokenIds =
+            manager.batchEnterPositions(cTokensIn, cTokensOut, amounts, directions, strikes, expiries, useCollateral);
 
         // Verify all positions were created
         assertEq(tokenIds.length, batchSize);
@@ -511,18 +451,10 @@ contract DualInvestmentUpgradeableTest is Test {
     function testProtocolFeeValidation() public {
         // Test fee rate validation
         vm.expectRevert("Fee rate too high");
-        manager.updateProtocolConfig(
-            protocolTreasury,
-            1001,
-            address(protocolToken)
-        ); // > 10%
+        manager.updateProtocolConfig(protocolTreasury, 1001, address(protocolToken)); // > 10%
 
         // Test valid fee rate
-        manager.updateProtocolConfig(
-            protocolTreasury,
-            1000,
-            address(protocolToken)
-        ); // Exactly 10%
+        manager.updateProtocolConfig(protocolTreasury, 1000, address(protocolToken)); // Exactly 10%
         assertEq(manager.protocolFeeRate(), 1000);
     }
 
@@ -540,11 +472,7 @@ contract DualInvestmentUpgradeableTest is Test {
         // Test that only owner can call admin functions
         vm.prank(user1);
         vm.expectRevert();
-        manager.updateProtocolConfig(
-            protocolTreasury,
-            100,
-            address(protocolToken)
-        );
+        manager.updateProtocolConfig(protocolTreasury, 100, address(protocolToken));
 
         vm.prank(user1);
         vm.expectRevert();
@@ -558,20 +486,13 @@ contract DualInvestmentUpgradeableTest is Test {
 
         // Test market integration event
         vm.expectEmit(true, false, false, true);
-        emit DualInvestmentManagerUpgradeable.MarketIntegrationUpdated(
-            address(pUSDC),
-            false
-        );
+        emit DualInvestmentManagerUpgradeable.MarketIntegrationUpdated(address(pUSDC), false);
         manager.setMarketIntegration(address(pUSDC), false);
 
         // Test protocol config event
         address newTreasury = makeAddr("newTreasury");
         vm.expectEmit(false, false, false, true);
-        emit DualInvestmentManagerUpgradeable.ProtocolConfigUpdated(
-            newTreasury,
-            75,
-            address(protocolToken)
-        );
+        emit DualInvestmentManagerUpgradeable.ProtocolConfigUpdated(newTreasury, 75, address(protocolToken));
         manager.updateProtocolConfig(newTreasury, 75, address(protocolToken));
     }
 
@@ -592,11 +513,7 @@ contract DualInvestmentUpgradeableTest is Test {
     }
 
     // Helper functions for test setup
-    function _createTestPosition(
-        address user,
-        uint256 amount,
-        bool useCollateral
-    ) internal returns (uint256 tokenId) {
+    function _createTestPosition(address user, uint256 amount, bool useCollateral) internal returns (uint256 tokenId) {
         vm.prank(user);
         if (useCollateral) {
             pETH.approve(address(vaultExecutor), amount);

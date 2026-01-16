@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = false
+skip-lint = false
+
+[programs.localnet]
+oft = "4dnJZxeAYb9vgACQya2hMJUsaA6r3sj9zKo4DiCo2Vc7"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "../id.json"
+
+[scripts]
+test = "npx jest test/anchor"

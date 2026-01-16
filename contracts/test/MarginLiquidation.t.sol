@@ -17,9 +17,7 @@ contract TestCTokenLiquidation is MockErc20 {
     mapping(address => uint256) public borrowBalance;
     uint256 public flashLoanFeeBps = 5; // 0.05%
 
-    constructor(address underlying_, string memory name_, string memory symbol_)
-        MockErc20(name_, symbol_, 8)
-    {
+    constructor(address underlying_, string memory name_, string memory symbol_) MockErc20(name_, symbol_, 8) {
         underlyingToken = MockErc20(underlying_);
     }
 
@@ -62,7 +60,10 @@ contract TestCTokenLiquidation is MockErc20 {
         return 0;
     }
 
-    function liquidateBorrow(address borrower, uint256 repayAmount, address cTokenCollateral) external returns (uint256) {
+    function liquidateBorrow(address borrower, uint256 repayAmount, address cTokenCollateral)
+        external
+        returns (uint256)
+    {
         require(underlyingToken.transferFrom(msg.sender, address(this), repayAmount), "CToken: repay transfer");
         borrowBalance[borrower] = repayAmount >= borrowBalance[borrower] ? 0 : borrowBalance[borrower] - repayAmount;
         TestCTokenLiquidation(cTokenCollateral).seize(msg.sender, borrower, repayAmount);
@@ -74,12 +75,10 @@ contract TestCTokenLiquidation is MockErc20 {
         return 0;
     }
 
-    function flashLoan(
-        IERC3156FlashBorrower receiver,
-        address token,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bool) {
+    function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
+        external
+        returns (bool)
+    {
         require(token == address(underlyingToken), "FlashLoan: token");
         require(underlyingToken.balanceOf(address(this)) >= amount, "FlashLoan: liquidity");
 
@@ -87,8 +86,7 @@ contract TestCTokenLiquidation is MockErc20 {
 
         uint256 fee = (amount * flashLoanFeeBps) / 10000;
         require(
-            receiver.onFlashLoan(msg.sender, token, amount, fee, data) ==
-                keccak256("ERC3156FlashBorrower.onFlashLoan"),
+            receiver.onFlashLoan(msg.sender, token, amount, fee, data) == keccak256("ERC3156FlashBorrower.onFlashLoan"),
             "FlashLoan: callback"
         );
 
@@ -202,23 +200,13 @@ contract MarginLiquidationTest is Test {
         oracle.setDirectPrice(address(weth), 5_000e18);
 
         MarginLiquidation.SwapParams memory swapParams = MarginLiquidation.SwapParams({
-            adapter: address(router),
-            minAmountOut: 0,
-            data: abi.encode(uint24(500), uint160(0))
+            adapter: address(router), minAmountOut: 0, data: abi.encode(uint24(500), uint160(0))
         });
 
         mockRouter.setRate(2e18); // 1 USDC -> 2 WETH for testing
 
         vm.prank(LIQUIDATOR);
-        liquidation.liquidate(
-            USER,
-            address(cWeth),
-            address(cUsdc),
-            0.1e18,
-            LIQUIDATOR,
-            0,
-            swapParams
-        );
+        liquidation.liquidate(USER, address(cWeth), address(cUsdc), 0.1e18, LIQUIDATOR, 0, swapParams);
 
         uint256 borrowAfter = cWeth.borrowBalanceStored(sma);
         assertLt(borrowAfter, 0.2e18, "borrow not reduced");
@@ -236,21 +224,11 @@ contract MarginLiquidationTest is Test {
         manager.borrow(address(weth), 0.05e18, address(0));
 
         MarginLiquidation.SwapParams memory swapParams = MarginLiquidation.SwapParams({
-            adapter: address(router),
-            minAmountOut: 0,
-            data: abi.encode(uint24(500), uint160(0))
+            adapter: address(router), minAmountOut: 0, data: abi.encode(uint24(500), uint160(0))
         });
 
         vm.prank(LIQUIDATOR);
         vm.expectRevert("Liquidation: account healthy");
-        liquidation.liquidate(
-            USER,
-            address(cWeth),
-            address(cUsdc),
-            0.1e18,
-            LIQUIDATOR,
-            0,
-            swapParams
-        );
+        liquidation.liquidate(USER, address(cWeth), address(cUsdc), 0.1e18, LIQUIDATOR, 0, swapParams);
     }
 }

@@ -18,33 +18,31 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
     // --- State Variables ---
-    
+
     /// @notice The underlying PERIDOT token
     IERC20 public immutable peridotToken;
-    
+
     /// @notice Total PERIDOT tokens held in the vault
     uint256 public totalPInVault;
 
     // --- Events ---
-    
+
     event Deposit(address indexed user, uint256 peridotAmount, uint256 sharesAmount);
     event Withdraw(address indexed user, uint256 sharesAmount, uint256 peridotAmount);
     event RevenueAdded(address indexed admin, uint256 amount);
 
     // --- Constructor ---
-    
-    constructor(
-        address _peridotToken,
-        string memory _name,
-        string memory _symbol,
-        address _owner
-    ) ERC20(_name, _symbol) Ownable(_owner) {
+
+    constructor(address _peridotToken, string memory _name, string memory _symbol, address _owner)
+        ERC20(_name, _symbol)
+        Ownable(_owner)
+    {
         require(_peridotToken != address(0), "Invalid PERIDOT token");
         peridotToken = IERC20(_peridotToken);
     }
 
     // --- Admin Functions ---
-    
+
     function pause() external onlyOwner {
         _pause();
     }
@@ -54,7 +52,7 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
     }
 
     // --- Core Vault Functions ---
-    
+
     /**
      * @notice Deposit PERIDOT tokens and receive xPERIDOT shares
      * @param amount Amount of PERIDOT tokens to deposit
@@ -62,19 +60,19 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
      */
     function deposit(uint256 amount) external nonReentrant whenNotPaused returns (uint256 shares) {
         require(amount > 0, "Amount must be greater than 0");
-        
+
         // Calculate shares to mint
         shares = previewDeposit(amount);
-        
+
         // Transfer PERIDOT from user
         peridotToken.safeTransferFrom(msg.sender, address(this), amount);
-        
+
         // Update vault balance
         totalPInVault += amount;
-        
+
         // Mint shares to user
         _mint(msg.sender, shares);
-        
+
         emit Deposit(msg.sender, amount, shares);
     }
 
@@ -86,21 +84,21 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
     function withdraw(uint256 shares) external nonReentrant whenNotPaused returns (uint256 amount) {
         require(shares > 0, "Shares must be greater than 0");
         require(balanceOf(msg.sender) >= shares, "Insufficient shares");
-        
+
         // Calculate PERIDOT amount to withdraw
         amount = previewWithdraw(shares);
         require(amount > 0, "Amount must be greater than 0");
         require(totalPInVault >= amount, "Insufficient vault balance");
-        
+
         // Burn shares from user
         _burn(msg.sender, shares);
-        
+
         // Update vault balance
         totalPInVault -= amount;
-        
+
         // Transfer PERIDOT to user
         peridotToken.safeTransfer(msg.sender, amount);
-        
+
         emit Withdraw(msg.sender, shares, amount);
     }
 
@@ -111,18 +109,18 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
      */
     function addRevenue(uint256 amount) external onlyOwner {
         require(amount > 0, "Amount must be greater than 0");
-        
+
         // Transfer PERIDOT from admin
         peridotToken.safeTransferFrom(msg.sender, address(this), amount);
-        
+
         // Increase vault balance (improves exchange rate)
         totalPInVault += amount;
-        
+
         emit RevenueAdded(msg.sender, amount);
     }
 
     // --- View Functions ---
-    
+
     /**
      * @notice Get the current exchange rate of PERIDOT per xPERIDOT
      * @return Exchange rate scaled by 1e18
@@ -170,11 +168,11 @@ contract xPeridotVault is ERC20, ReentrancyGuard, Pausable, Ownable {
      * @return totalPeridot Total PERIDOT tokens in vault
      * @return currentExchangeRate Current PERIDOT per xPERIDOT exchange rate
      */
-    function getVaultStats() external view returns (
-        uint256 totalShares,
-        uint256 totalPeridot,
-        uint256 currentExchangeRate
-    ) {
+    function getVaultStats()
+        external
+        view
+        returns (uint256 totalShares, uint256 totalPeridot, uint256 currentExchangeRate)
+    {
         totalShares = totalSupply();
         totalPeridot = totalPInVault;
         currentExchangeRate = exchangeRate();

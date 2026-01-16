@@ -94,26 +94,23 @@ contract PeridotLens {
         // split peridot speeds from Proposal 62 and other networks don't even
         // have peridot speeds.
         uint256 peridotSupplySpeed = 0;
-        (bool peridotSupplySpeedSuccess, bytes memory peridotSupplySpeedReturnData) = address(peridottroller).call(
-            abi.encodePacked(peridottroller.peridotSupplySpeeds.selector, abi.encode(address(pToken)))
-        );
+        (bool peridotSupplySpeedSuccess, bytes memory peridotSupplySpeedReturnData) = address(peridottroller)
+            .call(abi.encodePacked(peridottroller.peridotSupplySpeeds.selector, abi.encode(address(pToken))));
         if (peridotSupplySpeedSuccess) {
             peridotSupplySpeed = abi.decode(peridotSupplySpeedReturnData, (uint256));
         }
 
         uint256 peridotBorrowSpeed = 0;
-        (bool peridotBorrowSpeedSuccess, bytes memory peridotBorrowSpeedReturnData) = address(peridottroller).call(
-            abi.encodePacked(peridottroller.peridotBorrowSpeeds.selector, abi.encode(address(pToken)))
-        );
+        (bool peridotBorrowSpeedSuccess, bytes memory peridotBorrowSpeedReturnData) = address(peridottroller)
+            .call(abi.encodePacked(peridottroller.peridotBorrowSpeeds.selector, abi.encode(address(pToken))));
         if (peridotBorrowSpeedSuccess) {
             peridotBorrowSpeed = abi.decode(peridotBorrowSpeedReturnData, (uint256));
         }
 
         // If the split peridot speeds call doesn't work, try the  oldest non-spit version.
         if (!peridotSupplySpeedSuccess || !peridotBorrowSpeedSuccess) {
-            (bool peridotSpeedSuccess, bytes memory peridotSpeedReturnData) = address(peridottroller).call(
-                abi.encodePacked(peridottroller.peridotSpeeds.selector, abi.encode(address(pToken)))
-            );
+            (bool peridotSpeedSuccess, bytes memory peridotSpeedReturnData) = address(peridottroller)
+                .call(abi.encodePacked(peridottroller.peridotSpeeds.selector, abi.encode(address(pToken))));
             if (peridotSpeedSuccess) {
                 peridotSupplySpeed = peridotBorrowSpeed = abi.decode(peridotSpeedReturnData, (uint256));
             }
@@ -140,9 +137,8 @@ contract PeridotLens {
         (uint256 peridotSupplySpeed, uint256 peridotBorrowSpeed) = getPeridotSpeeds(peridottroller, pToken);
 
         uint256 borrowCap = 0;
-        (bool borrowCapSuccess, bytes memory borrowCapReturnData) = address(peridottroller).call(
-            abi.encodePacked(peridottroller.borrowCaps.selector, abi.encode(address(pToken)))
-        );
+        (bool borrowCapSuccess, bytes memory borrowCapReturnData) = address(peridottroller)
+            .call(abi.encodePacked(peridottroller.borrowCaps.selector, abi.encode(address(pToken))));
         if (borrowCapSuccess) {
             borrowCap = abi.decode(borrowCapReturnData, (uint256));
         }
@@ -279,10 +275,7 @@ contract PeridotLens {
         for (uint256 i = 0; i < proposalCount; i++) {
             GovernorAlpha.Receipt memory receipt = governor.getReceipt(proposalIds[i], voter);
             res[i] = GovReceipt({
-                proposalId: proposalIds[i],
-                hasVoted: receipt.hasVoted,
-                support: receipt.support,
-                votes: receipt.votes
+                proposalId: proposalIds[i], hasVoted: receipt.hasVoted, support: receipt.support, votes: receipt.votes
             });
         }
         return res;
@@ -305,10 +298,7 @@ contract PeridotLens {
         for (uint256 i = 0; i < proposalCount; i++) {
             GovernorBravoInterface.Receipt memory receipt = governor.getReceipt(proposalIds[i], voter);
             res[i] = GovBravoReceipt({
-                proposalId: proposalIds[i],
-                hasVoted: receipt.hasVoted,
-                support: receipt.support,
-                votes: receipt.votes
+                proposalId: proposalIds[i], hasVoted: receipt.hasVoted, support: receipt.support, votes: receipt.votes
             });
         }
         return res;
@@ -504,8 +494,7 @@ contract PeridotLens {
         PeridotVotes[] memory res = new PeridotVotes[](blockNumbers.length);
         for (uint256 i = 0; i < blockNumbers.length; i++) {
             res[i] = PeridotVotes({
-                blockNumber: uint256(blockNumbers[i]),
-                votes: uint256(peridot.getPriorVotes(account, blockNumbers[i]))
+                blockNumber: uint256(blockNumbers[i]), votes: uint256(peridot.getPriorVotes(account, blockNumbers[i]))
             });
         }
         return res;

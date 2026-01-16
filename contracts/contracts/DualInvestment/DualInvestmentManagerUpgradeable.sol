@@ -19,11 +19,7 @@ import "../PeridottrollerInterface.sol";
  * @notice Upgradeable main entry point for dual investment operations with protocol integration
  * @dev Handles position entry with collateral or borrow paths, integrates with Peridot protocol
  */
-contract DualInvestmentManagerUpgradeable is
-    Initializable,
-    Ownable,
-    ReentrancyGuard
-{
+contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Core contracts
@@ -71,31 +67,14 @@ contract DualInvestmentManagerUpgradeable is
     );
 
     // Protocol integration events - NEW
-    event ProtocolFeeCollected(
-        address indexed user,
-        uint256 fee,
-        uint256 tokenId
-    );
-    event ProtocolRewardEarned(
-        address indexed user,
-        uint256 reward,
-        uint256 tokenId
-    );
+    event ProtocolFeeCollected(address indexed user, uint256 fee, uint256 tokenId);
+    event ProtocolRewardEarned(address indexed user, uint256 reward, uint256 tokenId);
     // Auto-compounding events removed
     event MarketIntegrationUpdated(address indexed market, bool integrated);
-    event ProtocolConfigUpdated(
-        address treasury,
-        uint256 feeRate,
-        address token
-    );
+    event ProtocolConfigUpdated(address treasury, uint256 feeRate, address token);
 
     event CTokenSupported(address indexed cToken, bool supported);
-    event RiskParametersUpdated(
-        uint256 maxPositionSize,
-        uint256 minPositionSize,
-        uint256 maxExpiry,
-        uint256 minExpiry
-    );
+    event RiskParametersUpdated(uint256 maxPositionSize, uint256 minPositionSize, uint256 maxExpiry, uint256 minExpiry);
 
     constructor() Ownable(msg.sender) {
         // Allow initialization for simple deployment pattern
@@ -162,17 +141,9 @@ contract DualInvestmentManagerUpgradeable is
         bool useCollateral,
         bool enableAutoCompound // Deprecated - ignored
     ) external nonReentrant returns (uint256 tokenId) {
-        return
-            _enterPositionInternal(
-                cTokenIn,
-                cTokenOut,
-                amount,
-                direction,
-                strike,
-                expiry,
-                useCollateral,
-                enableAutoCompound
-            );
+        return _enterPositionInternal(
+            cTokenIn, cTokenOut, amount, direction, strike, expiry, useCollateral, enableAutoCompound
+        );
     }
 
     function _enterPositionInternal(
@@ -186,37 +157,20 @@ contract DualInvestmentManagerUpgradeable is
         bool enableAutoCompound // Deprecated - ignored
     ) internal returns (uint256 tokenId) {
         // Validate inputs
-        _validatePositionParameters(
-            cTokenIn,
-            cTokenOut,
-            amount,
-            direction,
-            strike,
-            expiry
-        );
+        _validatePositionParameters(cTokenIn, cTokenOut, amount, direction, strike, expiry);
 
         // Get position value in USD for risk checking
         uint256 positionValueUSD = _getPositionValueUSD(cTokenIn, amount);
 
         // Check risk constraints
-        (bool riskAllowed, string memory riskReason) = riskGuard
-            .checkPositionEntry(
-                msg.sender,
-                cTokenIn,
-                positionValueUSD,
-                useCollateral
-            );
+        (bool riskAllowed, string memory riskReason) =
+            riskGuard.checkPositionEntry(msg.sender, cTokenIn, positionValueUSD, useCollateral);
         require(riskAllowed, riskReason);
 
         // Generate token ID
         address underlying = cTokenToUnderlying[cTokenIn];
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender,
-            underlying,
-            uint64(strike),
-            uint64(expiry),
-            direction,
-            nextMarketId++
+            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
         );
 
         // Calculate and collect protocol fee
@@ -226,17 +180,16 @@ contract DualInvestmentManagerUpgradeable is
         }
 
         // Create position struct with protocol integration
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition
-            .Position({
-                user: msg.sender,
-                cTokenIn: cTokenIn,
-                cTokenOut: cTokenOut,
-                notional: uint128(amount),
-                expiry: uint64(expiry),
-                strike: uint64(strike),
-                direction: direction,
-                settled: false
-            });
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
+            user: msg.sender,
+            cTokenIn: cTokenIn,
+            cTokenOut: cTokenOut,
+            notional: uint128(amount),
+            expiry: uint64(expiry),
+            strike: uint64(strike),
+            direction: direction,
+            settled: false
+        });
 
         if (useCollateral) {
             _enterWithCollateral(cTokenIn, amount, tokenId, position);
@@ -246,11 +199,7 @@ contract DualInvestmentManagerUpgradeable is
 
         // Protocol reward calculation
         if (protocolToken != address(0)) {
-            uint256 reward = _calculateProtocolReward(
-                msg.sender,
-                cTokenIn,
-                positionValueUSD
-            );
+            uint256 reward = _calculateProtocolReward(msg.sender, cTokenIn, positionValueUSD);
             if (reward > 0) {
                 userProtocolRewards[msg.sender] += reward;
                 emit ProtocolRewardEarned(msg.sender, reward, tokenId);
@@ -259,17 +208,7 @@ contract DualInvestmentManagerUpgradeable is
 
         // Auto-compounding removed
 
-        emit PositionEntered(
-            tokenId,
-            msg.sender,
-            cTokenIn,
-            cTokenOut,
-            amount,
-            strike,
-            expiry,
-            direction,
-            useCollateral
-        );
+        emit PositionEntered(tokenId, msg.sender, cTokenIn, cTokenOut, amount, strike, expiry, direction, useCollateral);
 
         return tokenId;
     }
@@ -290,17 +229,9 @@ contract DualInvestmentManagerUpgradeable is
         bool enableAutoCompound
     ) external nonReentrant returns (uint256 tokenId) {
         uint256 expiry = block.timestamp + offsetSeconds;
-        return
-            _enterPositionInternal(
-                cTokenIn,
-                cTokenOut,
-                amount,
-                direction,
-                strike,
-                expiry,
-                useCollateral,
-                enableAutoCompound
-            );
+        return _enterPositionInternal(
+            cTokenIn, cTokenOut, amount, direction, strike, expiry, useCollateral, enableAutoCompound
+        );
     }
 
     /**
@@ -316,92 +247,47 @@ contract DualInvestmentManagerUpgradeable is
         uint256 expiry
     ) external nonReentrant returns (uint256 tokenId) {
         require(protocolIntegratedMarkets[cToken], "Market not integrated");
-        require(
-            supportedCTokens[cToken] && supportedCTokens[cTokenOut],
-            "Unsupported cToken"
-        );
-        require(
-            expiry >= block.timestamp + minExpiry &&
-                expiry <= block.timestamp + maxExpiry,
-            "Expiry out of range"
-        );
+        require(supportedCTokens[cToken] && supportedCTokens[cTokenOut], "Unsupported cToken");
+        require(expiry >= block.timestamp + minExpiry && expiry <= block.timestamp + maxExpiry, "Expiry out of range");
         require(borrowUnderlyingAmount > 0, "Invalid amount");
 
         // Check risk via RiskGuard using USD value of borrow
-        uint256 pricePerToken = settlementEngine
-            .priceOracle()
-            .getUnderlyingPrice(PToken(cToken));
-        uint256 positionValueUSD = (borrowUnderlyingAmount * pricePerToken) /
-            1e18;
-        (bool ok, string memory reason) = riskGuard.checkPositionEntry(
-            msg.sender,
-            cToken,
-            positionValueUSD,
-            false
-        );
+        uint256 pricePerToken = settlementEngine.priceOracle().getUnderlyingPrice(PToken(cToken));
+        uint256 positionValueUSD = (borrowUnderlyingAmount * pricePerToken) / 1e18;
+        (bool ok, string memory reason) = riskGuard.checkPositionEntry(msg.sender, cToken, positionValueUSD, false);
         require(ok, reason);
 
         // Ask router to borrow and route funds to the vault executor
-        bool routed = borrowRouter.borrowAndRoute(
-            cToken,
-            borrowUnderlyingAmount,
-            address(vaultExecutor),
-            msg.sender
-        );
+        bool routed = borrowRouter.borrowAndRoute(cToken, borrowUnderlyingAmount, address(vaultExecutor), msg.sender);
         require(routed, "Borrow route failed");
 
         // Vault holds underlying now; mint to itself so it can account and settle later
-        uint256 cTokensMinted = vaultExecutor.mintCTokensTo(
-            cToken,
-            address(vaultExecutor),
-            borrowUnderlyingAmount
-        );
+        uint256 cTokensMinted = vaultExecutor.mintCTokensTo(cToken, address(vaultExecutor), borrowUnderlyingAmount);
 
         // Create position and mint to user
         address underlying = cTokenToUnderlying[cToken];
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender,
-            underlying,
-            uint64(strike),
-            uint64(expiry),
-            direction,
-            nextMarketId++
+            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
         );
 
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition
-            .Position({
-                user: msg.sender,
-                cTokenIn: cToken,
-                cTokenOut: cTokenOut,
-                notional: uint128(cTokensMinted),
-                expiry: uint64(expiry),
-                strike: uint64(strike),
-                direction: direction,
-                settled: false
-            });
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
+            user: msg.sender,
+            cTokenIn: cToken,
+            cTokenOut: cTokenOut,
+            notional: uint128(cTokensMinted),
+            expiry: uint64(expiry),
+            strike: uint64(strike),
+            direction: direction,
+            settled: false
+        });
 
-        positionToken.mintPosition(
-            msg.sender,
-            tokenId,
-            cTokensMinted,
-            position
-        );
+        positionToken.mintPosition(msg.sender, tokenId, cTokensMinted, position);
 
         // Track risk/utilization
         riskGuard.updateUserPositionValue(msg.sender, 0, positionValueUSD);
         riskGuard.updateMarketUtilization(cToken, positionValueUSD, true);
 
-        emit PositionEntered(
-            tokenId,
-            msg.sender,
-            cToken,
-            cTokenOut,
-            cTokensMinted,
-            strike,
-            expiry,
-            direction,
-            false
-        );
+        emit PositionEntered(tokenId, msg.sender, cToken, cTokenOut, cTokensMinted, strike, expiry, direction, false);
 
         return tokenId;
     }
@@ -409,11 +295,7 @@ contract DualInvestmentManagerUpgradeable is
     /**
      * @notice Returns the valid expiry window bounds based on current block time
      */
-    function getExpiryBounds()
-        external
-        view
-        returns (uint256 minAllowed, uint256 maxAllowed)
-    {
+    function getExpiryBounds() external view returns (uint256 minAllowed, uint256 maxAllowed) {
         minAllowed = block.timestamp + minExpiry;
         maxAllowed = block.timestamp + maxExpiry;
     }
@@ -453,25 +335,15 @@ contract DualInvestmentManagerUpgradeable is
         uint256 underlyingAmount = (amount * exchangeRate) / 1e18;
 
         // Additional borrow safety check
-        (bool canBorrow, string memory borrowReason) = borrowRouter
-            .canUserBorrow(msg.sender, cToken, underlyingAmount);
+        (bool canBorrow, string memory borrowReason) = borrowRouter.canUserBorrow(msg.sender, cToken, underlyingAmount);
         require(canBorrow, borrowReason);
 
         // Use borrow router to borrow and route to vault executor
-        bool borrowSuccess = borrowRouter.borrowAndRoute(
-            cToken,
-            underlyingAmount,
-            address(vaultExecutor),
-            msg.sender
-        );
+        bool borrowSuccess = borrowRouter.borrowAndRoute(cToken, underlyingAmount, address(vaultExecutor), msg.sender);
         require(borrowSuccess, "Borrow and route failed");
 
         // Vault executor supplies to protocol account
-        vaultExecutor.mintCTokensTo(
-            cToken,
-            address(vaultExecutor),
-            underlyingAmount
-        );
+        vaultExecutor.mintCTokensTo(cToken, address(vaultExecutor), underlyingAmount);
 
         // Update risk tracking
         uint256 positionValueUSD = _getPositionValueUSD(cToken, amount);
@@ -515,68 +387,41 @@ contract DualInvestmentManagerUpgradeable is
         require(cTokenNotional <= maxPositionSize, "Position size too large");
 
         // Risk checks on USD value of position (use underlyingAmount * price)
-        uint256 pricePerToken = settlementEngine
-            .priceOracle()
-            .getUnderlyingPrice(PToken(cToken));
+        uint256 pricePerToken = settlementEngine.priceOracle().getUnderlyingPrice(PToken(cToken));
         uint256 positionValueUSD = (underlyingAmount * pricePerToken) / 1e18;
-        (bool riskAllowed, string memory riskReason) = riskGuard
-            .checkPositionEntry(msg.sender, cToken, positionValueUSD, false);
+        (bool riskAllowed, string memory riskReason) =
+            riskGuard.checkPositionEntry(msg.sender, cToken, positionValueUSD, false);
         require(riskAllowed, riskReason);
 
         // Generate token ID
         address underlying = cTokenToUnderlying[cToken];
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender,
-            underlying,
-            uint64(strike),
-            uint64(expiry),
-            direction,
-            nextMarketId++
+            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
         );
 
         // Pull underlying from user and mint cTokens into vault executor
-        uint256 cTokensMinted = vaultExecutor.pullUnderlyingAndMintTo(
-            cToken,
-            msg.sender,
-            address(vaultExecutor),
-            underlyingAmount
-        );
+        uint256 cTokensMinted =
+            vaultExecutor.pullUnderlyingAndMintTo(cToken, msg.sender, address(vaultExecutor), underlyingAmount);
 
         // Update risk tracking
         riskGuard.updateUserPositionValue(msg.sender, 0, positionValueUSD);
         riskGuard.updateMarketUtilization(cToken, positionValueUSD, true);
 
         // Create and mint position with actual minted cTokens
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition
-            .Position({
-                user: msg.sender,
-                cTokenIn: cToken,
-                cTokenOut: cTokenOut,
-                notional: uint128(cTokensMinted),
-                expiry: uint64(expiry),
-                strike: uint64(strike),
-                direction: direction,
-                settled: false
-            });
+        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
+            user: msg.sender,
+            cTokenIn: cToken,
+            cTokenOut: cTokenOut,
+            notional: uint128(cTokensMinted),
+            expiry: uint64(expiry),
+            strike: uint64(strike),
+            direction: direction,
+            settled: false
+        });
 
-        positionToken.mintPosition(
-            msg.sender,
-            tokenId,
-            cTokensMinted,
-            position
-        );
+        positionToken.mintPosition(msg.sender, tokenId, cTokensMinted, position);
 
-        emit PositionEntered(
-            tokenId,
-            msg.sender,
-            cToken,
-            cTokenOut,
-            cTokensMinted,
-            strike,
-            expiry,
-            direction,
-            false
-        );
+        emit PositionEntered(tokenId, msg.sender, cToken, cTokenOut, cTokensMinted, strike, expiry, direction, false);
 
         return tokenId;
     }
@@ -584,11 +429,7 @@ contract DualInvestmentManagerUpgradeable is
     /**
      * @notice Collect protocol fee from user
      */
-    function _collectProtocolFee(
-        address user,
-        uint256 fee,
-        uint256 tokenId
-    ) internal {
+    function _collectProtocolFee(address user, uint256 fee, uint256 tokenId) internal {
         // Fee collection logic - could be in native token or protocol token
         // For now, assume fee is collected from user's balance
         emit ProtocolFeeCollected(user, fee, tokenId);
@@ -597,11 +438,11 @@ contract DualInvestmentManagerUpgradeable is
     /**
      * @notice Calculate protocol rewards based on market integration
      */
-    function _calculateProtocolReward(
-        address user,
-        address cToken,
-        uint256 positionValue
-    ) internal view returns (uint256 reward) {
+    function _calculateProtocolReward(address user, address cToken, uint256 positionValue)
+        internal
+        view
+        returns (uint256 reward)
+    {
         if (!protocolIntegratedMarkets[cToken]) {
             return 0;
         }
@@ -645,11 +486,9 @@ contract DualInvestmentManagerUpgradeable is
         bool[] calldata useCollateral
     ) external nonReentrant returns (uint256[] memory tokenIds) {
         require(
-            cTokensIn.length == amounts.length &&
-                amounts.length == directions.length &&
-                directions.length == strikes.length &&
-                strikes.length == expiries.length &&
-                expiries.length == useCollateral.length,
+            cTokensIn.length == amounts.length && amounts.length == directions.length
+                && directions.length == strikes.length && strikes.length == expiries.length
+                && expiries.length == useCollateral.length,
             "Array length mismatch"
         );
 
@@ -676,11 +515,10 @@ contract DualInvestmentManagerUpgradeable is
     /**
      * @notice Update protocol configuration
      */
-    function updateProtocolConfig(
-        address _protocolTreasury,
-        uint256 _protocolFeeRate,
-        address _protocolToken
-    ) external onlyOwner {
+    function updateProtocolConfig(address _protocolTreasury, uint256 _protocolFeeRate, address _protocolToken)
+        external
+        onlyOwner
+    {
         require(_protocolTreasury != address(0), "Invalid treasury");
         require(_protocolFeeRate <= 1000, "Fee rate too high"); // Max 10%
 
@@ -688,20 +526,13 @@ contract DualInvestmentManagerUpgradeable is
         protocolFeeRate = _protocolFeeRate;
         protocolToken = _protocolToken;
 
-        emit ProtocolConfigUpdated(
-            _protocolTreasury,
-            _protocolFeeRate,
-            _protocolToken
-        );
+        emit ProtocolConfigUpdated(_protocolTreasury, _protocolFeeRate, _protocolToken);
     }
 
     /**
      * @notice Set market integration status
      */
-    function setMarketIntegration(
-        address cToken,
-        bool integrated
-    ) external onlyOwner {
+    function setMarketIntegration(address cToken, bool integrated) external onlyOwner {
         protocolIntegratedMarkets[cToken] = integrated;
         emit MarketIntegrationUpdated(cToken, integrated);
     }
@@ -709,10 +540,7 @@ contract DualInvestmentManagerUpgradeable is
     /**
      * @notice Set market utilization bonus
      */
-    function setMarketUtilizationBonus(
-        address cToken,
-        uint256 bonusBps
-    ) external onlyOwner {
+    function setMarketUtilizationBonus(address cToken, uint256 bonusBps) external onlyOwner {
         require(bonusBps <= 5000, "Bonus too high"); // Max 50% bonus
         marketUtilizationBonus[cToken] = bonusBps;
     }
@@ -742,10 +570,7 @@ contract DualInvestmentManagerUpgradeable is
         require(expiry <= block.timestamp + maxExpiry, "Expiry too far");
     }
 
-    function setSupportedCToken(
-        address cToken,
-        bool supported
-    ) external onlyOwner {
+    function setSupportedCToken(address cToken, bool supported) external onlyOwner {
         require(cToken != address(0), "Invalid cToken address");
 
         supportedCTokens[cToken] = supported;
@@ -754,9 +579,7 @@ contract DualInvestmentManagerUpgradeable is
             try PErc20(cToken).underlying() returns (address underlying) {
                 cTokenToUnderlying[cToken] = underlying;
             } catch {
-                cTokenToUnderlying[
-                    cToken
-                ] = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+                cTokenToUnderlying[cToken] = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
             }
         } else {
             delete cTokenToUnderlying[cToken];
@@ -771,10 +594,7 @@ contract DualInvestmentManagerUpgradeable is
         uint256 _maxExpiry,
         uint256 _minExpiry
     ) external onlyOwner {
-        require(
-            _maxPositionSize > _minPositionSize,
-            "Invalid position size range"
-        );
+        require(_maxPositionSize > _minPositionSize, "Invalid position size range");
         require(_maxExpiry > _minExpiry, "Invalid expiry range");
         require(_minExpiry >= 1 minutes, "Expiry too short");
 
@@ -783,36 +603,23 @@ contract DualInvestmentManagerUpgradeable is
         maxExpiry = _maxExpiry;
         minExpiry = _minExpiry;
 
-        emit RiskParametersUpdated(
-            _maxPositionSize,
-            _minPositionSize,
-            _maxExpiry,
-            _minExpiry
-        );
+        emit RiskParametersUpdated(_maxPositionSize, _minPositionSize, _maxExpiry, _minExpiry);
     }
 
-    function getPositionInfo(
-        uint256 tokenId
-    )
+    function getPositionInfo(uint256 tokenId)
         external
         view
-        returns (
-            ERC1155DualPosition.Position memory position,
-            bool canSettle,
-            bool isSettled
-        )
+        returns (ERC1155DualPosition.Position memory position, bool canSettle, bool isSettled)
     {
         position = positionToken.getPosition(tokenId);
-        (canSettle, ) = settlementEngine.canSettlePosition(tokenId);
-        (isSettled, , ) = settlementEngine.getSettlementInfo(tokenId);
+        (canSettle,) = settlementEngine.canSettlePosition(tokenId);
+        (isSettled,,) = settlementEngine.getSettlementInfo(tokenId);
     }
 
-    function canEnterPosition(
-        address user,
-        address cTokenIn,
-        uint256 amount,
-        bool useCollateral
-    ) external returns (bool canEnter, string memory reason) {
+    function canEnterPosition(address user, address cTokenIn, uint256 amount, bool useCollateral)
+        external
+        returns (bool canEnter, string memory reason)
+    {
         if (!supportedCTokens[cTokenIn]) {
             return (false, "cToken not supported");
         }
@@ -831,7 +638,7 @@ contract DualInvestmentManagerUpgradeable is
                 return (false, "Insufficient cToken balance");
             }
         } else {
-            (, uint256 liquidity, ) = peridottroller.getAccountLiquidity(user);
+            (, uint256 liquidity,) = peridottroller.getAccountLiquidity(user);
             if (liquidity == 0) {
                 return (false, "Insufficient liquidity to borrow");
             }
@@ -840,16 +647,11 @@ contract DualInvestmentManagerUpgradeable is
         return (true, "");
     }
 
-    function _getPositionValueUSD(
-        address cToken,
-        uint256 amount
-    ) internal view returns (uint256 valueUSD) {
+    function _getPositionValueUSD(address cToken, uint256 amount) internal view returns (uint256 valueUSD) {
         uint256 exchangeRate = PErc20(cToken).exchangeRateStored();
         uint256 underlyingAmount = (amount * exchangeRate) / 1e18;
 
-        uint256 pricePerToken = settlementEngine
-            .priceOracle()
-            .getUnderlyingPrice(PToken(cToken));
+        uint256 pricePerToken = settlementEngine.priceOracle().getUnderlyingPrice(PToken(cToken));
 
         return (underlyingAmount * pricePerToken) / 1e18;
     }

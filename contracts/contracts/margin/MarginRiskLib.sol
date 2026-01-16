@@ -8,9 +8,7 @@ import {SimplePriceOracle} from "../SimplePriceOracle.sol";
 interface IPeridottrollerView {
     function getAllMarkets() external view returns (PToken[] memory);
 
-    function markets(
-        address pToken
-    ) external view returns (bool, uint256, bool);
+    function markets(address pToken) external view returns (bool, uint256, bool);
 }
 
 library MarginRiskLib {
@@ -41,13 +39,7 @@ library MarginRiskLib {
         for (uint256 i = 0; i < marketsLength; i++) {
             marketAddresses[i] = address(markets[i]);
         }
-        return computeAccountMetricsForMarkets(
-            comptroller,
-            oracle,
-            account,
-            hfMinWithdrawBps,
-            marketAddresses
-        );
+        return computeAccountMetricsForMarkets(comptroller, oracle, account, hfMinWithdrawBps, marketAddresses);
     }
 
     function computeAccountMetricsForMarkets(
@@ -60,8 +52,7 @@ library MarginRiskLib {
         uint256 marketsLength = marketList.length;
         for (uint256 i = 0; i < marketsLength; i++) {
             address cToken = marketList[i];
-            (bool isListed, uint256 collateralFactorMantissa, ) = comptroller
-                .markets(cToken);
+            (bool isListed, uint256 collateralFactorMantissa,) = comptroller.markets(cToken);
             if (!isListed || collateralFactorMantissa == 0) {
                 continue;
             }
@@ -80,13 +71,10 @@ library MarginRiskLib {
             uint256 exchangeRate = pToken.exchangeRateStored();
 
             if (cTokenBalance > 0) {
-                uint256 underlyingAmount = (cTokenBalance * exchangeRate) /
-                    EXP_SCALE;
+                uint256 underlyingAmount = (cTokenBalance * exchangeRate) / EXP_SCALE;
                 uint256 usdValue = (underlyingAmount * price) / EXP_SCALE;
                 metrics.grossCollateralValue += usdValue;
-                metrics.collateralValue +=
-                    (usdValue * collateralFactorMantissa) /
-                    EXP_SCALE;
+                metrics.collateralValue += (usdValue * collateralFactorMantissa) / EXP_SCALE;
             }
 
             uint256 borrowBalance = pToken.borrowBalanceStored(account);
@@ -102,23 +90,15 @@ library MarginRiskLib {
             metrics.excessCollateralValue = metrics.collateralValue;
             metrics.grossExposureValue = metrics.grossCollateralValue;
         } else {
-            metrics.equity =
-                int256(metrics.grossCollateralValue) -
-                int256(metrics.borrowValue);
-            metrics.healthFactorBps =
-                (metrics.collateralValue * BPS_SCALE) /
-                metrics.borrowValue;
+            metrics.equity = int256(metrics.grossCollateralValue) - int256(metrics.borrowValue);
+            metrics.healthFactorBps = (metrics.collateralValue * BPS_SCALE) / metrics.borrowValue;
 
-            uint256 minRequiredCollateral = (metrics.borrowValue *
-                hfMinWithdrawBps) / BPS_SCALE;
+            uint256 minRequiredCollateral = (metrics.borrowValue * hfMinWithdrawBps) / BPS_SCALE;
             if (metrics.collateralValue > minRequiredCollateral) {
-                metrics.excessCollateralValue =
-                    metrics.collateralValue -
-                    minRequiredCollateral;
+                metrics.excessCollateralValue = metrics.collateralValue - minRequiredCollateral;
             }
 
-            metrics.grossExposureValue =
-                metrics.grossCollateralValue + metrics.borrowValue;
+            metrics.grossExposureValue = metrics.grossCollateralValue + metrics.borrowValue;
         }
     }
 
@@ -134,14 +114,7 @@ library MarginRiskLib {
         for (uint256 i = 0; i < markets.length; i++) {
             marketList[i] = address(markets[i]);
         }
-        return maxWithdrawableUnderlyingFromMarkets(
-            comptroller,
-            oracle,
-            account,
-            cToken,
-            hfMinWithdrawBps,
-            marketList
-        );
+        return maxWithdrawableUnderlyingFromMarkets(comptroller, oracle, account, cToken, hfMinWithdrawBps, marketList);
     }
 
     function maxWithdrawableUnderlyingFromMarkets(
@@ -152,18 +125,12 @@ library MarginRiskLib {
         uint16 hfMinWithdrawBps,
         address[] memory marketList
     ) internal view returns (uint256) {
-        (bool isListed, uint256 collateralFactorMantissa, ) = comptroller
-            .markets(cToken);
+        (bool isListed, uint256 collateralFactorMantissa,) = comptroller.markets(cToken);
         require(isListed, "RiskLib: market not listed");
         require(collateralFactorMantissa > 0, "RiskLib: market disabled");
 
-        AccountMetrics memory metrics = computeAccountMetricsForMarkets(
-            comptroller,
-            oracle,
-            account,
-            hfMinWithdrawBps,
-            marketList
-        );
+        AccountMetrics memory metrics =
+            computeAccountMetricsForMarkets(comptroller, oracle, account, hfMinWithdrawBps, marketList);
 
         if (metrics.excessCollateralValue == 0) {
             return 0;
@@ -188,7 +155,6 @@ library MarginRiskLib {
         uint256 exchangeRate = pToken.exchangeRateStored();
         uint256 underlyingBalance = (cTokenBalance * exchangeRate) / EXP_SCALE;
 
-        return
-            withdrawable < underlyingBalance ? withdrawable : underlyingBalance;
+        return withdrawable < underlyingBalance ? withdrawable : underlyingBalance;
     }
 }

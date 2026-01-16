@@ -15,10 +15,7 @@ interface IPancakeV2Router {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
-    function getAmountsOut(
-        uint256 amountIn,
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
+    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
 }
 
 interface IPancakeV3Router {
@@ -41,13 +38,9 @@ interface IPancakeV3Router {
         uint256 amountOutMinimum;
     }
 
-    function exactInputSingle(
-        ExactInputSingleParams calldata params
-    ) external returns (uint256 amountOut);
+    function exactInputSingle(ExactInputSingleParams calldata params) external returns (uint256 amountOut);
 
-    function exactInput(
-        ExactInputParams calldata params
-    ) external returns (uint256 amountOut);
+    function exactInput(ExactInputParams calldata params) external returns (uint256 amountOut);
 }
 
 interface IPancakeV3QuoterV2 {
@@ -59,24 +52,11 @@ interface IPancakeV3QuoterV2 {
         uint160 sqrtPriceLimitX96
     )
         external
-        returns (
-            uint256 amountOut,
-            uint160 sqrtPriceX96After,
-            uint32 initializedTicksCrossed,
-            uint256 gasEstimate
-        );
+        returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
 
-    function quoteExactInput(
-        bytes memory path,
-        uint256 amountIn
-    )
+    function quoteExactInput(bytes memory path, uint256 amountIn)
         external
-        returns (
-            uint256 amountOut,
-            uint160 sqrtPriceX96After,
-            uint32 initializedTicksCrossed,
-            uint256 gasEstimate
-        );
+        returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
 }
 
 contract PancakeSwapAdapter is Ownable, ReentrancyGuard {
@@ -99,33 +79,24 @@ contract PancakeSwapAdapter is Ownable, ReentrancyGuard {
         emit RoutersUpdated(_v2, _v3, _quoter);
     }
 
-    function setRouters(
-        address _v2,
-        address _v3,
-        address _quoter
-    ) external onlyOwner {
+    function setRouters(address _v2, address _v3, address _quoter) external onlyOwner {
         v2Router = _v2;
         v3Router = _v3;
         v3Quoter = _quoter;
         emit RoutersUpdated(_v2, _v3, _quoter);
     }
 
-    function setV3Fee(
-        address tokenIn,
-        address tokenOut,
-        uint24 fee
-    ) external onlyOwner {
+    function setV3Fee(address tokenIn, address tokenOut, uint24 fee) external onlyOwner {
         v3FeeForPair[tokenIn][tokenOut] = fee;
         emit V3FeeUpdated(tokenIn, tokenOut, fee);
     }
 
     // Quotes
-    function quoteV2(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address via
-    ) public view returns (uint256 amountOut) {
+    function quoteV2(address tokenIn, address tokenOut, uint256 amountIn, address via)
+        public
+        view
+        returns (uint256 amountOut)
+    {
         require(v2Router != address(0), "v2 not set");
         address[] memory path;
         if (via == address(0)) {
@@ -138,38 +109,25 @@ contract PancakeSwapAdapter is Ownable, ReentrancyGuard {
             path[1] = via;
             path[2] = tokenOut;
         }
-        uint256[] memory amounts = IPancakeV2Router(v2Router).getAmountsOut(
-            amountIn,
-            path
-        );
+        uint256[] memory amounts = IPancakeV2Router(v2Router).getAmountsOut(amountIn, path);
         return amounts[amounts.length - 1];
     }
 
-    function quoteV3Single(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint24 fee
-    ) public returns (uint256 amountOut) {
+    function quoteV3Single(address tokenIn, address tokenOut, uint256 amountIn, uint24 fee)
+        public
+        returns (uint256 amountOut)
+    {
         require(v3Quoter != address(0), "v3 quoter not set");
-        (amountOut, , , ) = IPancakeV3QuoterV2(v3Quoter).quoteExactInputSingle(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            fee == 0 ? 3000 : fee,
-            0
-        );
+        (amountOut,,,) =
+            IPancakeV3QuoterV2(v3Quoter).quoteExactInputSingle(tokenIn, tokenOut, amountIn, fee == 0 ? 3000 : fee, 0);
     }
 
     // Swaps
-    function swapV2(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minOut,
-        address to,
-        address via
-    ) external nonReentrant returns (uint256 amountOut) {
+    function swapV2(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut, address to, address via)
+        external
+        nonReentrant
+        returns (uint256 amountOut)
+    {
         require(v2Router != address(0), "v2 not set");
         IERC20(tokenIn).forceApprove(v2Router, amountIn);
         address[] memory path;
@@ -184,44 +142,32 @@ contract PancakeSwapAdapter is Ownable, ReentrancyGuard {
             path[2] = tokenOut;
         }
         uint256 pre = IERC20(tokenOut).balanceOf(to);
-        IPancakeV2Router(v2Router).swapExactTokensForTokens(
-            amountIn,
-            minOut,
-            path,
-            to,
-            block.timestamp + 1200
-        );
+        IPancakeV2Router(v2Router).swapExactTokensForTokens(amountIn, minOut, path, to, block.timestamp + 1200);
         uint256 post = IERC20(tokenOut).balanceOf(to);
         amountOut = post - pre;
     }
 
-    function swapV3Single(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minOut,
-        address to,
-        uint24 fee
-    ) external nonReentrant returns (uint256 amountOut) {
+    function swapV3Single(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut, address to, uint24 fee)
+        external
+        nonReentrant
+        returns (uint256 amountOut)
+    {
         require(v3Router != address(0), "v3 not set");
         IERC20(tokenIn).forceApprove(v3Router, amountIn);
-        amountOut = IPancakeV3Router(v3Router).exactInputSingle(
-            IPancakeV3Router.ExactInputSingleParams({
-                tokenIn: tokenIn,
-                tokenOut: tokenOut,
-                fee: fee == 0
-                    ? (
-                        v3FeeForPair[tokenIn][tokenOut] == 0
-                            ? 3000
-                            : v3FeeForPair[tokenIn][tokenOut]
-                    )
-                    : fee,
-                recipient: to,
-                deadline: block.timestamp + 1200,
-                amountIn: amountIn,
-                amountOutMinimum: minOut,
-                sqrtPriceLimitX96: 0
-            })
-        );
+        amountOut = IPancakeV3Router(v3Router)
+            .exactInputSingle(
+                IPancakeV3Router.ExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    fee: fee == 0
+                        ? (v3FeeForPair[tokenIn][tokenOut] == 0 ? 3000 : v3FeeForPair[tokenIn][tokenOut])
+                        : fee,
+                    recipient: to,
+                    deadline: block.timestamp + 1200,
+                    amountIn: amountIn,
+                    amountOutMinimum: minOut,
+                    sqrtPriceLimitX96: 0
+                })
+            );
     }
 }

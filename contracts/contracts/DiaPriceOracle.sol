@@ -9,8 +9,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 /// @notice Price oracle compatible with DIA adapter contracts on Somnia (AggregatorV3-style)
 /// @dev Prefers DIA adapter feeds; falls back to last cached valid price, then to manual price.
 contract DiaPriceOracle is PriceOracle {
-    address internal constant NATIVE_TOKEN =
-        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     // Manual price storage as ultimate fallback
     mapping(address => uint256) private prices;
 
@@ -28,10 +27,7 @@ contract DiaPriceOracle is PriceOracle {
     uint256 public priceStaleThreshold;
 
     event PricePosted(
-        address asset,
-        uint256 previousPriceMantissa,
-        uint256 requestedPriceMantissa,
-        uint256 newPriceMantissa
+        address asset, uint256 previousPriceMantissa, uint256 requestedPriceMantissa, uint256 newPriceMantissa
     );
     event DIAAdapterRegistered(address asset, address adapter);
     event LastOraclePriceUpdated(address indexed asset, uint256 priceMantissa);
@@ -52,17 +48,13 @@ contract DiaPriceOracle is PriceOracle {
         priceStaleThreshold = _staleThreshold;
     }
 
-    function _getUnderlyingAddress(
-        PErc20 pToken
-    ) private view returns (address) {
+    function _getUnderlyingAddress(PErc20 pToken) private view returns (address) {
         address asset;
         if (compareStrings(pToken.symbol(), "pETH")) {
             return NATIVE_TOKEN;
         }
 
-        try PErc20(address(pToken)).underlying() returns (
-            address underlyingAsset
-        ) {
+        try PErc20(address(pToken)).underlying() returns (address underlyingAsset) {
             asset = underlyingAsset;
         } catch {
             asset = NATIVE_TOKEN;
@@ -76,24 +68,19 @@ contract DiaPriceOracle is PriceOracle {
     }
 
     /// @notice Returns the price of the underlying asset in mantissa (18 decimals)
-    function getUnderlyingPrice(
-        PToken pToken
-    ) public view override returns (uint256) {
+    function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
         address asset = _getUnderlyingAddress(PErc20(address(pToken)));
         AggregatorV3Interface adapter = assetToDIAAdapter[asset];
 
         if (address(adapter) != address(0)) {
             try adapter.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
-                if (
-                    block.timestamp - updatedAt <= priceStaleThreshold &&
-                    price > 0
-                ) {
+                if (block.timestamp - updatedAt <= priceStaleThreshold && price > 0) {
                     uint8 decimals = adapter.decimals();
                     uint256 priceMantissa = uint256(price);
 
@@ -122,17 +109,9 @@ contract DiaPriceOracle is PriceOracle {
     }
 
     /// @notice Admin: set the underlying price directly on the manual storage
-    function setUnderlyingPrice(
-        PToken pToken,
-        uint256 underlyingPriceMantissa
-    ) public onlyAdmin {
+    function setUnderlyingPrice(PToken pToken, uint256 underlyingPriceMantissa) public onlyAdmin {
         address asset = _getUnderlyingAddress(PErc20(address(pToken)));
-        emit PricePosted(
-            asset,
-            prices[asset],
-            underlyingPriceMantissa,
-            underlyingPriceMantissa
-        );
+        emit PricePosted(asset, prices[asset], underlyingPriceMantissa, underlyingPriceMantissa);
         prices[asset] = underlyingPriceMantissa;
     }
 
@@ -143,10 +122,7 @@ contract DiaPriceOracle is PriceOracle {
     }
 
     /// @notice Admin: register a DIA adapter implementing AggregatorV3Interface for an asset
-    function registerDIAAdapter(
-        address asset,
-        address adapter
-    ) public onlyAdmin {
+    function registerDIAAdapter(address asset, address adapter) public onlyAdmin {
         require(adapter != address(0), "Invalid adapter address");
         assetToDIAAdapter[asset] = AggregatorV3Interface(adapter);
         emit DIAAdapterRegistered(asset, adapter);
@@ -160,27 +136,20 @@ contract DiaPriceOracle is PriceOracle {
 
             if (address(adapter) != address(0)) {
                 try adapter.latestRoundData() returns (
-                    uint80 /* roundId */,
+                    uint80, /* roundId */
                     int256 price,
-                    uint256 /* startedAt */,
+                    uint256, /* startedAt */
                     uint256 updatedAt,
                     uint80 /* answeredInRound */
                 ) {
-                    if (
-                        block.timestamp - updatedAt <= priceStaleThreshold &&
-                        price > 0
-                    ) {
+                    if (block.timestamp - updatedAt <= priceStaleThreshold && price > 0) {
                         uint8 decimals = adapter.decimals();
                         uint256 priceMantissa = uint256(price);
 
                         if (decimals < 18) {
-                            priceMantissa =
-                                priceMantissa *
-                                (10 ** (18 - decimals));
+                            priceMantissa = priceMantissa * (10 ** (18 - decimals));
                         } else if (decimals > 18) {
-                            priceMantissa =
-                                priceMantissa /
-                                (10 ** (decimals - 18));
+                            priceMantissa = priceMantissa / (10 ** (decimals - 18));
                         }
 
                         lastValidOraclePrice[asset] = priceMantissa;
@@ -215,10 +184,7 @@ contract DiaPriceOracle is PriceOracle {
 
     /// @notice Admin: remove a DIA adapter and clear cached price
     function removeDIAAdapter(address asset) public onlyAdmin {
-        require(
-            address(assetToDIAAdapter[asset]) != address(0),
-            "No adapter for asset"
-        );
+        require(address(assetToDIAAdapter[asset]) != address(0), "No adapter for asset");
         delete assetToDIAAdapter[asset];
         delete lastValidOraclePrice[asset];
         emit DIAAdapterRegistered(asset, address(0));
@@ -230,16 +196,13 @@ contract DiaPriceOracle is PriceOracle {
 
         if (address(adapter) != address(0)) {
             try adapter.latestRoundData() returns (
-                uint80 /* roundId */,
+                uint80, /* roundId */
                 int256 price,
-                uint256 /* startedAt */,
+                uint256, /* startedAt */
                 uint256 updatedAt,
                 uint80 /* answeredInRound */
             ) {
-                if (
-                    block.timestamp - updatedAt <= priceStaleThreshold &&
-                    price > 0
-                ) {
+                if (block.timestamp - updatedAt <= priceStaleThreshold && price > 0) {
                     uint8 decimals = adapter.decimals();
                     uint256 priceMantissa = uint256(price);
 
@@ -273,18 +236,10 @@ contract DiaPriceOracle is PriceOracle {
     }
 
     /// @notice Expose latest round data directly from the DIA adapter
-    function getLatestRoundData(
-        address asset
-    )
+    function getLatestRoundData(address asset)
         external
         view
-        returns (
-            uint80 roundId,
-            int256 price,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         AggregatorV3Interface adapter = assetToDIAAdapter[asset];
         require(address(adapter) != address(0), "No adapter for asset");
@@ -298,25 +253,14 @@ contract DiaPriceOracle is PriceOracle {
             return true;
         }
 
-        try adapter.latestRoundData() returns (
-            uint80,
-            int256 price,
-            uint256,
-            uint256 updatedAt,
-            uint80
-        ) {
-            return (block.timestamp - updatedAt > priceStaleThreshold ||
-                price <= 0);
+        try adapter.latestRoundData() returns (uint80, int256 price, uint256, uint256 updatedAt, uint80) {
+            return (block.timestamp - updatedAt > priceStaleThreshold || price <= 0);
         } catch {
             return true;
         }
     }
 
-    function compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) ==
-            keccak256(abi.encodePacked((b))));
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 }

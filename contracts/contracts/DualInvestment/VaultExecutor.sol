@@ -24,8 +24,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
     mapping(address => bool) public authorizedManagers;
 
     // Track underlying balances by user and cToken
-    mapping(address => mapping(address => uint256))
-        public userUnderlyingBalances;
+    mapping(address => mapping(address => uint256)) public userUnderlyingBalances;
 
     // Track protocol-supplied amounts by cToken
     mapping(address => uint256) public protocolSuppliedAmounts;
@@ -35,23 +34,12 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
 
     // Events
     event UserCTokensRedeemed(
-        address indexed user,
-        address indexed cToken,
-        uint256 cTokenAmount,
-        uint256 underlyingAmount
+        address indexed user, address indexed cToken, uint256 cTokenAmount, uint256 underlyingAmount
     );
 
-    event UnderlyingSuppliedToProtocol(
-        address indexed cToken,
-        uint256 underlyingAmount,
-        uint256 cTokensMinted
-    );
+    event UnderlyingSuppliedToProtocol(address indexed cToken, uint256 underlyingAmount, uint256 cTokensMinted);
 
-    event UnderlyingWithdrawnFromProtocol(
-        address indexed cToken,
-        uint256 cTokensRedeemed,
-        uint256 underlyingAmount
-    );
+    event UnderlyingWithdrawnFromProtocol(address indexed cToken, uint256 cTokensRedeemed, uint256 underlyingAmount);
 
     event ProtocolAccountUpdated(address oldAccount, address newAccount);
     event SwapAdapterUpdated(address oldAdapter, address newAdapter);
@@ -73,11 +61,12 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param cTokenAmount Amount of cTokens to redeem
      * @return underlyingAmount Amount of underlying received
      */
-    function redeemAndSupplyToProtocol(
-        address user,
-        address cToken,
-        uint256 cTokenAmount
-    ) external onlyAuthorized nonReentrant returns (uint256 underlyingAmount) {
+    function redeemAndSupplyToProtocol(address user, address cToken, uint256 cTokenAmount)
+        external
+        onlyAuthorized
+        nonReentrant
+        returns (uint256 underlyingAmount)
+    {
         require(user != address(0), "Invalid user address");
         require(cToken != address(0), "Invalid cToken address");
         require(cTokenAmount > 0, "Amount must be greater than zero");
@@ -85,10 +74,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         PErc20 pToken = PErc20(cToken);
 
         // Transfer cTokens from user to this contract
-        require(
-            pToken.transferFrom(user, address(this), cTokenAmount),
-            "cToken transfer failed"
-        );
+        require(pToken.transferFrom(user, address(this), cTokenAmount), "cToken transfer failed");
 
         // Redeem cTokens for underlying (track delta)
         IERC20 underlying = IERC20(pToken.underlying());
@@ -117,11 +103,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         uint256 cTokensMinted = postCTokenBal - preCTokenBal;
         protocolSuppliedAmounts[cToken] += cTokensMinted;
 
-        emit UnderlyingSuppliedToProtocol(
-            cToken,
-            underlyingAmount,
-            cTokensMinted
-        );
+        emit UnderlyingSuppliedToProtocol(cToken, underlyingAmount, cTokensMinted);
 
         return underlyingAmount;
     }
@@ -132,10 +114,12 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param underlyingAmount Amount of underlying to withdraw
      * @return actualAmount Actual amount withdrawn
      */
-    function withdrawUnderlyingFromProtocol(
-        address cToken,
-        uint256 underlyingAmount
-    ) external onlyAuthorized nonReentrant returns (uint256 actualAmount) {
+    function withdrawUnderlyingFromProtocol(address cToken, uint256 underlyingAmount)
+        external
+        onlyAuthorized
+        nonReentrant
+        returns (uint256 actualAmount)
+    {
         require(cToken != address(0), "Invalid cToken address");
         require(underlyingAmount > 0, "Amount must be greater than zero");
 
@@ -163,11 +147,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         // Update protocol-supplied tracking
         protocolSuppliedAmounts[cToken] -= cTokensToRedeem;
 
-        emit UnderlyingWithdrawnFromProtocol(
-            cToken,
-            cTokensToRedeem,
-            actualAmount
-        );
+        emit UnderlyingWithdrawnFromProtocol(cToken, cTokensToRedeem, actualAmount);
 
         return actualAmount;
     }
@@ -184,40 +164,23 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
     /**
      * @notice Swap underlying tokens held by the vault and return amount out
      */
-    function swapUnderlying(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minOut
-    ) external onlyAuthorized nonReentrant returns (uint256 amountOut) {
+    function swapUnderlying(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut)
+        external
+        onlyAuthorized
+        nonReentrant
+        returns (uint256 amountOut)
+    {
         require(swapAdapter != address(0), "Adapter not set");
-        require(
-            tokenIn != address(0) && tokenOut != address(0),
-            "Invalid tokens"
-        );
+        require(tokenIn != address(0) && tokenOut != address(0), "Invalid tokens");
         require(amountIn > 0, "Zero amount");
 
         // Try v3 single, fallback to v2
-        try
-            PancakeSwapAdapter(swapAdapter).swapV3Single(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minOut,
-                address(this),
-                0
-            )
-        returns (uint256 outV3) {
+        try PancakeSwapAdapter(swapAdapter)
+            .swapV3Single(tokenIn, tokenOut, amountIn, minOut, address(this), 0) returns (uint256 outV3) {
             amountOut = outV3;
         } catch {
-            amountOut = PancakeSwapAdapter(swapAdapter).swapV2(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minOut,
-                address(this),
-                address(0)
-            );
+            amountOut =
+                PancakeSwapAdapter(swapAdapter).swapV2(tokenIn, tokenOut, amountIn, minOut, address(this), address(0));
         }
     }
 
@@ -232,36 +195,23 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         uint256 minUnderlyingOut
     ) external onlyAuthorized nonReentrant returns (uint256 cTokensMinted) {
         require(swapAdapter != address(0), "Adapter not set");
-        require(
-            cTokenIn != address(0) && cTokenOut != address(0),
-            "Invalid cTokens"
-        );
+        require(cTokenIn != address(0) && cTokenOut != address(0), "Invalid cTokens");
         require(recipient != address(0), "Invalid recipient");
 
         IERC20 underlyingIn = IERC20(PErc20(cTokenIn).underlying());
         IERC20 underlyingOut = IERC20(PErc20(cTokenOut).underlying());
 
-        require(
-            underlyingIn.balanceOf(address(this)) >= underlyingInAmount,
-            "Insufficient underlyingIn"
-        );
+        require(underlyingIn.balanceOf(address(this)) >= underlyingInAmount, "Insufficient underlyingIn");
 
         uint256 amountOut = _swapUnderlyingInternal(
-            address(underlyingIn),
-            address(underlyingOut),
-            underlyingInAmount,
-            minUnderlyingOut
+            address(underlyingIn), address(underlyingOut), underlyingInAmount, minUnderlyingOut
         );
 
         // If the swap output is too small to mint at least 1 unit of cToken,
         // pay the user directly in underlying to avoid rounding to zero.
-        uint256 minUnderlyingForOneCToken = PErc20(cTokenOut)
-            .exchangeRateStored() / 1e18;
+        uint256 minUnderlyingForOneCToken = PErc20(cTokenOut).exchangeRateStored() / 1e18;
         if (amountOut < minUnderlyingForOneCToken) {
-            require(
-                underlyingOut.balanceOf(address(this)) >= amountOut,
-                "Insufficient underlyingOut"
-            );
+            require(underlyingOut.balanceOf(address(this)) >= amountOut, "Insufficient underlyingOut");
             underlyingOut.safeTransfer(recipient, amountOut);
             return 0;
         }
@@ -276,11 +226,11 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param recipient Address to receive tokens
      * @param amount Amount to transfer
      */
-    function transferUnderlying(
-        address cToken,
-        address recipient,
-        uint256 amount
-    ) external onlyAuthorized nonReentrant {
+    function transferUnderlying(address cToken, address recipient, uint256 amount)
+        external
+        onlyAuthorized
+        nonReentrant
+    {
         require(cToken != address(0), "Invalid cToken address");
         require(recipient != address(0), "Invalid recipient address");
         require(amount > 0, "Amount must be greater than zero");
@@ -288,10 +238,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         PErc20 pToken = PErc20(cToken);
         IERC20 underlying = IERC20(pToken.underlying());
 
-        require(
-            underlying.balanceOf(address(this)) >= amount,
-            "Insufficient underlying balance"
-        );
+        require(underlying.balanceOf(address(this)) >= amount, "Insufficient underlying balance");
 
         underlying.safeTransfer(recipient, amount);
     }
@@ -303,19 +250,19 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param underlyingAmount Amount of underlying to supply
      * @return cTokensMinted Amount of cTokens minted
      */
-    function mintCTokensTo(
-        address cToken,
-        address recipient,
-        uint256 underlyingAmount
-    ) external onlyAuthorized nonReentrant returns (uint256 cTokensMinted) {
+    function mintCTokensTo(address cToken, address recipient, uint256 underlyingAmount)
+        external
+        onlyAuthorized
+        nonReentrant
+        returns (uint256 cTokensMinted)
+    {
         return _mintCTokensToInternal(cToken, recipient, underlyingAmount);
     }
 
-    function _mintCTokensToInternal(
-        address cToken,
-        address recipient,
-        uint256 underlyingAmount
-    ) internal returns (uint256 cTokensMinted) {
+    function _mintCTokensToInternal(address cToken, address recipient, uint256 underlyingAmount)
+        internal
+        returns (uint256 cTokensMinted)
+    {
         require(cToken != address(0), "Invalid cToken address");
         require(recipient != address(0), "Invalid recipient address");
         require(underlyingAmount > 0, "Amount must be greater than zero");
@@ -323,10 +270,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         PErc20 pToken = PErc20(cToken);
         IERC20 underlying = IERC20(pToken.underlying());
 
-        require(
-            underlying.balanceOf(address(this)) >= underlyingAmount,
-            "Insufficient underlying balance"
-        );
+        require(underlying.balanceOf(address(this)) >= underlyingAmount, "Insufficient underlying balance");
 
         // Approve and mint (track delta)
         uint256 preCTokenBal = pToken.balanceOf(address(this));
@@ -337,51 +281,29 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         // Transfer only the newly minted cTokens to recipient
         uint256 postCTokenBal = pToken.balanceOf(address(this));
         cTokensMinted = postCTokenBal - preCTokenBal;
-        require(
-            pToken.transfer(recipient, cTokensMinted),
-            "cToken transfer failed"
-        );
+        require(pToken.transfer(recipient, cTokensMinted), "cToken transfer failed");
 
         return cTokensMinted;
     }
 
-    function _swapUnderlyingInternal(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minOut
-    ) internal returns (uint256 amountOut) {
+    function _swapUnderlyingInternal(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut)
+        internal
+        returns (uint256 amountOut)
+    {
         require(swapAdapter != address(0), "Adapter not set");
-        require(
-            tokenIn != address(0) && tokenOut != address(0),
-            "Invalid tokens"
-        );
+        require(tokenIn != address(0) && tokenOut != address(0), "Invalid tokens");
         require(amountIn > 0, "Zero amount");
 
         // Ensure the adapter holds the input tokens for router pull
         IERC20(tokenIn).safeTransfer(swapAdapter, amountIn);
 
         // Try v3 single, fallback to v2
-        try
-            PancakeSwapAdapter(swapAdapter).swapV3Single(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minOut,
-                address(this),
-                0
-            )
-        returns (uint256 outV3) {
+        try PancakeSwapAdapter(swapAdapter)
+            .swapV3Single(tokenIn, tokenOut, amountIn, minOut, address(this), 0) returns (uint256 outV3) {
             amountOut = outV3;
         } catch {
-            amountOut = PancakeSwapAdapter(swapAdapter).swapV2(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minOut,
-                address(this),
-                address(0)
-            );
+            amountOut =
+                PancakeSwapAdapter(swapAdapter).swapV2(tokenIn, tokenOut, amountIn, minOut, address(this), address(0));
         }
     }
 
@@ -393,12 +315,12 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param underlyingAmount Amount of underlying to pull and supply
      * @return cTokensMinted Amount of cTokens minted
      */
-    function pullUnderlyingAndMintTo(
-        address cToken,
-        address fromUser,
-        address recipient,
-        uint256 underlyingAmount
-    ) external onlyAuthorized nonReentrant returns (uint256 cTokensMinted) {
+    function pullUnderlyingAndMintTo(address cToken, address fromUser, address recipient, uint256 underlyingAmount)
+        external
+        onlyAuthorized
+        nonReentrant
+        returns (uint256 cTokensMinted)
+    {
         require(cToken != address(0), "Invalid cToken address");
         require(fromUser != address(0), "Invalid user address");
         require(recipient != address(0), "Invalid recipient address");
@@ -421,20 +343,13 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
 
         // Transfer minted cTokens to recipient if needed
         if (recipient != address(this)) {
-            require(
-                pToken.transfer(recipient, cTokensMinted),
-                "cToken transfer failed"
-            );
+            require(pToken.transfer(recipient, cTokensMinted), "cToken transfer failed");
         }
 
         // Track protocol-supplied amount
         protocolSuppliedAmounts[cToken] += cTokensMinted;
 
-        emit UnderlyingSuppliedToProtocol(
-            cToken,
-            underlyingAmount,
-            cTokensMinted
-        );
+        emit UnderlyingSuppliedToProtocol(cToken, underlyingAmount, cTokensMinted);
     }
 
     /**
@@ -442,10 +357,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param user User address
      * @param cToken cToken address
      */
-    function getUserUnderlyingBalance(
-        address user,
-        address cToken
-    ) external view returns (uint256) {
+    function getUserUnderlyingBalance(address user, address cToken) external view returns (uint256) {
         return userUnderlyingBalances[user][cToken];
     }
 
@@ -453,9 +365,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @notice Get protocol's supplied amount for a cToken
      * @param cToken cToken address
      */
-    function getProtocolSuppliedAmount(
-        address cToken
-    ) external view returns (uint256) {
+    function getProtocolSuppliedAmount(address cToken) external view returns (uint256) {
         return protocolSuppliedAmounts[cToken];
     }
 
@@ -464,10 +374,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param manager Address to authorize/deauthorize
      * @param authorized Authorization status
      */
-    function setAuthorizedManager(
-        address manager,
-        bool authorized
-    ) external onlyOwner {
+    function setAuthorizedManager(address manager, bool authorized) external onlyOwner {
         authorizedManagers[manager] = authorized;
     }
 
@@ -488,11 +395,7 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param to Recipient address
      * @param amount Amount to withdraw
      */
-    function emergencyWithdraw(
-        address token,
-        address to,
-        uint256 amount
-    ) external onlyOwner {
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
         require(to != address(0), "Invalid recipient");
         IERC20(token).safeTransfer(to, amount);
     }

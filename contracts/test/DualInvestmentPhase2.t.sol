@@ -191,12 +191,13 @@ contract DualInvestmentPhase2Test is Test {
         uint8 direction = 0; // CALL
 
         // This should work since risk guard allows it by default
-        (bool canEnter, string memory reason) = manager.canEnterPosition(
-            user1,
-            address(pETH),
-            amount,
-            true // use collateral
-        );
+        (bool canEnter, string memory reason) =
+            manager.canEnterPosition(
+                user1,
+                address(pETH),
+                amount,
+                true // use collateral
+            );
 
         // The test should pass basic checks (we configured supported tokens)
         // Note: Full position entry would require more complex mock setup
@@ -204,11 +205,12 @@ contract DualInvestmentPhase2Test is Test {
 
     function testBorrowRouterCanUserBorrow() public {
         // Test borrow capacity check
-        (bool canBorrow, string memory reason) = borrowRouter.canUserBorrow(
-            user1,
-            address(pETH),
-            1e18 // 1 ETH
-        );
+        (bool canBorrow, string memory reason) =
+            borrowRouter.canUserBorrow(
+                user1,
+                address(pETH),
+                1e18 // 1 ETH
+            );
 
         // Result depends on mock peridottroller implementation
         // This tests that the function doesn't revert and returns a result
@@ -219,12 +221,13 @@ contract DualInvestmentPhase2Test is Test {
         // Test position entry validation
         uint256 positionValue = 1000e18; // $1000 position
 
-        (bool allowed, string memory reason) = riskGuard.checkPositionEntry(
-            user1,
-            address(pETH),
-            positionValue,
-            true // use collateral
-        );
+        (bool allowed, string memory reason) =
+            riskGuard.checkPositionEntry(
+                user1,
+                address(pETH),
+                positionValue,
+                true // use collateral
+            );
 
         // Should work for reasonable position size
         assertTrue(bytes(reason).length >= 0, "Should return a reason");

@@ -72,7 +72,7 @@ contract PancakeBoostedDelegate is PErc20Delegate {
     function _setLPVaultInternal(address vault_, uint256 minSeed_) internal {
         // Validate that vault_ is an ERC4626
         IERC4626 vault = IERC4626(vault_);
-        
+
         // Validate inflation protection seed if required
         if (minSeed_ > 0) {
             uint256 deadBalance = IERC20(vault_).balanceOf(DEAD_ADDRESS);
@@ -112,13 +112,7 @@ contract PancakeBoostedDelegate is PErc20Delegate {
 
         // Initialize base PErc20
         super.initialize(
-            underlying_,
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
+            underlying_, peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_
         );
     }
 
@@ -174,7 +168,7 @@ contract PancakeBoostedDelegate is PErc20Delegate {
      */
     function underlyingPool() external view returns (address) {
         if (address(lpVault) == address(0)) return address(0);
-        
+
         // Try to call pool() on the vault - may revert if not a V3LPVault4626
         try IV3LPVault4626Minimal(address(lpVault)).pool() returns (address poolAddr) {
             return poolAddr;
@@ -188,13 +182,13 @@ contract PancakeBoostedDelegate is PErc20Delegate {
      */
     function underlyingTokens() external view returns (address token0, address token1) {
         if (address(lpVault) == address(0)) return (address(0), address(0));
-        
+
         try IV3LPVault4626Extended(address(lpVault)).token0() returns (address t0) {
             token0 = t0;
         } catch {
             return (address(0), address(0));
         }
-        
+
         try IV3LPVault4626Extended(address(lpVault)).token1() returns (address t1) {
             token1 = t1;
         } catch {
@@ -207,11 +201,11 @@ contract PancakeBoostedDelegate is PErc20Delegate {
      */
     function vaultManagedAmounts() external view returns (uint256 amount0, uint256 amount1) {
         if (address(lpVault) == address(0)) return (0, 0);
-        
+
         try IV3LPVault4626Extended(address(lpVault)).totalManagedToken0() returns (uint256 a0) {
             amount0 = a0;
         } catch {}
-        
+
         try IV3LPVault4626Extended(address(lpVault)).totalManagedToken1() returns (uint256 a1) {
             amount1 = a1;
         } catch {}
@@ -222,11 +216,11 @@ contract PancakeBoostedDelegate is PErc20Delegate {
      */
     function vaultTickRange() external view returns (int24 tickLower, int24 tickUpper) {
         if (address(lpVault) == address(0)) return (0, 0);
-        
+
         try IV3LPVault4626Extended(address(lpVault)).tickLower() returns (int24 tl) {
             tickLower = tl;
         } catch {}
-        
+
         try IV3LPVault4626Extended(address(lpVault)).tickUpper() returns (int24 tu) {
             tickUpper = tu;
         } catch {}

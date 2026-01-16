@@ -24,7 +24,8 @@ contract RewardDistributorMultiForkTest is Test {
         address rewardTokenAddr = vm.envOr("REWARD_TOKEN", address(0));
         address admin = vm.envOr("REWARD_ADMIN", address(0));
 
-        if (bytes(rpc).length == 0 || marketAddr == address(0) || rewardTokenAddr == address(0) || admin == address(0)) {
+        if (bytes(rpc).length == 0 || marketAddr == address(0) || rewardTokenAddr == address(0) || admin == address(0))
+        {
             emit log("Skipping fork: set MONAD_RPC, MARKET, REWARD_TOKEN, REWARD_ADMIN");
             return;
         }

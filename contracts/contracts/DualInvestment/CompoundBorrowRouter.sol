@@ -40,25 +40,16 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
         uint256 healthFactorAfter
     );
 
-    event AuthorizedDestinationUpdated(
-        address indexed destination,
-        bool authorized
-    );
+    event AuthorizedDestinationUpdated(address indexed destination, bool authorized);
     event MinHealthFactorUpdated(uint256 oldFactor, uint256 newFactor);
     event MaxLTVUpdated(uint256 oldLTV, uint256 newLTV);
 
     modifier onlyAuthorizedDestination(address destination) {
-        require(
-            authorizedDestinations[destination],
-            "Destination not authorized"
-        );
+        require(authorizedDestinations[destination], "Destination not authorized");
         _;
     }
 
-    constructor(
-        address _peridottroller,
-        address _priceOracle
-    ) Ownable(msg.sender) {
+    constructor(address _peridottroller, address _priceOracle) Ownable(msg.sender) {
         require(_peridottroller != address(0), "Invalid peridottroller");
         require(_priceOracle != address(0), "Invalid price oracle");
         peridottroller = PeridottrollerInterface(_peridottroller);
@@ -73,12 +64,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param user User initiating the borrow (for accounting)
      * @return success Whether the operation succeeded
      */
-    function borrowAndRoute(
-        address cToken,
-        uint256 borrowAmount,
-        address destination,
-        address user
-    )
+    function borrowAndRoute(address cToken, uint256 borrowAmount, address destination, address user)
         external
         onlyAuthorizedDestination(destination)
         nonReentrant
@@ -89,8 +75,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
         require(user != address(0), "Invalid user");
 
         // Get user's current account liquidity and health factor
-        (, uint256 liquidityBefore, uint256 shortfallBefore) = peridottroller
-            .getAccountLiquidity(user);
+        (, uint256 liquidityBefore, uint256 shortfallBefore) = peridottroller.getAccountLiquidity(user);
         require(shortfallBefore == 0, "User has existing shortfall");
         require(liquidityBefore > 0, "User has no liquidity");
 
@@ -104,10 +89,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
 
         // Verify health factor after borrowing
         uint256 healthFactorAfter = _calculateHealthFactor(user);
-        require(
-            healthFactorAfter >= minHealthFactorAfterBorrow,
-            "Health factor too low after borrow"
-        );
+        require(healthFactorAfter >= minHealthFactorAfterBorrow, "Health factor too low after borrow");
 
         // Route borrowed funds to destination. Some implementations may credit the user instead of this router.
         IERC20 underlying = IERC20(pToken.underlying());
@@ -119,14 +101,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
             underlying.safeTransferFrom(user, destination, borrowAmount);
         }
 
-        emit BorrowAndRoute(
-            user,
-            cToken,
-            destination,
-            borrowAmount,
-            healthFactorBefore,
-            healthFactorAfter
-        );
+        emit BorrowAndRoute(user, cToken, destination, borrowAmount, healthFactorBefore, healthFactorAfter);
 
         return true;
     }
@@ -139,24 +114,18 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @return canBorrow Whether user can safely borrow
      * @return reason Reason if cannot borrow
      */
-    function canUserBorrow(
-        address user,
-        address cToken,
-        uint256 borrowAmount
-    ) external returns (bool canBorrow, string memory reason) {
+    function canUserBorrow(address user, address cToken, uint256 borrowAmount)
+        external
+        returns (bool canBorrow, string memory reason)
+    {
         // Check if market is listed and borrowing is enabled
-        uint256 allowed = peridottroller.borrowAllowed(
-            cToken,
-            user,
-            borrowAmount
-        );
+        uint256 allowed = peridottroller.borrowAllowed(cToken, user, borrowAmount);
         if (allowed != 0) {
             return (false, "Borrow not allowed by peridottroller");
         }
 
         // Check user's current liquidity
-        (, uint256 liquidity, uint256 shortfall) = peridottroller
-            .getAccountLiquidity(user);
+        (, uint256 liquidity, uint256 shortfall) = peridottroller.getAccountLiquidity(user);
         if (shortfall > 0) {
             return (false, "User has existing shortfall");
         }
@@ -172,11 +141,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
         }
 
         // Check if resulting health factor would be acceptable
-        uint256 projectedHealthFactor = _projectHealthFactorAfterBorrow(
-            user,
-            cToken,
-            borrowAmount
-        );
+        uint256 projectedHealthFactor = _projectHealthFactorAfterBorrow(user, cToken, borrowAmount);
 
         if (projectedHealthFactor < minHealthFactorAfterBorrow) {
             return (false, "Health factor would be too low");
@@ -190,9 +155,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param user User address
      * @return healthFactor Health factor (1e18 = 100%)
      */
-    function getUserHealthFactor(
-        address user
-    ) external view returns (uint256 healthFactor) {
+    function getUserHealthFactor(address user) external view returns (uint256 healthFactor) {
         return _calculateHealthFactor(user);
     }
 
@@ -201,11 +164,8 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param user User address
      * @return healthFactor Health factor (0 if no borrows, >1e18 if healthy)
      */
-    function _calculateHealthFactor(
-        address user
-    ) internal view returns (uint256 healthFactor) {
-        (, uint256 liquidity, uint256 shortfall) = peridottroller
-            .getAccountLiquidity(user);
+    function _calculateHealthFactor(address user) internal view returns (uint256 healthFactor) {
+        (, uint256 liquidity, uint256 shortfall) = peridottroller.getAccountLiquidity(user);
 
         if (shortfall > 0) {
             return 0; // Liquidatable
@@ -232,12 +192,10 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param user User address
      * @return totalBorrowValue Estimated total borrow value in USD
      */
-    function _estimateTotalBorrowValue(
-        address user
-    ) internal view returns (uint256 totalBorrowValue) {
+    function _estimateTotalBorrowValue(address user) internal view returns (uint256 totalBorrowValue) {
         // In a production system, this would iterate through all markets
         // For now, we'll use the liquidity calculation as a proxy
-        (, uint256 liquidity, ) = peridottroller.getAccountLiquidity(user);
+        (, uint256 liquidity,) = peridottroller.getAccountLiquidity(user);
 
         // This is a simplified approximation
         // Real implementation would sum up borrows across all markets
@@ -251,14 +209,14 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param borrowAmount Amount to borrow
      * @return projectedHealthFactor Projected health factor after borrow
      */
-    function _projectHealthFactorAfterBorrow(
-        address user,
-        address cToken,
-        uint256 borrowAmount
-    ) internal view returns (uint256 projectedHealthFactor) {
+    function _projectHealthFactorAfterBorrow(address user, address cToken, uint256 borrowAmount)
+        internal
+        view
+        returns (uint256 projectedHealthFactor)
+    {
         uint256 currentHealthFactor = _calculateHealthFactor(user);
         uint256 borrowValueUSD = _getBorrowValueInUSD(cToken, borrowAmount);
-        (, uint256 liquidity, ) = peridottroller.getAccountLiquidity(user);
+        (, uint256 liquidity,) = peridottroller.getAccountLiquidity(user);
 
         if (currentHealthFactor == type(uint256).max) {
             // No existing borrows, calculate fresh
@@ -279,10 +237,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param amount Amount of underlying tokens
      * @return valueUSD Value in USD (scaled to 1e18)
      */
-    function _getBorrowValueInUSD(
-        address cToken,
-        uint256 amount
-    ) internal view returns (uint256 valueUSD) {
+    function _getBorrowValueInUSD(address cToken, uint256 amount) internal view returns (uint256 valueUSD) {
         PErc20 pToken = PErc20(cToken);
 
         // Get price from our SimplePriceOracle
@@ -296,10 +251,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param destination Destination address
      * @param authorized Whether destination is authorized
      */
-    function setAuthorizedDestination(
-        address destination,
-        bool authorized
-    ) external onlyOwner {
+    function setAuthorizedDestination(address destination, bool authorized) external onlyOwner {
         require(destination != address(0), "Invalid destination");
         authorizedDestinations[destination] = authorized;
         emit AuthorizedDestinationUpdated(destination, authorized);
@@ -335,10 +287,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param cToken cToken to repay to
      * @param repayAmount Amount to repay
      */
-    function emergencyRepay(
-        address cToken,
-        uint256 repayAmount
-    ) external onlyOwner {
+    function emergencyRepay(address cToken, uint256 repayAmount) external onlyOwner {
         PErc20 pToken = PErc20(cToken);
         IERC20 underlying = IERC20(pToken.underlying());
 
@@ -352,11 +301,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
      * @param to Recipient address
      * @param amount Amount to withdraw
      */
-    function emergencyWithdraw(
-        address token,
-        address to,
-        uint256 amount
-    ) external onlyOwner {
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
         require(to != address(0), "Invalid recipient");
         IERC20(token).safeTransfer(to, amount);
     }

@@ -25,8 +25,7 @@ contract PancakeBoostedPErc20 is PErc20 {
     using SafeERC20 for IERC20;
 
     /// @notice Dead address for inflation protection seed validation.
-    address public constant DEAD_ADDRESS =
-        0x000000000000000000000000000000000000dEaD;
+    address public constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /// @notice The V3LPVault4626 whose shares are the underlying of this pToken.
     IERC4626 public immutable lpVault;
@@ -65,10 +64,7 @@ contract PancakeBoostedPErc20 is PErc20 {
         // Validate inflation protection seed if required
         if (minVaultSeed_ > 0) {
             uint256 deadBalance = IERC20(underlying_).balanceOf(DEAD_ADDRESS);
-            require(
-                deadBalance >= minVaultSeed_,
-                "PancakeBoosted: vault seed missing"
-            );
+            require(deadBalance >= minVaultSeed_, "PancakeBoosted: vault seed missing");
         }
         minVaultSeed = minVaultSeed_;
 
@@ -77,13 +73,7 @@ contract PancakeBoostedPErc20 is PErc20 {
 
         // Initialize the PErc20 base
         initialize(
-            underlying_,
-            peridottroller_,
-            interestRateModel_,
-            initialExchangeRateMantissa_,
-            name_,
-            symbol_,
-            decimals_
+            underlying_, peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_
         );
 
         // Transfer admin rights to the designated address
@@ -120,9 +110,7 @@ contract PancakeBoostedPErc20 is PErc20 {
      * @param shares Amount of vault shares.
      * @return assets The token0-equivalent value.
      */
-    function convertVaultSharesToAssets(
-        uint256 shares
-    ) external view returns (uint256 assets) {
+    function convertVaultSharesToAssets(uint256 shares) external view returns (uint256 assets) {
         return lpVault.convertToAssets(shares);
     }
 
@@ -131,9 +119,7 @@ contract PancakeBoostedPErc20 is PErc20 {
      * @param assets The token0-equivalent value.
      * @return shares Amount of vault shares.
      */
-    function convertAssetsToVaultShares(
-        uint256 assets
-    ) external view returns (uint256 shares) {
+    function convertAssetsToVaultShares(uint256 assets) external view returns (uint256 shares) {
         return lpVault.convertToShares(assets);
     }
 
@@ -142,9 +128,7 @@ contract PancakeBoostedPErc20 is PErc20 {
      */
     function underlyingPool() external view returns (address) {
         // Try to call pool() on the vault - may revert if not a V3LPVault4626
-        try IV3LPVault4626Minimal(address(lpVault)).pool() returns (
-            address poolAddr
-        ) {
+        try IV3LPVault4626Minimal(address(lpVault)).pool() returns (address poolAddr) {
             return poolAddr;
         } catch {
             return address(0);

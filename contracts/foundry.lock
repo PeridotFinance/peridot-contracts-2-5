@@ -1,0 +1,5 @@
+{
+  "lib/solidity-bytes-utils": {
+    "rev": "f4413cd6137b78403e3a1156bee6aceab46b46fa"
+  }
+}

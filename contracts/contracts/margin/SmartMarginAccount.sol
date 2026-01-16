@@ -56,85 +56,52 @@ contract SmartMarginAccount {
         emit ManagerUpdated(newManager);
     }
 
-    function enterMarket(
-        address comptroller,
-        address cToken
-    ) external onlyManager returns (uint256) {
+    function enterMarket(address comptroller, address cToken) external onlyManager returns (uint256) {
         address[] memory markets = new address[](1);
         markets[0] = cToken;
-        uint256[] memory results = PeridottrollerInterface(comptroller)
-            .enterMarkets(markets);
+        uint256[] memory results = PeridottrollerInterface(comptroller).enterMarkets(markets);
         require(results[0] == 0, "SMA: enter market failed");
         return results[0];
     }
 
-    function exitMarket(
-        address comptroller,
-        address cToken
-    ) external onlyManager returns (uint256) {
+    function exitMarket(address comptroller, address cToken) external onlyManager returns (uint256) {
         return PeridottrollerInterface(comptroller).exitMarket(cToken);
     }
 
-    function borrow(
-        address cToken,
-        uint256 amount
-    ) external onlyManager returns (uint256) {
+    function borrow(address cToken, uint256 amount) external onlyManager returns (uint256) {
         return PErc20(cToken).borrow(amount);
     }
 
-    function repayBorrow(
-        address cToken,
-        uint256 amount
-    ) external onlyManager returns (uint256) {
+    function repayBorrow(address cToken, uint256 amount) external onlyManager returns (uint256) {
         IERC20 underlying = IERC20(PErc20(cToken).underlying());
         underlying.forceApprove(cToken, amount);
         return PErc20(cToken).repayBorrow(amount);
     }
 
-    function mint(
-        address cToken,
-        uint256 underlyingAmount
-    ) external onlyManager returns (uint256) {
+    function mint(address cToken, uint256 underlyingAmount) external onlyManager returns (uint256) {
         IERC20 underlying = IERC20(PErc20(cToken).underlying());
         underlying.forceApprove(cToken, underlyingAmount);
         return PErc20(cToken).mint(underlyingAmount);
     }
 
-    function redeem(
-        address cToken,
-        uint256 amount
-    ) external onlyManager returns (uint256) {
+    function redeem(address cToken, uint256 amount) external onlyManager returns (uint256) {
         return PErc20(cToken).redeem(amount);
     }
 
-    function redeemUnderlying(
-        address cToken,
-        uint256 underlyingAmount
-    ) external onlyManager returns (uint256) {
+    function redeemUnderlying(address cToken, uint256 underlyingAmount) external onlyManager returns (uint256) {
         return PErc20(cToken).redeemUnderlying(underlyingAmount);
     }
 
-    function transferOut(
-        address token,
-        address to,
-        uint256 amount
-    ) external onlyManager {
+    function transferOut(address token, address to, uint256 amount) external onlyManager {
         require(to != address(0), "SMA: invalid recipient");
         IERC20(token).safeTransfer(to, amount);
     }
 
-    function approve(
-        address token,
-        address spender,
-        uint256 amount
-    ) external onlyManager {
+    function approve(address token, address spender, uint256 amount) external onlyManager {
         IERC20(token).forceApprove(spender, amount);
     }
 
-    function callRouter(
-        address target,
-        bytes calldata data
-    ) external onlyManager returns (bytes memory) {
+    function callRouter(address target, bytes calldata data) external onlyManager returns (bytes memory) {
         require(target.code.length > 0, "SMA: target not contract");
 
         (bool success, bytes memory response) = target.call(data);
@@ -152,11 +119,7 @@ contract SmartMarginAccount {
         return response;
     }
 
-    function rescueToken(
-        address token,
-        address to,
-        uint256 amount
-    ) external onlyManager {
+    function rescueToken(address token, address to, uint256 amount) external onlyManager {
         require(to != address(0), "SMA: invalid rescue to");
         IERC20(token).safeTransfer(to, amount);
     }

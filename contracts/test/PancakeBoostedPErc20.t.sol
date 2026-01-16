@@ -71,23 +71,13 @@ contract PancakeBoostedPErc20Test is Test {
     function testConstructorValidatesVault() public {
         vm.expectRevert("PancakeBoosted: vault zero");
         new PancakeBoostedPErc20(
-            address(0),
-            comptroller,
-            irm,
-            INITIAL_EXCHANGE_RATE,
-            "Test",
-            "TST",
-            18,
-            payable(address(this)),
-            0
+            address(0), comptroller, irm, INITIAL_EXCHANGE_RATE, "Test", "TST", 18, payable(address(this)), 0
         );
     }
 
     function testConstructorValidatesSeed() public {
         // Create a new vault without seed
-        MockERC4626Vault unseededVault = new MockERC4626Vault(
-            IERC20Metadata(address(baseToken))
-        );
+        MockERC4626Vault unseededVault = new MockERC4626Vault(IERC20Metadata(address(baseToken)));
 
         vm.expectRevert("PancakeBoosted: vault seed missing");
         new PancakeBoostedPErc20(
@@ -113,11 +103,7 @@ contract PancakeBoostedPErc20Test is Test {
 
         assertEq(err, 0, "mint should succeed");
         assertEq(pToken.balanceOf(alice), sharesToSupply, "pToken balance");
-        assertEq(
-            vault.balanceOf(address(pToken)),
-            sharesToSupply,
-            "vault shares held by pToken"
-        );
+        assertEq(vault.balanceOf(address(pToken)), sharesToSupply, "vault shares held by pToken");
     }
 
     function testRedeemReturnsVaultShares() public {
@@ -132,11 +118,7 @@ contract PancakeBoostedPErc20Test is Test {
         uint256 vaultBalanceAfter = vault.balanceOf(alice);
         vm.stopPrank();
 
-        assertEq(
-            vaultBalanceAfter - vaultBalanceBefore,
-            50e18,
-            "vault shares returned"
-        );
+        assertEq(vaultBalanceAfter - vaultBalanceBefore, 50e18, "vault shares returned");
         assertEq(pToken.balanceOf(alice), 50e18, "remaining pTokens");
     }
 
@@ -154,11 +136,7 @@ contract PancakeBoostedPErc20Test is Test {
         uint256 vaultBalanceAfter = vault.balanceOf(bob);
         vm.stopPrank();
 
-        assertEq(
-            vaultBalanceAfter - vaultBalanceBefore,
-            50e18,
-            "borrowed vault shares"
-        );
+        assertEq(vaultBalanceAfter - vaultBalanceBefore, 50e18, "borrowed vault shares");
     }
 
     function testRepayBorrow() public {
@@ -213,11 +191,7 @@ contract PancakeBoostedPErc20Test is Test {
         vm.stopPrank();
 
         assertEq(pToken.totalSupply(), 250e18, "total pToken supply");
-        assertEq(
-            vault.balanceOf(address(pToken)),
-            250e18,
-            "total vault shares held"
-        );
+        assertEq(vault.balanceOf(address(pToken)), 250e18, "total vault shares held");
 
         // Both redeem partially
         vm.prank(alice);
@@ -227,10 +201,6 @@ contract PancakeBoostedPErc20Test is Test {
         pToken.redeem(75e18);
 
         assertEq(pToken.totalSupply(), 125e18, "remaining pToken supply");
-        assertEq(
-            vault.balanceOf(address(pToken)),
-            125e18,
-            "remaining vault shares"
-        );
+        assertEq(vault.balanceOf(address(pToken)), 125e18, "remaining vault shares");
     }
 }
