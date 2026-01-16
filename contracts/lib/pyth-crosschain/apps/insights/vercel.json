@@ -1,5 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "../../vercel-ignore.sh",
-  "buildCommand": "turbo run build:vercel --filter @pythnetwork/insights"
-}
