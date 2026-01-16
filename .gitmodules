@@ -1,3 +1,6 @@
 [submodule "contracts/lib/solidity-bytes-utils"]
 	path = contracts/lib/solidity-bytes-utils
 	url = https://github.com/GNSPS/solidity-bytes-utils
+[submodule "contracts/lib/lz-address-book"]
+	path = contracts/lib/lz-address-book
+	url = https://github.com/LayerZero-Labs/lz-address-book
