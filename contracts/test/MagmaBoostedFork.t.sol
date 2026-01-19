@@ -27,6 +27,7 @@ contract MagmaBoostedForkTest is Test {
     address testUser;
 
     function setUp() public {
+        _ensureForkOrSkip();
         // Create test user with WMON
         testUser = address(0x9999);
 
@@ -122,5 +123,25 @@ contract MagmaBoostedForkTest is Test {
         console.log("Vault assets (WMON value):", vaultAssets);
 
         assertTrue(vaultAssets > 0, "Should have assets in vault");
+    }
+
+    function _ensureForkOrSkip() internal {
+        try vm.activeFork() returns (uint256) {
+            return;
+        } catch {
+            string memory url = _tryEnvString("MONAD_RPC_URL");
+            if (bytes(url).length == 0) {
+                vm.skip(true);
+            }
+            vm.createSelectFork(url);
+        }
+    }
+
+    function _tryEnvString(string memory key) internal view returns (string memory) {
+        try vm.envString(key) returns (string memory value) {
+            return value;
+        } catch {
+            return "";
+        }
     }
 }

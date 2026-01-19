@@ -25,10 +25,7 @@ contract RedeemSimulation is Test {
     IERC4626 vault;
 
     function setUp() public {
-        // Fork Monad Mainnet at the specific block
-        // vm.createSelectFork("https://rpc.monad.xyz", TARGET_BLOCK);
-        // Note: User must provide RPC URL via environment variable or command line
-        // We will assume `forge test --fork-url $MONAD_RPC_URL --fork-block-number 456140`
+        _ensureForkOrSkip();
 
         pToken = MorphoBoostedDelegate(DELEGATOR_PROXY);
         usdc = IERC20(USDC);
@@ -96,5 +93,25 @@ contract RedeemSimulation is Test {
         // Success - log the outcome
         console.log("\n=== SUCCESS ===");
         console.log("User successfully redeemed", REDEEM_AMOUNT, "USDC");
+    }
+
+    function _ensureForkOrSkip() internal {
+        try vm.activeFork() returns (uint256) {
+            return;
+        } catch {
+            string memory url = _tryEnvString("MONAD_RPC_URL");
+            if (bytes(url).length == 0) {
+                vm.skip(true);
+            }
+            vm.createSelectFork(url, TARGET_BLOCK);
+        }
+    }
+
+    function _tryEnvString(string memory key) internal view returns (string memory) {
+        try vm.envString(key) returns (string memory value) {
+            return value;
+        } catch {
+            return "";
+        }
     }
 }
