@@ -14,21 +14,29 @@ import {IMarginRouterAdapter} from "./IMarginRouterAdapter.sol";
 contract WhitelistRouterAdapter is IMarginRouterAdapter, Ownable {
     using SafeERC20 for IERC20;
 
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
+
     struct SelectorConfig {
         bool useSelectorWhitelist;
     }
 
     address public manager;
+    uint256 public actionDelay;
 
     mapping(address => bool) public whitelistedTargets;
     mapping(address => mapping(bytes4 => bool)) public whitelistedSelectors;
     mapping(address => SelectorConfig) public targetSelectorConfig;
     mapping(address => bool) public operators;
+    mapping(bytes32 => uint256) public queuedActions;
 
     event ManagerUpdated(address indexed newManager);
     event TargetWhitelistUpdated(address indexed target, bool allowed);
     event SelectorWhitelistUpdated(address indexed target, bytes4 indexed selector, bool allowed);
     event OperatorUpdated(address indexed operator, bool allowed);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
     event SwapForwarded(
         address indexed fromAccount,
         address indexed tokenIn,
@@ -42,9 +50,52 @@ contract WhitelistRouterAdapter is IMarginRouterAdapter, Ownable {
         _;
     }
 
-    constructor(address owner_) Ownable(owner_) {}
+    constructor(address owner_, uint256 actionDelay_) Ownable(owner_) {
+        require(actionDelay_ >= MIN_ACTION_DELAY, "Adapter: delay too short");
+        actionDelay = actionDelay_;
+        emit ActionDelayUpdated(actionDelay_);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        require(newDelay >= actionDelay, "Adapter: delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Adapter: delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Adapter: action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueSetManager(address newManager) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setManager", newManager)));
+    }
+
+    function queueSetOperator(address operator, bool allowed) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setOperator", operator, allowed)));
+    }
+
+    function queueSetTargetWhitelist(
+        address target,
+        bool allowed,
+        bool enforceSelectorWhitelist
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setTargetWhitelist", target, allowed, enforceSelectorWhitelist)));
+    }
+
+    function queueSetSelectorWhitelist(
+        address target,
+        bytes4 selector,
+        bool allowed
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setSelectorWhitelist", target, selector, allowed)));
+    }
 
     function setManager(address newManager) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setManager", newManager));
+        _consumeAction(actionId);
         if (manager != address(0)) {
             operators[manager] = false;
             emit OperatorUpdated(manager, false);
@@ -55,22 +106,32 @@ contract WhitelistRouterAdapter is IMarginRouterAdapter, Ownable {
             emit OperatorUpdated(newManager, true);
         }
         emit ManagerUpdated(newManager);
+        emit ActionExecuted(actionId);
     }
 
     function setOperator(address operator, bool allowed) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setOperator", operator, allowed));
+        _consumeAction(actionId);
         operators[operator] = allowed;
         emit OperatorUpdated(operator, allowed);
+        emit ActionExecuted(actionId);
     }
 
     function setTargetWhitelist(address target, bool allowed, bool enforceSelectorWhitelist) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setTargetWhitelist", target, allowed, enforceSelectorWhitelist));
+        _consumeAction(actionId);
         whitelistedTargets[target] = allowed;
         targetSelectorConfig[target].useSelectorWhitelist = enforceSelectorWhitelist && allowed;
         emit TargetWhitelistUpdated(target, allowed);
+        emit ActionExecuted(actionId);
     }
 
     function setSelectorWhitelist(address target, bytes4 selector, bool allowed) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setSelectorWhitelist", target, selector, allowed));
+        _consumeAction(actionId);
         whitelistedSelectors[target][selector] = allowed;
         emit SelectorWhitelistUpdated(target, selector, allowed);
+        emit ActionExecuted(actionId);
     }
 
     function swap(
@@ -125,5 +186,20 @@ contract WhitelistRouterAdapter is IMarginRouterAdapter, Ownable {
         if (leftoverIn > 0) {
             tokenInContract.safeTransfer(fromAccount, leftoverIn);
         }
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Adapter: action already queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Adapter: action not queued");
+        require(block.timestamp >= executeAfter, "Adapter: action not ready");
+        delete queuedActions[actionId];
     }
 }

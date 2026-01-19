@@ -21,7 +21,11 @@ contract BoostedPErc20 is PErc20 {
     /// @notice When true the adapter is bypassed and funds stay on the pToken.
     bool public boostPaused;
 
-    event BoostAdapterUpdated(address indexed oldAdapter, address indexed newAdapter, uint256 withdrawn);
+    event BoostAdapterUpdated(
+        address indexed oldAdapter,
+        address indexed newAdapter,
+        uint256 withdrawn
+    );
     event LiquidityBufferUpdated(uint256 previousMantissa, uint256 newMantissa);
     event BoostPausedUpdated(bool paused);
     event BoostFundsDeployed(uint256 amountDeployed);
@@ -43,7 +47,10 @@ contract BoostedPErc20 is PErc20 {
         }
 
         if (address(adapter) != address(0)) {
-            require(adapter.underlying() == underlying, "BoostedPErc20: adapter underlying mismatch");
+            require(
+                adapter.underlying() == underlying,
+                "BoostedPErc20: adapter underlying mismatch"
+            );
             boostAdapter = adapter;
             _ensureAdapterAllowance();
             boostPaused = false;
@@ -70,7 +77,8 @@ contract BoostedPErc20 is PErc20 {
     }
 
     /**
-     * @notice Pauses or resumes the adapter. Pausing withdraws all funds back to the pToken.
+     * @notice Pauses or resumes the adapter. Pausing withdraws all funds back to the pToken
+     *         and revokes the adapter's allowance to prevent fund extraction while paused.
      */
     function setBoostPaused(bool pause) public {
         require(msg.sender == admin, "BoostedPErc20: only admin");
@@ -82,6 +90,8 @@ contract BoostedPErc20 is PErc20 {
             if (address(boostAdapter) != address(0)) {
                 uint256 amount = boostAdapter.withdrawAll(address(this));
                 emit BoostFundsPulled(amount);
+                // Revoke allowance to prevent compromised adapter from pulling funds while paused
+                _clearAdapterAllowance(address(boostAdapter));
             }
         } else {
             _ensureAdapterAllowance();
@@ -98,7 +108,10 @@ contract BoostedPErc20 is PErc20 {
         require(msg.sender == admin, "BoostedPErc20: only admin");
         require(recipient != address(0), "BoostedPErc20: recipient zero");
         IBoostedYieldAdapter adapter = boostAdapter;
-        require(address(adapter) != address(0), "BoostedPErc20: adapter not set");
+        require(
+            address(adapter) != address(0),
+            "BoostedPErc20: adapter not set"
+        );
         uint256 withdrawn = adapter.withdrawAll(recipient);
         emit BoostFundsPulled(withdrawn);
     }
@@ -120,7 +133,10 @@ contract BoostedPErc20 is PErc20 {
     /**
      * @dev After the protocol pulls tokens in, forward the excess above the buffer into the adapter.
      */
-    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
+    function doTransferIn(
+        address from,
+        uint256 amount
+    ) internal override returns (uint256) {
         uint256 actual = super.doTransferIn(from, amount);
         _rebalanceBuffer();
         return actual;
@@ -129,7 +145,10 @@ contract BoostedPErc20 is PErc20 {
     /**
      * @dev Before transferring tokens out make sure enough liquidity is on-hand, pulling from the adapter as needed.
      */
-    function doTransferOut(address payable to, uint256 amount) internal override {
+    function doTransferOut(
+        address payable to,
+        uint256 amount
+    ) internal override {
         _ensureLiquidity(amount);
         super.doTransferOut(to, amount);
         _rebalanceBuffer();
@@ -179,7 +198,8 @@ contract BoostedPErc20 is PErc20 {
             return;
         }
 
-        uint256 targetBuffer = (totalAssets * liquidityBufferMantissa) / MANTISSA_ONE;
+        uint256 targetBuffer = (totalAssets * liquidityBufferMantissa) /
+            MANTISSA_ONE;
 
         if (localCash > targetBuffer) {
             uint256 toDeposit = localCash - targetBuffer;

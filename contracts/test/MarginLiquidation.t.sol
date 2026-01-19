@@ -132,6 +132,7 @@ contract MarginLiquidationTest is Test {
     TestCTokenLiquidation public cWeth;
     PancakeV3RouterAdapter public router;
     MockPancakeV3RouterLiquidation public mockRouter;
+    uint256 public actionDelay;
 
     address public constant USER = address(0xA11CE);
     address public constant LIQUIDATOR = address(0xB0B);
@@ -158,14 +159,20 @@ contract MarginLiquidationTest is Test {
         manager.configureMarket(address(cWeth), address(weth), true, true, true, true, true, 300, 50, 100);
 
         mockRouter = new MockPancakeV3RouterLiquidation();
-        router = new PancakeV3RouterAdapter(address(this), address(mockRouter));
-        router.setManager(address(manager));
-        manager.setRouterAdapter(address(router));
-        router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
-
+        actionDelay = 1 days;
+        router = new PancakeV3RouterAdapter(address(this), address(mockRouter), actionDelay);
         liquidation = new MarginLiquidation(address(manager), address(this));
-        liquidation.setAdapter(address(router), true);
+
+        router.queueSetManager(address(manager));
+        router.queueSetPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
+        router.queueSetOperator(address(liquidation), true);
+        vm.warp(block.timestamp + actionDelay);
+        router.setManager(address(manager));
+        router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
         router.setOperator(address(liquidation), true);
+        manager.setRouterAdapter(address(router));
+
+        liquidation.setAdapter(address(router), true);
 
         usdc.mint(USER, 10_000e18);
         weth.mint(USER, 50e18);

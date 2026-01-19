@@ -95,6 +95,7 @@ contract MarginManagerTest is Test {
     TestCToken public cWeth;
     PancakeV3RouterAdapter public router;
     MockPancakeV3Router public mockRouter;
+    uint256 public actionDelay;
 
     address public constant USER = address(0xA11CE);
     uint24 internal constant POOL_FEE = 500;
@@ -130,10 +131,14 @@ contract MarginManagerTest is Test {
 
         mockRouter = new MockPancakeV3Router();
         mockRouter.setRate(5e14);
-        router = new PancakeV3RouterAdapter(address(this), address(mockRouter));
+        actionDelay = 1 days;
+        router = new PancakeV3RouterAdapter(address(this), address(mockRouter), actionDelay);
+        router.queueSetManager(address(manager));
+        router.queueSetPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
+        vm.warp(block.timestamp + actionDelay);
         router.setManager(address(manager));
-        manager.setRouterAdapter(address(router));
         router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
+        manager.setRouterAdapter(address(router));
 
         usdc.mint(USER, 10_000e18);
         weth.mint(USER, 100e18);

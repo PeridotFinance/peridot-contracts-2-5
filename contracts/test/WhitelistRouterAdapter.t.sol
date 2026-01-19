@@ -24,12 +24,17 @@ contract WhitelistRouterAdapterTest is Test {
     MockErc20 public tokenIn;
     MockErc20 public tokenOut;
     ResidualSwapTarget public target;
+    uint256 public actionDelay;
 
     function setUp() public {
-        adapter = new WhitelistRouterAdapter(address(this));
-        adapter.setManager(address(this));
-
         target = new ResidualSwapTarget();
+        actionDelay = 1 days;
+        adapter = new WhitelistRouterAdapter(address(this), actionDelay);
+
+        adapter.queueSetManager(address(this));
+        adapter.queueSetTargetWhitelist(address(target), true, false);
+        vm.warp(block.timestamp + actionDelay);
+        adapter.setManager(address(this));
         adapter.setTargetWhitelist(address(target), true, false);
 
         tokenIn = new MockErc20("TokenIn", "TIN", 18);

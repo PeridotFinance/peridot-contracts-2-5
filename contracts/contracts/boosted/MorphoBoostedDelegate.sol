@@ -7,17 +7,31 @@ import "../PeridottrollerInterface.sol";
 import "../InterestRateModel.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./RewardDistributorMulti.sol";
 
 interface IMerklDistributor {
-    function claim(address account, address token, uint256 amount, bytes32[] calldata proof) external returns (uint256);
+    function claim(
+        address account,
+        address token,
+        uint256 amount,
+        bytes32[] calldata proof
+    ) external returns (uint256);
 }
 
 /**
  * @title MorphoBoostedDelegate
- * @notice Compound-style delegate for a Morpho-boosted market with optional multi-reward harvesting.
- * @dev Underlying is the vault asset. Funds are deployed into a Morpho ERC4626 vault. Rewards can be claimed
- *      and optionally swapped via a DEX and deposited back into the vault or sent to reserves.
+ * @notice Compound-style delegate for a Morpho-boosted market.
+ * @dev Underlying is the vault asset. Funds are deployed into a Morpho ERC4626 vault.
+ *
+ *      Yield Distribution:
+ *      - Native yield: Automatically accrues via ERC4626 share price increase. All pToken holders
+ *        benefit proportionally without any action needed.
+ *      - URD/Merkl rewards: Users claim their own rewards directly from Merkl's dapp. If any
+ *        rewards are in the underlying token, they are reinvested into the vault to benefit all holders.
+ *
+ *      GOVERNANCE:
+ *      - Admin controls vault, buffer, and reward configuration
+ *      - In production, admin MUST be a multisig or timelock contract
+ *      - Vault changes should have on-chain delay to prevent fund redirection attacks
  */
 contract MorphoBoostedDelegate is PErc20Delegate {
     using SafeERC20 for IERC20;
@@ -33,10 +47,9 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     /// @notice When true, deposits are paused and funds are pulled back on toggle.
     bool public vaultPaused;
 
-    /// @notice Reward configuration.
+    /// @notice Reward configuration (Merkl/URD claims).
     address public rewardDistributor; // contract to claim rewards from (Merkl/URD)
-    address[] public rewardTokens; // reward tokens that will be claimed and forwarded to distributor
-    mapping(address => address) public rewardDistributors; // rewardToken => distributor contract
+    address[] public rewardTokens; // reward tokens that will be claimed
     mapping(address => bool) public isRewardToken;
 
     event VaultBufferUpdated(uint256 previousMantissa, uint256 newMantissa);
@@ -46,17 +59,28 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     event RewardsHarvested(address[] rewardTokens);
     event RewardsConfigUpdated(address distributor);
     event RewardTokenAdded(address rewardToken);
-    event RewardClaimed(address indexed user, address indexed reward, uint256 amount);
+    event RewardClaimed(
+        address indexed user,
+        address indexed reward,
+        uint256 amount
+    );
+    event UnderlyingRewardsReinvested(uint256 amount);
 
     /**
      * @notice Called when becoming the implementation for a delegator.
      * @dev Decodes morphoVault and vaultBufferMantissa from becomeImplementationData.
+     *      Validates vault address and asset match.
      */
     function _becomeImplementation(bytes memory data) public override {
         require(msg.sender == admin, "only admin");
         if (data.length > 0) {
-            (address vault_, uint256 buffer_) = abi.decode(data, (address, uint256));
+            (address vault_, uint256 buffer_) = abi.decode(
+                data,
+                (address, uint256)
+            );
             if (vault_ != address(0)) {
+                _validateVault(vault_);
+                require(buffer_ <= MANTISSA_ONE, "buffer too high");
                 morphoVault = IERC4626(vault_);
                 vaultBufferMantissa = buffer_;
             }
@@ -65,17 +89,45 @@ contract MorphoBoostedDelegate is PErc20Delegate {
 
     /**
      * @notice Admin function to set the Morpho vault (for post-deployment setup).
+     * @dev CRITICAL: Validates vault asset matches underlying to prevent fund misdirection.
+     *      In production, this should be behind a timelock.
      */
     function _setMorphoVault(address vault_, uint256 buffer_) external {
         require(msg.sender == admin, "only admin");
         require(vault_ != address(0), "zero vault");
+        _validateVault(vault_);
+        require(buffer_ <= MANTISSA_ONE, "buffer too high");
         morphoVault = IERC4626(vault_);
         vaultBufferMantissa = buffer_;
         emit VaultBufferUpdated(0, buffer_);
     }
 
     /**
+     * @notice Validates that a vault is compatible with this delegate.
+     * @dev Checks: (1) non-zero address, (2) is contract, (3) asset matches underlying.
+     */
+    function _validateVault(address vault_) internal view {
+        require(vault_ != address(0), "zero vault");
+        require(vault_.code.length > 0, "vault not contract");
+
+        // Verify vault's asset matches our underlying
+        try IERC4626(vault_).asset() returns (address vaultAsset) {
+            require(vaultAsset == underlying, "vault asset mismatch");
+        } catch {
+            revert("vault asset() failed");
+        }
+
+        // Sanity check: try calling totalAssets to ensure vault is functional
+        try IERC4626(vault_).totalAssets() returns (uint256) {
+            // Success - vault appears functional
+        } catch {
+            revert("vault totalAssets() failed");
+        }
+    }
+
+    /**
      * @notice Initialize delegate storage (called via delegator's _setImplementation).
+     * @dev Validates vault compatibility before initialization.
      */
     function initialize(
         address underlying_,
@@ -89,14 +141,27 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         uint256 vaultBufferMantissa_
     ) public {
         require(accrualBlockNumber == 0 && borrowIndex == 0, "already init");
+        require(vaultBufferMantissa_ <= MANTISSA_ONE, "buffer too high");
 
         admin = payable(msg.sender);
+
+        // Initialize parent first to set underlying
+        super.initialize(
+            underlying_,
+            peridottroller_,
+            interestRateModel_,
+            initialExchangeRateMantissa_,
+            name_,
+            symbol_,
+            decimals_
+        );
+
+        // Now validate and set vault (after underlying is set)
+        if (address(morphoVault_) != address(0)) {
+            _validateVault(address(morphoVault_));
+        }
         morphoVault = morphoVault_;
         vaultBufferMantissa = vaultBufferMantissa_;
-
-        super.initialize(
-            underlying_, peridottroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_
-        );
     }
 
     // Admin setters
@@ -133,11 +198,6 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         emit RewardTokenAdded(rewardToken);
     }
 
-    function _setRewardDistributor(address rewardToken, address distributor) external {
-        require(msg.sender == admin, "only admin");
-        rewardDistributors[rewardToken] = distributor;
-    }
-
     /// @notice Admin-only: set the global Merkl/URD distributor address used for harvestRewards.
     function _setMerklDistributor(address distributor) external {
         require(msg.sender == admin, "only admin");
@@ -152,45 +212,76 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         isRewardToken[rewardToken] = true;
     }
 
-    // Rewards: claim + swap + deposit
+    /**
+     * @notice Harvest rewards from the configured distributor.
+     * @dev Rewards in the underlying token are automatically reinvested into the vault,
+     *      benefiting all pToken holders. Other reward tokens (e.g. governance tokens)
+     *      are typically claimed by users directly from Merkl's dapp.
+     */
     function harvestRewards() external nonReentrant {
         accrueInterest();
         if (rewardDistributor != address(0) && rewardTokens.length > 0) {
-            try IRewardsDistributor(rewardDistributor).claim(address(this), rewardTokens) {} catch {}
+            try
+                IRewardsDistributor(rewardDistributor).claim(
+                    address(this),
+                    rewardTokens
+                )
+            {} catch {}
         }
-        _forwardRewardsToDistributors();
+        // Reinvest any underlying rewards back into the vault
+        _reinvestUnderlyingRewards();
         emit RewardsHarvested(rewardTokens);
     }
 
-    /// @notice Claim Merkl/URD rewards using provided proofs; forwards claimed balances to distributors.
-    function claimMerklRewards(address[] calldata tokens, uint256[] calldata amounts, bytes32[][] calldata proofs)
-        external
-        nonReentrant
-    {
-        require(tokens.length == amounts.length && amounts.length == proofs.length, "length mismatch");
+    /**
+     * @notice Claim Merkl/URD rewards using provided proofs.
+     * @dev Rewards in the underlying token are automatically reinvested into the vault.
+     *      Other reward tokens are typically claimed by users directly from Merkl's dapp.
+     */
+    function claimMerklRewards(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bytes32[][] calldata proofs
+    ) external nonReentrant {
+        require(
+            tokens.length == amounts.length && amounts.length == proofs.length,
+            "length mismatch"
+        );
         require(rewardDistributor != address(0), "distributor not set");
         for (uint256 i = 0; i < tokens.length; i++) {
             address token = tokens[i];
             if (!isRewardToken[token]) continue;
-            try IMerklDistributor(rewardDistributor)
-                .claim(address(this), token, amounts[i], proofs[i]) returns (uint256 claimed) {
+            try
+                IMerklDistributor(rewardDistributor).claim(
+                    address(this),
+                    token,
+                    amounts[i],
+                    proofs[i]
+                )
+            returns (uint256 claimed) {
                 emit RewardClaimed(address(this), token, claimed);
             } catch {}
         }
-        _forwardRewardsToDistributors();
+        // Reinvest any underlying rewards back into the vault
+        _reinvestUnderlyingRewards();
     }
 
-    function _forwardRewardsToDistributors() internal {
-        for (uint256 i = 0; i < rewardTokens.length; i++) {
-            address rToken = rewardTokens[i];
-            address dist = rewardDistributors[rToken];
-            if (dist == address(0)) {
-                continue;
-            }
-            uint256 bal = IERC20(rToken).balanceOf(address(this));
-            if (bal == 0) continue;
-            IERC20(rToken).forceApprove(dist, bal);
-            try RewardDistributorMulti(dist).addReward(address(this), rToken, bal) {} catch {}
+    /**
+     * @dev Reinvests any underlying token balance (from rewards) back into the vault.
+     *      This benefits all pToken holders by increasing the exchange rate.
+     */
+    function _reinvestUnderlyingRewards() internal {
+        uint256 localCash = super.getCashPrior();
+        if (localCash == 0) return;
+
+        // Rebalance will deposit excess cash into the vault
+        // Any rewards in underlying will be treated as excess and deposited
+        _rebalanceVault();
+
+        // Emit event if we had underlying rewards to reinvest
+        uint256 newLocalCash = super.getCashPrior();
+        if (localCash > newLocalCash) {
+            emit UnderlyingRewardsReinvested(localCash - newLocalCash);
         }
     }
 
@@ -199,13 +290,19 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         return super.getCashPrior() + _vaultWithdrawable();
     }
 
-    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
+    function doTransferIn(
+        address from,
+        uint256 amount
+    ) internal override returns (uint256) {
         uint256 actual = super.doTransferIn(from, amount);
         _rebalanceVault();
         return actual;
     }
 
-    function doTransferOut(address payable to, uint256 amount) internal override {
+    function doTransferOut(
+        address payable to,
+        uint256 amount
+    ) internal override {
         _ensureLocalLiquidity(amount);
         super.doTransferOut(to, amount);
         _rebalanceVault();
@@ -245,7 +342,9 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         emit VaultDeposited(amount, shares);
     }
 
-    function _withdrawFromVault(uint256 amount) internal returns (uint256 withdrawn) {
+    function _withdrawFromVault(
+        uint256 amount
+    ) internal returns (uint256 withdrawn) {
         if (amount == 0) return 0;
         uint256 maxAvail = _vaultWithdrawable();
         require(maxAvail >= amount, "vault shortfall");
@@ -259,24 +358,31 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         return morphoVault.convertToAssets(shares);
     }
 
+    /**
+     * @notice Returns the amount actually withdrawable from the vault.
+     * @dev CRITICAL: Respects ERC4626 maxWithdraw limit. If maxWithdraw returns 0,
+     *      it means withdrawals are blocked/disabled, so we return 0 (not all assets).
+     *      This prevents getCashPrior() from over-reporting available liquidity.
+     */
     function _vaultWithdrawable() internal view returns (uint256) {
-        try morphoVault.maxWithdraw(address(this)) returns (uint256 amt) {
-            if (amt > 0) return amt;
-            return _vaultAssets();
+        if (address(morphoVault) == address(0)) return 0;
+
+        try morphoVault.maxWithdraw(address(this)) returns (
+            uint256 maxWithdrawable
+        ) {
+            // Respect ERC4626 limit: if maxWithdraw is 0, withdrawals are blocked
+            if (maxWithdrawable == 0) return 0;
+
+            // Return the minimum of maxWithdraw and our share value
+            // (in case maxWithdraw somehow exceeds our assets)
+            uint256 ourAssets = _vaultAssets();
+            return maxWithdrawable < ourAssets ? maxWithdrawable : ourAssets;
         } catch {
-            return _vaultAssets();
+            // If maxWithdraw fails, be conservative and return 0
+            // (don't assume full withdrawability)
+            return 0;
         }
     }
-}
-
-interface IRouter {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
 }
 
 interface IRewardsDistributor {

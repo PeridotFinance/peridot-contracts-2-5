@@ -25,6 +25,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
 
     uint256 private constant EXP_SCALE = 1e18;
     uint256 private constant BPS_SCALE = 1e4;
+    uint256 private constant MAX_MARKETS_PER_ACCOUNT = 20;
 
     struct Account {
         address sma;
@@ -62,17 +63,43 @@ contract MarginManager is Ownable, ReentrancyGuard {
     mapping(address => Account) public accounts;
     mapping(address => MarketConfig) public marketConfigs; // cToken => config
     mapping(address => address) public underlyingToMarket; // underlying => cToken
+    mapping(address => bool) private underlyingHasMarket; // underlying => true if ever mapped (prevents remapping)
     mapping(address => uint256) public protocolFees; // token => accrued amount
     mapping(address => address[]) private accountMarkets;
     mapping(address => mapping(address => bool)) private accountMarketsSet;
 
     event BorrowingEnabled(address indexed user, address sma);
     event Deposit(address indexed user, address indexed asset, uint256 amount);
-    event Withdraw(address indexed user, address indexed asset, uint256 amount, uint256 hfAfterBps);
-    event SupplyFromBalance(address indexed user, address indexed asset, uint256 amount, uint256 hfAfterBps);
-    event RedeemToBalance(address indexed user, address indexed asset, uint256 amount, uint256 hfAfterBps);
-    event Borrow(address indexed user, address indexed asset, uint256 amount, uint256 hfAfterBps);
-    event Repay(address indexed user, address indexed asset, uint256 amount, uint256 hfAfterBps);
+    event Withdraw(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 hfAfterBps
+    );
+    event SupplyFromBalance(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 hfAfterBps
+    );
+    event RedeemToBalance(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 hfAfterBps
+    );
+    event Borrow(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 hfAfterBps
+    );
+    event Repay(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 hfAfterBps
+    );
     event Trade(
         address indexed user,
         address indexed tokenIn,
@@ -113,14 +140,28 @@ contract MarginManager is Ownable, ReentrancyGuard {
     );
     event RouterAdapterUpdated(address indexed newAdapter);
     event FlashloanProviderUpdated(address indexed newProvider);
-    event ThresholdsUpdated(uint16 hfMinWithdrawBps, uint16 hfLockBps, uint16 hfUnlockBps);
+    event ThresholdsUpdated(
+        uint16 hfMinWithdrawBps,
+        uint16 hfLockBps,
+        uint16 hfUnlockBps
+    );
     event FeesUpdated(uint16 openFeeBps, uint16 closeFeeBps);
     event FeesAccrued(address indexed asset, uint256 amount);
     event FeesSwept(address indexed asset, address indexed to, uint256 amount);
     event DefaultLeverageUpdated(uint16 maxLeverageX100);
     event FeeRecipientUpdated(address indexed newRecipient);
+    event EmergencyWithdraw(
+        address indexed user,
+        address indexed cToken,
+        uint256 amount,
+        address indexed to
+    );
+    event MarketDeprecated(address indexed cToken, address indexed underlying);
 
-    constructor(address _peridottroller, address _priceOracle) Ownable(msg.sender) {
+    constructor(
+        address _peridottroller,
+        address _priceOracle
+    ) Ownable(msg.sender) {
         require(_peridottroller != address(0), "Manager: invalid comptroller");
         require(_priceOracle != address(0), "Manager: invalid oracle");
 
@@ -146,29 +187,48 @@ contract MarginManager is Ownable, ReentrancyGuard {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (address cToken, MarketConfig memory config, bool isUnderlying) = _getMarketForAsset(asset);
+        (
+            address cToken,
+            MarketConfig memory config,
+            bool isUnderlying
+        ) = _getMarketForAsset(asset);
         require(config.active, "Manager: market inactive");
         require(config.depositsEnabled, "Manager: deposits paused");
 
         if (isUnderlying) {
             IERC20(asset).safeTransferFrom(msg.sender, account.sma, amount);
-            uint256 mintResult = SmartMarginAccount(account.sma).mint(cToken, amount);
+            uint256 mintResult = SmartMarginAccount(account.sma).mint(
+                cToken,
+                amount
+            );
             require(mintResult == 0, "Manager: mint failed");
         } else {
             IERC20(cToken).safeTransferFrom(msg.sender, account.sma, amount);
         }
 
-        SmartMarginAccount(account.sma).enterMarket(address(peridottroller), cToken);
+        SmartMarginAccount(account.sma).enterMarket(
+            address(peridottroller),
+            cToken
+        );
         _ensureUserMarket(msg.sender, cToken);
         address[] memory markets = _getUserMarkets(msg.sender);
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, markets
-        );
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                markets
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
         emit Deposit(msg.sender, asset, amount);
     }
 
-    function withdraw(address asset, uint256 amount, address to) external nonReentrant {
+    function withdraw(
+        address asset,
+        uint256 amount,
+        address to
+    ) external nonReentrant {
         require(amount > 0, "Manager: zero amount");
         require(to != address(0), "Manager: invalid recipient");
 
@@ -176,20 +236,33 @@ contract MarginManager is Ownable, ReentrancyGuard {
         require(account.sma != address(0), "Manager: no account");
         require(!account.withdrawalsLocked, "Manager: withdrawals locked");
 
-        (address cToken, MarketConfig memory config, bool isUnderlying) = _getMarketForAsset(asset);
+        (
+            address cToken,
+            MarketConfig memory config,
+            bool isUnderlying
+        ) = _getMarketForAsset(asset);
         require(config.active, "Manager: market inactive");
         require(config.withdrawalsEnabled, "Manager: withdrawals paused");
         require(isUnderlying, "Manager: only underlying withdraw");
 
         address[] memory markets = _getUserMarkets(msg.sender);
-        uint256 maxUnderlying = MarginRiskLib.maxWithdrawableUnderlyingFromMarkets(
-            peridottroller, priceOracle, account.sma, cToken, hfMinWithdrawBps, markets
-        );
+        uint256 maxUnderlying = MarginRiskLib
+            .maxWithdrawableUnderlyingFromMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                cToken,
+                hfMinWithdrawBps,
+                markets
+            );
 
         require(maxUnderlying > 0, "Manager: nothing withdrawable");
         require(amount <= maxUnderlying, "Manager: exceeds max withdraw");
 
-        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(cToken, amount);
+        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(
+            cToken,
+            amount
+        );
         require(redeemResult == 0, "Manager: redeem failed");
 
         uint256 payoutAmount = amount;
@@ -199,34 +272,58 @@ contract MarginManager is Ownable, ReentrancyGuard {
                 payoutAmount = amount - fee;
                 address recipient = feeRecipient;
                 if (recipient == address(0)) {
-                    SmartMarginAccount(account.sma).transferOut(asset, address(this), fee);
+                    SmartMarginAccount(account.sma).transferOut(
+                        asset,
+                        address(this),
+                        fee
+                    );
                     protocolFees[asset] += fee;
                 } else {
-                    SmartMarginAccount(account.sma).transferOut(asset, recipient, fee);
+                    SmartMarginAccount(account.sma).transferOut(
+                        asset,
+                        recipient,
+                        fee
+                    );
                 }
                 emit FeesAccrued(asset, fee);
             }
         }
 
         if (payoutAmount > 0) {
-            SmartMarginAccount(account.sma).transferOut(asset, to, payoutAmount);
+            SmartMarginAccount(account.sma).transferOut(
+                asset,
+                to,
+                payoutAmount
+            );
         }
 
         _pruneUserMarkets(msg.sender, account.sma);
 
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
         emit Withdraw(msg.sender, asset, amount, metrics.healthFactorBps);
     }
 
-    function supplyFromBalance(address asset, uint256 amount) external nonReentrant {
+    function supplyFromBalance(
+        address asset,
+        uint256 amount
+    ) external nonReentrant {
         require(amount > 0, "Manager: zero amount");
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (address cToken, MarketConfig memory config, bool isUnderlying) = _getMarketForAsset(asset);
+        (
+            address cToken,
+            MarketConfig memory config,
+            bool isUnderlying
+        ) = _getMarketForAsset(asset);
         require(config.active, "Manager: market inactive");
         require(config.depositsEnabled, "Manager: deposits paused");
         require(isUnderlying, "Manager: only underlying");
@@ -234,55 +331,107 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint256 balance = IERC20(asset).balanceOf(account.sma);
         require(balance >= amount, "Manager: insufficient balance");
 
-        uint256 mintResult = SmartMarginAccount(account.sma).mint(cToken, amount);
+        uint256 mintResult = SmartMarginAccount(account.sma).mint(
+            cToken,
+            amount
+        );
         require(mintResult == 0, "Manager: mint failed");
-        SmartMarginAccount(account.sma).enterMarket(address(peridottroller), cToken);
+        SmartMarginAccount(account.sma).enterMarket(
+            address(peridottroller),
+            cToken
+        );
 
         _ensureUserMarket(msg.sender, cToken);
 
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
 
-        emit SupplyFromBalance(msg.sender, asset, amount, metrics.healthFactorBps);
+        emit SupplyFromBalance(
+            msg.sender,
+            asset,
+            amount,
+            metrics.healthFactorBps
+        );
     }
 
-    function redeemToBalance(address asset, uint256 amount) external nonReentrant {
+    function redeemToBalance(
+        address asset,
+        uint256 amount
+    ) external nonReentrant {
         require(amount > 0, "Manager: zero amount");
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
         require(!account.withdrawalsLocked, "Manager: withdrawals locked");
 
-        (address cToken, MarketConfig memory config, bool isUnderlying) = _getMarketForAsset(asset);
+        (
+            address cToken,
+            MarketConfig memory config,
+            bool isUnderlying
+        ) = _getMarketForAsset(asset);
         require(config.active, "Manager: market inactive");
         require(config.withdrawalsEnabled, "Manager: withdrawals paused");
         require(isUnderlying, "Manager: only underlying");
 
         address[] memory markets = _getUserMarkets(msg.sender);
-        uint256 maxUnderlying = MarginRiskLib.maxWithdrawableUnderlyingFromMarkets(
-            peridottroller, priceOracle, account.sma, cToken, hfMinWithdrawBps, markets
-        );
+        uint256 maxUnderlying = MarginRiskLib
+            .maxWithdrawableUnderlyingFromMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                cToken,
+                hfMinWithdrawBps,
+                markets
+            );
         require(maxUnderlying > 0, "Manager: nothing withdrawable");
         require(amount <= maxUnderlying, "Manager: exceeds max withdraw");
 
-        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(cToken, amount);
+        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(
+            cToken,
+            amount
+        );
         require(redeemResult == 0, "Manager: redeem failed");
 
         _pruneUserMarkets(msg.sender, account.sma);
 
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
 
-        emit RedeemToBalance(msg.sender, asset, amount, metrics.healthFactorBps);
+        emit RedeemToBalance(
+            msg.sender,
+            asset,
+            amount,
+            metrics.healthFactorBps
+        );
     }
 
-    function borrow(address asset, uint256 amount, address to) external nonReentrant {
+    function borrow(
+        address asset,
+        uint256 amount,
+        address to
+    ) external nonReentrant {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
-        (MarginRiskLib.AccountMetrics memory postMetrics,,) = _borrowFor(msg.sender, account, asset, amount, to);
+        (MarginRiskLib.AccountMetrics memory postMetrics, , ) = _borrowFor(
+            msg.sender,
+            account,
+            asset,
+            amount,
+            to
+        );
         emit Borrow(msg.sender, asset, amount, postMetrics.healthFactorBps);
     }
 
@@ -291,41 +440,64 @@ contract MarginManager is Ownable, ReentrancyGuard {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (address cToken,, bool isUnderlying) = _getMarketForAsset(asset);
+        (address cToken, , bool isUnderlying) = _getMarketForAsset(asset);
         require(isUnderlying, "Manager: repay requires underlying");
 
         IERC20(asset).safeTransferFrom(msg.sender, account.sma, amount);
-        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(cToken, amount);
+        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(
+            cToken,
+            amount
+        );
         require(repayResult == 0, "Manager: repay failed");
 
         _pruneUserMarkets(msg.sender, account.sma);
 
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        // Use graceful mode - repayments should not be blocked by missing prices
+        // since they reduce risk
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarketsGraceful(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
         emit Repay(msg.sender, asset, amount, metrics.healthFactorBps);
     }
 
-    function repayFromBalance(address asset, uint256 amount) external nonReentrant {
+    function repayFromBalance(
+        address asset,
+        uint256 amount
+    ) external nonReentrant {
         require(amount > 0, "Manager: zero amount");
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (address cToken,, bool isUnderlying) = _getMarketForAsset(asset);
+        (address cToken, , bool isUnderlying) = _getMarketForAsset(asset);
         require(isUnderlying, "Manager: repay requires underlying");
 
         uint256 balance = IERC20(asset).balanceOf(account.sma);
         require(balance >= amount, "Manager: insufficient balance");
 
-        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(cToken, amount);
+        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(
+            cToken,
+            amount
+        );
         require(repayResult == 0, "Manager: repay failed");
 
         _pruneUserMarkets(msg.sender, account.sma);
 
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        // Use graceful mode - repayments should not be blocked by missing prices
+        // since they reduce risk
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarketsGraceful(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, metrics.healthFactorBps);
         emit Repay(msg.sender, asset, amount, metrics.healthFactorBps);
     }
@@ -342,10 +514,24 @@ contract MarginManager is Ownable, ReentrancyGuard {
         require(amountIn > 0, "Manager: zero amount");
         require(routerAdapter != address(0), "Manager: router not set");
 
-        (address cTokenIn, MarketConfig memory configIn, bool inIsUnderlying) = _getMarketForAsset(tokenIn);
-        (address cTokenOut, MarketConfig memory configOut, bool outIsUnderlying) = _getMarketForAsset(tokenOut);
-        require(configIn.active && configOut.active, "Manager: market inactive");
-        require(configIn.tradesEnabled && configOut.tradesEnabled, "Manager: trades paused");
+        (
+            address cTokenIn,
+            MarketConfig memory configIn,
+            bool inIsUnderlying
+        ) = _getMarketForAsset(tokenIn);
+        (
+            address cTokenOut,
+            MarketConfig memory configOut,
+            bool outIsUnderlying
+        ) = _getMarketForAsset(tokenOut);
+        require(
+            configIn.active && configOut.active,
+            "Manager: market inactive"
+        );
+        require(
+            configIn.tradesEnabled && configOut.tradesEnabled,
+            "Manager: trades paused"
+        );
         require(inIsUnderlying && outIsUnderlying, "Manager: underlying only");
 
         uint256 priceIn = priceOracle.getUnderlyingPrice(PToken(cTokenIn));
@@ -355,42 +541,105 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint256 expectedOut = (amountIn * priceIn) / priceOut;
         require(expectedOut > 0, "Manager: expectedOut zero");
 
-        uint16 slippageLimit = _minPositive(configIn.tradeSlippageBps, configOut.tradeSlippageBps);
+        uint16 slippageLimit = _minPositive(
+            configIn.tradeSlippageBps,
+            configOut.tradeSlippageBps
+        );
         if (slippageLimit > 0) {
-            uint256 managerMinOut = (expectedOut * (BPS_SCALE - slippageLimit)) / BPS_SCALE;
+            uint256 managerMinOut = (expectedOut *
+                (BPS_SCALE - slippageLimit)) / BPS_SCALE;
             require(minAmountOut >= managerMinOut, "Manager: minOut too low");
         }
-        uint16 deviationLimit = _minPositive(configIn.oracleDeviationBps, configOut.oracleDeviationBps);
+        uint16 deviationLimit = _minPositive(
+            configIn.oracleDeviationBps,
+            configOut.oracleDeviationBps
+        );
 
         address[] memory marketsBefore = _getUserMarkets(msg.sender);
-        MarginRiskLib.AccountMetrics memory preMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, marketsBefore
-        );
+        MarginRiskLib.AccountMetrics memory preMetrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                marketsBefore
+            );
 
-        SmartMarginAccount(account.sma).approve(tokenIn, routerAdapter, amountIn);
-        amountOut = IMarginRouterAdapter(routerAdapter)
-            .swap(account.sma, tokenIn, tokenOut, amountIn, minAmountOut, routerData);
+        // Capture balances before swap for delta verification
+        uint256 tokenInBefore = IERC20(tokenIn).balanceOf(account.sma);
+        uint256 tokenOutBefore = IERC20(tokenOut).balanceOf(account.sma);
+
+        SmartMarginAccount(account.sma).approve(
+            tokenIn,
+            routerAdapter,
+            amountIn
+        );
+        IMarginRouterAdapter(routerAdapter).swap(
+            account.sma,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            minAmountOut,
+            routerData
+        );
         SmartMarginAccount(account.sma).approve(tokenIn, routerAdapter, 0);
+
+        // Verify balance deltas instead of trusting adapter return value
+        uint256 tokenInAfter = IERC20(tokenIn).balanceOf(account.sma);
+        uint256 tokenOutAfter = IERC20(tokenOut).balanceOf(account.sma);
+
+        uint256 actualAmountIn = tokenInBefore - tokenInAfter;
+        require(actualAmountIn <= amountIn, "Manager: excess tokenIn taken");
+
+        amountOut = tokenOutAfter - tokenOutBefore;
+        require(amountOut >= minAmountOut, "Manager: insufficient output");
         require(amountOut > 0, "Manager: zero output");
 
-        _enforceTradeBounds(amountIn, amountOut, expectedOut, priceIn, priceOut, slippageLimit, deviationLimit);
-
-        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
+        _enforceTradeBounds(
+            actualAmountIn,
+            amountOut,
+            expectedOut,
+            priceIn,
+            priceOut,
+            slippageLimit,
+            deviationLimit
         );
 
+        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
+
         if (account.withdrawalsLocked) {
-            require(postMetrics.healthFactorBps >= preMetrics.healthFactorBps, "Manager: locked worsen");
+            require(
+                postMetrics.healthFactorBps >= preMetrics.healthFactorBps,
+                "Manager: locked worsen"
+            );
         }
 
-        require(postMetrics.healthFactorBps >= hfLockBps, "Manager: health factor low");
+        require(
+            postMetrics.healthFactorBps >= hfLockBps,
+            "Manager: health factor low"
+        );
         uint16 leverageCap = _effectiveLeverageCap(
-            _resolveLeverageCap(configIn.maxLeverageX100), _resolveLeverageCap(configOut.maxLeverageX100)
+            _resolveLeverageCap(configIn.maxLeverageX100),
+            _resolveLeverageCap(configOut.maxLeverageX100)
         );
         _enforceLeverage(postMetrics, leverageCap);
         _syncLockState(msg.sender, account, postMetrics.healthFactorBps);
 
-        emit Trade(msg.sender, tokenIn, tokenOut, amountIn, amountOut, postMetrics.healthFactorBps);
+        emit Trade(
+            msg.sender,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut,
+            postMetrics.healthFactorBps
+        );
         return amountOut;
     }
 
@@ -404,18 +653,33 @@ contract MarginManager is Ownable, ReentrancyGuard {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (, address borrowCToken, uint256 netAmount) =
-            _borrowFor(msg.sender, account, borrowAsset, borrowAmount, address(0));
+        (, address borrowCToken, uint256 netAmount) = _borrowFor(
+            msg.sender,
+            account,
+            borrowAsset,
+            borrowAmount,
+            address(0)
+        );
 
         address collateralCToken;
         bool collateralIsUnderlying;
-        (collateralCToken,, collateralIsUnderlying) = _getMarketForAsset(collateralAsset);
+        (collateralCToken, , collateralIsUnderlying) = _getMarketForAsset(
+            collateralAsset
+        );
         {
-            MarketConfig storage collateralConfig = marketConfigs[collateralCToken];
+            MarketConfig storage collateralConfig = marketConfigs[
+                collateralCToken
+            ];
             require(collateralConfig.active, "Manager: market inactive");
-            require(collateralConfig.depositsEnabled, "Manager: deposits paused");
+            require(
+                collateralConfig.depositsEnabled,
+                "Manager: deposits paused"
+            );
         }
-        require(collateralIsUnderlying, "Manager: collateral must be underlying");
+        require(
+            collateralIsUnderlying,
+            "Manager: collateral must be underlying"
+        );
 
         if (borrowAsset == collateralAsset) {
             collateralSupplied = netAmount;
@@ -432,18 +696,34 @@ contract MarginManager is Ownable, ReentrancyGuard {
             );
         }
 
-        uint256 mintResult = SmartMarginAccount(account.sma).mint(collateralCToken, collateralSupplied);
+        uint256 mintResult = SmartMarginAccount(account.sma).mint(
+            collateralCToken,
+            collateralSupplied
+        );
         require(mintResult == 0, "Manager: mint failed");
-        SmartMarginAccount(account.sma).enterMarket(address(peridottroller), collateralCToken);
+        SmartMarginAccount(account.sma).enterMarket(
+            address(peridottroller),
+            collateralCToken
+        );
         _ensureUserMarket(msg.sender, collateralCToken);
 
-        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, postMetrics.healthFactorBps);
 
         emit LeveragedPositionOpened(
-            msg.sender, borrowAsset, collateralAsset, borrowAmount, collateralSupplied, postMetrics.healthFactorBps
+            msg.sender,
+            borrowAsset,
+            collateralAsset,
+            borrowAmount,
+            collateralSupplied,
+            postMetrics.healthFactorBps
         );
 
         return collateralSupplied;
@@ -463,24 +743,42 @@ contract MarginManager is Ownable, ReentrancyGuard {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
 
-        (address collateralCToken, MarketConfig memory collateralConfig, bool collateralIsUnderlying) =
-            _getMarketForAsset(collateralAsset);
-        require(collateralIsUnderlying, "Manager: collateral must be underlying");
+        (
+            address collateralCToken,
+            MarketConfig memory collateralConfig,
+            bool collateralIsUnderlying
+        ) = _getMarketForAsset(collateralAsset);
+        require(
+            collateralIsUnderlying,
+            "Manager: collateral must be underlying"
+        );
 
         address[] memory marketsBefore = _getUserMarkets(msg.sender);
-        uint256 maxUnderlying = MarginRiskLib.maxWithdrawableUnderlyingFromMarkets(
-            peridottroller, priceOracle, account.sma, collateralCToken, hfMinWithdrawBps, marketsBefore
+        uint256 maxUnderlying = MarginRiskLib
+            .maxWithdrawableUnderlyingFromMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                collateralCToken,
+                hfMinWithdrawBps,
+                marketsBefore
+            );
+        require(
+            collateralToRedeem <= maxUnderlying,
+            "Manager: exceeds max withdraw"
         );
-        require(collateralToRedeem <= maxUnderlying, "Manager: exceeds max withdraw");
 
-        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(collateralCToken, collateralToRedeem);
+        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(
+            collateralCToken,
+            collateralToRedeem
+        );
         require(redeemResult == 0, "Manager: redeem failed");
 
         address repayCToken;
         uint256 repayBalance;
         {
             bool repayIsUnderlying;
-            (repayCToken,, repayIsUnderlying) = _getMarketForAsset(repayAsset);
+            (repayCToken, , repayIsUnderlying) = _getMarketForAsset(repayAsset);
             require(repayIsUnderlying, "Manager: repay must be underlying");
 
             if (collateralAsset == repayAsset) {
@@ -500,26 +798,44 @@ contract MarginManager is Ownable, ReentrancyGuard {
             }
         }
 
-        require(repayBalance >= repayAmount, "Manager: insufficient repay balance");
+        require(
+            repayBalance >= repayAmount,
+            "Manager: insufficient repay balance"
+        );
 
-        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(repayCToken, repayAmount);
+        uint256 repayResult = SmartMarginAccount(account.sma).repayBorrow(
+            repayCToken,
+            repayAmount
+        );
         require(repayResult == 0, "Manager: repay failed");
 
         _pruneUserMarkets(msg.sender, account.sma);
 
-        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(msg.sender)
-        );
+        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(msg.sender)
+            );
         _syncLockState(msg.sender, account, postMetrics.healthFactorBps);
 
         emit LeveragedPositionClosed(
-            msg.sender, collateralAsset, repayAsset, collateralToRedeem, repayAmount, postMetrics.healthFactorBps
+            msg.sender,
+            collateralAsset,
+            repayAsset,
+            collateralToRedeem,
+            repayAmount,
+            postMetrics.healthFactorBps
         );
 
         return repayAmount;
     }
 
-    function getAccountState(address user)
+    function getAccountState(
+        address user
+    )
         external
         view
         returns (
@@ -534,9 +850,14 @@ contract MarginManager is Ownable, ReentrancyGuard {
         if (account.sma == address(0)) {
             return (0, 0, 0, type(uint256).max, false);
         }
-        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(user)
-        );
+        MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                _getUserMarkets(user)
+            );
         return (
             metrics.equity,
             metrics.collateralValue,
@@ -550,24 +871,39 @@ contract MarginManager is Ownable, ReentrancyGuard {
         return accounts[user];
     }
 
-    function getAccountMetrics(address user) external view returns (MarginRiskLib.AccountMetrics memory metrics) {
+    function getAccountMetrics(
+        address user
+    ) external view returns (MarginRiskLib.AccountMetrics memory metrics) {
         Account memory account = accounts[user];
         if (account.sma == address(0)) {
             return metrics;
         }
         metrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(user)
+            peridottroller,
+            priceOracle,
+            account.sma,
+            hfMinWithdrawBps,
+            _getUserMarkets(user)
         );
     }
 
-    function maxWithdrawable(address user, address asset) external view returns (uint256) {
+    function maxWithdrawable(
+        address user,
+        address asset
+    ) external view returns (uint256) {
         Account memory account = accounts[user];
         require(account.sma != address(0), "Manager: no account");
-        (address cToken,, bool isUnderlying) = _getMarketForAsset(asset);
+        (address cToken, , bool isUnderlying) = _getMarketForAsset(asset);
         address[] memory markets = _getUserMarkets(user);
-        uint256 withdrawable = MarginRiskLib.maxWithdrawableUnderlyingFromMarkets(
-            peridottroller, priceOracle, account.sma, cToken, hfMinWithdrawBps, markets
-        );
+        uint256 withdrawable = MarginRiskLib
+            .maxWithdrawableUnderlyingFromMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                cToken,
+                hfMinWithdrawBps,
+                markets
+            );
         if (!isUnderlying) {
             uint256 exchangeRate = PErc20(cToken).exchangeRateStored();
             return (withdrawable * EXP_SCALE) / exchangeRate;
@@ -576,6 +912,10 @@ contract MarginManager is Ownable, ReentrancyGuard {
     }
 
     function setRouterAdapter(address newAdapter) external onlyOwner {
+        require(
+            newAdapter == address(0) || newAdapter.code.length > 0,
+            "Manager: adapter not contract"
+        );
         routerAdapter = newAdapter;
         emit RouterAdapterUpdated(newAdapter);
     }
@@ -585,7 +925,11 @@ contract MarginManager is Ownable, ReentrancyGuard {
         emit FlashloanProviderUpdated(newProvider);
     }
 
-    function setThresholds(uint16 _hfMinWithdrawBps, uint16 _hfLockBps, uint16 _hfUnlockBps) external onlyOwner {
+    function setThresholds(
+        uint16 _hfMinWithdrawBps,
+        uint16 _hfLockBps,
+        uint16 _hfUnlockBps
+    ) external onlyOwner {
         require(_hfMinWithdrawBps >= 10000, "Manager: hfMin too low");
         require(_hfUnlockBps > _hfLockBps, "Manager: unlock must exceed lock");
         hfMinWithdrawBps = _hfMinWithdrawBps;
@@ -594,7 +938,10 @@ contract MarginManager is Ownable, ReentrancyGuard {
         emit ThresholdsUpdated(_hfMinWithdrawBps, _hfLockBps, _hfUnlockBps);
     }
 
-    function setFees(uint16 _openFeeBps, uint16 _closeFeeBps) external onlyOwner {
+    function setFees(
+        uint16 _openFeeBps,
+        uint16 _closeFeeBps
+    ) external onlyOwner {
         require(_openFeeBps <= 100, "Manager: open fee too high");
         require(_closeFeeBps <= 100, "Manager: close fee too high");
         openFeeBps = _openFeeBps;
@@ -608,12 +955,19 @@ contract MarginManager is Ownable, ReentrancyGuard {
     }
 
     function setDefaultMaxLeverage(uint16 maxLeverageX100_) external onlyOwner {
-        require(maxLeverageX100_ == 0 || maxLeverageX100_ >= 100, "Manager: leverage too low");
+        require(
+            maxLeverageX100_ == 0 || maxLeverageX100_ >= 100,
+            "Manager: leverage too low"
+        );
         defaultMaxLeverageX100 = maxLeverageX100_;
         emit DefaultLeverageUpdated(maxLeverageX100_);
     }
 
-    function sweepFees(address asset, address to, uint256 amount) external onlyOwner {
+    function sweepFees(
+        address asset,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
         require(to != address(0), "Manager: invalid recipient");
         uint256 accrued = protocolFees[asset];
         require(amount <= accrued, "Manager: insufficient fees");
@@ -622,17 +976,26 @@ contract MarginManager is Ownable, ReentrancyGuard {
         emit FeesSwept(asset, to, amount);
     }
 
-    function _enforceLeverage(MarginRiskLib.AccountMetrics memory metrics, uint16 leverageX100) internal pure {
+    function _enforceLeverage(
+        MarginRiskLib.AccountMetrics memory metrics,
+        uint16 leverageX100
+    ) internal pure {
         if (leverageX100 == 0 || metrics.borrowValue == 0) {
             return;
         }
         require(metrics.equity > 0, "Manager: leverage invalid");
         uint256 equity = uint256(metrics.equity);
         uint256 borrowValue = metrics.borrowValue;
-        require(borrowValue * 100 <= equity * leverageX100, "Manager: leverage exceeded");
+        require(
+            borrowValue * 100 <= equity * leverageX100,
+            "Manager: leverage exceeded"
+        );
     }
 
-    function _effectiveLeverageCap(uint16 capA, uint16 capB) internal pure returns (uint16) {
+    function _effectiveLeverageCap(
+        uint16 capA,
+        uint16 capB
+    ) internal pure returns (uint16) {
         if (capA == 0) {
             return capB;
         }
@@ -642,7 +1005,9 @@ contract MarginManager is Ownable, ReentrancyGuard {
         return capA < capB ? capA : capB;
     }
 
-    function _resolveLeverageCap(uint16 marketCap) internal view returns (uint16) {
+    function _resolveLeverageCap(
+        uint16 marketCap
+    ) internal view returns (uint16) {
         return marketCap != 0 ? marketCap : defaultMaxLeverageX100;
     }
 
@@ -666,7 +1031,8 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint16 deviationLimit
     ) internal pure {
         if (slippageLimit > 0) {
-            uint256 managerMinOut = (expectedOut * (BPS_SCALE - slippageLimit)) / BPS_SCALE;
+            uint256 managerMinOut = (expectedOut *
+                (BPS_SCALE - slippageLimit)) / BPS_SCALE;
             require(amountOut >= managerMinOut, "Manager: slippage");
         }
 
@@ -675,18 +1041,27 @@ contract MarginManager is Ownable, ReentrancyGuard {
             uint256 usdOut = (amountOut * priceOut) / EXP_SCALE;
             uint256 lower = (usdIn * (BPS_SCALE - deviationLimit)) / BPS_SCALE;
             uint256 upper = (usdIn * (BPS_SCALE + deviationLimit)) / BPS_SCALE;
-            require(usdOut >= lower && usdOut <= upper, "Manager: oracle deviation");
+            require(
+                usdOut >= lower && usdOut <= upper,
+                "Manager: oracle deviation"
+            );
         }
     }
 
     function _ensureUserMarket(address user, address cToken) internal {
         if (!accountMarketsSet[user][cToken]) {
+            require(
+                accountMarkets[user].length < MAX_MARKETS_PER_ACCOUNT,
+                "Manager: max markets reached"
+            );
             accountMarketsSet[user][cToken] = true;
             accountMarkets[user].push(cToken);
         }
     }
 
-    function _getUserMarkets(address user) internal view returns (address[] memory markets) {
+    function _getUserMarkets(
+        address user
+    ) internal view returns (address[] memory markets) {
         address[] storage stored = accountMarkets[user];
         markets = new address[](stored.length);
         for (uint256 i = 0; i < stored.length; i++) {
@@ -711,14 +1086,28 @@ contract MarginManager is Ownable, ReentrancyGuard {
         }
     }
 
-    function _borrowFor(address user, Account storage account, address asset, uint256 amount, address to)
+    function _borrowFor(
+        address user,
+        Account storage account,
+        address asset,
+        uint256 amount,
+        address to
+    )
         internal
-        returns (MarginRiskLib.AccountMetrics memory postMetrics, address cToken, uint256 netAmount)
+        returns (
+            MarginRiskLib.AccountMetrics memory postMetrics,
+            address cToken,
+            uint256 netAmount
+        )
     {
         require(amount > 0, "Manager: zero amount");
         require(!account.withdrawalsLocked, "Manager: locked");
 
-        (address marketToken, MarketConfig memory config, bool isUnderlying) = _getMarketForAsset(asset);
+        (
+            address marketToken,
+            MarketConfig memory config,
+            bool isUnderlying
+        ) = _getMarketForAsset(asset);
         require(config.active, "Manager: market inactive");
         require(config.borrowsEnabled, "Manager: borrows paused");
         require(isUnderlying, "Manager: must borrow underlying");
@@ -726,9 +1115,14 @@ contract MarginManager is Ownable, ReentrancyGuard {
         _ensureUserMarket(user, marketToken);
 
         address[] memory marketsBefore = _getUserMarkets(user);
-        MarginRiskLib.AccountMetrics memory preMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, marketsBefore
-        );
+        MarginRiskLib.AccountMetrics memory preMetrics = MarginRiskLib
+            .computeAccountMetricsForMarkets(
+                peridottroller,
+                priceOracle,
+                account.sma,
+                hfMinWithdrawBps,
+                marketsBefore
+            );
 
         require(preMetrics.collateralValue > 0, "Manager: no collateral");
 
@@ -737,10 +1131,14 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint256 borrowValue = (amount * price) / EXP_SCALE;
         uint256 newBorrowValue = preMetrics.borrowValue + borrowValue;
         require(newBorrowValue > 0, "Manager: invalid borrow");
-        uint256 projectedHF = (preMetrics.collateralValue * BPS_SCALE) / newBorrowValue;
+        uint256 projectedHF = (preMetrics.collateralValue * BPS_SCALE) /
+            newBorrowValue;
         require(projectedHF >= hfLockBps, "Manager: health factor low");
 
-        uint256 borrowResult = SmartMarginAccount(account.sma).borrow(marketToken, amount);
+        uint256 borrowResult = SmartMarginAccount(account.sma).borrow(
+            marketToken,
+            amount
+        );
         require(borrowResult == 0, "Manager: borrow failed");
 
         netAmount = amount;
@@ -750,10 +1148,18 @@ contract MarginManager is Ownable, ReentrancyGuard {
                 netAmount = amount - fee;
                 address recipient = feeRecipient;
                 if (recipient == address(0)) {
-                    SmartMarginAccount(account.sma).transferOut(asset, address(this), fee);
+                    SmartMarginAccount(account.sma).transferOut(
+                        asset,
+                        address(this),
+                        fee
+                    );
                     protocolFees[asset] += fee;
                 } else {
-                    SmartMarginAccount(account.sma).transferOut(asset, recipient, fee);
+                    SmartMarginAccount(account.sma).transferOut(
+                        asset,
+                        recipient,
+                        fee
+                    );
                 }
                 emit FeesAccrued(asset, fee);
             }
@@ -764,9 +1170,16 @@ contract MarginManager is Ownable, ReentrancyGuard {
         }
 
         postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
-            peridottroller, priceOracle, account.sma, hfMinWithdrawBps, _getUserMarkets(user)
+            peridottroller,
+            priceOracle,
+            account.sma,
+            hfMinWithdrawBps,
+            _getUserMarkets(user)
         );
-        _enforceLeverage(postMetrics, _resolveLeverageCap(config.maxLeverageX100));
+        _enforceLeverage(
+            postMetrics,
+            _resolveLeverageCap(config.maxLeverageX100)
+        );
         _syncLockState(user, account, postMetrics.healthFactorBps);
         cToken = marketToken;
     }
@@ -789,25 +1202,67 @@ contract MarginManager is Ownable, ReentrancyGuard {
 
         MarketConfig storage configIn = marketConfigs[cTokenIn];
         MarketConfig storage configOut = marketConfigs[cTokenOut];
-        require(configIn.active && configOut.active, "Manager: market inactive");
-        require(configIn.tradesEnabled && configOut.tradesEnabled, "Manager: trades paused");
+        require(
+            configIn.active && configOut.active,
+            "Manager: market inactive"
+        );
+        require(
+            configIn.tradesEnabled && configOut.tradesEnabled,
+            "Manager: trades paused"
+        );
 
         uint256 expectedOut = (amountIn * priceIn) / priceOut;
         require(expectedOut > 0, "Manager: expectedOut zero");
 
-        uint16 slippageLimit = _minPositive(configIn.tradeSlippageBps, configOut.tradeSlippageBps);
+        uint16 slippageLimit = _minPositive(
+            configIn.tradeSlippageBps,
+            configOut.tradeSlippageBps
+        );
         if (slippageLimit > 0) {
-            uint256 managerMinOut = (expectedOut * (BPS_SCALE - slippageLimit)) / BPS_SCALE;
+            uint256 managerMinOut = (expectedOut *
+                (BPS_SCALE - slippageLimit)) / BPS_SCALE;
             require(minAmountOut >= managerMinOut, "Manager: minOut too low");
         }
-        uint16 deviationLimit = _minPositive(configIn.oracleDeviationBps, configOut.oracleDeviationBps);
+        uint16 deviationLimit = _minPositive(
+            configIn.oracleDeviationBps,
+            configOut.oracleDeviationBps
+        );
+
+        // Capture balances before swap for delta verification
+        uint256 tokenInBefore = IERC20(tokenIn).balanceOf(sma);
+        uint256 tokenOutBefore = IERC20(tokenOut).balanceOf(sma);
 
         SmartMarginAccount(sma).approve(tokenIn, routerAdapter, amountIn);
-        amountOut = IMarginRouterAdapter(routerAdapter).swap(sma, tokenIn, tokenOut, amountIn, minAmountOut, routerData);
+        IMarginRouterAdapter(routerAdapter).swap(
+            sma,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            minAmountOut,
+            routerData
+        );
         SmartMarginAccount(sma).approve(tokenIn, routerAdapter, 0);
+
+        // Verify balance deltas instead of trusting adapter return value
+        uint256 tokenInAfter = IERC20(tokenIn).balanceOf(sma);
+        uint256 tokenOutAfter = IERC20(tokenOut).balanceOf(sma);
+
+        uint256 actualAmountIn = tokenInBefore - tokenInAfter;
+        require(actualAmountIn <= amountIn, "Manager: excess tokenIn taken");
+
+        amountOut = tokenOutAfter - tokenOutBefore;
+        require(amountOut >= minAmountOut, "Manager: insufficient output");
         require(amountOut > 0, "Manager: zero output");
 
-        _enforceTradeBounds(amountIn, amountOut, expectedOut, priceIn, priceOut, slippageLimit, deviationLimit);
+        _enforceTradeBounds(
+            actualAmountIn,
+            amountOut,
+            expectedOut,
+            priceIn,
+            priceOut,
+            slippageLimit,
+            deviationLimit
+        );
     }
 
     function configureMarket(
@@ -822,10 +1277,28 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint16 tradeSlippageBps,
         uint16 oracleDeviationBps
     ) external onlyOwner {
-        require(cToken != address(0) && underlying != address(0), "Manager: invalid market");
+        require(
+            cToken != address(0) && underlying != address(0),
+            "Manager: invalid market"
+        );
         require(tradeSlippageBps <= BPS_SCALE, "Manager: slippage too high");
         require(oracleDeviationBps <= BPS_SCALE, "Manager: deviation too high");
-        require(maxLeverageX100 == 0 || maxLeverageX100 >= 100, "Manager: leverage too low");
+        require(
+            maxLeverageX100 == 0 || maxLeverageX100 >= 100,
+            "Manager: leverage too low"
+        );
+
+        // Prevent underlying remapping: once an underlying is mapped to a cToken, it cannot be changed
+        address existingCToken = underlyingToMarket[underlying];
+        if (underlyingHasMarket[underlying]) {
+            require(
+                existingCToken == cToken,
+                "Manager: cannot remap underlying"
+            );
+        } else {
+            underlyingHasMarket[underlying] = true;
+        }
+
         marketConfigs[cToken] = MarketConfig({
             active: active,
             depositsEnabled: depositsEnabled,
@@ -853,7 +1326,77 @@ contract MarginManager is Ownable, ReentrancyGuard {
         );
     }
 
-    function _getMarketForAsset(address asset)
+    /**
+     * @notice Emergency withdrawal allowing users to redeem from a specific cToken even if market is inactive
+     * @dev This is an escape hatch for users with positions in deprecated/paused markets
+     * @param cToken The cToken address to redeem from (must be a configured market)
+     * @param amount The amount of underlying to redeem
+     * @param to The recipient address
+     */
+    function emergencyWithdraw(
+        address cToken,
+        uint256 amount,
+        address to
+    ) external nonReentrant {
+        require(amount > 0, "Manager: zero amount");
+        require(to != address(0), "Manager: invalid recipient");
+
+        Account storage account = accounts[msg.sender];
+        require(account.sma != address(0), "Manager: no account");
+
+        // Verify cToken is a known market (even if currently inactive)
+        MarketConfig memory config = marketConfigs[cToken];
+        require(config.underlying != address(0), "Manager: unknown market");
+
+        // Check that user has position in this market
+        uint256 cTokenBalance = PErc20(cToken).balanceOf(account.sma);
+        require(cTokenBalance > 0, "Manager: no position");
+
+        // Ensure user has no borrows (emergency withdraw is only for trapped collateral)
+        address[] memory markets = _getUserMarkets(msg.sender);
+        for (uint256 i = 0; i < markets.length; i++) {
+            uint256 borrowBal = PErc20(markets[i]).borrowBalanceStored(
+                account.sma
+            );
+            require(borrowBal == 0, "Manager: must repay borrows first");
+        }
+
+        uint256 redeemResult = SmartMarginAccount(account.sma).redeemUnderlying(
+            cToken,
+            amount
+        );
+        require(redeemResult == 0, "Manager: redeem failed");
+
+        address underlying = config.underlying;
+        SmartMarginAccount(account.sma).transferOut(underlying, to, amount);
+
+        _pruneUserMarkets(msg.sender, account.sma);
+
+        emit EmergencyWithdraw(msg.sender, cToken, amount, to);
+    }
+
+    /**
+     * @notice Deprecate a market - sets it inactive but preserves the underlying mapping
+     * @dev Users with positions in deprecated markets can use emergencyWithdraw to exit
+     * @param cToken The cToken address to deprecate
+     */
+    function deprecateMarket(address cToken) external onlyOwner {
+        MarketConfig storage config = marketConfigs[cToken];
+        require(config.underlying != address(0), "Manager: unknown market");
+
+        config.active = false;
+        config.depositsEnabled = false;
+        config.borrowsEnabled = false;
+        // Keep withdrawalsEnabled true so users can still exit via normal flow if possible
+        config.withdrawalsEnabled = true;
+        config.tradesEnabled = false;
+
+        emit MarketDeprecated(cToken, config.underlying);
+    }
+
+    function _getMarketForAsset(
+        address asset
+    )
         internal
         view
         returns (address cToken, MarketConfig memory config, bool isUnderlying)
@@ -872,11 +1415,17 @@ contract MarginManager is Ownable, ReentrancyGuard {
         return (cToken, config, isUnderlying);
     }
 
-    function _syncLockState(address user, Account storage account, uint256 healthFactorBps) internal {
+    function _syncLockState(
+        address user,
+        Account storage account,
+        uint256 healthFactorBps
+    ) internal {
         if (!account.withdrawalsLocked && healthFactorBps < hfLockBps) {
             account.withdrawalsLocked = true;
             emit Locked(user);
-        } else if (account.withdrawalsLocked && healthFactorBps >= hfUnlockBps) {
+        } else if (
+            account.withdrawalsLocked && healthFactorBps >= hfUnlockBps
+        ) {
             account.withdrawalsLocked = false;
             emit Unlocked(user);
         }

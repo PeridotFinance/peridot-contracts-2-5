@@ -59,18 +59,37 @@ contract P_OFTAdapter is OFTAdapter {
     // Emergency controls
     bool public paused;
 
+    // Maximum refill rate to prevent overflow in rate limit calculations
+    uint256 public constant MAX_REFILL_RATE = 1e50;
+
     // Events (PeerSet is inherited from OFTAdapter)
-    event RateLimitSet(uint32 indexed eid, bool isOutbound, uint256 capacity, uint256 refillRate);
+    event RateLimitSet(
+        uint32 indexed eid,
+        bool isOutbound,
+        uint256 capacity,
+        uint256 refillRate
+    );
     event Paused(bool paused);
-    event TokensLocked(address indexed from, uint32 indexed dstEid, uint256 amount);
-    event TokensUnlocked(address indexed to, uint32 indexed srcEid, uint256 amount);
+    event TokensLocked(
+        address indexed from,
+        uint32 indexed dstEid,
+        uint256 amount
+    );
+    event TokensUnlocked(
+        address indexed to,
+        uint32 indexed srcEid,
+        uint256 amount
+    );
+    event EmergencyWithdraw(address indexed to, uint256 amount);
 
     // Errors
     error AdapterPaused();
     error RateLimitExceeded();
-    error InsufficientInventory();
+    error InsufficientInventory(uint256 available, uint256 required);
     error InvalidPeer();
     error ZeroAddress();
+    error EmergencyWithdrawRequiresPause();
+    error RefillRateTooHigh();
 
     /**
      * @notice Constructor
@@ -78,10 +97,11 @@ contract P_OFTAdapter is OFTAdapter {
      * @param _lzEndpoint LayerZero Endpoint V2 address for this chain
      * @param _owner Admin address
      */
-    constructor(address _token, address _lzEndpoint, address _owner)
-        OFTAdapter(_token, _lzEndpoint, _owner)
-        Ownable(_owner)
-    {
+    constructor(
+        address _token,
+        address _lzEndpoint,
+        address _owner
+    ) OFTAdapter(_token, _lzEndpoint, _owner) Ownable(_owner) {
         // OFTAdapter handles token and endpoint storage
         // Additional initialization if needed
     }
@@ -93,10 +113,20 @@ contract P_OFTAdapter is OFTAdapter {
      * @param _eid Chain endpoint ID
      * @param _isOutbound True for outbound, false for inbound
      * @param _capacity Maximum tokens per window
-     * @param _refillRate Tokens refilled per second
+     * @param _refillRate Tokens refilled per second (bounded by MAX_REFILL_RATE)
      */
-    function setRateLimit(uint32 _eid, bool _isOutbound, uint256 _capacity, uint256 _refillRate) external onlyOwner {
-        RateLimit storage limit = _isOutbound ? outboundLimits[_eid] : inboundLimits[_eid];
+    function setRateLimit(
+        uint32 _eid,
+        bool _isOutbound,
+        uint256 _capacity,
+        uint256 _refillRate
+    ) external onlyOwner {
+        // Prevent overflow in elapsed * refillRate calculation
+        if (_refillRate > MAX_REFILL_RATE) revert RefillRateTooHigh();
+
+        RateLimit storage limit = _isOutbound
+            ? outboundLimits[_eid]
+            : inboundLimits[_eid];
 
         limit.capacity = _capacity;
         limit.refillRate = _refillRate;
@@ -194,45 +224,70 @@ contract P_OFTAdapter is OFTAdapter {
         if (elapsed == 0) return;
 
         uint256 refill = elapsed * limit.refillRate;
-        limit.tokens = limit.tokens + refill > limit.capacity ? limit.capacity : limit.tokens + refill;
+        limit.tokens = limit.tokens + refill > limit.capacity
+            ? limit.capacity
+            : limit.tokens + refill;
         limit.lastRefill = block.timestamp;
     }
 
     /**
      * @notice Emergency withdraw (use with extreme caution)
+     * @dev This withdraws the underlying token escrow, which can break bridging if misused.
+     *      Only callable when paused.
      * @param _to Recipient address
      * @param _amount Amount to withdraw
      */
-    function emergencyWithdraw(address _to, uint256 _amount) external onlyOwner {
+    function emergencyWithdraw(
+        address _to,
+        uint256 _amount
+    ) external onlyOwner {
         if (_to == address(0)) revert ZeroAddress();
+        if (!paused) revert EmergencyWithdrawRequiresPause();
         IERC20(innerToken).safeTransfer(_to, _amount);
+        emit EmergencyWithdraw(_to, _amount);
+    }
+
+    // -------------------------
+    // LayerZero internal hooks
+    // -------------------------
+
+    /**
+     * @notice Override _debit to enforce pause and rate limits on outbound transfers
+     * @dev Called by LayerZero when sending tokens cross-chain
+     */
+    function _debit(
+        address _from,
+        uint256 _amountLD,
+        uint256 _minAmountLD,
+        uint32 _dstEid
+    )
+        internal
+        virtual
+        override
+        returns (uint256 amountSentLD, uint256 amountReceivedLD)
+    {
+        if (paused) revert AdapterPaused();
+        _consumeOutboundLimit(_dstEid, _amountLD);
+        return super._debit(_from, _amountLD, _minAmountLD, _dstEid);
+    }
+
+    /**
+     * @notice Override _credit to enforce pause and rate limits on inbound transfers
+     * @dev Called by LayerZero when receiving tokens cross-chain
+     */
+    function _credit(
+        address _to,
+        uint256 _amountLD,
+        uint32 _srcEid
+    ) internal virtual override returns (uint256 amountReceivedLD) {
+        if (paused) revert AdapterPaused();
+        _consumeInboundLimit(_srcEid, _amountLD);
+
+        // Check that we have sufficient inventory to unlock
+        uint256 available = IERC20(innerToken).balanceOf(address(this));
+        if (available < _amountLD)
+            revert InsufficientInventory(available, _amountLD);
+
+        return super._credit(_to, _amountLD, _srcEid);
     }
 }
-
-/**
- * IMPLEMENTATION CHECKLIST:
- *
- * [ ] 1. Install LayerZero packages:
- *        npm install @layerzerolabs/lz-evm-oapp-v2
- *
- * [ ] 2. Replace this contract with proper OFTAdapter inheritance:
- *        import {OFTAdapter} from "@layerzerolabs/oft-evm/contracts/OFTAdapter.sol";
- *        contract P_OFTAdapter is OFTAdapter, Ownable { ... }
- *
- * [ ] 3. Update constructor to call parent:
- *        constructor(...) OFTAdapter(_token, _lzEndpoint, _owner) Ownable(_owner) { }
- *
- * [ ] 4. Override _debit() to add rate limits before sending
- *
- * [ ] 5. Override _credit() to add rate limits when receiving
- *
- * [ ] 6. Deploy on testnet (BNB Testnet + Arbitrum Sepolia)
- *
- * [ ] 7. Configure peers using setPeer()
- *
- * [ ] 8. Seed inventory by transferring $P tokens to adapter
- *
- * [ ] 9. Test cross-chain transfer
- *
- * [ ] 10. Monitor on LayerZero Scan: https://testnet.layerzeroscan.com
- */

@@ -107,7 +107,11 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
     event MasterChefStaked(uint256 indexed tokenId);
     event MasterChefUnstaked(uint256 indexed tokenId);
     event Harvested(uint256 rewardAmount, uint256 amount0, uint256 amount1);
-    event HarvestConfigUpdated(uint256 minToken0, uint256 minToken1, uint256 threshold);
+    event HarvestConfigUpdated(
+        uint256 minToken0,
+        uint256 minToken1,
+        uint256 threshold
+    );
     event DustSwept(address indexed to, uint256 amount0, uint256 amount1);
 
     modifier onlyKeeperOrOwner() {
@@ -125,8 +129,14 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         address owner_,
         VaultConfig memory config_
     ) ERC20(name_, symbol_) ERC4626(token0_) Ownable(owner_) {
-        require(address(token0_) != address(0) && address(token1_) != address(0), "token zero");
-        if (address(config_.positionManager) == address(0) || config_.pool == address(0)) {
+        require(
+            address(token0_) != address(0) && address(token1_) != address(0),
+            "token zero"
+        );
+        if (
+            address(config_.positionManager) == address(0) ||
+            config_.pool == address(0)
+        ) {
             revert InvalidConfiguration();
         }
 
@@ -138,26 +148,40 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         config = config_;
         if (config_.stakeWithMasterChef) {
             // Staking with MasterChef requires both masterChef and rewardToken
-            if (address(config_.masterChef) == address(0) || address(config_.rewardToken) == address(0)) {
+            if (
+                address(config_.masterChef) == address(0) ||
+                address(config_.rewardToken) == address(0)
+            ) {
                 revert InvalidConfiguration();
             }
         }
         // If there's a rewardToken but no staking, we need a routerAdapter to swap rewards
         // If there's no rewardToken, no routerAdapter is needed (no-rewards scenario like Monad)
-        if (address(config_.rewardToken) != address(0) && config_.routerAdapter == address(0)) {
+        if (
+            address(config_.rewardToken) != address(0) &&
+            config_.routerAdapter == address(0)
+        ) {
             revert InvalidConfiguration();
         }
         rewardToken = config_.rewardToken;
     }
 
-    function previewDepositDual(uint256 amount0Desired, uint256 amount1Desired) public view returns (uint256 shares) {
+    function previewDepositDual(
+        uint256 amount0Desired,
+        uint256 amount1Desired
+    ) public view returns (uint256 shares) {
         if (amount0Desired == 0 && amount1Desired == 0) return 0;
-        (uint160 sqrtPriceX96,) = _currentSqrtPrice();
+        (uint160 sqrtPriceX96, ) = _currentSqrtPrice();
         uint160 sqrtLower = TickMath.getSqrtRatioAtTick(config.tickLower);
         uint160 sqrtUpper = TickMath.getSqrtRatioAtTick(config.tickUpper);
 
-        uint128 liquidityAdded =
-            LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtLower, sqrtUpper, amount0Desired, amount1Desired);
+        uint128 liquidityAdded = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            sqrtLower,
+            sqrtUpper,
+            amount0Desired,
+            amount1Desired
+        );
         if (liquidityAdded == 0) return 0;
 
         uint128 liquidityBefore = totalLiquidity;
@@ -168,54 +192,103 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         return (uint256(liquidityAdded) * supply) / liquidityBefore;
     }
 
-    function previewWithdrawDual(uint256 shares) public view returns (uint256 amount0, uint256 amount1) {
+    function previewWithdrawDual(
+        uint256 shares
+    ) public view returns (uint256 amount0, uint256 amount1) {
         uint256 supply = totalSupply();
         if (shares == 0 || supply == 0) {
             return (0, 0);
         }
 
-        uint128 liquidityBurned = uint128((uint256(totalLiquidity) * shares) / supply);
+        uint128 liquidityBurned = uint128(
+            (uint256(totalLiquidity) * shares) / supply
+        );
         if (liquidityBurned == 0) {
             return (0, 0);
         }
 
-        (uint160 sqrtPriceX96,) = _currentSqrtPrice();
+        (uint160 sqrtPriceX96, ) = _currentSqrtPrice();
         uint160 sqrtLower = TickMath.getSqrtRatioAtTick(config.tickLower);
         uint160 sqrtUpper = TickMath.getSqrtRatioAtTick(config.tickUpper);
 
-        (amount0, amount1) =
-            LiquidityAmounts.getAmountsForLiquidity(sqrtPriceX96, sqrtLower, sqrtUpper, liquidityBurned);
+        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96,
+            sqrtLower,
+            sqrtUpper,
+            liquidityBurned
+        );
     }
 
-    function depositDual(DepositParams calldata params) external nonReentrant whenNotPaused returns (uint256 shares) {
-        address refundReceiver = params.refundReceiver == address(0) ? params.receiver : params.refundReceiver;
+    function depositDual(
+        DepositParams calldata params
+    ) external nonReentrant whenNotPaused returns (uint256 shares) {
+        address refundReceiver = params.refundReceiver == address(0)
+            ? params.receiver
+            : params.refundReceiver;
 
-        token0.safeTransferFrom(msg.sender, address(this), params.amount0Desired);
-        token1.safeTransferFrom(msg.sender, address(this), params.amount1Desired);
-
-        uint128 liquidityBefore = totalLiquidity;
-        (uint256 amount0Used, uint256 amount1Used, uint128 liquidityAdded) = _addLiquidity(
-            params.amount0Desired, params.amount1Desired, params.amount0Min, params.amount1Min, params.deadline
+        token0.safeTransferFrom(
+            msg.sender,
+            address(this),
+            params.amount0Desired
+        );
+        token1.safeTransferFrom(
+            msg.sender,
+            address(this),
+            params.amount1Desired
         );
 
-        if (amount0Used < params.amount0Min || amount1Used < params.amount1Min) {
+        uint128 liquidityBefore = totalLiquidity;
+        (
+            uint256 amount0Used,
+            uint256 amount1Used,
+            uint128 liquidityAdded
+        ) = _addLiquidity(
+                params.amount0Desired,
+                params.amount1Desired,
+                params.amount0Min,
+                params.amount1Min,
+                params.deadline
+            );
+
+        if (
+            amount0Used < params.amount0Min || amount1Used < params.amount1Min
+        ) {
             revert SlippageExceeded();
         }
 
         totalManagedToken0 += amount0Used;
         totalManagedToken1 += amount1Used;
 
-        shares = _mintShares(params.receiver, liquidityAdded, liquidityBefore, params.minShares);
+        shares = _mintShares(
+            params.receiver,
+            liquidityAdded,
+            liquidityBefore,
+            params.minShares
+        );
         totalLiquidity = liquidityBefore + liquidityAdded;
 
-        _refundExcess(refundReceiver, params.amount0Desired, params.amount1Desired, amount0Used, amount1Used);
+        _refundExcess(
+            refundReceiver,
+            params.amount0Desired,
+            params.amount1Desired,
+            amount0Used,
+            amount1Used
+        );
 
         emit LiquidityAdded(
-            msg.sender, params.receiver, positionTokenId, amount0Used, amount1Used, liquidityAdded, shares
+            msg.sender,
+            params.receiver,
+            positionTokenId,
+            amount0Used,
+            amount1Used,
+            liquidityAdded,
+            shares
         );
     }
 
-    function withdrawDual(WithdrawParams calldata params)
+    function withdrawDual(
+        WithdrawParams calldata params
+    )
         external
         nonReentrant
         whenNotPaused
@@ -226,8 +299,12 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         }
 
         uint128 liquidityBurned;
-        (amount0, amount1, liquidityBurned) =
-            _removeLiquidity(params.shares, params.amount0Min, params.amount1Min, params.deadline);
+        (amount0, amount1, liquidityBurned) = _removeLiquidity(
+            params.shares,
+            params.amount0Min,
+            params.amount1Min,
+            params.deadline
+        );
 
         _burn(params.owner, params.shares);
 
@@ -239,15 +316,31 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         token1.safeTransfer(params.receiver, amount1);
 
         emit LiquidityRemoved(
-            msg.sender, params.owner, params.receiver, params.shares, amount0, amount1, liquidityBurned
+            msg.sender,
+            params.owner,
+            params.receiver,
+            params.shares,
+            amount0,
+            amount1,
+            liquidityBurned
         );
     }
 
-    function unstakeFromMasterChef(address to) external onlyKeeperOrOwner {
+    /**
+     * @notice Unstake NFT from MasterChef
+     * @dev CRITICAL SECURITY: Always returns NFT to this vault (address(this)), not to an arbitrary address.
+     *      Only owner can call (not keeper) to prevent NFT theft.
+     */
+    function unstakeFromMasterChef() external onlyOwner {
         require(config.stakeWithMasterChef, "staking disabled");
         require(positionTokenId != 0, "no position");
 
-        config.masterChef.withdraw(config.masterChefPid, positionTokenId, to);
+        // IMPORTANT: Always withdraw to address(this) to prevent NFT theft
+        config.masterChef.withdraw(
+            config.masterChefPid,
+            positionTokenId,
+            address(this)
+        );
         config.stakeWithMasterChef = false;
 
         emit MasterChefUnstaked(positionTokenId);
@@ -258,7 +351,11 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         emit KeeperUpdated(newKeeper);
     }
 
-    function configureHarvest(uint256 minToken0, uint256 minToken1, uint256 threshold) external onlyOwner {
+    function configureHarvest(
+        uint256 minToken0,
+        uint256 minToken1,
+        uint256 threshold
+    ) external onlyOwner {
         harvestMinToken0 = minToken0;
         harvestMinToken1 = minToken1;
         harvestThreshold = threshold;
@@ -267,26 +364,54 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
 
     /**
      * @notice Sweep any leftover tokens that couldn't be added to liquidity.
-     * @dev This recovers dust tokens that accumulate due to V3's concentrated liquidity
-     *      requiring specific token ratios. Only callable by owner.
+     * @dev IMPORTANT: This should only sweep true "dust" - small amounts left over from rounding.
+     *      To prevent abuse, we cap swept amounts to a maximum percentage of totalManagedTokens.
+     *      Swept amounts are subtracted from totalManaged accounting to keep totalAssets() accurate.
      * @param to Address to send the dust tokens to.
+     * @param maxAmount0 Maximum amount of token0 to sweep (safety check)
+     * @param maxAmount1 Maximum amount of token1 to sweep (safety check)
      */
-    function sweepDust(address to) external onlyOwner {
+    function sweepDust(
+        address to,
+        uint256 maxAmount0,
+        uint256 maxAmount1
+    ) external onlyOwner {
         require(to != address(0), "zero address");
+
         uint256 dust0 = token0.balanceOf(address(this));
         uint256 dust1 = token1.balanceOf(address(this));
 
+        // Safety: cap sweep to specified maximums
+        if (dust0 > maxAmount0) dust0 = maxAmount0;
+        if (dust1 > maxAmount1) dust1 = maxAmount1;
+
+        // Safety: don't allow sweeping more than 1% of managed tokens
+        uint256 maxSweep0 = totalManagedToken0 / 100;
+        uint256 maxSweep1 = totalManagedToken1 / 100;
+        if (dust0 > maxSweep0) dust0 = maxSweep0;
+        if (dust1 > maxSweep1) dust1 = maxSweep1;
+
         if (dust0 > 0) {
             token0.safeTransfer(to, dust0);
+            // Update accounting to reflect swept tokens
+            totalManagedToken0 = totalManagedToken0 > dust0
+                ? totalManagedToken0 - dust0
+                : 0;
         }
         if (dust1 > 0) {
             token1.safeTransfer(to, dust1);
+            // Update accounting to reflect swept tokens
+            totalManagedToken1 = totalManagedToken1 > dust1
+                ? totalManagedToken1 - dust1
+                : 0;
         }
 
         emit DustSwept(to, dust0, dust1);
     }
 
-    function harvestAndCompound(HarvestParams calldata params)
+    function harvestAndCompound(
+        HarvestParams calldata params
+    )
         external
         onlyKeeperOrOwner
         whenNotPaused
@@ -311,14 +436,27 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
             rewardForToken0 = rewardBalance / 2;
             rewardForToken1 = rewardBalance - rewardForToken0;
         } else {
-            require(rewardForToken0 + rewardForToken1 <= rewardBalance, "reward excess");
+            require(
+                rewardForToken0 + rewardForToken1 <= rewardBalance,
+                "reward excess"
+            );
         }
 
         if (rewardForToken0 > 0) {
-            _swapReward(address(token0), rewardForToken0, params.minToken0Out, params.swapDataToken0);
+            _swapReward(
+                address(token0),
+                rewardForToken0,
+                params.minToken0Out,
+                params.swapDataToken0
+            );
         }
         if (rewardForToken1 > 0) {
-            _swapReward(address(token1), rewardForToken1, params.minToken1Out, params.swapDataToken1);
+            _swapReward(
+                address(token1),
+                rewardForToken1,
+                params.minToken1Out,
+                params.swapDataToken1
+            );
         }
 
         // Use ALL available tokens (including any leftover from previous harvests)
@@ -330,8 +468,17 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
             return 0;
         }
 
-        (uint256 amount0Used, uint256 amount1Used, uint128 liquidity) =
-            _addLiquidity(availableToken0, availableToken1, harvestMinToken0, harvestMinToken1, block.timestamp);
+        (
+            uint256 amount0Used,
+            uint256 amount1Used,
+            uint128 liquidity
+        ) = _addLiquidity(
+                availableToken0,
+                availableToken1,
+                harvestMinToken0,
+                harvestMinToken1,
+                block.timestamp
+            );
 
         if (liquidity == 0) {
             return 0;
@@ -342,7 +489,11 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         totalLiquidity += liquidity;
         lastHarvest = block.timestamp;
 
-        emit Harvested(rewardForToken0 + rewardForToken1, amount0Used, amount1Used);
+        emit Harvested(
+            rewardForToken0 + rewardForToken1,
+            amount0Used,
+            amount1Used
+        );
         return liquidity;
     }
 
@@ -366,11 +517,19 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         revert SingleAssetNotSupported();
     }
 
-    function withdraw(uint256, address, address) public pure override returns (uint256) {
+    function withdraw(
+        uint256,
+        address,
+        address
+    ) public pure override returns (uint256) {
         revert SingleAssetNotSupported();
     }
 
-    function redeem(uint256, address, address) public pure override returns (uint256) {
+    function redeem(
+        uint256,
+        address,
+        address
+    ) public pure override returns (uint256) {
         revert SingleAssetNotSupported();
     }
 
@@ -386,7 +545,7 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         // Return the token0-equivalent value that can be withdrawn via withdrawDual
         uint256 shares = balanceOf(owner);
         if (shares == 0) return 0;
-        (uint256 amount0,) = previewWithdrawDual(shares);
+        (uint256 amount0, ) = previewWithdrawDual(shares);
         return amount0;
     }
 
@@ -402,12 +561,16 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         return 0; // Single-asset mint not supported
     }
 
-    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+    function previewWithdraw(
+        uint256 assets
+    ) public view override returns (uint256) {
         // Estimate shares needed to withdraw this amount of token0-equivalent value
         return convertToShares(assets);
     }
 
-    function previewRedeem(uint256 shares) public view override returns (uint256) {
+    function previewRedeem(
+        uint256 shares
+    ) public view override returns (uint256) {
         return convertToAssets(shares);
     }
 
@@ -419,12 +582,16 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         return _valueOf(totalManagedToken0, totalManagedToken1);
     }
 
-    function convertToAssets(uint256 shares) public view override returns (uint256 assets) {
+    function convertToAssets(
+        uint256 shares
+    ) public view override returns (uint256 assets) {
         (uint256 amount0, uint256 amount1) = previewWithdrawDual(shares);
         assets = _valueOf(amount0, amount1);
     }
 
-    function convertToShares(uint256 assets) public view override returns (uint256 shares) {
+    function convertToShares(
+        uint256 assets
+    ) public view override returns (uint256 shares) {
         uint256 supply = totalSupply();
         if (supply == 0 || assets == 0) {
             return assets;
@@ -436,10 +603,12 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         return (assets * supply) / totalAssetValue;
     }
 
-    function _mintShares(address receiver, uint128 liquidityAdded, uint128 liquidityBefore, uint256 minShares)
-        internal
-        returns (uint256 shares)
-    {
+    function _mintShares(
+        address receiver,
+        uint128 liquidityAdded,
+        uint128 liquidityBefore,
+        uint256 minShares
+    ) internal returns (uint256 shares) {
         uint256 supply = totalSupply();
         if (supply == 0 || liquidityBefore == 0) {
             shares = uint256(liquidityAdded);
@@ -467,10 +636,12 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         }
     }
 
-    function _swapReward(address tokenOut, uint256 amountIn, uint256 minAmountOut, bytes memory data)
-        internal
-        returns (uint256 amountOut)
-    {
+    function _swapReward(
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory data
+    ) internal returns (uint256 amountOut) {
         if (amountIn == 0) {
             return 0;
         }
@@ -482,8 +653,14 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(address(this));
         rewardToken.forceApprove(config.routerAdapter, amountIn);
-        IMarginRouterAdapter(config.routerAdapter)
-            .swap(address(this), address(rewardToken), tokenOut, amountIn, minAmountOut, data);
+        IMarginRouterAdapter(config.routerAdapter).swap(
+            address(this),
+            address(rewardToken),
+            tokenOut,
+            amountIn,
+            minAmountOut,
+            data
+        );
         rewardToken.forceApprove(config.routerAdapter, 0);
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(address(this));
         amountOut = balanceAfter - balanceBefore;
@@ -502,47 +679,62 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         token1.forceApprove(address(positionManager), amount1Desired);
 
         if (positionTokenId == 0) {
-            INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
-                token0: address(token0),
-                token1: address(token1),
-                fee: config.fee,
-                tickLower: config.tickLower,
-                tickUpper: config.tickUpper,
-                amount0Desired: amount0Desired,
-                amount1Desired: amount1Desired,
-                amount0Min: amount0Min,
-                amount1Min: amount1Min,
-                recipient: address(this),
-                deadline: deadline
-            });
-
-            uint256 tokenId;
-            (tokenId, liquidity, amount0, amount1) = positionManager.mint(params);
-            positionTokenId = tokenId;
-
-            if (config.stakeWithMasterChef) {
-                config.masterChef.deposit(config.masterChefPid, tokenId, address(this));
-                emit MasterChefStaked(tokenId);
-            }
-        } else {
-            INonfungiblePositionManager.IncreaseLiquidityParams memory paramsInc =
-                INonfungiblePositionManager.IncreaseLiquidityParams({
-                    tokenId: positionTokenId,
+            INonfungiblePositionManager.MintParams
+                memory params = INonfungiblePositionManager.MintParams({
+                    token0: address(token0),
+                    token1: address(token1),
+                    fee: config.fee,
+                    tickLower: config.tickLower,
+                    tickUpper: config.tickUpper,
                     amount0Desired: amount0Desired,
                     amount1Desired: amount1Desired,
                     amount0Min: amount0Min,
                     amount1Min: amount1Min,
+                    recipient: address(this),
                     deadline: deadline
                 });
 
-            (liquidity, amount0, amount1) = positionManager.increaseLiquidity(paramsInc);
+            uint256 tokenId;
+            (tokenId, liquidity, amount0, amount1) = positionManager.mint(
+                params
+            );
+            positionTokenId = tokenId;
+
+            if (config.stakeWithMasterChef) {
+                config.masterChef.deposit(
+                    config.masterChefPid,
+                    tokenId,
+                    address(this)
+                );
+                emit MasterChefStaked(tokenId);
+            }
+        } else {
+            INonfungiblePositionManager.IncreaseLiquidityParams
+                memory paramsInc = INonfungiblePositionManager
+                    .IncreaseLiquidityParams({
+                        tokenId: positionTokenId,
+                        amount0Desired: amount0Desired,
+                        amount1Desired: amount1Desired,
+                        amount0Min: amount0Min,
+                        amount1Min: amount1Min,
+                        deadline: deadline
+                    });
+
+            (liquidity, amount0, amount1) = positionManager.increaseLiquidity(
+                paramsInc
+            );
         }
 
         token0.forceApprove(address(positionManager), 0);
         token1.forceApprove(address(positionManager), 0);
     }
 
-    function _removeLiquidity(uint256 shares, uint256 amount0Min, uint256 amount1Min, uint256 deadline)
+    function _removeLiquidity(
+        uint256 shares,
+        uint256 amount0Min,
+        uint256 amount1Min,
+        uint256 deadline
+    )
         internal
         returns (uint256 amount0, uint256 amount1, uint128 liquidityBurned)
     {
@@ -560,14 +752,15 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         uint256 balance0Before = token0.balanceOf(address(this));
         uint256 balance1Before = token1.balanceOf(address(this));
 
-        INonfungiblePositionManager.DecreaseLiquidityParams memory params =
-            INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: positionTokenId,
-                liquidity: liquidityBurned,
-                amount0Min: amount0Min,
-                amount1Min: amount1Min,
-                deadline: deadline
-            });
+        INonfungiblePositionManager.DecreaseLiquidityParams
+            memory params = INonfungiblePositionManager
+                .DecreaseLiquidityParams({
+                    tokenId: positionTokenId,
+                    liquidity: liquidityBurned,
+                    amount0Min: amount0Min,
+                    amount1Min: amount1Min,
+                    deadline: deadline
+                });
 
         (amount0, amount1) = positionManager.decreaseLiquidity(params);
 
@@ -588,24 +781,53 @@ contract V3LPVault4626 is ERC4626, Ownable, Pausable, ReentrancyGuard {
         uint256 fee1 = (balance1After - balance1Before) - amount1;
 
         totalLiquidity = liquidityBefore - liquidityBurned;
-        totalManagedToken0 = amount0 >= totalManagedToken0 ? fee0 : (totalManagedToken0 - amount0) + fee0;
-        totalManagedToken1 = amount1 >= totalManagedToken1 ? fee1 : (totalManagedToken1 - amount1) + fee1;
+
+        // Update managed tokens accounting correctly:
+        // New managed = old managed - principal + fees
+        // Handle underflow safely (shouldn't happen in normal operation but be defensive)
+        if (amount0 <= totalManagedToken0) {
+            totalManagedToken0 = (totalManagedToken0 - amount0) + fee0;
+        } else {
+            // Defensive: if amount0 > totalManagedToken0, just set to fees
+            // This should not happen in normal operation
+            totalManagedToken0 = fee0;
+        }
+
+        if (amount1 <= totalManagedToken1) {
+            totalManagedToken1 = (totalManagedToken1 - amount1) + fee1;
+        } else {
+            // Defensive: if amount1 > totalManagedToken1, just set to fees
+            // This should not happen in normal operation
+            totalManagedToken1 = fee1;
+        }
     }
 
-    function _currentSqrtPrice() internal view returns (uint160 sqrtPriceX96, int24 tick) {
-        (sqrtPriceX96, tick,,,,,) = IPancakeV3Pool(config.pool).slot0();
+    function _currentSqrtPrice()
+        internal
+        view
+        returns (uint160 sqrtPriceX96, int24 tick)
+    {
+        (sqrtPriceX96, tick, , , , , ) = IPancakeV3Pool(config.pool).slot0();
     }
 
-    function _valueOf(uint256 amount0, uint256 amount1) internal view returns (uint256) {
+    function _valueOf(
+        uint256 amount0,
+        uint256 amount1
+    ) internal view returns (uint256) {
         if (amount0 == 0 && amount1 == 0) return 0;
-        (uint160 sqrtPriceX96,) = _currentSqrtPrice();
+        (uint160 sqrtPriceX96, ) = _currentSqrtPrice();
         uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
-        uint256 token1InToken0 = amount1 == 0 ? 0 : FullMath.mulDiv(amount1, FixedPoint96.Q192, priceX192);
+        uint256 token1InToken0 = amount1 == 0
+            ? 0
+            : FullMath.mulDiv(amount1, FixedPoint96.Q192, priceX192);
         uint256 totalToken0 = amount0 + token1InToken0;
         return _scaleTo1e18(totalToken0, token0Decimals);
     }
 
-    function _scaleTo1e18(uint256 amount, uint8 decimals) internal pure returns (uint256) {
+    function _scaleTo1e18(
+        uint256 amount,
+        uint8 decimals
+    ) internal pure returns (uint256) {
         if (decimals == 18) {
             return amount;
         } else if (decimals > 18) {

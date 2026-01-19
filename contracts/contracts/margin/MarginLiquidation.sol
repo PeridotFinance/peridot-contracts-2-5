@@ -18,6 +18,11 @@ import {SimplePriceOracle} from "../SimplePriceOracle.sol";
 /**
  * @title MarginLiquidation
  * @notice Facilitates flashloan-backed liquidations of SmartMarginAccount positions.
+ * @dev Security notes:
+ *      - cToken addresses are validated against manager's market configs
+ *      - Flash loan authentication uses storage-bound expected values
+ *      - Balance deltas are tracked to prevent sweeping stray tokens
+ *      - Adapters must be allowlisted (recommend multisig/timelock for owner)
  */
 contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
@@ -41,11 +46,22 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         address caller;
     }
 
+    /// @notice Expected flash loan parameters (set before flash loan, cleared after)
+    struct PendingFlashLoan {
+        address expectedLender;
+        address expectedToken;
+        uint256 expectedAmount;
+        bool active;
+    }
+
     MarginManager public immutable manager;
     IPeridottrollerView public immutable peridottroller;
     SimplePriceOracle public immutable priceOracle;
 
     mapping(address => bool) public allowedAdapters;
+
+    /// @notice Storage-bound flash loan authentication
+    PendingFlashLoan private pendingFlashLoan;
 
     event AdapterUpdated(address indexed adapter, bool allowed);
     event Liquidated(
@@ -66,8 +82,44 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
     }
 
     function setAdapter(address adapter, bool allowed) external onlyOwner {
+        // Require adapter to be a contract if enabling
+        require(!allowed || adapter.code.length > 0, "Liquidation: adapter not contract");
         allowedAdapters[adapter] = allowed;
         emit AdapterUpdated(adapter, allowed);
+    }
+
+    /**
+     * @dev Validates that a cToken is a legitimate market in the manager
+     * @param cToken The cToken address to validate
+     * @return underlying The validated underlying address
+     */
+    function _validateMarket(address cToken) internal view returns (address underlying) {
+        require(cToken != address(0), "Liquidation: zero cToken");
+        require(cToken.code.length > 0, "Liquidation: cToken not contract");
+
+        // Get market config from manager
+        (
+            bool active,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            address configUnderlying
+        ) = manager.marketConfigs(cToken);
+
+        require(active, "Liquidation: market not active");
+        require(configUnderlying != address(0), "Liquidation: market not configured");
+
+        // Verify the cToken's underlying matches manager config
+        underlying = PErc20(cToken).underlying();
+        require(underlying == configUnderlying, "Liquidation: underlying mismatch");
+
+        // Also verify with comptroller
+        (bool isListed, , ) = peridottroller.markets(cToken);
+        require(isListed, "Liquidation: market not listed");
     }
 
     function liquidate(
@@ -90,8 +142,9 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         require(metrics.borrowValue > 0, "Liquidation: nothing to repay");
         require(metrics.healthFactorBps < manager.hfLockBps(), "Liquidation: account healthy");
 
-        address borrowUnderlying = PErc20(debtCToken).underlying();
-        address collateralUnderlying = PErc20(collateralCToken).underlying();
+        // Validate cToken addresses against manager's market configs
+        address borrowUnderlying = _validateMarket(debtCToken);
+        address collateralUnderlying = _validateMarket(collateralCToken);
 
         FlashCallbackData memory data = FlashCallbackData({
             user: user,
@@ -108,10 +161,21 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
 
         bytes memory encoded = abi.encode(data);
 
+        // Store expected flash loan parameters in storage for authentication
+        pendingFlashLoan = PendingFlashLoan({
+            expectedLender: debtCToken,
+            expectedToken: borrowUnderlying,
+            expectedAmount: repayAmount,
+            active: true
+        });
+
         require(
             PErc20(debtCToken).flashLoan(IERC3156FlashBorrower(address(this)), borrowUnderlying, repayAmount, encoded),
             "Liquidation: flashloan failed"
         );
+
+        // Clear pending flash loan
+        delete pendingFlashLoan;
     }
 
     function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)
@@ -121,14 +185,34 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
     {
         require(initiator == address(this), "Liquidation: bad initiator");
 
+        // Authenticate using storage-bound expected values (not calldata)
+        PendingFlashLoan memory expected = pendingFlashLoan;
+        require(expected.active, "Liquidation: no pending flash loan");
+        require(msg.sender == expected.expectedLender, "Liquidation: unexpected lender");
+        require(token == expected.expectedToken, "Liquidation: unexpected token");
+        require(amount == expected.expectedAmount, "Liquidation: unexpected amount");
+
         FlashCallbackData memory params = abi.decode(data, (FlashCallbackData));
-        require(msg.sender == params.debtCToken, "Liquidation: unexpected lender");
-        require(token == params.borrowUnderlying, "Liquidation: unexpected token");
+        // Double-check calldata matches storage expectations
+        require(params.debtCToken == expected.expectedLender, "Liquidation: params mismatch");
+        require(params.borrowUnderlying == expected.expectedToken, "Liquidation: token mismatch");
 
         IERC20 borrowToken = IERC20(token);
         IERC20 collateralToken = IERC20(params.collateralUnderlying);
 
-        // Approve cToken to pull repay amount
+        // Track balance deltas to avoid sweeping stray tokens
+        // Note: At this point, the flash loan amount has already been transferred to us
+        // So borrowBalanceBefore includes the flash loan amount
+        uint256 borrowBalanceStart = borrowToken.balanceOf(address(this));
+        uint256 collateralBalanceBefore = collateralToken.balanceOf(address(this));
+
+        // The flash loan amount should be present
+        require(borrowBalanceStart >= amount, "Liquidation: flash loan not received");
+
+        // Calculate pre-existing balance (before flash loan)
+        uint256 preExistingBorrowBalance = borrowBalanceStart - amount;
+
+        // Approve cToken to pull repay amount (exact amount only)
         borrowToken.forceApprove(params.debtCToken, amount);
 
         uint256 cTokenBalanceBefore = IERC20(params.collateralCToken).balanceOf(address(this));
@@ -145,44 +229,66 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         uint256 redeemResult = PErc20(params.collateralCToken).redeem(seizedCTokens);
         require(redeemResult == 0, "Liquidation: redeem failed");
 
-        uint256 collateralBalance = collateralToken.balanceOf(address(this));
-        require(collateralBalance > 0, "Liquidation: no collateral underlying");
+        // Calculate collateral delta (only use what was gained from liquidation)
+        uint256 collateralBalanceAfterRedeem = collateralToken.balanceOf(address(this));
+        uint256 collateralGained = collateralBalanceAfterRedeem - collateralBalanceBefore;
+        require(collateralGained > 0, "Liquidation: no collateral underlying");
 
         if (params.swap.adapter != address(0)) {
             require(allowedAdapters[params.swap.adapter], "Liquidation: adapter not allowed");
-            collateralToken.forceApprove(params.swap.adapter, collateralBalance);
-            uint256 amountOut = IMarginRouterAdapter(params.swap.adapter)
-                .swap(
-                    address(this),
-                    params.collateralUnderlying,
-                    params.borrowUnderlying,
-                    collateralBalance,
-                    params.swap.minAmountOut,
-                    params.swap.data
-                );
+            require(params.swap.adapter.code.length > 0, "Liquidation: adapter not contract");
+
+            // Approve exact amount only
+            collateralToken.forceApprove(params.swap.adapter, collateralGained);
+
+            // Track borrow token balance before swap
+            uint256 borrowBalanceBeforeSwap = borrowToken.balanceOf(address(this));
+
+            IMarginRouterAdapter(params.swap.adapter).swap(
+                address(this),
+                params.collateralUnderlying,
+                params.borrowUnderlying,
+                collateralGained,
+                params.swap.minAmountOut,
+                params.swap.data
+            );
             collateralToken.forceApprove(params.swap.adapter, 0);
-            require(amountOut >= params.swap.minAmountOut, "Liquidation: swap min out");
+
+            // Verify swap output using balance delta
+            uint256 borrowBalanceAfterSwap = borrowToken.balanceOf(address(this));
+            uint256 swapOutput = borrowBalanceAfterSwap - borrowBalanceBeforeSwap;
+            require(swapOutput >= params.swap.minAmountOut, "Liquidation: swap min out");
         } else {
             require(params.collateralUnderlying == params.borrowUnderlying, "Liquidation: swap required");
         }
 
         uint256 totalRepay = amount + fee;
-        uint256 repayBalance = borrowToken.balanceOf(address(this));
-        require(repayBalance >= totalRepay, "Liquidation: insufficient repay");
 
-        uint256 profit = repayBalance - totalRepay;
+        // Calculate profit using balance delta
+        uint256 borrowBalanceNow = borrowToken.balanceOf(address(this));
+
+        // We need: borrowBalanceNow >= totalRepay + preExistingBorrowBalance
+        // (enough to repay flash loan and leave pre-existing balance intact)
+        require(borrowBalanceNow >= totalRepay + preExistingBorrowBalance, "Liquidation: insufficient repay");
+
+        // Profit = current balance - totalRepay - preExisting
+        // This ensures we only count gains from this liquidation
+        uint256 profit = borrowBalanceNow - totalRepay - preExistingBorrowBalance;
         require(profit >= params.minProfit, "Liquidation: insufficient profit");
 
         // Repay flashloan
         borrowToken.safeTransfer(msg.sender, totalRepay);
 
-        // Send profit to recipient
+        // Send profit to recipient (only the profit from this liquidation)
         if (profit > 0) {
             borrowToken.safeTransfer(params.recipient, profit);
         }
 
-        // Forward any residual collateral underlying (should be zero if swapped)
-        uint256 residualCollateral = collateralToken.balanceOf(address(this));
+        // Forward residual collateral (only from this liquidation)
+        uint256 collateralBalanceNow = collateralToken.balanceOf(address(this));
+        uint256 residualCollateral = collateralBalanceNow > collateralBalanceBefore
+            ? collateralBalanceNow - collateralBalanceBefore
+            : 0;
         if (residualCollateral > 0) {
             collateralToken.safeTransfer(params.recipient, residualCollateral);
         }
@@ -190,5 +296,18 @@ contract MarginLiquidation is IERC3156FlashBorrower, ReentrancyGuard, Ownable {
         emit Liquidated(params.caller, params.user, params.debtCToken, params.collateralCToken, amount, fee, profit);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
+    }
+
+    /**
+     * @notice Rescue tokens accidentally sent to this contract
+     * @dev Only owner can call. Cannot rescue during active flash loan.
+     * @param token The token to rescue
+     * @param to The recipient
+     * @param amount The amount to rescue
+     */
+    function rescueTokens(address token, address to, uint256 amount) external onlyOwner {
+        require(!pendingFlashLoan.active, "Liquidation: flash loan active");
+        require(to != address(0), "Liquidation: invalid recipient");
+        IERC20(token).safeTransfer(to, amount);
     }
 }

@@ -10,6 +10,16 @@ import {OFTAdapterUpgradeable} from "@layerzerolabs/oft-evm-upgradeable/contract
  * @title P_OFTAdapterUpgradeable
  * @notice LayerZero V2 OFT Adapter for a pre-minted ERC20 token using lock/unlock pattern, deployed behind a proxy.
  * @dev Extends LayerZero's OFTAdapterUpgradeable. Rate limits + pause are enforced inside `_debit` and `_credit`.
+ *
+ *      UPGRADE SAFETY:
+ *      - The proxy's token and endpoint are locked at initialization time.
+ *      - Upgrading to an implementation with different token/endpoint will cause ConfigMismatch reverts.
+ *      - This is intentional to prevent malicious upgrades that could steal escrowed funds.
+ *      - If token/endpoint migration is needed, deploy a new proxy and migrate liquidity.
+ *
+ *      DEPLOYMENT:
+ *      - The implementation contract disables initializers in the constructor.
+ *      - Proxy deployment MUST call initialize() atomically (e.g., via proxy constructor data).
  */
 contract P_OFTAdapterUpgradeable is OFTAdapterUpgradeable {
     using SafeERC20 for IERC20;
@@ -33,6 +43,11 @@ contract P_OFTAdapterUpgradeable is OFTAdapterUpgradeable {
 
     bool public paused;
 
+    // Maximum refill rate to prevent overflow in rate limit calculations
+    // Assuming max elapsed time of ~100 years (3.15e9 seconds), this ensures no overflow
+    // type(uint256).max / 3.15e9 ~= 3.67e67, so we use a conservative limit of 1e50
+    uint256 public constant MAX_REFILL_RATE = 1e50;
+
     event RateLimitSet(
         uint32 indexed eid,
         bool isOutbound,
@@ -45,14 +60,29 @@ contract P_OFTAdapterUpgradeable is OFTAdapterUpgradeable {
     error AdapterPaused();
     error RateLimitExceeded();
     error InsufficientInventory(uint256 available, uint256 required);
-    error ConfigMismatch(address configuredToken, address token, address configuredEndpoint, address endpoint);
+    error ConfigMismatch(
+        address configuredToken,
+        address token,
+        address configuredEndpoint,
+        address endpoint
+    );
     error EmergencyWithdrawRequiresPause();
     error ZeroAddress();
+    error RefillRateTooHigh();
 
+    /**
+     * @notice Constructor for the implementation contract.
+     * @dev Disables initializers to prevent the implementation from being initialized directly.
+     *      The proxy will call initialize() which is protected by the initializer modifier.
+     */
     constructor(
         address _token,
         address _lzEndpoint
-    ) OFTAdapterUpgradeable(_token, _lzEndpoint) {}
+    ) OFTAdapterUpgradeable(_token, _lzEndpoint) {
+        // Disable initializers on the implementation contract itself
+        // This prevents anyone from calling initialize() on the implementation
+        _disableInitializers();
+    }
 
     function initialize(address _owner) external initializer {
         if (_owner == address(0)) revert ZeroAddress();
@@ -70,12 +100,23 @@ contract P_OFTAdapterUpgradeable is OFTAdapterUpgradeable {
         emit Paused(_paused);
     }
 
+    /**
+     * @notice Set rate limit for a specific endpoint ID.
+     * @dev Refill rate is bounded to prevent overflow in rate limit calculations.
+     * @param _eid The endpoint ID (destination for outbound, source for inbound)
+     * @param _isOutbound True for outbound limit, false for inbound
+     * @param _capacity Maximum tokens allowed in the bucket
+     * @param _refillRate Tokens refilled per second (bounded by MAX_REFILL_RATE)
+     */
     function setRateLimit(
         uint32 _eid,
         bool _isOutbound,
         uint256 _capacity,
         uint256 _refillRate
     ) external onlyOwner {
+        // Prevent overflow in elapsed * refillRate calculation
+        if (_refillRate > MAX_REFILL_RATE) revert RefillRateTooHigh();
+
         RateLimit storage limit = _isOutbound
             ? outboundLimits[_eid]
             : inboundLimits[_eid];
@@ -154,7 +195,12 @@ contract P_OFTAdapterUpgradeable is OFTAdapterUpgradeable {
         address _token = token();
         address _endpoint = address(endpoint);
         if (_token != configuredToken || _endpoint != configuredEndpoint) {
-            revert ConfigMismatch(configuredToken, _token, configuredEndpoint, _endpoint);
+            revert ConfigMismatch(
+                configuredToken,
+                _token,
+                configuredEndpoint,
+                _endpoint
+            );
         }
     }
 

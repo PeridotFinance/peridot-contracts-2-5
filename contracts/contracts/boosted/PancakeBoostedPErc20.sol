@@ -60,6 +60,11 @@ contract PancakeBoostedPErc20 is PErc20 {
         // Validate that underlying is an ERC4626 vault
         lpVault = IERC4626(underlying_);
         require(address(lpVault) != address(0), "PancakeBoosted: vault zero");
+        try lpVault.asset() returns (address asset_) {
+            require(asset_ != address(0), "PancakeBoosted: vault asset zero");
+        } catch {
+            revert("PancakeBoosted: non-ERC4626");
+        }
 
         // Validate inflation protection seed if required
         if (minVaultSeed_ > 0) {

@@ -9,6 +9,7 @@ import "./BoostedPErc20.sol";
 /**
  * @title Peridot's Boosted PErc20 Immutable
  * @notice Convenience wrapper that wires a boosted market during construction.
+ * @dev SECURITY: Admin address is immutable after construction. Ensure it's correct!
  */
 contract BoostedPErc20Immutable is BoostedPErc20 {
     constructor(
@@ -23,6 +24,9 @@ contract BoostedPErc20Immutable is BoostedPErc20 {
         IBoostedYieldAdapter adapter_,
         uint256 liquidityBufferMantissa_
     ) {
+        // Validate admin address to prevent permanent lock-out
+        require(admin_ != address(0), "BoostedPErc20Immutable: zero admin");
+        
         // The deployer is the temporary admin for initialization
         admin = payable(msg.sender);
 
@@ -39,6 +43,7 @@ contract BoostedPErc20Immutable is BoostedPErc20 {
         }
 
         // Hand over admin privileges to the designated admin address
+        // This is final and cannot be changed (immutable contract)
         admin = admin_;
     }
 }

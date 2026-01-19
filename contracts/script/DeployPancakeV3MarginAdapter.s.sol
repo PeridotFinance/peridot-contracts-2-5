@@ -22,6 +22,10 @@ contract DeployPancakeV3MarginAdapter is Script {
         address owner = ownerOverride != address(0)
             ? ownerOverride
             : vm.addr(deployerKey);
+        uint256 actionDelay = _tryEnvUint("ADAPTER_ACTION_DELAY");
+        if (actionDelay == 0) {
+            actionDelay = 1 days;
+        }
 
         PoolConfig[] memory pools = _loadPoolConfigs();
         address[] memory operators = _loadOperators();
@@ -32,34 +36,30 @@ contract DeployPancakeV3MarginAdapter is Script {
 
         vm.startBroadcast(deployerKey);
 
-        PancakeV3RouterAdapter adapter = new PancakeV3RouterAdapter(
-            owner,
-            router
-        );
+        PancakeV3RouterAdapter adapter = new PancakeV3RouterAdapter(owner, router, actionDelay);
         console.log("Adapter deployed:", address(adapter));
+        console.log("Action delay:", actionDelay);
 
         if (manager != address(0)) {
-            adapter.setManager(manager);
-            console.log("  Manager set:", manager);
+            bytes32 actionId = adapter.queueSetManager(manager);
+            console.log("  Manager queued:", manager);
+            console.logBytes32(actionId);
         }
 
         for (uint256 i = 0; i < operators.length; i++) {
-            adapter.setOperator(operators[i], true);
-            console.log("  Operator allowed:", operators[i]);
+            bytes32 actionId = adapter.queueSetOperator(operators[i], true);
+            console.log("  Operator queued:", operators[i]);
+            console.logBytes32(actionId);
         }
 
         for (uint256 i = 0; i < pools.length; i++) {
             PoolConfig memory pool = pools[i];
-            adapter.setPoolWhitelist(
-                pool.token0,
-                pool.token1,
-                pool.fee,
-                pool.allowed
-            );
-            console.log("  Pool whitelist token0:", pool.token0);
+            bytes32 actionId = adapter.queueSetPoolWhitelist(pool.token0, pool.token1, pool.fee, pool.allowed);
+            console.log("  Pool whitelist queued token0:", pool.token0);
             console.log("    token1:", pool.token1);
             console.log("    fee:", uint256(pool.fee));
             console.log("    allowed:", pool.allowed);
+            console.logBytes32(actionId);
         }
 
         vm.stopBroadcast();
