@@ -30,8 +30,6 @@ contract DeployDualInvestmentWithProxy is Script {
         0xBfEaDDA58d0583f33309AdE83F35A680824E397f;
     address public constant PERIDOTTROLLER =
         0x2e6aeB2AA9B1fC76aCD2E9E5EfeC2bF39C3a9094;
-    address public constant PROTOCOL_ACCOUNT =
-        0xF450B38cccFdcfAD2f98f7E4bB533151a2fB00E9;
 
     address public constant PROTOCOL_TREASURY =
         0xF450B38cccFdcfAD2f98f7E4bB533151a2fB00E9;
@@ -74,7 +72,6 @@ contract DeployDualInvestmentWithProxy is Script {
 
         require(PRICE_ORACLE != address(0), "PRICE_ORACLE not set");
         require(PERIDOTTROLLER != address(0), "PERIDOTTROLLER not set");
-        require(PROTOCOL_ACCOUNT != address(0), "PROTOCOL_ACCOUNT not set");
         require(PROTOCOL_TREASURY != address(0), "PROTOCOL_TREASURY not set");
 
         vm.startBroadcast(pk);
@@ -88,7 +85,7 @@ contract DeployDualInvestmentWithProxy is Script {
         addrs.positionToken = address(new ERC1155DualPosition());
         console.log("ERC1155DualPosition:", addrs.positionToken);
 
-        addrs.vaultExecutor = address(new VaultExecutor(PROTOCOL_ACCOUNT));
+        addrs.vaultExecutor = address(new VaultExecutor());
         console.log("VaultExecutor:", addrs.vaultExecutor);
 
         addrs.settlementEngine = address(
@@ -142,43 +139,53 @@ contract DeployDualInvestmentWithProxy is Script {
             addrs.settlementEngine,
             true
         );
-        VaultExecutor(addrs.vaultExecutor).setAuthorizedManager(
+        bytes32 vaultManagerAction = VaultExecutor(addrs.vaultExecutor).queueSetAuthorizedManager(
             addrs.manager,
             true
         );
-        VaultExecutor(addrs.vaultExecutor).setAuthorizedManager(
+        bytes32 vaultSettlementAction = VaultExecutor(addrs.vaultExecutor).queueSetAuthorizedManager(
             addrs.settlementEngine,
             true
         );
+        console.log("Queued VaultExecutor manager auth action:", vaultManagerAction);
+        console.log("Queued VaultExecutor settlement auth action:", vaultSettlementAction);
         CompoundBorrowRouter(addrs.borrowRouter).setAuthorizedDestination(
             addrs.vaultExecutor,
             true
         );
 
         // 5) Configure params
-        SettlementEngine(addrs.settlementEngine).setSettlementWindow(
+        bytes32 settlementWindowAction = SettlementEngine(addrs.settlementEngine).queueSetSettlementWindow(
             SETTLEMENT_WINDOW
         );
         CompoundBorrowRouter(addrs.borrowRouter).setMinHealthFactor(
             MIN_HEALTH_FACTOR
         );
         CompoundBorrowRouter(addrs.borrowRouter).setMaxLTV(MAX_LTV);
-        RiskGuard(addrs.riskGuard).setMaxPositionSizeRatio(
+        bytes32 riskGuardAction = RiskGuard(addrs.riskGuard).queueSetMaxPositionSizeRatio(
             MAX_POSITION_SIZE_RATIO
         );
+        console.log("Queued settlement window action:", settlementWindowAction);
+        console.log("Queued risk guard max position size action:", riskGuardAction);
 
         // 6) Manager risk params and protocol config via proxy address
         DualInvestmentManagerUpgradeable manager = DualInvestmentManagerUpgradeable(
                 addrs.manager
             );
-        manager.setRiskParameters(
+        bytes32 riskParamsAction = manager.queueSetRiskParameters(
             MAX_POSITION_SIZE,
             MIN_POSITION_SIZE,
             MAX_EXPIRY,
             MIN_EXPIRY
         );
         // Optionally set protocol fee to 0 initially
-        manager.updateProtocolConfig(PROTOCOL_TREASURY, 0, PROTOCOL_TOKEN);
+        bytes32 protocolConfigAction = manager.queueUpdateProtocolConfig(
+            PROTOCOL_TREASURY,
+            0,
+            PROTOCOL_TOKEN
+        );
+        console.log("Queued manager risk parameters action:", riskParamsAction);
+        console.log("Queued protocol config action:", protocolConfigAction);
 
         // 7) Transfer ownership of router/guard to manager (proxy)
         CompoundBorrowRouter(addrs.borrowRouter).transferOwnership(
@@ -201,9 +208,16 @@ contract DeployDualInvestmentWithProxy is Script {
         address[3] memory cTokens = [CTOKEN_PWBTC, CTOKEN_PUSDC, CTOKEN_PUSDT];
         for (uint256 i = 0; i < cTokens.length; i++) {
             if (cTokens[i] != address(0)) {
-                manager.setSupportedCToken(cTokens[i], true);
-                manager.setMarketIntegration(cTokens[i], true);
-                manager.setMarketUtilizationBonus(cTokens[i], 100);
+                bytes32 supportAction = manager.queueSetSupportedCToken(cTokens[i], true);
+                bytes32 integrationAction = manager.queueSetMarketIntegration(cTokens[i], true);
+                bytes32 bonusAction = manager.queueSetMarketUtilizationBonus(cTokens[i], 100);
+                console.log(
+                    "Queued support/integration actions:",
+                    cTokens[i],
+                    supportAction,
+                    integrationAction,
+                    bonusAction
+                );
             }
         }
     }

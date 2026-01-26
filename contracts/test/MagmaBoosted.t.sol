@@ -289,6 +289,60 @@ contract MagmaBoostedTest is Test {
         assertApproxEqRel(localCash, vaultAssets, 0.1e18, "Should maintain 50/50 split");
     }
 
+    function testSetMagmaVaultRejectsInvalidBuffer() public {
+        MagmaBoostedDelegate delegate = MagmaBoostedDelegate(address(delegator));
+
+        vm.expectRevert("buffer too low");
+        delegate._setMagmaVault(address(magma), 0);
+
+        vm.expectRevert("invalid buffer");
+        delegate._setMagmaVault(address(magma), 2e18);
+    }
+
+    function testInitializeRejectsInvalidBuffer() public {
+        MagmaBoostedDelegate impl = new MagmaBoostedDelegate();
+
+        vm.expectRevert("buffer too low");
+        impl.initialize(
+            address(wmon),
+            PeridottrollerInterface(address(unitroller)),
+            InterestRateModel(address(irm)),
+            INITIAL_EXCHANGE_RATE,
+            "Peridot Magma WMON",
+            "pMagmaWMON",
+            18,
+            IMagma(address(magma)),
+            0
+        );
+    }
+
+    function testBecomeImplementationRejectsInvalidBuffer() public {
+        MagmaBoostedDelegate impl = new MagmaBoostedDelegate();
+        bytes memory becomeImplData = abi.encode(address(magma), 0);
+
+        vm.expectRevert("buffer too low");
+        new PErc20Delegator(
+            address(wmon),
+            PeridottrollerInterface(address(unitroller)),
+            InterestRateModel(address(irm)),
+            INITIAL_EXCHANGE_RATE,
+            "Peridot Magma WMON",
+            "pMagmaWMON",
+            18,
+            payable(admin),
+            address(impl),
+            becomeImplData
+        );
+    }
+
+    function testRequestRedemptionIfNeededRestricted() public {
+        MagmaBoostedDelegate delegate = MagmaBoostedDelegate(address(delegator));
+
+        vm.prank(user1);
+        vm.expectRevert("only admin");
+        delegate.requestRedemptionIfNeeded();
+    }
+
     function testPauseVault() public {
         MagmaBoostedDelegate delegate = MagmaBoostedDelegate(address(delegator));
 

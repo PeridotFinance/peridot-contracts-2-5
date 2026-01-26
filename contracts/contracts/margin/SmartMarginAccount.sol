@@ -21,8 +21,13 @@ import {PToken} from "../PToken.sol";
 contract SmartMarginAccount {
     using SafeERC20 for IERC20;
 
+    address public immutable factory;
     address public manager;
     address public owner;
+    address public comptroller;
+
+    address[] public enteredMarkets;
+    mapping(address => uint256) private enteredMarketIndex;
 
     event ManagerUpdated(address indexed newManager);
     event OwnerUpdated(address indexed newOwner);
@@ -43,22 +48,30 @@ contract SmartMarginAccount {
         _;
     }
 
+    constructor() {
+        factory = msg.sender;
+    }
+
     /**
      * @notice Initialize the account. Can only be called once.
      * @dev The caller (msg.sender) becomes the manager. This ensures atomic initialization
      *      in the same transaction as clone deployment, preventing front-running attacks.
      * @param _manager Must equal msg.sender (the deploying factory/manager contract)
      * @param _owner The user who owns this margin account
+     * @param _comptroller The canonical Peridottroller for borrow checks
      */
-    function initialize(address _manager, address _owner) external {
+    function initialize(address _manager, address _owner, address _comptroller) external {
         require(manager == address(0), "SMA: initialized");
         require(_manager != address(0), "SMA: invalid manager");
         require(_owner != address(0), "SMA: invalid owner");
+        require(_comptroller != address(0), "SMA: invalid comptroller");
         // Ensure caller is the manager - prevents front-running of uninitialized clones
         require(_manager == msg.sender, "SMA: caller must be manager");
+        require(msg.sender == factory, "SMA: caller must be factory");
 
         manager = _manager;
         owner = _owner;
+        comptroller = _comptroller;
 
         emit ManagerUpdated(_manager);
         emit OwnerUpdated(_owner);
@@ -76,26 +89,22 @@ contract SmartMarginAccount {
         emit ManagerUpdated(newManager);
     }
 
-    function enterMarket(
-        address comptroller,
-        address cToken
-    ) external onlyManager returns (uint256) {
+    function enterMarket(address cToken) external onlyManager returns (uint256) {
         address[] memory markets = new address[](1);
         markets[0] = cToken;
         uint256[] memory results = PeridottrollerInterface(comptroller)
             .enterMarkets(markets);
         require(results[0] == 0, "SMA: enter market failed");
+        _trackMarket(cToken);
         return results[0];
     }
 
-    function exitMarket(
-        address comptroller,
-        address cToken
-    ) external onlyManager returns (uint256) {
+    function exitMarket(address cToken) external onlyManager returns (uint256) {
         uint256 result = PeridottrollerInterface(comptroller).exitMarket(
             cToken
         );
         require(result == 0, "SMA: exit market failed");
+        _untrackMarket(cToken);
         return result;
     }
 
@@ -116,6 +125,7 @@ contract SmartMarginAccount {
         underlying.forceApprove(cToken, amount);
         uint256 result = PErc20(cToken).repayBorrow(amount);
         require(result == 0, "SMA: repay failed");
+        underlying.forceApprove(cToken, 0);
         return result;
     }
 
@@ -127,6 +137,7 @@ contract SmartMarginAccount {
         underlying.forceApprove(cToken, underlyingAmount);
         uint256 result = PErc20(cToken).mint(underlyingAmount);
         require(result == 0, "SMA: mint failed");
+        underlying.forceApprove(cToken, 0);
         return result;
     }
 
@@ -200,27 +211,47 @@ contract SmartMarginAccount {
      * @dev This provides owner control over funds if the manager becomes unavailable or
      *      compromised. Can only be used when the account has no outstanding borrows
      *      in any market (checked via comptroller's getAllMarkets).
-     * @param comptroller The Peridottroller address to check borrow status
      * @param token The token to withdraw
      * @param amount The amount to withdraw
      */
-    function ownerEmergencyWithdraw(
-        address comptroller,
-        address token,
-        uint256 amount
-    ) external onlyOwner {
+    function ownerEmergencyWithdraw(address token, uint256 amount)
+        external
+        onlyOwner
+    {
         require(amount > 0, "SMA: zero amount");
 
         // Verify no outstanding borrows in any market
-        PToken[] memory markets = PeridottrollerInterface(comptroller)
-            .getAllMarkets();
-        for (uint256 i = 0; i < markets.length; i++) {
-            uint256 borrowBalance = PErc20(address(markets[i]))
+        uint256 marketsLength = enteredMarkets.length;
+        for (uint256 i = 0; i < marketsLength; i++) {
+            uint256 borrowBalance = PErc20(enteredMarkets[i])
                 .borrowBalanceStored(address(this));
             require(borrowBalance == 0, "SMA: must repay borrows first");
         }
 
         IERC20(token).safeTransfer(owner, amount);
         emit EmergencyWithdraw(owner, token, amount);
+    }
+
+    function _trackMarket(address cToken) internal {
+        if (enteredMarketIndex[cToken] != 0) {
+            return;
+        }
+        enteredMarkets.push(cToken);
+        enteredMarketIndex[cToken] = enteredMarkets.length;
+    }
+
+    function _untrackMarket(address cToken) internal {
+        uint256 index = enteredMarketIndex[cToken];
+        if (index == 0) {
+            return;
+        }
+        uint256 lastIndex = enteredMarkets.length;
+        if (index != lastIndex) {
+            address last = enteredMarkets[lastIndex - 1];
+            enteredMarkets[index - 1] = last;
+            enteredMarketIndex[last] = index;
+        }
+        enteredMarkets.pop();
+        delete enteredMarketIndex[cToken];
     }
 }

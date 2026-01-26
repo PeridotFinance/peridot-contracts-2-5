@@ -26,6 +26,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
     uint256 private constant EXP_SCALE = 1e18;
     uint256 private constant BPS_SCALE = 1e4;
     uint256 private constant MAX_MARKETS_PER_ACCOUNT = 20;
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
 
     struct Account {
         address sma;
@@ -59,6 +60,9 @@ contract MarginManager is Ownable, ReentrancyGuard {
     SmartMarginAccount public immutable implementation;
     IPeridottrollerView public immutable peridottroller;
     SimplePriceOracle public immutable priceOracle;
+
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
 
     mapping(address => Account) public accounts;
     mapping(address => MarketConfig) public marketConfigs; // cToken => config
@@ -157,6 +161,10 @@ contract MarginManager is Ownable, ReentrancyGuard {
         address indexed to
     );
     event MarketDeprecated(address indexed cToken, address indexed underlying);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     constructor(
         address _peridottroller,
@@ -168,13 +176,19 @@ contract MarginManager is Ownable, ReentrancyGuard {
         implementation = new SmartMarginAccount();
         peridottroller = IPeridottrollerView(_peridottroller);
         priceOracle = SimplePriceOracle(_priceOracle);
+        actionDelay = MIN_ACTION_DELAY;
+        emit ActionDelayUpdated(actionDelay);
     }
 
     function enableBorrowing() external returns (address sma) {
         Account storage account = accounts[msg.sender];
         if (account.sma == address(0)) {
             sma = Clones.clone(address(implementation));
-            SmartMarginAccount(sma).initialize(address(this), msg.sender);
+            SmartMarginAccount(sma).initialize(
+                address(this),
+                msg.sender,
+                address(peridottroller)
+            );
             account.sma = sma;
             emit BorrowingEnabled(msg.sender, sma);
         } else {
@@ -206,10 +220,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
             IERC20(cToken).safeTransferFrom(msg.sender, account.sma, amount);
         }
 
-        SmartMarginAccount(account.sma).enterMarket(
-            address(peridottroller),
-            cToken
-        );
+        SmartMarginAccount(account.sma).enterMarket(cToken);
         _ensureUserMarket(msg.sender, cToken);
         address[] memory markets = _getUserMarkets(msg.sender);
         MarginRiskLib.AccountMetrics memory metrics = MarginRiskLib
@@ -336,10 +347,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
             amount
         );
         require(mintResult == 0, "Manager: mint failed");
-        SmartMarginAccount(account.sma).enterMarket(
-            address(peridottroller),
-            cToken
-        );
+        SmartMarginAccount(account.sma).enterMarket(cToken);
 
         _ensureUserMarket(msg.sender, cToken);
 
@@ -425,6 +433,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
     ) external nonReentrant {
         Account storage account = accounts[msg.sender];
         require(account.sma != address(0), "Manager: no account");
+        require(to != address(0), "Manager: invalid recipient");
         (MarginRiskLib.AccountMetrics memory postMetrics, , ) = _borrowFor(
             msg.sender,
             account,
@@ -701,10 +710,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
             collateralSupplied
         );
         require(mintResult == 0, "Manager: mint failed");
-        SmartMarginAccount(account.sma).enterMarket(
-            address(peridottroller),
-            collateralCToken
-        );
+        SmartMarginAccount(account.sma).enterMarket(collateralCToken);
         _ensureUserMarket(msg.sender, collateralCToken);
 
         MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib
@@ -715,6 +721,10 @@ contract MarginManager is Ownable, ReentrancyGuard {
                 hfMinWithdrawBps,
                 _getUserMarkets(msg.sender)
             );
+        require(
+            postMetrics.healthFactorBps >= hfLockBps,
+            "Manager: health factor low"
+        );
         _syncLockState(msg.sender, account, postMetrics.healthFactorBps);
 
         emit LeveragedPositionOpened(
@@ -912,17 +922,27 @@ contract MarginManager is Ownable, ReentrancyGuard {
     }
 
     function setRouterAdapter(address newAdapter) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("setRouterAdapter", newAdapter)
+        );
+        _consumeAction(actionId);
         require(
             newAdapter == address(0) || newAdapter.code.length > 0,
             "Manager: adapter not contract"
         );
         routerAdapter = newAdapter;
         emit RouterAdapterUpdated(newAdapter);
+        emit ActionExecuted(actionId);
     }
 
     function setFlashloanProvider(address newProvider) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("setFlashloanProvider", newProvider)
+        );
+        _consumeAction(actionId);
         flashloanProvider = newProvider;
         emit FlashloanProviderUpdated(newProvider);
+        emit ActionExecuted(actionId);
     }
 
     function setThresholds(
@@ -930,37 +950,62 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint16 _hfLockBps,
         uint16 _hfUnlockBps
     ) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode(
+                "setThresholds",
+                _hfMinWithdrawBps,
+                _hfLockBps,
+                _hfUnlockBps
+            )
+        );
+        _consumeAction(actionId);
         require(_hfMinWithdrawBps >= 10000, "Manager: hfMin too low");
         require(_hfUnlockBps > _hfLockBps, "Manager: unlock must exceed lock");
         hfMinWithdrawBps = _hfMinWithdrawBps;
         hfLockBps = _hfLockBps;
         hfUnlockBps = _hfUnlockBps;
         emit ThresholdsUpdated(_hfMinWithdrawBps, _hfLockBps, _hfUnlockBps);
+        emit ActionExecuted(actionId);
     }
 
     function setFees(
         uint16 _openFeeBps,
         uint16 _closeFeeBps
     ) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("setFees", _openFeeBps, _closeFeeBps)
+        );
+        _consumeAction(actionId);
         require(_openFeeBps <= 100, "Manager: open fee too high");
         require(_closeFeeBps <= 100, "Manager: close fee too high");
         openFeeBps = _openFeeBps;
         closeFeeBps = _closeFeeBps;
         emit FeesUpdated(_openFeeBps, _closeFeeBps);
+        emit ActionExecuted(actionId);
     }
 
     function setFeeRecipient(address newRecipient) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("setFeeRecipient", newRecipient)
+        );
+        _consumeAction(actionId);
         feeRecipient = newRecipient;
         emit FeeRecipientUpdated(newRecipient);
+        emit ActionExecuted(actionId);
     }
 
     function setDefaultMaxLeverage(uint16 maxLeverageX100_) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("setDefaultMaxLeverage", maxLeverageX100_)
+        );
+        _consumeAction(actionId);
         require(
             maxLeverageX100_ == 0 || maxLeverageX100_ >= 100,
             "Manager: leverage too low"
         );
         defaultMaxLeverageX100 = maxLeverageX100_;
         emit DefaultLeverageUpdated(maxLeverageX100_);
+        emit ActionExecuted(actionId);
     }
 
     function sweepFees(
@@ -1277,6 +1322,22 @@ contract MarginManager is Ownable, ReentrancyGuard {
         uint16 tradeSlippageBps,
         uint16 oracleDeviationBps
     ) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode(
+                "configureMarket",
+                cToken,
+                underlying,
+                active,
+                depositsEnabled,
+                borrowsEnabled,
+                withdrawalsEnabled,
+                tradesEnabled,
+                maxLeverageX100,
+                tradeSlippageBps,
+                oracleDeviationBps
+            )
+        );
+        _consumeAction(actionId);
         require(
             cToken != address(0) && underlying != address(0),
             "Manager: invalid market"
@@ -1324,6 +1385,7 @@ contract MarginManager is Ownable, ReentrancyGuard {
             tradeSlippageBps,
             oracleDeviationBps
         );
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -1381,6 +1443,10 @@ contract MarginManager is Ownable, ReentrancyGuard {
      * @param cToken The cToken address to deprecate
      */
     function deprecateMarket(address cToken) external onlyOwner {
+        bytes32 actionId = keccak256(
+            abi.encode("deprecateMarket", cToken)
+        );
+        _consumeAction(actionId);
         MarketConfig storage config = marketConfigs[cToken];
         require(config.underlying != address(0), "Manager: unknown market");
 
@@ -1392,6 +1458,146 @@ contract MarginManager is Ownable, ReentrancyGuard {
         config.tradesEnabled = false;
 
         emit MarketDeprecated(cToken, config.underlying);
+        emit ActionExecuted(actionId);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "Manager: delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Manager: delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Manager: action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueSetRouterAdapter(address newAdapter)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("setRouterAdapter", newAdapter))
+        );
+    }
+
+    function queueSetFlashloanProvider(address newProvider)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("setFlashloanProvider", newProvider))
+        );
+    }
+
+    function queueSetThresholds(
+        uint16 _hfMinWithdrawBps,
+        uint16 _hfLockBps,
+        uint16 _hfUnlockBps
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(
+            keccak256(
+                abi.encode(
+                    "setThresholds",
+                    _hfMinWithdrawBps,
+                    _hfLockBps,
+                    _hfUnlockBps
+                )
+            )
+        );
+    }
+
+    function queueSetFees(uint16 _openFeeBps, uint16 _closeFeeBps)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("setFees", _openFeeBps, _closeFeeBps))
+        );
+    }
+
+    function queueSetFeeRecipient(address newRecipient)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("setFeeRecipient", newRecipient))
+        );
+    }
+
+    function queueSetDefaultMaxLeverage(uint16 maxLeverageX100_)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("setDefaultMaxLeverage", maxLeverageX100_))
+        );
+    }
+
+    function queueConfigureMarket(
+        address cToken,
+        address underlying,
+        bool active,
+        bool depositsEnabled,
+        bool borrowsEnabled,
+        bool withdrawalsEnabled,
+        bool tradesEnabled,
+        uint16 maxLeverageX100,
+        uint16 tradeSlippageBps,
+        uint16 oracleDeviationBps
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(
+            keccak256(
+                abi.encode(
+                    "configureMarket",
+                    cToken,
+                    underlying,
+                    active,
+                    depositsEnabled,
+                    borrowsEnabled,
+                    withdrawalsEnabled,
+                    tradesEnabled,
+                    maxLeverageX100,
+                    tradeSlippageBps,
+                    oracleDeviationBps
+                )
+            )
+        );
+    }
+
+    function queueDeprecateMarket(address cToken)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(
+            keccak256(abi.encode("deprecateMarket", cToken))
+        );
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Manager: action queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Manager: action not queued");
+        require(block.timestamp >= executeAfter, "Manager: action not ready");
+        delete queuedActions[actionId];
     }
 
     function _getMarketForAsset(

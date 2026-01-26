@@ -9,6 +9,7 @@ import {MockErc20} from "./MockErc20.sol";
 import {MockPeridottroller} from "./MockPeridottroller.sol";
 import {MockInterestRateModel} from "./MockInterestRateModel.sol";
 import {MockInstantYieldAdapter} from "./MockInstantYieldAdapter.sol";
+import {FailingYieldAdapter} from "./FailingYieldAdapter.sol";
 
 contract BoostedPErc20Test is Test {
     uint256 constant INITIAL_EXCHANGE_RATE = 2e16; // 0.02 scaled by 1e18
@@ -22,6 +23,7 @@ contract BoostedPErc20Test is Test {
     MockInterestRateModel internal interestModel;
     BoostedPErc20 internal boosted;
     MockInstantYieldAdapter internal adapter;
+    FailingYieldAdapter internal failingAdapter;
 
     function setUp() public {
         underlying = new MockErc20("Mock Token", "MOCK", 18);
@@ -119,5 +121,59 @@ contract BoostedPErc20Test is Test {
         assertEq(adapter.totalUnderlying(), 0, "adapter empty after pause");
         uint256 onHand = underlying.balanceOf(address(boosted));
         assertEq(onHand, mintAmount, "all funds returned");
+    }
+
+    function testAdapterTotalUnderlyingFailureKeepsFundsLocal() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(true, false, false, false);
+
+        uint256 mintAmount = 1_000e18;
+        underlying.mint(alice, mintAmount);
+
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), mintAmount);
+        uint256 res = boosted.mint(mintAmount);
+        vm.stopPrank();
+
+        assertEq(res, 0, "mint result");
+        assertEq(underlying.balanceOf(address(boosted)), mintAmount, "funds stay local");
+    }
+
+    function testAdapterDepositFailureDoesNotRevertMint() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(false, true, false, false);
+
+        uint256 mintAmount = 1_000e18;
+        underlying.mint(alice, mintAmount);
+
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), mintAmount);
+        uint256 res = boosted.mint(mintAmount);
+        vm.stopPrank();
+
+        assertEq(res, 0, "mint result");
+        assertEq(underlying.balanceOf(address(boosted)), mintAmount, "deposit failure keeps cash local");
+    }
+
+    function testAdapterWithdrawFailureDoesNotRevertRebalance() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+
+        uint256 mintAmount = 1_000e18;
+        underlying.mint(alice, mintAmount);
+
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), mintAmount);
+        boosted.mint(mintAmount);
+        vm.stopPrank();
+
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(false, false, true, false);
+        boosted.setLiquidityBufferMantissa(9e17);
+        assertTrue(true, "rebalance handled withdraw failure");
     }
 }

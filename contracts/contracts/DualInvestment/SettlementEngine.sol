@@ -14,6 +14,8 @@ import "../PErc20.sol";
  * @dev Pulls price at/near expiry and settles positions accordingly
  */
 contract SettlementEngine is Ownable, ReentrancyGuard {
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
+
     // Core contracts
     ERC1155DualPosition public immutable positionToken;
     VaultExecutor public immutable vaultExecutor;
@@ -21,6 +23,9 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
 
     // Settlement configuration
     uint256 public settlementWindow = 1 hours; // Grace period after expiry for settlement
+    uint256 public maxSettlementSlippageBps = 200; // 2% max slippage on swaps
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
     mapping(uint256 => bool) public isSettled; // Track settled positions
     mapping(uint256 => uint256) public settlementPrices; // Store settlement prices
 
@@ -36,6 +41,11 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
     );
 
     event SettlementWindowUpdated(uint256 oldWindow, uint256 newWindow);
+    event MaxSettlementSlippageUpdated(uint256 oldBps, uint256 newBps);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     event SettlementPriceSet(uint256 indexed tokenId, uint256 price);
 
@@ -47,6 +57,9 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         positionToken = ERC1155DualPosition(_positionToken);
         vaultExecutor = VaultExecutor(_vaultExecutor);
         priceOracle = SimplePriceOracle(_priceOracle);
+
+        actionDelay = MIN_ACTION_DELAY;
+        emit ActionDelayUpdated(actionDelay);
     }
 
     /**
@@ -74,14 +87,13 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
 
         (address winningCToken, uint256 payoutAmount) = _calculatePayout(position, settlementPrice, userBalance);
 
-        isSettled[tokenId] = true;
-        settlementPrices[tokenId] = settlementPrice;
-
-        positionToken.burnPosition(user, tokenId, userBalance);
-
         if (payoutAmount > 0) {
             _executePayout(position, winningCToken, user, payoutAmount);
         }
+
+        isSettled[tokenId] = true;
+        settlementPrices[tokenId] = settlementPrice;
+        positionToken.burnPosition(user, tokenId, userBalance);
 
         emit PositionSettled(
             tokenId,
@@ -194,6 +206,8 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         address user,
         uint256 cTokenAmount
     ) internal {
+        uint256 minPayoutCTokens = (cTokenAmount * (10000 - maxSettlementSlippageBps)) / 10000;
+
         // Compute underlying needed for payout in payoutCToken units
         uint256 exchangeRateOut;
         try PErc20(payoutCToken).exchangeRateCurrent() returns (uint256 rate) {
@@ -206,8 +220,8 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         // First attempt: withdraw directly from payout market if the vault holds it
         uint256 withdrawnOut = vaultExecutor.withdrawUnderlyingFromProtocol(payoutCToken, underlyingOutRequested);
         if (withdrawnOut > 0) {
-            // Mint payoutCToken directly to user
-            vaultExecutor.mintCTokensTo(payoutCToken, user, withdrawnOut);
+            uint256 mintedOut = vaultExecutor.mintCTokensTo(payoutCToken, user, withdrawnOut);
+            require(mintedOut >= minPayoutCTokens, "Insufficient payout");
             return;
         }
 
@@ -232,9 +246,30 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
         uint256 withdrawnIn = vaultExecutor.withdrawUnderlyingFromProtocol(sourceCToken, requiredIn);
 
         if (withdrawnIn > 0) {
-            // Swap to payout underlying and mint payoutCToken to user; accept any amountOut (minOut=0 for simplicity)
-            vaultExecutor.swapAndMintTo(sourceCToken, payoutCToken, user, withdrawnIn, 0);
+            uint256 minUnderlyingOut =
+                _computeMinUnderlyingOut(sourceCToken, payoutCToken, withdrawnIn, maxSettlementSlippageBps);
+            uint256 mintedOut =
+                vaultExecutor.swapAndMintTo(sourceCToken, payoutCToken, user, withdrawnIn, minUnderlyingOut);
+            require(mintedOut >= minPayoutCTokens, "Insufficient payout");
+            return;
         }
+
+        revert("Payout unavailable");
+    }
+
+    function _computeMinUnderlyingOut(
+        address cTokenIn,
+        address cTokenOut,
+        uint256 underlyingInAmount,
+        uint256 slippageBps
+    ) internal returns (uint256 minUnderlyingOut) {
+        uint256 priceIn = priceOracle.getUnderlyingPrice(PToken(cTokenIn));
+        uint256 priceOut = priceOracle.getUnderlyingPrice(PToken(cTokenOut));
+        require(priceIn > 0 && priceOut > 0, "Invalid price");
+
+        uint256 valueUsd = (underlyingInAmount * priceIn) / 1e18;
+        uint256 expectedOut = (valueUsd * 1e18) / priceOut;
+        minUnderlyingOut = (expectedOut * (10000 - slippageBps)) / 10000;
     }
 
     /**
@@ -286,10 +321,13 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param newWindow New settlement window in seconds
      */
     function setSettlementWindow(uint256 newWindow) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setSettlementWindow", newWindow));
+        _consumeAction(actionId);
         require(newWindow > 0, "Invalid settlement window");
         uint256 oldWindow = settlementWindow;
         settlementWindow = newWindow;
         emit SettlementWindowUpdated(oldWindow, newWindow);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -298,10 +336,74 @@ contract SettlementEngine is Ownable, ReentrancyGuard {
      * @param price Price to set
      */
     function emergencySetSettlementPrice(uint256 tokenId, uint256 price) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("emergencySetSettlementPrice", tokenId, price));
+        _consumeAction(actionId);
         require(price > 0, "Invalid price");
         require(!isSettled[tokenId], "Position already settled");
 
         settlementPrices[tokenId] = price;
         emit SettlementPriceSet(tokenId, price);
+        emit ActionExecuted(actionId);
+    }
+
+    function setMaxSettlementSlippageBps(uint256 newBps) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMaxSettlementSlippageBps", newBps));
+        _consumeAction(actionId);
+        require(newBps <= 2000, "Slippage too high"); // Max 20%
+        uint256 oldBps = maxSettlementSlippageBps;
+        maxSettlementSlippageBps = newBps;
+        emit MaxSettlementSlippageUpdated(oldBps, newBps);
+        emit ActionExecuted(actionId);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "Delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueSetSettlementWindow(uint256 newWindow) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setSettlementWindow", newWindow)));
+    }
+
+    function queueEmergencySetSettlementPrice(uint256 tokenId, uint256 price)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(keccak256(abi.encode("emergencySetSettlementPrice", tokenId, price)));
+    }
+
+    function queueSetMaxSettlementSlippageBps(uint256 newBps) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setMaxSettlementSlippageBps", newBps)));
+    }
+
+    function queueSetActionDelay(uint256 newDelay) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setActionDelay", newDelay)));
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Action already queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Action not queued");
+        require(block.timestamp >= executeAfter, "Action not ready");
+        delete queuedActions[actionId];
     }
 }

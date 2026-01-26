@@ -6,7 +6,10 @@ import {console} from "forge-std/console.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IVaultExec {
-    function setAuthorizedManager(address manager, bool authorized) external;
+    function queueSetAuthorizedManager(
+        address manager,
+        bool authorized
+    ) external returns (bytes32 actionId);
 
     function redeemAndSupplyToProtocol(
         address user,
@@ -34,12 +37,17 @@ contract ProbeVaultExecutor is Script {
         console.log("User:  ", user);
         console.log("Amount:", amount);
 
-        // 1) Authorize the probe caller on the vault (owner only)
+        // 1) Queue authorization for the probe caller on the vault (owner only)
         vm.startBroadcast(ownerPk);
-        IVaultExec(vault).setAuthorizedManager(vm.addr(authPk), true);
+        bytes32 actionId = IVaultExec(vault).queueSetAuthorizedManager(
+            vm.addr(authPk),
+            true
+        );
+        console.log("Queued authorize action:", actionId);
         vm.stopBroadcast();
 
-        // 2) Approve cToken and call redeemAndSupplyToProtocol
+        // 2) After timelock delay, execute setAuthorizedManager and run the probe.
+        // This script only queues the action for safety.
         vm.startBroadcast(authPk);
         try IERC20(cToken).transferFrom(user, vault, amount) returns (
             bool success

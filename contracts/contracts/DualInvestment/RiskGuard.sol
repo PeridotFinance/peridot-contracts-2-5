@@ -12,6 +12,8 @@ import "../SimplePriceOracle.sol";
  * @dev Validates user health factors and prevents over-leveraging
  */
 contract RiskGuard is Ownable {
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
+
     // Core contracts
     PeridottrollerInterface public immutable peridottroller;
     SimplePriceOracle public immutable priceOracle;
@@ -33,6 +35,8 @@ contract RiskGuard is Ownable {
     // Emergency controls
     bool public emergencyPaused = false;
     mapping(address => bool) public marketsPaused;
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
 
     // Events
     event RiskParameterUpdated(string parameter, uint256 oldValue, uint256 newValue);
@@ -41,6 +45,12 @@ contract RiskGuard is Ownable {
     event EmergencyPaused(bool paused);
     event MarketPaused(address indexed market, bool paused);
     event RiskViolation(address indexed user, string reason, uint256 value);
+    event MarketMaxUtilizationUpdated(address indexed market, uint256 maxUtilization);
+    event WhitelistedUserUpdated(address indexed user, bool whitelisted);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     modifier notPaused() {
         require(!emergencyPaused, "Emergency paused");
@@ -57,6 +67,9 @@ contract RiskGuard is Ownable {
         require(_priceOracle != address(0), "Invalid price oracle");
         peridottroller = PeridottrollerInterface(_peridottroller);
         priceOracle = SimplePriceOracle(_priceOracle);
+
+        actionDelay = MIN_ACTION_DELAY;
+        emit ActionDelayUpdated(actionDelay);
     }
 
     /**
@@ -82,18 +95,6 @@ contract RiskGuard is Ownable {
             return (false, "Market paused");
         }
 
-        // For fully collateralized entries, skip borrow-related and liquidity-based checks.
-        // Manager already ensures the user owns the cTokens and pulls them.
-        if (useCollateral) {
-            return (true, "");
-        }
-
-        // Check user health factor (borrow path)
-        uint256 healthFactor = _calculateHealthFactor(user);
-        if (healthFactor < minHealthFactor && healthFactor != type(uint256).max) {
-            return (false, "Health factor too low");
-        }
-
         // Check position size limits (unless whitelisted)
         if (!whitelistedUsers[user]) {
             uint256 newTotalPositionValue = userTotalPositionValue[user] + positionValue;
@@ -111,6 +112,16 @@ contract RiskGuard is Ownable {
             if (newUtilization > maxUtil) {
                 return (false, "Market utilization limit exceeded");
             }
+        }
+
+        if (useCollateral) {
+            return (true, "");
+        }
+
+        // Check user health factor (borrow path)
+        uint256 healthFactor = _calculateHealthFactor(user);
+        if (healthFactor < minHealthFactor && healthFactor != type(uint256).max) {
+            return (false, "Health factor too low");
         }
 
         // Additional checks for borrow path
@@ -191,8 +202,13 @@ contract RiskGuard is Ownable {
         internal
         returns (bool allowed, string memory reason)
     {
+        (bool ok, uint256 positionValueInUnderlying) = _tryConvertUSDToUnderlying(cToken, positionValue);
+        if (!ok) {
+            return (false, "Price unavailable");
+        }
+
         // Check if borrowing is allowed for this market (guard against reverting controllers)
-        try peridottroller.borrowAllowed(cToken, user, positionValue) returns (uint256 borrowAllowed) {
+        try peridottroller.borrowAllowed(cToken, user, positionValueInUnderlying) returns (uint256 borrowAllowed) {
             if (borrowAllowed != 0) {
                 return (false, "Borrow not allowed by peridottroller");
             }
@@ -214,8 +230,7 @@ contract RiskGuard is Ownable {
         }
 
         // Convert position value to underlying tokens for liquidity check
-        uint256 positionValueInUnderlying = _convertUSDToUnderlying(cToken, positionValue);
-        uint256 liquidityInUnderlying = _convertUSDToUnderlying(cToken, liquidity);
+        (, uint256 liquidityInUnderlying) = _tryConvertUSDToUnderlying(cToken, liquidity);
 
         if (positionValueInUnderlying > liquidityInUnderlying) {
             return (false, "Insufficient liquidity for borrow");
@@ -271,16 +286,20 @@ contract RiskGuard is Ownable {
      * @notice Convert USD value to underlying tokens
      * @param cToken cToken address
      * @param usdValue Value in USD
+     * @return ok Whether conversion succeeded
      * @return underlyingAmount Amount in underlying tokens
      */
-    function _convertUSDToUnderlying(address cToken, uint256 usdValue)
+    function _tryConvertUSDToUnderlying(address cToken, uint256 usdValue)
         internal
         view
-        returns (uint256 underlyingAmount)
+        returns (bool ok, uint256 underlyingAmount)
     {
         PErc20 pToken = PErc20(cToken);
         uint256 pricePerToken = priceOracle.getUnderlyingPrice(pToken);
-        return (usdValue * 1e18) / pricePerToken;
+        if (pricePerToken == 0) {
+            return (false, 0);
+        }
+        return (true, (usdValue * 1e18) / pricePerToken);
     }
 
     // Admin functions
@@ -290,10 +309,13 @@ contract RiskGuard is Ownable {
      * @param newMinHealthFactor New minimum health factor
      */
     function setMinHealthFactor(uint256 newMinHealthFactor) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMinHealthFactor", newMinHealthFactor));
+        _consumeAction(actionId);
         require(newMinHealthFactor >= 1e18, "Health factor must be >= 100%");
         uint256 oldValue = minHealthFactor;
         minHealthFactor = newMinHealthFactor;
         emit RiskParameterUpdated("minHealthFactor", oldValue, newMinHealthFactor);
+        emit ActionExecuted(actionId);
     }
 
     // Liquidation threshold setter removed - handled by Peridottroller
@@ -303,10 +325,13 @@ contract RiskGuard is Ownable {
      * @param newRatio New maximum position size ratio
      */
     function setMaxPositionSizeRatio(uint256 newRatio) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMaxPositionSizeRatio", newRatio));
+        _consumeAction(actionId);
         require(newRatio > 0 && newRatio <= 1e18, "Invalid ratio");
         uint256 oldValue = maxPositionSizeRatio;
         maxPositionSizeRatio = newRatio;
         emit RiskParameterUpdated("maxPositionSizeRatio", oldValue, newRatio);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -315,7 +340,11 @@ contract RiskGuard is Ownable {
      * @param maxUtilization Maximum utilization for this market
      */
     function setMarketMaxUtilization(address market, uint256 maxUtilization) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMarketMaxUtilization", market, maxUtilization));
+        _consumeAction(actionId);
         marketMaxUtilization[market] = maxUtilization;
+        emit MarketMaxUtilizationUpdated(market, maxUtilization);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -324,7 +353,11 @@ contract RiskGuard is Ownable {
      * @param whitelisted Whether user is whitelisted
      */
     function setWhitelistedUser(address user, bool whitelisted) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setWhitelistedUser", user, whitelisted));
+        _consumeAction(actionId);
         whitelistedUsers[user] = whitelisted;
+        emit WhitelistedUserUpdated(user, whitelisted);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -332,8 +365,11 @@ contract RiskGuard is Ownable {
      * @param paused Whether to pause
      */
     function setEmergencyPause(bool paused) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setEmergencyPause", paused));
+        _consumeAction(actionId);
         emergencyPaused = paused;
         emit EmergencyPaused(paused);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -342,7 +378,73 @@ contract RiskGuard is Ownable {
      * @param paused Whether to pause
      */
     function setMarketPaused(address market, bool paused) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMarketPaused", market, paused));
+        _consumeAction(actionId);
         marketsPaused[market] = paused;
         emit MarketPaused(market, paused);
+        emit ActionExecuted(actionId);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "Delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueSetMinHealthFactor(uint256 newMinHealthFactor) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setMinHealthFactor", newMinHealthFactor)));
+    }
+
+    function queueSetMaxPositionSizeRatio(uint256 newRatio) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setMaxPositionSizeRatio", newRatio)));
+    }
+
+    function queueSetMarketMaxUtilization(address market, uint256 maxUtilization)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(keccak256(abi.encode("setMarketMaxUtilization", market, maxUtilization)));
+    }
+
+    function queueSetWhitelistedUser(address user, bool whitelisted) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setWhitelistedUser", user, whitelisted)));
+    }
+
+    function queueSetEmergencyPause(bool paused) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setEmergencyPause", paused)));
+    }
+
+    function queueSetMarketPaused(address market, bool paused) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setMarketPaused", market, paused)));
+    }
+
+    function queueSetActionDelay(uint256 newDelay) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setActionDelay", newDelay)));
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Action already queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Action not queued");
+        require(block.timestamp >= executeAfter, "Action not ready");
+        delete queuedActions[actionId];
     }
 }

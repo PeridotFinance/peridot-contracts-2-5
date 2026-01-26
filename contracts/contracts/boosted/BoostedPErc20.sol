@@ -172,8 +172,9 @@ contract BoostedPErc20 is PErc20 {
         }
 
         uint256 shortfall = amount - localCash;
-        uint256 pulled = adapter.withdraw(address(this), shortfall);
-        emit BoostFundsPulled(pulled);
+        try adapter.withdraw(address(this), shortfall) returns (uint256 pulled) {
+            emit BoostFundsPulled(pulled);
+        } catch {}
 
         uint256 newCash = super.getCashPrior();
         require(newCash >= amount, "BoostedPErc20: liquidity shortfall");
@@ -192,7 +193,10 @@ contract BoostedPErc20 is PErc20 {
         }
 
         uint256 localCash = super.getCashPrior();
-        uint256 adapterBalance = adapter.totalUnderlying();
+        (bool balanceOk, uint256 adapterBalance) = _adapterBalanceSafe();
+        if (!balanceOk) {
+            return;
+        }
         uint256 totalAssets = localCash + adapterBalance;
         if (totalAssets == 0) {
             return;
@@ -205,14 +209,16 @@ contract BoostedPErc20 is PErc20 {
             uint256 toDeposit = localCash - targetBuffer;
             if (toDeposit > 0) {
                 _ensureAdapterAllowance();
-                uint256 deployed = adapter.deposit(toDeposit);
-                emit BoostFundsDeployed(deployed);
+                try adapter.deposit(toDeposit) returns (uint256 deployed) {
+                    emit BoostFundsDeployed(deployed);
+                } catch {}
             }
         } else if (targetBuffer > localCash) {
             uint256 deficit = targetBuffer - localCash;
             if (deficit > 0) {
-                uint256 pulled = adapter.withdraw(address(this), deficit);
-                emit BoostFundsPulled(pulled);
+                try adapter.withdraw(address(this), deficit) returns (uint256 pulled) {
+                    emit BoostFundsPulled(pulled);
+                } catch {}
             }
         }
     }
@@ -222,14 +228,23 @@ contract BoostedPErc20 is PErc20 {
     }
 
     function _adapterBalance() internal view returns (uint256) {
+        (bool ok, uint256 balance) = _adapterBalanceSafe();
+        return ok ? balance : 0;
+    }
+
+    function _adapterBalanceSafe() internal view returns (bool ok, uint256 balance) {
         if (boostPaused) {
-            return 0;
+            return (true, 0);
         }
         IBoostedYieldAdapter adapter = boostAdapter;
         if (address(adapter) == address(0)) {
-            return 0;
+            return (true, 0);
         }
-        return adapter.totalUnderlying();
+        try adapter.totalUnderlying() returns (uint256 reported) {
+            return (true, reported);
+        } catch {
+            return (false, 0);
+        }
     }
 
     function _ensureAdapterAllowance() internal {

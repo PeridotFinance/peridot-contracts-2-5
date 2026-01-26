@@ -155,6 +155,9 @@ contract MarginLiquidationTest is Test {
         oracle.setDirectPrice(address(weth), 2000e18);
 
         manager = new MarginManager(address(comptroller), address(oracle));
+        manager.queueConfigureMarket(address(cUsdc), address(usdc), true, true, true, true, true, 300, 50, 100);
+        manager.queueConfigureMarket(address(cWeth), address(weth), true, true, true, true, true, 300, 50, 100);
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.configureMarket(address(cUsdc), address(usdc), true, true, true, true, true, 300, 50, 100);
         manager.configureMarket(address(cWeth), address(weth), true, true, true, true, true, 300, 50, 100);
 
@@ -170,6 +173,8 @@ contract MarginLiquidationTest is Test {
         router.setManager(address(manager));
         router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
         router.setOperator(address(liquidation), true);
+        manager.queueSetRouterAdapter(address(router));
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setRouterAdapter(address(router));
 
         liquidation.setAdapter(address(router), true);
@@ -201,7 +206,7 @@ contract MarginLiquidationTest is Test {
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(weth), 0.2e18, address(0)); // borrow 0.2 WETH
+        manager.borrow(address(weth), 0.2e18, sma); // borrow 0.2 WETH
 
         // push account underwater by increasing WETH price
         oracle.setDirectPrice(address(weth), 5_000e18);
@@ -222,13 +227,13 @@ contract MarginLiquidationTest is Test {
     }
 
     function testLiquidationRevertsWhenHealthy() public {
-        _enable();
+        address sma = _enable();
 
         vm.prank(USER);
         manager.deposit(address(usdc), 2_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(weth), 0.05e18, address(0));
+        manager.borrow(address(weth), 0.05e18, sma);
 
         MarginLiquidation.SwapParams memory swapParams = MarginLiquidation.SwapParams({
             adapter: address(router), minAmountOut: 0, data: abi.encode(uint24(500), uint160(0))

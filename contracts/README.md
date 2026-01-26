@@ -46,6 +46,7 @@ See `addresses.MD` for the full list (spokes, markets, adapters).
 
 - Compile: `forge build`
 - Run tests: `forge test`
+- Fork tests: set `MONAD_RPC_URL` (and optionally `WMON_ADDRESS`, `MAGMA_ADDRESS`) for Monad fork tests; some skip if required system contracts are missing on the RPC.
 - Local node: `anvil`
 - Deploy Comptroller (BNB): `forge script script/DeployPeridottroller.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`
 - Deploy pToken: `forge script script/DeployPErc20Fixed.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`

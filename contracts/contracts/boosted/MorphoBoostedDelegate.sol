@@ -37,6 +37,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MANTISSA_ONE = 1e18;
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
 
     /// @notice Morpho vault (ERC4626-compatible).
     IERC4626 public morphoVault;
@@ -52,10 +53,14 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     address[] public rewardTokens; // reward tokens that will be claimed
     mapping(address => bool) public isRewardToken;
 
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
+
     event VaultBufferUpdated(uint256 previousMantissa, uint256 newMantissa);
     event VaultPausedUpdated(bool paused);
     event VaultDeposited(uint256 assets, uint256 shares);
     event VaultWithdrawn(uint256 assets, uint256 shares);
+    event MorphoVaultUpdated(address indexed oldVault, address indexed newVault);
     event RewardsHarvested(address[] rewardTokens);
     event RewardsConfigUpdated(address distributor);
     event RewardTokenAdded(address rewardToken);
@@ -65,6 +70,10 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         uint256 amount
     );
     event UnderlyingRewardsReinvested(uint256 amount);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     /**
      * @notice Called when becoming the implementation for a delegator.
@@ -85,6 +94,10 @@ contract MorphoBoostedDelegate is PErc20Delegate {
                 vaultBufferMantissa = buffer_;
             }
         }
+        if (actionDelay == 0) {
+            actionDelay = MIN_ACTION_DELAY;
+            emit ActionDelayUpdated(actionDelay);
+        }
     }
 
     /**
@@ -94,12 +107,17 @@ contract MorphoBoostedDelegate is PErc20Delegate {
      */
     function _setMorphoVault(address vault_, uint256 buffer_) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setMorphoVault", vault_, buffer_));
+        _consumeAction(actionId);
         require(vault_ != address(0), "zero vault");
         _validateVault(vault_);
         require(buffer_ <= MANTISSA_ONE, "buffer too high");
+        address oldVault = address(morphoVault);
         morphoVault = IERC4626(vault_);
         vaultBufferMantissa = buffer_;
+        emit MorphoVaultUpdated(oldVault, vault_);
         emit VaultBufferUpdated(0, buffer_);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -144,6 +162,10 @@ contract MorphoBoostedDelegate is PErc20Delegate {
         require(vaultBufferMantissa_ <= MANTISSA_ONE, "buffer too high");
 
         admin = payable(msg.sender);
+        if (actionDelay == 0) {
+            actionDelay = MIN_ACTION_DELAY;
+            emit ActionDelayUpdated(actionDelay);
+        }
 
         // Initialize parent first to set underlying
         super.initialize(
@@ -167,41 +189,56 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     // Admin setters
     function _setVaultBuffer(uint256 newMantissa) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setVaultBuffer", newMantissa));
+        _consumeAction(actionId);
         require(newMantissa <= MANTISSA_ONE, "invalid buffer");
         uint256 prev = vaultBufferMantissa;
         vaultBufferMantissa = newMantissa;
         emit VaultBufferUpdated(prev, newMantissa);
         _rebalanceVault();
+        emit ActionExecuted(actionId);
     }
 
     function _setVaultPaused(bool pause) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setVaultPaused", pause));
+        _consumeAction(actionId);
         if (pause == vaultPaused) return;
         vaultPaused = pause;
         if (pause) {
-            _withdrawFromVault(_vaultAssets());
+            _withdrawFromVault(_vaultWithdrawable());
         } else {
             _rebalanceVault();
         }
         emit VaultPausedUpdated(pause);
+        emit ActionExecuted(actionId);
     }
 
     function _setRewardsConfig(address distributor) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setRewardsConfig", distributor));
+        _consumeAction(actionId);
         rewardDistributor = distributor;
         emit RewardsConfigUpdated(distributor);
+        emit ActionExecuted(actionId);
     }
 
     function _addRewardToken(address rewardToken) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("addRewardToken", rewardToken));
+        _consumeAction(actionId);
         _pushRewardToken(rewardToken);
         emit RewardTokenAdded(rewardToken);
+        emit ActionExecuted(actionId);
     }
 
     /// @notice Admin-only: set the global Merkl/URD distributor address used for harvestRewards.
     function _setMerklDistributor(address distributor) external {
         require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setMerklDistributor", distributor));
+        _consumeAction(actionId);
         rewardDistributor = distributor;
+        emit ActionExecuted(actionId);
     }
 
     function _pushRewardToken(address rewardToken) internal {
@@ -310,10 +347,10 @@ contract MorphoBoostedDelegate is PErc20Delegate {
 
     // Vault helpers
     function _rebalanceVault() internal {
-        if (vaultPaused) return;
+        if (vaultPaused || !_vaultConfigured()) return;
         uint256 localCash = super.getCashPrior();
-        uint256 vaultAssets = _vaultAssets();
-        uint256 total = localCash + vaultAssets;
+        uint256 vaultWithdrawable = _vaultWithdrawable();
+        uint256 total = localCash + vaultWithdrawable;
         if (total == 0) return;
         uint256 target = (total * vaultBufferMantissa) / MANTISSA_ONE;
         if (localCash > target) {
@@ -321,8 +358,10 @@ contract MorphoBoostedDelegate is PErc20Delegate {
             _depositToVault(toDeposit);
         } else if (target > localCash) {
             uint256 deficit = target - localCash;
-            if (deficit > vaultAssets) deficit = vaultAssets;
-            _withdrawFromVault(deficit);
+            if (deficit > vaultWithdrawable) deficit = vaultWithdrawable;
+            if (deficit > 0) {
+                _withdrawFromVault(deficit);
+            }
         }
     }
 
@@ -336,7 +375,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     }
 
     function _depositToVault(uint256 amount) internal {
-        if (amount == 0 || vaultPaused) return;
+        if (amount == 0 || vaultPaused || !_vaultConfigured()) return;
         IERC20(underlying).forceApprove(address(morphoVault), amount);
         uint256 shares = morphoVault.deposit(amount, address(this));
         emit VaultDeposited(amount, shares);
@@ -345,14 +384,18 @@ contract MorphoBoostedDelegate is PErc20Delegate {
     function _withdrawFromVault(
         uint256 amount
     ) internal returns (uint256 withdrawn) {
-        if (amount == 0) return 0;
+        if (amount == 0 || !_vaultConfigured()) return 0;
         uint256 maxAvail = _vaultWithdrawable();
-        require(maxAvail >= amount, "vault shortfall");
+        if (maxAvail == 0) return 0;
+        if (amount > maxAvail) {
+            amount = maxAvail;
+        }
         withdrawn = morphoVault.withdraw(amount, address(this), address(this));
         emit VaultWithdrawn(amount, withdrawn);
     }
 
     function _vaultAssets() internal view returns (uint256) {
+        if (!_vaultConfigured()) return 0;
         uint256 shares = morphoVault.balanceOf(address(this));
         if (shares == 0) return 0;
         return morphoVault.convertToAssets(shares);
@@ -365,7 +408,7 @@ contract MorphoBoostedDelegate is PErc20Delegate {
      *      This prevents getCashPrior() from over-reporting available liquidity.
      */
     function _vaultWithdrawable() internal view returns (uint256) {
-        if (address(morphoVault) == address(0)) return 0;
+        if (!_vaultConfigured()) return 0;
 
         try morphoVault.maxWithdraw(address(this)) returns (
             uint256 maxWithdrawable
@@ -382,6 +425,81 @@ contract MorphoBoostedDelegate is PErc20Delegate {
             // (don't assume full withdrawability)
             return 0;
         }
+    }
+
+    function queueSetMorphoVault(address vault_, uint256 buffer_)
+        external
+        returns (bytes32 actionId)
+    {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setMorphoVault", vault_, buffer_)));
+    }
+
+    function queueSetVaultBuffer(uint256 newMantissa) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setVaultBuffer", newMantissa)));
+    }
+
+    function queueSetVaultPaused(bool pause) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setVaultPaused", pause)));
+    }
+
+    function queueSetRewardsConfig(address distributor) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setRewardsConfig", distributor)));
+    }
+
+    function queueAddRewardToken(address rewardToken) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("addRewardToken", rewardToken)));
+    }
+
+    function queueSetMerklDistributor(address distributor) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setMerklDistributor", distributor)));
+    }
+
+    function setActionDelay(uint256 newDelay) external {
+        require(msg.sender == admin, "only admin");
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function queueSetActionDelay(uint256 newDelay) external returns (bytes32 actionId) {
+        require(msg.sender == admin, "only admin");
+        actionId = _queueAction(keccak256(abi.encode("setActionDelay", newDelay)));
+    }
+
+    function cancelAction(bytes32 actionId) external {
+        require(msg.sender == admin, "only admin");
+        require(queuedActions[actionId] != 0, "action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "action queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "action not queued");
+        require(block.timestamp >= executeAfter, "action not ready");
+        delete queuedActions[actionId];
+    }
+
+    function _vaultConfigured() internal view returns (bool) {
+        return address(morphoVault) != address(0);
     }
 }
 

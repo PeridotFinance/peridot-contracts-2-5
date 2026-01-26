@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
-
-// Simple deployment without complex proxy infrastructure
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // Upgradeable contracts
 import "../contracts/DualInvestment/DualInvestmentManagerUpgradeable.sol";
@@ -53,7 +52,6 @@ contract DualInvestmentUpgradeableTest is Test {
     address public admin;
     address public user1;
     address public user2;
-    address public protocolAccount;
     address public protocolTreasury;
 
     // Test constants
@@ -66,7 +64,6 @@ contract DualInvestmentUpgradeableTest is Test {
         admin = address(this);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
-        protocolAccount = makeAddr("protocolAccount");
         protocolTreasury = makeAddr("protocolTreasury");
 
         // Deploy mock tokens
@@ -85,29 +82,36 @@ contract DualInvestmentUpgradeableTest is Test {
 
         // Deploy core contracts
         positionToken = new ERC1155DualPosition();
-        vaultExecutor = new VaultExecutor(protocolAccount);
+        vaultExecutor = new VaultExecutor();
         settlementEngine = new SettlementEngine(address(positionToken), address(vaultExecutor), address(oracle));
 
         borrowRouter = new CompoundBorrowRouter(address(peridottroller), address(oracle));
         riskGuard = new RiskGuard(address(peridottroller), address(oracle));
 
-        // Deploy upgradeable manager with simple initialization
-        manager = new DualInvestmentManagerUpgradeable();
-
-        manager.initialize(
-            address(positionToken),
-            address(vaultExecutor),
-            address(settlementEngine),
-            address(borrowRouter),
-            address(riskGuard),
-            address(peridottroller),
-            protocolTreasury,
-            address(protocolToken)
+        // Deploy upgradeable manager via ERC1967 proxy
+        DualInvestmentManagerUpgradeable implementation = new DualInvestmentManagerUpgradeable();
+        bytes memory initData = abi.encodeCall(
+            DualInvestmentManagerUpgradeable.initialize,
+            (
+                address(positionToken),
+                address(vaultExecutor),
+                address(settlementEngine),
+                address(borrowRouter),
+                address(riskGuard),
+                address(peridottroller),
+                protocolTreasury,
+                address(protocolToken)
+            )
         );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        manager = DualInvestmentManagerUpgradeable(address(proxy));
 
         // Set up authorizations
         positionToken.setAuthorizedMinter(address(manager), true);
         positionToken.setAuthorizedMinter(address(settlementEngine), true);
+        vaultExecutor.queueSetAuthorizedManager(address(manager), true);
+        vaultExecutor.queueSetAuthorizedManager(address(settlementEngine), true);
+        vm.warp(block.timestamp + vaultExecutor.actionDelay());
         vaultExecutor.setAuthorizedManager(address(manager), true);
         vaultExecutor.setAuthorizedManager(address(settlementEngine), true);
         borrowRouter.setAuthorizedDestination(address(vaultExecutor), true);
@@ -124,11 +128,19 @@ contract DualInvestmentUpgradeableTest is Test {
         oracle.setDirectPrice(address(pETH), ETH_PRICE); // Set price for cToken too
         oracle.setDirectPrice(address(pUSDC), USDC_PRICE); // Set price for cToken too
 
-        // Configure supported cTokens
+        // Queue admin actions that require timelock
+        manager.queueSetSupportedCToken(address(pUSDC), true);
+        manager.queueSetSupportedCToken(address(pETH), true);
+        manager.queueSetMarketIntegration(address(pETH), true);
+        manager.queueSetMarketIntegration(address(pUSDC), true);
+        manager.queueSetMarketUtilizationBonus(address(pETH), 100); // 1% bonus
+        manager.queueSetMarketUtilizationBonus(address(pUSDC), 50); // 0.5% bonus
+
+        vm.warp(block.timestamp + manager.actionDelay());
+
+        // Execute admin actions
         manager.setSupportedCToken(address(pUSDC), true);
         manager.setSupportedCToken(address(pETH), true);
-
-        // Configure protocol integration
         manager.setMarketIntegration(address(pETH), true);
         manager.setMarketIntegration(address(pUSDC), true);
         manager.setMarketUtilizationBonus(address(pETH), 100); // 1% bonus
@@ -176,16 +188,8 @@ contract DualInvestmentUpgradeableTest is Test {
         // Ensure manager and tokens are configured
         vm.prank(user1);
         pETH.approve(address(vaultExecutor), 1e18);
-
-        // Add support if not present
-        if (!manager.supportedCTokens(address(pETH))) {
-            vm.prank(address(this));
-            manager.setSupportedCToken(address(pETH), true);
-        }
-        if (!manager.supportedCTokens(address(pUSDC))) {
-            vm.prank(address(this));
-            manager.setSupportedCToken(address(pUSDC), true);
-        }
+        vm.prank(user1);
+        pETH.approve(address(manager), 1e18);
 
         // Use configured minExpiry to ensure we meet the lower bound
         uint256 offset = manager.minExpiry();
@@ -203,13 +207,14 @@ contract DualInvestmentUpgradeableTest is Test {
         // Mint cTokens to user and approve vault
         vm.startPrank(user1);
         pETH.approve(address(vaultExecutor), type(uint256).max);
+        pETH.approve(address(manager), type(uint256).max);
         vm.stopPrank();
 
-        // Enter a larger position (5 ETH)
+        // Enter a larger position within risk limits (2 ETH)
         uint256 offset = manager.minExpiry();
         vm.prank(user1);
         uint256 tokenId =
-            manager.enterPositionWithOffset(address(pETH), address(pUSDC), 5e18, 0, ETH_PRICE, offset, true, false);
+            manager.enterPositionWithOffset(address(pETH), address(pUSDC), 2e18, 1, ETH_PRICE, offset, true, false);
 
         // Fast forward to expiry
         vm.warp(block.timestamp + offset + 1);
@@ -225,6 +230,7 @@ contract DualInvestmentUpgradeableTest is Test {
         vm.startPrank(user1);
         // User obtains 2 ETH underlying and approves vault executor
         weth.approve(address(vaultExecutor), 2e18);
+        weth.approve(address(manager), 2e18);
         vm.stopPrank();
 
         uint256 expiry = block.timestamp + manager.minExpiry();
@@ -236,6 +242,8 @@ contract DualInvestmentUpgradeableTest is Test {
 
     function testBorrowAndEnterPosition_OneShot() public {
         // Ensure router authorized and market integrated
+        manager.queueSetMarketIntegration(address(pETH), true);
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setMarketIntegration(address(pETH), true);
         // borrowRouter owner is the manager (ownership was transferred in setUp), so prank as manager
         vm.prank(address(manager));
@@ -244,9 +252,11 @@ contract DualInvestmentUpgradeableTest is Test {
         // Configure user mock liquidity indirectly by minting and prices (already in setUp)
         uint256 expiry = block.timestamp + manager.minExpiry();
 
-        // Pre-approve router to pull underlying if borrow credits user
+        // Pre-approve vault executor to pull underlying from user
         vm.prank(user1);
-        weth.approve(address(borrowRouter), type(uint256).max);
+        weth.approve(address(vaultExecutor), type(uint256).max);
+        vm.prank(user1);
+        weth.approve(address(manager), type(uint256).max);
 
         // Borrow 1 ETH underlying and enter position in one call
         vm.prank(user1);
@@ -258,15 +268,8 @@ contract DualInvestmentUpgradeableTest is Test {
         // Min expiry is set in setUp via manager.setRiskParameters
         vm.prank(user1);
         pETH.approve(address(vaultExecutor), 1e18);
-
-        if (!manager.supportedCTokens(address(pETH))) {
-            vm.prank(address(this));
-            manager.setSupportedCToken(address(pETH), true);
-        }
-        if (!manager.supportedCTokens(address(pUSDC))) {
-            vm.prank(address(this));
-            manager.setSupportedCToken(address(pUSDC), true);
-        }
+        vm.prank(user1);
+        pETH.approve(address(manager), 1e18);
 
         // Offset just below minExpiry should fail the minExpiry guard
         uint256 tooSmall = manager.minExpiry() - 1;
@@ -281,6 +284,8 @@ contract DualInvestmentUpgradeableTest is Test {
         uint256 newFeeRate = 100; // 1%
         address newToken = makeAddr("newToken");
 
+        manager.queueUpdateProtocolConfig(newTreasury, newFeeRate, newToken);
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.updateProtocolConfig(newTreasury, newFeeRate, newToken);
 
         assertEq(manager.protocolTreasury(), newTreasury);
@@ -294,10 +299,14 @@ contract DualInvestmentUpgradeableTest is Test {
 
         assertFalse(manager.protocolIntegratedMarkets(newMarket));
 
+        manager.queueSetMarketIntegration(newMarket, true);
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setMarketIntegration(newMarket, true);
         assertTrue(manager.protocolIntegratedMarkets(newMarket));
 
         // Test utilization bonus
+        manager.queueSetMarketUtilizationBonus(newMarket, 200); // 2%
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setMarketUtilizationBonus(newMarket, 200); // 2%
         assertEq(manager.marketUtilizationBonus(newMarket), 200);
     }
@@ -315,13 +324,14 @@ contract DualInvestmentUpgradeableTest is Test {
     function testPositionEntryWithProtocolIntegration() public {
         // Test entering a position with protocol integration features
         uint256 amount = 1e18; // 1 ETH = $2400
-        uint64 strike = uint64(ETH_PRICE);
+        uint128 strike = uint128(ETH_PRICE);
         uint64 expiry = uint64(block.timestamp + 1 days);
         uint8 direction = 0; // CALL
 
         // Approve cToken transfer to VaultExecutor (redeem path pulls from user)
         vm.startPrank(user1);
         pETH.approve(address(vaultExecutor), amount);
+        pETH.approve(address(manager), amount);
         vm.stopPrank();
 
         // Check initial state
@@ -378,6 +388,8 @@ contract DualInvestmentUpgradeableTest is Test {
         // Approve cToken transfers
         vm.prank(user1);
         pETH.approve(address(vaultExecutor), type(uint256).max);
+        vm.prank(user1);
+        pETH.approve(address(manager), type(uint256).max);
 
         // Execute batch entry
         vm.prank(user1);
@@ -450,20 +462,28 @@ contract DualInvestmentUpgradeableTest is Test {
 
     function testProtocolFeeValidation() public {
         // Test fee rate validation
+        manager.queueUpdateProtocolConfig(protocolTreasury, 1001, address(protocolToken)); // > 10%
+        vm.warp(block.timestamp + manager.actionDelay());
         vm.expectRevert("Fee rate too high");
         manager.updateProtocolConfig(protocolTreasury, 1001, address(protocolToken)); // > 10%
 
         // Test valid fee rate
+        manager.queueUpdateProtocolConfig(protocolTreasury, 1000, address(protocolToken)); // Exactly 10%
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.updateProtocolConfig(protocolTreasury, 1000, address(protocolToken)); // Exactly 10%
         assertEq(manager.protocolFeeRate(), 1000);
     }
 
     function testMarketBonusValidation() public {
         // Test bonus validation
+        manager.queueSetMarketUtilizationBonus(address(pETH), 5001); // > 50%
+        vm.warp(block.timestamp + manager.actionDelay());
         vm.expectRevert("Bonus too high");
         manager.setMarketUtilizationBonus(address(pETH), 5001); // > 50%
 
         // Test valid bonus
+        manager.queueSetMarketUtilizationBonus(address(pETH), 5000); // Exactly 50%
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setMarketUtilizationBonus(address(pETH), 5000); // Exactly 50%
         assertEq(manager.marketUtilizationBonus(address(pETH)), 5000);
     }
@@ -485,12 +505,16 @@ contract DualInvestmentUpgradeableTest is Test {
         // Test that protocol events are emitted correctly
 
         // Test market integration event
+        manager.queueSetMarketIntegration(address(pUSDC), false);
+        vm.warp(block.timestamp + manager.actionDelay());
         vm.expectEmit(true, false, false, true);
         emit DualInvestmentManagerUpgradeable.MarketIntegrationUpdated(address(pUSDC), false);
         manager.setMarketIntegration(address(pUSDC), false);
 
         // Test protocol config event
         address newTreasury = makeAddr("newTreasury");
+        manager.queueUpdateProtocolConfig(newTreasury, 75, address(protocolToken));
+        vm.warp(block.timestamp + manager.actionDelay());
         vm.expectEmit(false, false, false, true);
         emit DualInvestmentManagerUpgradeable.ProtocolConfigUpdated(newTreasury, 75, address(protocolToken));
         manager.updateProtocolConfig(newTreasury, 75, address(protocolToken));
@@ -517,6 +541,7 @@ contract DualInvestmentUpgradeableTest is Test {
         vm.prank(user);
         if (useCollateral) {
             pETH.approve(address(vaultExecutor), amount);
+            pETH.approve(address(manager), amount);
         }
 
         vm.prank(user);

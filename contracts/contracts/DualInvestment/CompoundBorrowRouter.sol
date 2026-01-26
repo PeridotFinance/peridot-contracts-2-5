@@ -24,6 +24,9 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
     // Authorized destinations that can receive routed funds
     mapping(address => bool) public authorizedDestinations;
 
+    // Authorized callers allowed to route on behalf of users
+    mapping(address => bool) public authorizedCallers;
+
     // Minimum health factor required after borrowing (e.g., 1.25 = 125%)
     uint256 public minHealthFactorAfterBorrow = 1.25e18;
 
@@ -41,6 +44,7 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
     );
 
     event AuthorizedDestinationUpdated(address indexed destination, bool authorized);
+    event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event MinHealthFactorUpdated(uint256 oldFactor, uint256 newFactor);
     event MaxLTVUpdated(uint256 oldLTV, uint256 newLTV);
 
@@ -57,11 +61,12 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Borrow assets and route them to authorized destination
-     * @param cToken cToken to borrow from
-     * @param borrowAmount Amount of underlying to borrow
+     * @notice Route user-held underlying to an authorized destination
+     * @dev User must have already borrowed (or otherwise hold) the underlying and approve this router.
+     * @param cToken cToken market for price checks and underlying lookup
+     * @param borrowAmount Amount of underlying to route
      * @param destination Authorized destination to receive funds
-     * @param user User initiating the borrow (for accounting)
+     * @param user User initiating the route
      * @return success Whether the operation succeeded
      */
     function borrowAndRoute(address cToken, uint256 borrowAmount, address destination, address user)
@@ -73,35 +78,30 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
         require(cToken != address(0), "Invalid cToken");
         require(borrowAmount > 0, "Invalid borrow amount");
         require(user != address(0), "Invalid user");
+        require(msg.sender == user || authorizedCallers[msg.sender], "Caller not authorized");
 
         // Get user's current account liquidity and health factor
-        (, uint256 liquidityBefore, uint256 shortfallBefore) = peridottroller.getAccountLiquidity(user);
-        require(shortfallBefore == 0, "User has existing shortfall");
-        require(liquidityBefore > 0, "User has no liquidity");
+        (, uint256 liquidity, uint256 shortfall) = peridottroller.getAccountLiquidity(user);
+        require(shortfall == 0, "User has existing shortfall");
+        require(liquidity > 0, "User has no liquidity");
 
-        // Calculate health factor before borrowing
-        uint256 healthFactorBefore = _calculateHealthFactor(user);
+        // Calculate health factor based on current borrow state
+        uint256 healthFactor = _calculateHealthFactor(user);
+        require(healthFactor >= minHealthFactorAfterBorrow, "Health factor too low");
 
-        // Perform borrow operation
+        // Enforce max LTV based on current borrow state
+        uint256 currentBorrowValue = _estimateTotalBorrowValue(user);
+        uint256 totalCollateralValue = liquidity + currentBorrowValue;
+        require(totalCollateralValue > 0, "User has no collateral");
+        uint256 currentLTV = (currentBorrowValue * 1e18) / totalCollateralValue;
+        require(currentLTV <= maxLTVForBorrow, "LTV too high");
+
+        // Route user-held funds to destination.
         PErc20 pToken = PErc20(cToken);
-        uint256 borrowResult = pToken.borrow(borrowAmount);
-        require(borrowResult == 0, "Borrow failed");
-
-        // Verify health factor after borrowing
-        uint256 healthFactorAfter = _calculateHealthFactor(user);
-        require(healthFactorAfter >= minHealthFactorAfterBorrow, "Health factor too low after borrow");
-
-        // Route borrowed funds to destination. Some implementations may credit the user instead of this router.
         IERC20 underlying = IERC20(pToken.underlying());
-        uint256 routerBal = underlying.balanceOf(address(this));
-        if (routerBal >= borrowAmount) {
-            underlying.safeTransfer(destination, borrowAmount);
-        } else {
-            // Fallback: pull from user if underlying was sent to the user. Requires prior approval.
-            underlying.safeTransferFrom(user, destination, borrowAmount);
-        }
+        underlying.safeTransferFrom(user, destination, borrowAmount);
 
-        emit BorrowAndRoute(user, cToken, destination, borrowAmount, healthFactorBefore, healthFactorAfter);
+        emit BorrowAndRoute(user, cToken, destination, borrowAmount, healthFactor, healthFactor);
 
         return true;
     }
@@ -136,8 +136,23 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
 
         // Calculate required collateral for this borrow
         uint256 borrowValueUSD = _getBorrowValueInUSD(cToken, borrowAmount);
+        if (borrowValueUSD == 0) {
+            return (false, "Invalid price");
+        }
         if (borrowValueUSD > liquidity) {
             return (false, "Insufficient liquidity for borrow amount");
+        }
+
+        // Enforce max LTV
+        uint256 currentBorrowValue = _estimateTotalBorrowValue(user);
+        uint256 totalCollateralValue = liquidity + currentBorrowValue;
+        if (totalCollateralValue == 0) {
+            return (false, "User has no collateral");
+        }
+        uint256 newBorrowValue = currentBorrowValue + borrowValueUSD;
+        uint256 newLTV = (newBorrowValue * 1e18) / totalCollateralValue;
+        if (newLTV > maxLTVForBorrow) {
+            return (false, "Max LTV exceeded");
         }
 
         // Check if resulting health factor would be acceptable
@@ -216,6 +231,9 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
     {
         uint256 currentHealthFactor = _calculateHealthFactor(user);
         uint256 borrowValueUSD = _getBorrowValueInUSD(cToken, borrowAmount);
+        if (borrowValueUSD == 0) {
+            return 0;
+        }
         (, uint256 liquidity,) = peridottroller.getAccountLiquidity(user);
 
         if (currentHealthFactor == type(uint256).max) {
@@ -242,6 +260,9 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
 
         // Get price from our SimplePriceOracle
         uint256 pricePerToken = priceOracle.getUnderlyingPrice(pToken);
+        if (pricePerToken == 0) {
+            return 0;
+        }
 
         return (amount * pricePerToken) / 1e18;
     }
@@ -255,6 +276,17 @@ contract CompoundBorrowRouter is Ownable, ReentrancyGuard {
         require(destination != address(0), "Invalid destination");
         authorizedDestinations[destination] = authorized;
         emit AuthorizedDestinationUpdated(destination, authorized);
+    }
+
+    /**
+     * @notice Set authorized caller
+     * @param caller Caller address
+     * @param authorized Whether caller is authorized
+     */
+    function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {
+        require(caller != address(0), "Invalid caller");
+        authorizedCallers[caller] = authorized;
+        emit AuthorizedCallerUpdated(caller, authorized);
     }
 
     /**

@@ -111,18 +111,21 @@ contract DualInvestmentManager is Ownable, ReentrancyGuard {
 
         // Generate token ID
         address underlying = cTokenToUnderlying[cTokenIn];
+        uint256 marketId = nextMarketId++;
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
+            msg.sender, underlying, uint128(strike), uint64(expiry), direction, marketId
         );
 
         // Create position struct
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: msg.sender,
+            underlying: underlying,
+            marketId: marketId,
             cTokenIn: cTokenIn,
             cTokenOut: cTokenOut,
             notional: uint128(amount),
             expiry: uint64(expiry),
-            strike: uint64(strike),
+            strike: uint128(strike),
             direction: direction,
             settled: false
         });
@@ -182,16 +185,12 @@ contract DualInvestmentManager is Ownable, ReentrancyGuard {
         uint256 exchangeRate = PErc20(cToken).exchangeRateStored();
         uint256 underlyingAmount = (amount * exchangeRate) / 1e18;
 
-        // Additional borrow safety check
+        // Additional borrow safety check (for user-provided borrowed funds)
         (bool canBorrow, string memory borrowReason) = borrowRouter.canUserBorrow(msg.sender, cToken, underlyingAmount);
         require(canBorrow, borrowReason);
 
-        // Use borrow router to borrow and route to vault executor
-        bool borrowSuccess = borrowRouter.borrowAndRoute(cToken, underlyingAmount, address(vaultExecutor), msg.sender);
-        require(borrowSuccess, "Borrow and route failed");
-
-        // Vault executor supplies to protocol account
-        vaultExecutor.mintCTokensTo(cToken, address(vaultExecutor), underlyingAmount);
+        // Pull underlying from user (who has already borrowed) and mint to vault executor
+        vaultExecutor.pullUnderlyingAndMintTo(cToken, msg.sender, address(vaultExecutor), underlyingAmount);
 
         // Update risk tracking
         uint256 positionValueUSD = _getPositionValueUSD(cToken, amount);
@@ -234,8 +233,9 @@ contract DualInvestmentManager is Ownable, ReentrancyGuard {
         require(riskAllowed, riskReason);
 
         address underlying = cTokenToUnderlying[cToken];
+        uint256 marketId = nextMarketId++;
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
+            msg.sender, underlying, uint128(strike), uint64(expiry), direction, marketId
         );
 
         uint256 cTokensMinted =
@@ -246,11 +246,13 @@ contract DualInvestmentManager is Ownable, ReentrancyGuard {
 
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: msg.sender,
+            underlying: underlying,
+            marketId: marketId,
             cTokenIn: cToken,
             cTokenOut: cTokenOut,
             notional: uint128(cTokensMinted),
             expiry: uint64(expiry),
-            strike: uint64(strike),
+            strike: uint128(strike),
             direction: direction,
             settled: false
         });
@@ -282,8 +284,10 @@ contract DualInvestmentManager is Ownable, ReentrancyGuard {
             "Invalid direction"
         );
         require(strike > 0, "Invalid strike price");
+        require(strike <= type(uint128).max, "Strike too large");
         require(expiry > block.timestamp + minExpiry, "Expiry too soon");
         require(expiry <= block.timestamp + maxExpiry, "Expiry too far");
+        require(expiry <= type(uint64).max, "Expiry too large");
     }
 
     /**

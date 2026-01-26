@@ -43,7 +43,6 @@ contract DualInvestmentTest is Test {
     address public admin;
     address public user1;
     address public user2;
-    address public protocolAccount;
 
     // Test constants
     uint256 public constant INITIAL_USDC_BALANCE = 100000e6; // 100k USDC
@@ -55,7 +54,6 @@ contract DualInvestmentTest is Test {
         admin = address(this);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
-        protocolAccount = makeAddr("protocolAccount");
 
         // Deploy mock tokens
         usdc = new MockErc20("USD Coin", "USDC", 6);
@@ -76,7 +74,7 @@ contract DualInvestmentTest is Test {
 
         // Deploy core dual investment contracts
         positionToken = new ERC1155DualPosition();
-        vaultExecutor = new VaultExecutor(protocolAccount);
+        vaultExecutor = new VaultExecutor();
         settlementEngine = new SettlementEngine(address(positionToken), address(vaultExecutor), address(oracle));
         // Create dummy addresses for Phase 2 components for backward compatibility
         address dummyBorrowRouter = makeAddr("dummyBorrowRouter");
@@ -94,6 +92,9 @@ contract DualInvestmentTest is Test {
         // Set up authorizations
         positionToken.setAuthorizedMinter(address(manager), true);
         positionToken.setAuthorizedMinter(address(settlementEngine), true);
+        vaultExecutor.queueSetAuthorizedManager(address(manager), true);
+        vaultExecutor.queueSetAuthorizedManager(address(settlementEngine), true);
+        vm.warp(block.timestamp + vaultExecutor.actionDelay());
         vaultExecutor.setAuthorizedManager(address(manager), true);
         vaultExecutor.setAuthorizedManager(address(settlementEngine), true);
 
@@ -118,9 +119,10 @@ contract DualInvestmentTest is Test {
 
     function testPositionTokenCreation() public {
         // Test generating token IDs
-        uint256 tokenId = positionToken.generateTokenId(
+        uint256 tokenId = positionToken.generateTokenIdForUser(
+            user1,
             address(weth),
-            uint64(ETH_PRICE), // Strike at current price
+            uint128(ETH_PRICE), // Strike at current price
             uint64(block.timestamp + 1 days), // 1 day expiry
             0, // CALL direction
             1 // Market ID
@@ -129,8 +131,9 @@ contract DualInvestmentTest is Test {
         assertGt(tokenId, 0, "Token ID should be non-zero");
 
         // Test that same parameters generate same token ID
-        uint256 tokenId2 =
-            positionToken.generateTokenId(address(weth), uint64(ETH_PRICE), uint64(block.timestamp + 1 days), 0, 1);
+        uint256 tokenId2 = positionToken.generateTokenIdForUser(
+            user1, address(weth), uint128(ETH_PRICE), uint64(block.timestamp + 1 days), 0, 1
+        );
 
         assertEq(tokenId, tokenId2, "Same parameters should generate same token ID");
     }
@@ -139,9 +142,13 @@ contract DualInvestmentTest is Test {
         // Test authorization
         assertFalse(vaultExecutor.authorizedManagers(user1), "User1 should not be authorized initially");
 
+        vaultExecutor.queueSetAuthorizedManager(user1, true);
+        vm.warp(block.timestamp + vaultExecutor.actionDelay());
         vaultExecutor.setAuthorizedManager(user1, true);
         assertTrue(vaultExecutor.authorizedManagers(user1), "User1 should be authorized after setting");
 
+        vaultExecutor.queueSetAuthorizedManager(user1, false);
+        vm.warp(block.timestamp + vaultExecutor.actionDelay());
         vaultExecutor.setAuthorizedManager(user1, false);
         assertFalse(vaultExecutor.authorizedManagers(user1), "User1 should not be authorized after removing");
     }
@@ -185,6 +192,8 @@ contract DualInvestmentTest is Test {
 
     function testSettlementWindowUpdate() public {
         uint256 newWindow = 2 hours;
+        settlementEngine.queueSetSettlementWindow(newWindow);
+        vm.warp(block.timestamp + settlementEngine.actionDelay());
         settlementEngine.setSettlementWindow(newWindow);
 
         assertEq(settlementEngine.settlementWindow(), newWindow, "Settlement window should be updated");
@@ -197,17 +206,20 @@ contract DualInvestmentTest is Test {
         // Create a test position
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: user1,
+            underlying: address(weth),
+            marketId: 1,
             cTokenIn: address(pETH),
             cTokenOut: address(pUSDC),
             notional: 1000e18,
             expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
+            strike: uint128(ETH_PRICE),
             direction: 0, // CALL
             settled: false
         });
 
-        uint256 tokenId =
-            positionToken.generateTokenId(address(weth), position.strike, position.expiry, position.direction, 1);
+        uint256 tokenId = positionToken.generateTokenIdForUser(
+            position.user, position.underlying, position.strike, position.expiry, position.direction, position.marketId
+        );
 
         // Test position creation event
         vm.expectEmit(true, true, false, true);
@@ -256,12 +268,14 @@ contract DualInvestmentTest is Test {
     }
 
     // Test helper functions
-    function _createTestPosition(address user, uint256 amount, uint64 strike, uint64 expiry, uint8 direction)
+    function _createTestPosition(address user, uint256 amount, uint128 strike, uint64 expiry, uint8 direction)
         internal
         returns (uint256 tokenId)
     {
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: user,
+            underlying: address(weth),
+            marketId: 1,
             cTokenIn: address(pETH),
             cTokenOut: address(pUSDC),
             notional: uint128(amount),
@@ -271,7 +285,7 @@ contract DualInvestmentTest is Test {
             settled: false
         });
 
-        tokenId = positionToken.generateTokenId(address(weth), strike, expiry, direction, 1);
+        tokenId = positionToken.generateTokenIdForUser(user, address(weth), strike, expiry, direction, 1);
 
         // Authorize this contract to mint
         positionToken.setAuthorizedMinter(address(this), true);
@@ -283,7 +297,7 @@ contract DualInvestmentTest is Test {
     function testBasicPositionLifecycle() public {
         // Create a test position
         uint256 amount = 1000e18;
-        uint64 strike = uint64(ETH_PRICE);
+        uint128 strike = uint128(ETH_PRICE);
         uint64 expiry = uint64(block.timestamp + 1 days);
 
         uint256 tokenId = _createTestPosition(user1, amount, strike, expiry, 0);
@@ -306,11 +320,13 @@ contract DualInvestmentTest is Test {
     function test_RevertWhen_UnauthorizedMint() public {
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: user1,
+            underlying: address(weth),
+            marketId: 1,
             cTokenIn: address(pETH),
             cTokenOut: address(pUSDC),
             notional: 1000e18,
             expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
+            strike: uint128(ETH_PRICE),
             direction: 0,
             settled: false
         });
@@ -326,11 +342,13 @@ contract DualInvestmentTest is Test {
     function test_RevertWhen_InvalidDirection() public {
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: user1,
+            underlying: address(weth),
+            marketId: 1,
             cTokenIn: address(pETH),
             cTokenOut: address(pUSDC),
             notional: 1000e18,
             expiry: uint64(block.timestamp + 1 days),
-            strike: uint64(ETH_PRICE),
+            strike: uint128(ETH_PRICE),
             direction: 5, // Invalid direction
             settled: false
         });

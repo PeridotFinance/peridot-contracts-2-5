@@ -39,9 +39,6 @@ contract DeployDualInvestmentUpgradeable is Script {
         0xBfEaDDA58d0583f33309AdE83F35A680824E397f; // SimplePriceOracle (BSC testnet)
     address public constant PERIDOTTROLLER =
         0x2e6aeB2AA9B1fC76aCD2E9E5EfeC2bF39C3a9094; // Peridottroller address
-    address public constant PROTOCOL_ACCOUNT =
-        0xF450B38cccFdcfAD2f98f7E4bB533151a2fB00E9; // Protocol treasury account - UPDATE THIS
-
     // Protocol integration - UPDATE THESE
     address public constant PROTOCOL_TREASURY =
         0xF450B38cccFdcfAD2f98f7E4bB533151a2fB00E9; // Protocol treasury for fees - UPDATE THIS
@@ -90,16 +87,11 @@ contract DeployDualInvestmentUpgradeable is Script {
         console.log("Deployer address:", deployer);
         console.log("Price Oracle:", PRICE_ORACLE);
         console.log("Peridottroller:", PERIDOTTROLLER);
-        console.log("Protocol Account:", PROTOCOL_ACCOUNT);
         console.log("Protocol Treasury:", PROTOCOL_TREASURY);
 
         // Validate configuration
         require(PRICE_ORACLE != address(0), "PRICE_ORACLE not configured");
         require(PERIDOTTROLLER != address(0), "PERIDOTTROLLER not configured");
-        require(
-            PROTOCOL_ACCOUNT != address(0),
-            "PROTOCOL_ACCOUNT not configured"
-        );
         require(
             PROTOCOL_TREASURY != address(0),
             "PROTOCOL_TREASURY not configured"
@@ -129,7 +121,7 @@ contract DeployDualInvestmentUpgradeable is Script {
         console.log("   Deployed at:", addresses.positionToken);
 
         console.log("2. Deploying VaultExecutor...");
-        addresses.vaultExecutor = address(new VaultExecutor(PROTOCOL_ACCOUNT));
+        addresses.vaultExecutor = address(new VaultExecutor());
         console.log("   Deployed at:", addresses.vaultExecutor);
 
         console.log("3. Deploying SettlementEngine...");
@@ -191,17 +183,16 @@ contract DeployDualInvestmentUpgradeable is Script {
         );
 
         // Vault executor authorizations
-        VaultExecutor(addresses.vaultExecutor).setAuthorizedManager(
+        bytes32 vaultManagerAction = VaultExecutor(addresses.vaultExecutor).queueSetAuthorizedManager(
             addresses.manager,
             true
         );
-        VaultExecutor(addresses.vaultExecutor).setAuthorizedManager(
+        bytes32 vaultSettlementAction = VaultExecutor(addresses.vaultExecutor).queueSetAuthorizedManager(
             addresses.settlementEngine,
             true
         );
-        console.log(
-            "Authorized DualInvestmentManager and SettlementEngine to use VaultExecutor"
-        );
+        console.log("Queued VaultExecutor manager auth action:", vaultManagerAction);
+        console.log("Queued VaultExecutor settlement auth action:", vaultSettlementAction);
 
         // Borrow router authorizations
         CompoundBorrowRouter(addresses.borrowRouter).setAuthorizedDestination(
@@ -223,23 +214,18 @@ contract DeployDualInvestmentUpgradeable is Script {
             );
 
         // Configure manager risk parameters (short minExpiry for manual testing)
-        manager.setRiskParameters(
+        bytes32 riskParamsAction = manager.queueSetRiskParameters(
             MAX_POSITION_SIZE,
             MIN_POSITION_SIZE,
             MAX_EXPIRY,
             MIN_EXPIRY
         );
-        console.log("Manager risk parameters configured");
+        console.log("Queued manager risk parameters action:", riskParamsAction);
 
         // Configure settlement window
-        SettlementEngine(addresses.settlementEngine).setSettlementWindow(
-            SETTLEMENT_WINDOW
-        );
-        console.log(
-            "Settlement window configured:",
-            SETTLEMENT_WINDOW / 3600,
-            "hours"
-        );
+        bytes32 settlementWindowAction = SettlementEngine(addresses.settlementEngine)
+            .queueSetSettlementWindow(SETTLEMENT_WINDOW);
+        console.log("Queued settlement window action:", settlementWindowAction);
 
         // Configure borrow router parameters
         CompoundBorrowRouter(addresses.borrowRouter).setMinHealthFactor(
@@ -249,14 +235,18 @@ contract DeployDualInvestmentUpgradeable is Script {
         console.log("Borrow router parameters configured");
 
         // Configure risk guard parameters
-        RiskGuard(addresses.riskGuard).setMaxPositionSizeRatio(
+        bytes32 riskGuardAction = RiskGuard(addresses.riskGuard).queueSetMaxPositionSizeRatio(
             MAX_POSITION_SIZE_RATIO
         );
-        console.log("Risk guard parameters configured");
+        console.log("Queued risk guard max position size action:", riskGuardAction);
 
         // Set protocol fee to 0 for v1
-        manager.updateProtocolConfig(PROTOCOL_TREASURY, 0, PROTOCOL_TOKEN);
-        console.log("Protocol fee set to 0 bps");
+        bytes32 protocolConfigAction = manager.queueUpdateProtocolConfig(
+            PROTOCOL_TREASURY,
+            0,
+            PROTOCOL_TOKEN
+        );
+        console.log("Queued protocol config action:", protocolConfigAction);
 
         console.log("Protocol integration configured");
     }
@@ -308,14 +298,16 @@ contract DeployDualInvestmentUpgradeable is Script {
 
         if (count > 0) {
             for (uint256 i = 0; i < count; i++) {
-                manager.setSupportedCToken(cTokens[i], true);
-                manager.setMarketIntegration(cTokens[i], true);
-                manager.setMarketUtilizationBonus(cTokens[i], 100); // 1% bonus
+                bytes32 supportAction = manager.queueSetSupportedCToken(cTokens[i], true);
+                bytes32 integrationAction = manager.queueSetMarketIntegration(cTokens[i], true);
+                bytes32 bonusAction = manager.queueSetMarketUtilizationBonus(cTokens[i], 100); // 1% bonus
                 console.log(
-                    "Added",
+                    "Queued",
                     names[i],
-                    "support and integration:",
-                    cTokens[i]
+                    "support/integration actions:",
+                    supportAction,
+                    integrationAction,
+                    bonusAction
                 );
             }
         } else {

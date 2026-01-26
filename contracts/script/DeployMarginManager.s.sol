@@ -56,14 +56,14 @@ contract DeployMarginManager is Script {
 
         // Optional wiring: router adapter
         if (routerAdapter != address(0)) {
-            manager.setRouterAdapter(routerAdapter);
-            console.log("  Router adapter set:", routerAdapter);
+            bytes32 actionId = manager.queueSetRouterAdapter(routerAdapter);
+            console.log("  Queued router adapter:", actionId);
         }
 
         // Optional wiring: flashloan provider
         if (flashloanProvider != address(0)) {
-            manager.setFlashloanProvider(flashloanProvider);
-            console.log("  Flashloan provider set:", flashloanProvider);
+            bytes32 actionId = manager.queueSetFlashloanProvider(flashloanProvider);
+            console.log("  Queued flashloan provider:", actionId);
         }
 
         // Optional: override thresholds if all three values provided
@@ -72,11 +72,12 @@ contract DeployMarginManager is Script {
                 hfMinWithdrawBps != 0 && hfLockBps != 0 && hfUnlockBps != 0,
                 "Threshold env vars must all be set"
             );
-            manager.setThresholds(
+            bytes32 actionId = manager.queueSetThresholds(
                 uint16(hfMinWithdrawBps),
                 uint16(hfLockBps),
                 uint16(hfUnlockBps)
             );
+            console.log("  Queued thresholds action:", actionId);
             console.log("  Threshold minWithdraw:", hfMinWithdrawBps);
             console.log("  Threshold lock:", hfLockBps);
             console.log("  Threshold unlock:", hfUnlockBps);
@@ -84,21 +85,22 @@ contract DeployMarginManager is Script {
 
         // Optional: set open/close fees
         if (openFeeBps != 0 || closeFeeBps != 0) {
-            manager.setFees(uint16(openFeeBps), uint16(closeFeeBps));
+            bytes32 actionId = manager.queueSetFees(uint16(openFeeBps), uint16(closeFeeBps));
+            console.log("  Queued fees action:", actionId);
             console.log("  Open fee bps:", openFeeBps);
             console.log("  Close fee bps:", closeFeeBps);
         }
 
         // Optional: set protocol fee recipient
         if (feeRecipient != address(0)) {
-            manager.setFeeRecipient(feeRecipient);
-            console.log("  Fee recipient set:", feeRecipient);
+            bytes32 actionId = manager.queueSetFeeRecipient(feeRecipient);
+            console.log("  Queued fee recipient:", actionId);
         }
 
         // Optional: configure default leverage cap
         if (defaultMaxLev != 0) {
-            manager.setDefaultMaxLeverage(uint16(defaultMaxLev));
-            console.log("  Default leverage set:", defaultMaxLev);
+            bytes32 actionId = manager.queueSetDefaultMaxLeverage(uint16(defaultMaxLev));
+            console.log("  Queued default leverage:", actionId);
         }
 
         // Configure each market using the inputs supplied via env vars. Example env setup:
@@ -111,7 +113,7 @@ contract DeployMarginManager is Script {
         // (repeat for _1_, _2_, etc.)
         for (uint256 i = 0; i < markets.length; i++) {
             MarketInput memory m = markets[i];
-            manager.configureMarket(
+            bytes32 actionId = manager.queueConfigureMarket(
                 m.cToken,
                 m.underlying,
                 m.active,
@@ -123,7 +125,8 @@ contract DeployMarginManager is Script {
                 m.tradeSlippageBps,
                 m.oracleDeviationBps
             );
-            console.log("  Configured market cToken:", m.cToken);
+            console.log("  Queued market config:", actionId);
+            console.log("  Market cToken:", m.cToken);
             console.log("    underlying:", m.underlying);
         }
 

@@ -7,11 +7,13 @@ import {console} from "forge-std/console.sol";
 interface IPancakeSwapAdapter {
     function setRouters(address v2, address v3, address quoter) external;
 
+    function queueSetRouters(address v2, address v3, address quoter) external returns (bytes32 actionId);
+
     function setV3Fee(address tokenIn, address tokenOut, uint24 fee) external;
 }
 
 interface IVaultExecutorCfg {
-    function setSwapAdapter(address newAdapter) external;
+    function queueSetSwapAdapter(address newAdapter) external returns (bytes32 actionId);
 }
 
 contract DeployAndWirePancakeSwapAdapterBscTestnet is Script {
@@ -42,6 +44,8 @@ contract DeployAndWirePancakeSwapAdapterBscTestnet is Script {
         address tokenIn = DEFAULT_LINK;
         address tokenOut = DEFAULT_USDC;
         uint24 fee = uint24(3000);
+        address existingAdapter = _tryEnvAddress("EXISTING_ADAPTER", address(0));
+        bool updateRouters = _tryEnvBool("UPDATE_ROUTERS", false);
 
         console.log("VaultExecutor:", vault);
         console.log("Routers v2/v3/quoter:", v2, v3, quoter);
@@ -50,18 +54,25 @@ contract DeployAndWirePancakeSwapAdapterBscTestnet is Script {
 
         // Deploy adapter
         address adapter;
-        {
-            // deploy via inline assembly new since adapter ctor requires (v2,v3,quoter)
-            // Simpler: create2 not needed; we just deploy using the constructor
+        if (existingAdapter != address(0)) {
+            adapter = existingAdapter;
+            console.log("Using existing PancakeSwapAdapter:", adapter);
+        } else {
+            adapter = address(new PancakeSwapAdapter(v2, v3, quoter));
+            console.log("PancakeSwapAdapter:", adapter);
         }
-        adapter = address(new PancakeSwapAdapter(v2, v3, quoter));
-        console.log("PancakeSwapAdapter:", adapter);
 
         // Configure v3 fee for the primary pair (LINK -> USDC)
         IPancakeSwapAdapter(adapter).setV3Fee(tokenIn, tokenOut, fee);
 
+        if (updateRouters) {
+            bytes32 routerActionId = IPancakeSwapAdapter(adapter).queueSetRouters(v2, v3, quoter);
+            console.log("Queued router update action:", routerActionId);
+        }
+
         // Wire adapter into vault
-        IVaultExecutorCfg(vault).setSwapAdapter(adapter);
+        bytes32 actionId = IVaultExecutorCfg(vault).queueSetSwapAdapter(adapter);
+        console.log("Queued swap adapter action:", actionId);
 
         vm.stopBroadcast();
 
@@ -85,6 +96,14 @@ contract DeployAndWirePancakeSwapAdapterBscTestnet is Script {
         uint256 fallbackVal
     ) internal view returns (uint256) {
         try vm.envUint(key) returns (uint256 v) {
+            return v;
+        } catch {
+            return fallbackVal;
+        }
+    }
+
+    function _tryEnvBool(string memory key, bool fallbackVal) internal view returns (bool) {
+        try vm.envBool(key) returns (bool v) {
             return v;
         } catch {
             return fallbackVal;

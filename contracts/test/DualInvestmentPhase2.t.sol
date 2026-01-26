@@ -49,7 +49,6 @@ contract DualInvestmentPhase2Test is Test {
     address public admin;
     address public user1;
     address public user2;
-    address public protocolAccount;
 
     // Test constants
     uint256 public constant INITIAL_USDC_BALANCE = 100000e6; // 100k USDC
@@ -61,7 +60,6 @@ contract DualInvestmentPhase2Test is Test {
         admin = address(this);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
-        protocolAccount = makeAddr("protocolAccount");
 
         // Deploy mock tokens
         usdc = new MockErc20("USD Coin", "USDC", 6);
@@ -82,7 +80,7 @@ contract DualInvestmentPhase2Test is Test {
 
         // Deploy Phase 1 contracts
         positionToken = new ERC1155DualPosition();
-        vaultExecutor = new VaultExecutor(protocolAccount);
+        vaultExecutor = new VaultExecutor();
         settlementEngine = new SettlementEngine(address(positionToken), address(vaultExecutor), address(oracle));
 
         // Deploy Phase 2 contracts
@@ -102,6 +100,9 @@ contract DualInvestmentPhase2Test is Test {
         // Set up authorizations
         positionToken.setAuthorizedMinter(address(manager), true);
         positionToken.setAuthorizedMinter(address(settlementEngine), true);
+        vaultExecutor.queueSetAuthorizedManager(address(manager), true);
+        vaultExecutor.queueSetAuthorizedManager(address(settlementEngine), true);
+        vm.warp(block.timestamp + vaultExecutor.actionDelay());
         vaultExecutor.setAuthorizedManager(address(manager), true);
         vaultExecutor.setAuthorizedManager(address(settlementEngine), true);
         borrowRouter.setAuthorizedDestination(address(vaultExecutor), true);
@@ -157,11 +158,15 @@ contract DualInvestmentPhase2Test is Test {
         assertEq(riskGuard.maxPositionSizeRatio(), 0.5e18, "Initial max position size ratio should be 50%");
 
         // Test parameter updates
+        riskGuard.queueSetMinHealthFactor(1.4e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setMinHealthFactor(1.4e18);
         assertEq(riskGuard.minHealthFactor(), 1.4e18, "Min health factor should be updated");
 
         // Liquidation threshold setter removed
 
+        riskGuard.queueSetMaxPositionSizeRatio(0.6e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setMaxPositionSizeRatio(0.6e18);
         assertEq(riskGuard.maxPositionSizeRatio(), 0.6e18, "Max position size ratio should be updated");
     }
@@ -186,7 +191,7 @@ contract DualInvestmentPhase2Test is Test {
     function testPositionEntryRiskChecks() public {
         // Test position entry with risk checking
         uint256 amount = 1000e18;
-        uint64 strike = uint64(ETH_PRICE);
+        uint128 strike = uint128(ETH_PRICE);
         uint64 expiry = uint64(block.timestamp + 1 days);
         uint8 direction = 0; // CALL
 
@@ -271,9 +276,13 @@ contract DualInvestmentPhase2Test is Test {
         // Test user whitelisting
         assertFalse(riskGuard.whitelistedUsers(user1), "User1 should not be whitelisted initially");
 
+        riskGuard.queueSetWhitelistedUser(user1, true);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setWhitelistedUser(user1, true);
         assertTrue(riskGuard.whitelistedUsers(user1), "User1 should be whitelisted after setting");
 
+        riskGuard.queueSetWhitelistedUser(user1, false);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setWhitelistedUser(user1, false);
         assertFalse(riskGuard.whitelistedUsers(user1), "User1 should not be whitelisted after removing");
     }
@@ -282,9 +291,13 @@ contract DualInvestmentPhase2Test is Test {
         // Test emergency pause
         assertFalse(riskGuard.emergencyPaused(), "Should not be paused initially");
 
+        riskGuard.queueSetEmergencyPause(true);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setEmergencyPause(true);
         assertTrue(riskGuard.emergencyPaused(), "Should be paused after setting");
 
+        riskGuard.queueSetEmergencyPause(false);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setEmergencyPause(false);
         assertFalse(riskGuard.emergencyPaused(), "Should not be paused after unsetting");
 
@@ -292,6 +305,8 @@ contract DualInvestmentPhase2Test is Test {
         address market = address(pETH);
         assertFalse(riskGuard.marketsPaused(market), "Market should not be paused initially");
 
+        riskGuard.queueSetMarketPaused(market, true);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setMarketPaused(market, true);
         assertTrue(riskGuard.marketsPaused(market), "Market should be paused after setting");
     }
@@ -310,18 +325,26 @@ contract DualInvestmentPhase2Test is Test {
 
     function testRiskGuardParameterValidation() public {
         // Test parameter validation for risk guard
+        riskGuard.queueSetMinHealthFactor(0.8e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         vm.expectRevert("Health factor must be >= 100%");
         riskGuard.setMinHealthFactor(0.8e18);
 
+        riskGuard.queueSetMaxPositionSizeRatio(1.5e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         vm.expectRevert("Invalid ratio");
         riskGuard.setMaxPositionSizeRatio(1.5e18); // Above 100%
 
+        riskGuard.queueSetMaxPositionSizeRatio(0);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         vm.expectRevert("Invalid ratio");
         riskGuard.setMaxPositionSizeRatio(0); // Zero
     }
 
     function testLiquidationThresholdValidation() public {
         // Set min health factor first
+        riskGuard.queueSetMinHealthFactor(1.5e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         riskGuard.setMinHealthFactor(1.5e18);
 
         // Liquidation threshold setters removed
@@ -358,6 +381,8 @@ contract DualInvestmentPhase2Test is Test {
 
     function testRiskGuardEvents() public {
         // Test risk parameter update event
+        riskGuard.queueSetMinHealthFactor(1.4e18);
+        vm.warp(block.timestamp + riskGuard.actionDelay());
         vm.expectEmit(false, false, false, true);
         emit RiskGuard.RiskParameterUpdated("minHealthFactor", 1.3e18, 1.4e18);
         riskGuard.setMinHealthFactor(1.4e18);

@@ -108,6 +108,97 @@ contract MorphoBoostedPErc20Test is Test {
 
         assertEq(underlying.balanceOf(alice), 960e18); // 1000 start - 80 + 40 redeemed
     }
+
+    function testDepositToVaultFailureDoesNotRevert() public {
+        FailingDepositVault failingVault = new FailingDepositVault(IERC20Metadata(address(underlying)));
+        MorphoBoostedPErc20 failingToken = new MorphoBoostedPErc20(
+            address(underlying),
+            comptroller,
+            irm,
+            INITIAL_EXCHANGE_RATE,
+            "Peridot Morpho mUSD",
+            "pmUSD",
+            18,
+            payable(address(this)),
+            IERC4626(address(failingVault)),
+            BUFFER,
+            0
+        );
+        comptroller.setMarket(address(failingToken), true, 0.75e18);
+
+        underlying.mint(alice, 100e18);
+        vm.startPrank(alice);
+        underlying.approve(address(failingToken), 100e18);
+        failingToken.mint(100e18);
+        vm.stopPrank();
+
+        assertEq(failingVault.totalAssets(), 0, "vault should not receive assets");
+        assertEq(underlying.balanceOf(address(failingToken)), 100e18, "funds remain local");
+    }
+
+    function testWithdrawFromVaultFailureDoesNotRevert() public {
+        FailingWithdrawVault failingVault = new FailingWithdrawVault(IERC20Metadata(address(underlying)));
+        MorphoBoostedPErc20 failingToken = new MorphoBoostedPErc20(
+            address(underlying),
+            comptroller,
+            irm,
+            INITIAL_EXCHANGE_RATE,
+            "Peridot Morpho mUSD",
+            "pmUSD",
+            18,
+            payable(address(this)),
+            IERC4626(address(failingVault)),
+            BUFFER,
+            0
+        );
+        comptroller.setMarket(address(failingToken), true, 0.75e18);
+
+        underlying.mint(address(this), 100e18);
+        underlying.approve(address(failingToken), 100e18);
+        failingToken.mint(100e18);
+
+        failingVault.setMaxWithdrawLimit(100e18);
+        bytes32 pauseAction = failingToken.queueSetVaultPaused(true);
+        vm.warp(block.timestamp + failingToken.actionDelay());
+        failingToken.setVaultPaused(true);
+
+        bytes32 bufferAction = failingToken.queueSetVaultBufferMantissa(1e18);
+        vm.warp(block.timestamp + failingToken.actionDelay());
+        failingToken.setVaultBufferMantissa(1e18);
+
+        // Funds should remain locally available and not revert.
+        assertEq(underlying.balanceOf(address(failingToken)), 10e18);
+    }
+}
+
+contract FailingDepositVault is MockERC4626Vault {
+    constructor(IERC20Metadata asset_) MockERC4626Vault(asset_) {}
+
+    function deposit(uint256, address) public pure override returns (uint256) {
+        revert("deposit blocked");
+    }
+}
+
+contract FailingWithdrawVault is MockERC4626Vault {
+    uint256 public maxWithdrawLimit;
+
+    constructor(IERC20Metadata asset_) MockERC4626Vault(asset_) {}
+
+    function setMaxWithdrawLimit(uint256 newLimit) external {
+        maxWithdrawLimit = newLimit;
+    }
+
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        uint256 assets = convertToAssets(balanceOf(owner));
+        if (maxWithdrawLimit == 0) {
+            return 0;
+        }
+        return maxWithdrawLimit < assets ? maxWithdrawLimit : assets;
+    }
+
+    function withdraw(uint256, address, address) public pure override returns (uint256) {
+        revert("withdraw blocked");
+    }
 }
 
 contract MorphoBoostedPErc20ForkTest is Test {
@@ -248,6 +339,8 @@ contract MorphoBoostedPErc20ForkTest is Test {
         pToken.mint(mintAmount);
 
         // Pause should pull liquidity back on setVaultPaused(true)
+        bytes32 actionId = pToken.queueSetVaultPaused(true);
+        vm.warp(block.timestamp + pToken.actionDelay());
         pToken.setVaultPaused(true);
 
         uint256 vaultAssets = vault.convertToAssets(vault.balanceOf(address(pToken)));

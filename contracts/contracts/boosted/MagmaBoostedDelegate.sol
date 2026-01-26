@@ -125,6 +125,7 @@ contract MagmaBoostedDelegate is PErc20Delegate {
                 (address, uint256)
             );
             if (vault_ != address(0)) {
+                _validateBuffer(buffer_);
                 magmaVault = IMagma(vault_);
                 vaultBufferMantissa = buffer_;
             }
@@ -137,6 +138,7 @@ contract MagmaBoostedDelegate is PErc20Delegate {
     function _setMagmaVault(address vault_, uint256 buffer_) external {
         require(msg.sender == admin, "only admin");
         require(vault_ != address(0), "zero vault");
+        _validateBuffer(buffer_);
         magmaVault = IMagma(vault_);
         vaultBufferMantissa = buffer_;
         emit VaultBufferUpdated(0, buffer_);
@@ -157,6 +159,7 @@ contract MagmaBoostedDelegate is PErc20Delegate {
         uint256 vaultBufferMantissa_
     ) public {
         require(accrualBlockNumber == 0 && borrowIndex == 0, "already init");
+        _validateBuffer(vaultBufferMantissa_);
 
         admin = payable(msg.sender);
         magmaVault = magmaVault_;
@@ -248,6 +251,7 @@ contract MagmaBoostedDelegate is PErc20Delegate {
      *      Requests redemption of enough shares to restore buffer to target level.
      */
     function requestRedemptionIfNeeded() external {
+        require(msg.sender == admin, "only admin");
         require(pendingRedemptionId == 0, "redemption pending");
 
         uint256 localCash = super.getCashPrior();
@@ -392,6 +396,11 @@ contract MagmaBoostedDelegate is PErc20Delegate {
         }
         if (shares == 0) return 0;
         return magmaVault.convertToAssets(shares);
+    }
+
+    function _validateBuffer(uint256 buffer) internal pure {
+        require(buffer >= MIN_BUFFER_MANTISSA, "buffer too low");
+        require(buffer <= MANTISSA_ONE, "invalid buffer");
     }
 
     /**

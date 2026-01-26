@@ -164,8 +164,47 @@ contract SimpleMarginGasStressTest is Test {
         router.setManager(address(manager));
         router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
         router.setPoolWhitelist(address(weth), address(wbtc), POOL_FEE, true);
+        manager.queueSetRouterAdapter(address(router));
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.setRouterAdapter(address(router));
 
+        manager.queueConfigureMarket(
+            address(cUsdc),
+            address(usdc),
+            true,
+            true,
+            true,
+            true,
+            true,
+            500,
+            200,
+            500
+        );
+        manager.queueConfigureMarket(
+            address(cWeth),
+            address(weth),
+            true,
+            true,
+            true,
+            true,
+            true,
+            500,
+            200,
+            500
+        );
+        manager.queueConfigureMarket(
+            address(cWbtc),
+            address(wbtc),
+            true,
+            true,
+            true,
+            true,
+            true,
+            500,
+            200,
+            500
+        );
+        vm.warp(block.timestamp + manager.actionDelay());
         manager.configureMarket(
             address(cUsdc),
             address(usdc),

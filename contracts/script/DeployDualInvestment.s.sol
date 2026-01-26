@@ -39,8 +39,6 @@ contract DeployDualInvestment is Script {
     // Core protocol addresses - UPDATE THESE
     address public constant PRICE_ORACLE = address(0); // SimplePriceOracle address - UPDATE THIS
     address public constant PERIDOTTROLLER = address(0); // Peridottroller address - UPDATE THIS
-    address public constant PROTOCOL_ACCOUNT = address(0); // Protocol treasury account - UPDATE THIS
-
     // Supported cToken addresses - UPDATE THESE
     address public constant CTOKEN_PETH = address(0); // pETH address - UPDATE THIS
     address public constant CTOKEN_PUSDC = address(0); // pUSDC address - UPDATE THIS
@@ -67,15 +65,10 @@ contract DeployDualInvestment is Script {
         // Validate configuration addresses
         require(PRICE_ORACLE != address(0), "PRICE_ORACLE not configured");
         require(PERIDOTTROLLER != address(0), "PERIDOTTROLLER not configured");
-        require(
-            PROTOCOL_ACCOUNT != address(0),
-            "PROTOCOL_ACCOUNT not configured"
-        );
 
         console.log("=== Deploying Dual Investment Phase 2 ===");
         console.log("Price Oracle:", PRICE_ORACLE);
         console.log("Peridottroller:", PERIDOTTROLLER);
-        console.log("Protocol Account:", PROTOCOL_ACCOUNT);
 
         // 1. Deploy ERC1155DualPosition
         console.log("\n1. Deploying ERC1155DualPosition...");
@@ -84,7 +77,7 @@ contract DeployDualInvestment is Script {
 
         // 2. Deploy VaultExecutor
         console.log("\n2. Deploying VaultExecutor...");
-        VaultExecutor vaultExecutor = new VaultExecutor(PROTOCOL_ACCOUNT);
+        VaultExecutor vaultExecutor = new VaultExecutor();
         console.log("VaultExecutor deployed at:", address(vaultExecutor));
 
         // 3. Deploy SettlementEngine
@@ -130,11 +123,12 @@ contract DeployDualInvestment is Script {
         );
 
         // Vault executor authorizations
-        vaultExecutor.setAuthorizedManager(address(manager), true);
-        vaultExecutor.setAuthorizedManager(address(settlementEngine), true);
-        console.log(
-            "Authorized DualInvestmentManager and SettlementEngine to use VaultExecutor"
-        );
+        bytes32 vaultManagerAction =
+            vaultExecutor.queueSetAuthorizedManager(address(manager), true);
+        bytes32 vaultSettlementAction =
+            vaultExecutor.queueSetAuthorizedManager(address(settlementEngine), true);
+        console.log("Queued VaultExecutor manager auth action:", vaultManagerAction);
+        console.log("Queued VaultExecutor settlement auth action:", vaultSettlementAction);
 
         // Borrow router authorizations
         borrowRouter.setAuthorizedDestination(address(vaultExecutor), true);
@@ -151,8 +145,8 @@ contract DeployDualInvestment is Script {
         console.log("Manager risk parameters configured");
 
         // Configure settlement window
-        settlementEngine.setSettlementWindow(SETTLEMENT_WINDOW);
-        console.log("Settlement window configured");
+        bytes32 settlementWindowAction = settlementEngine.queueSetSettlementWindow(SETTLEMENT_WINDOW);
+        console.log("Queued settlement window action:", settlementWindowAction);
 
         // Configure borrow router parameters
         borrowRouter.setMinHealthFactor(MIN_HEALTH_FACTOR);
@@ -161,8 +155,8 @@ contract DeployDualInvestment is Script {
 
         // Configure risk guard parameters
         // Liquidation handled by Peridottroller; set position ratio only
-        riskGuard.setMaxPositionSizeRatio(MAX_POSITION_SIZE_RATIO);
-        console.log("Risk guard parameters configured");
+        bytes32 riskGuardAction = riskGuard.queueSetMaxPositionSizeRatio(MAX_POSITION_SIZE_RATIO);
+        console.log("Queued risk guard max position size action:", riskGuardAction);
 
         // Set protocol fee to 0 for v1-like behavior
         // Non-upgradeable manager has no protocol fee feature; skip
@@ -182,7 +176,6 @@ contract DeployDualInvestment is Script {
         console.log("  DualInvestmentManager: ", address(manager));
         console.log("");
         console.log("Configuration:");
-        console.log("  Protocol Account:      ", PROTOCOL_ACCOUNT);
         console.log("  Settlement Window:     ", SETTLEMENT_WINDOW, "seconds");
         console.log("  Min Health Factor:     ", MIN_HEALTH_FACTOR / 1e16, "%");
         console.log("  Max LTV:               ", MAX_LTV / 1e16, "%");

@@ -28,6 +28,7 @@ contract MockPErc20 {
         require(balanceOf[msg.sender] >= amount, "Insufficient balance");
         balanceOf[msg.sender] -= amount;
         totalSupply -= amount;
+        MockErc20(underlying).mint(msg.sender, amount);
         return 0; // Success
     }
 

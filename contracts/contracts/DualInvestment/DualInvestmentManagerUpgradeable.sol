@@ -22,6 +22,8 @@ import "../PeridottrollerInterface.sol";
 contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
+
     // Core contracts
     ERC1155DualPosition public positionToken;
     VaultExecutor public vaultExecutor;
@@ -53,6 +55,10 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
     // Cross-market integration
     mapping(address => uint256) public marketUtilizationBonus; // Bonus rates for high utilization markets
 
+    // Governance delay for critical admin actions
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
+
     // Events
     event PositionEntered(
         uint256 indexed tokenId,
@@ -67,17 +73,21 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
     );
 
     // Protocol integration events - NEW
-    event ProtocolFeeCollected(address indexed user, uint256 fee, uint256 tokenId);
+    event ProtocolFeeCollected(address indexed user, address indexed feeToken, uint256 feeAmount, uint256 tokenId);
     event ProtocolRewardEarned(address indexed user, uint256 reward, uint256 tokenId);
     // Auto-compounding events removed
     event MarketIntegrationUpdated(address indexed market, bool integrated);
     event ProtocolConfigUpdated(address treasury, uint256 feeRate, address token);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     event CTokenSupported(address indexed cToken, bool supported);
     event RiskParametersUpdated(uint256 maxPositionSize, uint256 minPositionSize, uint256 maxExpiry, uint256 minExpiry);
 
     constructor() Ownable(msg.sender) {
-        // Allow initialization for simple deployment pattern
+        _disableInitializers();
     }
 
     function initialize(
@@ -111,6 +121,9 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         protocolTreasury = _protocolTreasury;
         protocolToken = _protocolToken;
         protocolFeeRate = 50; // 0.5% default fee
+
+        actionDelay = MIN_ACTION_DELAY;
+        emit ActionDelayUpdated(actionDelay);
 
         // Risk parameters
         nextMarketId = 1;
@@ -162,34 +175,15 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         // Get position value in USD for risk checking
         uint256 positionValueUSD = _getPositionValueUSD(cTokenIn, amount);
 
-        // Check risk constraints
-        (bool riskAllowed, string memory riskReason) =
-            riskGuard.checkPositionEntry(msg.sender, cTokenIn, positionValueUSD, useCollateral);
-        require(riskAllowed, riskReason);
+        _requireRiskAllowed(msg.sender, cTokenIn, positionValueUSD, useCollateral);
 
-        // Generate token ID
-        address underlying = cTokenToUnderlying[cTokenIn];
-        tokenId = positionToken.generateTokenIdForUser(
-            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
-        );
+        ERC1155DualPosition.Position memory position;
+        (tokenId, position) = _buildPosition(msg.sender, cTokenIn, cTokenOut, amount, direction, strike, expiry);
 
         // Calculate and collect protocol fee
-        uint256 protocolFee = (positionValueUSD * protocolFeeRate) / 10000;
-        if (protocolFee > 0) {
-            _collectProtocolFee(msg.sender, protocolFee, tokenId);
+        if (protocolFeeRate > 0) {
+            _collectProtocolFee(msg.sender, cTokenIn, positionValueUSD, tokenId, useCollateral);
         }
-
-        // Create position struct with protocol integration
-        ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
-            user: msg.sender,
-            cTokenIn: cTokenIn,
-            cTokenOut: cTokenOut,
-            notional: uint128(amount),
-            expiry: uint64(expiry),
-            strike: uint64(strike),
-            direction: direction,
-            settled: false
-        });
 
         if (useCollateral) {
             _enterWithCollateral(cTokenIn, amount, tokenId, position);
@@ -197,20 +191,62 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
             _enterWithBorrow(cTokenIn, amount, tokenId, position);
         }
 
-        // Protocol reward calculation
-        if (protocolToken != address(0)) {
-            uint256 reward = _calculateProtocolReward(msg.sender, cTokenIn, positionValueUSD);
-            if (reward > 0) {
-                userProtocolRewards[msg.sender] += reward;
-                emit ProtocolRewardEarned(msg.sender, reward, tokenId);
-            }
-        }
+        _applyProtocolReward(msg.sender, cTokenIn, positionValueUSD, tokenId);
 
         // Auto-compounding removed
 
         emit PositionEntered(tokenId, msg.sender, cTokenIn, cTokenOut, amount, strike, expiry, direction, useCollateral);
 
         return tokenId;
+    }
+
+    function _requireRiskAllowed(address user, address cTokenIn, uint256 positionValueUSD, bool useCollateral)
+        internal
+    {
+        (bool riskAllowed, string memory riskReason) =
+            riskGuard.checkPositionEntry(user, cTokenIn, positionValueUSD, useCollateral);
+        require(riskAllowed, riskReason);
+    }
+
+    function _applyProtocolReward(address user, address cTokenIn, uint256 positionValueUSD, uint256 tokenId) internal {
+        if (protocolToken == address(0)) {
+            return;
+        }
+
+        uint256 reward = _calculateProtocolReward(user, cTokenIn, positionValueUSD);
+        if (reward > 0) {
+            userProtocolRewards[user] += reward;
+            emit ProtocolRewardEarned(user, reward, tokenId);
+        }
+    }
+
+    function _buildPosition(
+        address user,
+        address cTokenIn,
+        address cTokenOut,
+        uint256 amount,
+        uint8 direction,
+        uint256 strike,
+        uint256 expiry
+    ) internal returns (uint256 tokenId, ERC1155DualPosition.Position memory position) {
+        address underlying = cTokenToUnderlying[cTokenIn];
+        uint256 marketId = nextMarketId++;
+        tokenId = positionToken.generateTokenIdForUser(
+            user, underlying, uint128(strike), uint64(expiry), direction, marketId
+        );
+
+        position = ERC1155DualPosition.Position({
+            user: user,
+            underlying: underlying,
+            marketId: marketId,
+            cTokenIn: cTokenIn,
+            cTokenOut: cTokenOut,
+            notional: uint128(amount),
+            expiry: uint64(expiry),
+            strike: uint128(strike),
+            direction: direction,
+            settled: false
+        });
     }
 
     /**
@@ -257,26 +293,26 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         (bool ok, string memory reason) = riskGuard.checkPositionEntry(msg.sender, cToken, positionValueUSD, false);
         require(ok, reason);
 
-        // Ask router to borrow and route funds to the vault executor
-        bool routed = borrowRouter.borrowAndRoute(cToken, borrowUnderlyingAmount, address(vaultExecutor), msg.sender);
-        require(routed, "Borrow route failed");
-
-        // Vault holds underlying now; mint to itself so it can account and settle later
-        uint256 cTokensMinted = vaultExecutor.mintCTokensTo(cToken, address(vaultExecutor), borrowUnderlyingAmount);
+        // Pull underlying from user (who has already borrowed) and mint to vault executor
+        uint256 cTokensMinted =
+            vaultExecutor.pullUnderlyingAndMintTo(cToken, msg.sender, address(vaultExecutor), borrowUnderlyingAmount);
 
         // Create position and mint to user
         address underlying = cTokenToUnderlying[cToken];
+        uint256 marketId = nextMarketId++;
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
+            msg.sender, underlying, uint128(strike), uint64(expiry), direction, marketId
         );
 
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: msg.sender,
+            underlying: underlying,
+            marketId: marketId,
             cTokenIn: cToken,
             cTokenOut: cTokenOut,
             notional: uint128(cTokensMinted),
             expiry: uint64(expiry),
-            strike: uint64(strike),
+            strike: uint128(strike),
             direction: direction,
             settled: false
         });
@@ -334,16 +370,12 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         uint256 exchangeRate = PErc20(cToken).exchangeRateStored();
         uint256 underlyingAmount = (amount * exchangeRate) / 1e18;
 
-        // Additional borrow safety check
+        // Additional borrow safety check (for user-provided borrowed funds)
         (bool canBorrow, string memory borrowReason) = borrowRouter.canUserBorrow(msg.sender, cToken, underlyingAmount);
         require(canBorrow, borrowReason);
 
-        // Use borrow router to borrow and route to vault executor
-        bool borrowSuccess = borrowRouter.borrowAndRoute(cToken, underlyingAmount, address(vaultExecutor), msg.sender);
-        require(borrowSuccess, "Borrow and route failed");
-
-        // Vault executor supplies to protocol account
-        vaultExecutor.mintCTokensTo(cToken, address(vaultExecutor), underlyingAmount);
+        // Pull underlying from user (who has already borrowed) and mint to vault executor
+        vaultExecutor.pullUnderlyingAndMintTo(cToken, msg.sender, address(vaultExecutor), underlyingAmount);
 
         // Update risk tracking
         uint256 positionValueUSD = _getPositionValueUSD(cToken, amount);
@@ -395,8 +427,9 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
 
         // Generate token ID
         address underlying = cTokenToUnderlying[cToken];
+        uint256 marketId = nextMarketId++;
         tokenId = positionToken.generateTokenIdForUser(
-            msg.sender, underlying, uint64(strike), uint64(expiry), direction, nextMarketId++
+            msg.sender, underlying, uint128(strike), uint64(expiry), direction, marketId
         );
 
         // Pull underlying from user and mint cTokens into vault executor
@@ -410,11 +443,13 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         // Create and mint position with actual minted cTokens
         ERC1155DualPosition.Position memory position = ERC1155DualPosition.Position({
             user: msg.sender,
+            underlying: underlying,
+            marketId: marketId,
             cTokenIn: cToken,
             cTokenOut: cTokenOut,
             notional: uint128(cTokensMinted),
             expiry: uint64(expiry),
-            strike: uint64(strike),
+            strike: uint128(strike),
             direction: direction,
             settled: false
         });
@@ -429,10 +464,37 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
     /**
      * @notice Collect protocol fee from user
      */
-    function _collectProtocolFee(address user, uint256 fee, uint256 tokenId) internal {
-        // Fee collection logic - could be in native token or protocol token
-        // For now, assume fee is collected from user's balance
-        emit ProtocolFeeCollected(user, fee, tokenId);
+    function _collectProtocolFee(
+        address user,
+        address cTokenIn,
+        uint256 positionValueUSD,
+        uint256 tokenId,
+        bool useCollateral
+    ) internal {
+        uint256 feeUSD = (positionValueUSD * protocolFeeRate) / 10000;
+        if (feeUSD == 0) {
+            return;
+        }
+
+        uint256 pricePerToken = settlementEngine.priceOracle().getUnderlyingPrice(PToken(cTokenIn));
+        require(pricePerToken > 0, "Invalid fee price");
+
+        PErc20 pToken = PErc20(cTokenIn);
+
+        if (useCollateral) {
+            uint256 exchangeRate = pToken.exchangeRateStored();
+            uint256 feeUnderlying = (feeUSD * 1e18) / pricePerToken;
+            uint256 feeCTokens = (feeUnderlying * 1e18) / exchangeRate;
+            require(feeCTokens > 0, "Fee too small");
+            require(pToken.transferFrom(user, protocolTreasury, feeCTokens), "Fee transfer failed");
+            emit ProtocolFeeCollected(user, cTokenIn, feeCTokens, tokenId);
+        } else {
+            address underlying = pToken.underlying();
+            uint256 feeUnderlying = (feeUSD * 1e18) / pricePerToken;
+            require(feeUnderlying > 0, "Fee too small");
+            IERC20(underlying).safeTransferFrom(user, protocolTreasury, feeUnderlying);
+            emit ProtocolFeeCollected(user, underlying, feeUnderlying, tokenId);
+        }
     }
 
     /**
@@ -519,6 +581,9 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         external
         onlyOwner
     {
+        bytes32 actionId =
+            keccak256(abi.encode("updateProtocolConfig", _protocolTreasury, _protocolFeeRate, _protocolToken));
+        _consumeAction(actionId);
         require(_protocolTreasury != address(0), "Invalid treasury");
         require(_protocolFeeRate <= 1000, "Fee rate too high"); // Max 10%
 
@@ -527,22 +592,84 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         protocolToken = _protocolToken;
 
         emit ProtocolConfigUpdated(_protocolTreasury, _protocolFeeRate, _protocolToken);
+        emit ActionExecuted(actionId);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "Delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueUpdateProtocolConfig(
+        address _protocolTreasury,
+        uint256 _protocolFeeRate,
+        address _protocolToken
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId =
+            _queueAction(keccak256(abi.encode("updateProtocolConfig", _protocolTreasury, _protocolFeeRate, _protocolToken)));
+    }
+
+    function queueSetMarketIntegration(address cToken, bool integrated) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setMarketIntegration", cToken, integrated)));
+    }
+
+    function queueSetMarketUtilizationBonus(address cToken, uint256 bonusBps)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(keccak256(abi.encode("setMarketUtilizationBonus", cToken, bonusBps)));
+    }
+
+    function queueSetSupportedCToken(address cToken, bool supported) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setSupportedCToken", cToken, supported)));
+    }
+
+    function queueSetRiskParameters(
+        uint256 _maxPositionSize,
+        uint256 _minPositionSize,
+        uint256 _maxExpiry,
+        uint256 _minExpiry
+    ) external onlyOwner returns (bytes32 actionId) {
+        actionId =
+            _queueAction(keccak256(abi.encode("setRiskParameters", _maxPositionSize, _minPositionSize, _maxExpiry, _minExpiry)));
+    }
+
+    function queueSetActionDelay(uint256 newDelay) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setActionDelay", newDelay)));
     }
 
     /**
      * @notice Set market integration status
      */
     function setMarketIntegration(address cToken, bool integrated) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMarketIntegration", cToken, integrated));
+        _consumeAction(actionId);
         protocolIntegratedMarkets[cToken] = integrated;
         emit MarketIntegrationUpdated(cToken, integrated);
+        emit ActionExecuted(actionId);
     }
 
     /**
      * @notice Set market utilization bonus
      */
     function setMarketUtilizationBonus(address cToken, uint256 bonusBps) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setMarketUtilizationBonus", cToken, bonusBps));
+        _consumeAction(actionId);
         require(bonusBps <= 5000, "Bonus too high"); // Max 50% bonus
         marketUtilizationBonus[cToken] = bonusBps;
+        emit ActionExecuted(actionId);
     }
 
     // Auto-compounding configuration removed
@@ -566,11 +693,15 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
             "Invalid direction"
         );
         require(strike > 0, "Invalid strike price");
+        require(strike <= type(uint128).max, "Strike too large");
         require(expiry >= block.timestamp + minExpiry, "Expiry too soon");
         require(expiry <= block.timestamp + maxExpiry, "Expiry too far");
+        require(expiry <= type(uint64).max, "Expiry too large");
     }
 
     function setSupportedCToken(address cToken, bool supported) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setSupportedCToken", cToken, supported));
+        _consumeAction(actionId);
         require(cToken != address(0), "Invalid cToken address");
 
         supportedCTokens[cToken] = supported;
@@ -586,6 +717,7 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         }
 
         emit CTokenSupported(cToken, supported);
+        emit ActionExecuted(actionId);
     }
 
     function setRiskParameters(
@@ -594,6 +726,9 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         uint256 _maxExpiry,
         uint256 _minExpiry
     ) external onlyOwner {
+        bytes32 actionId =
+            keccak256(abi.encode("setRiskParameters", _maxPositionSize, _minPositionSize, _maxExpiry, _minExpiry));
+        _consumeAction(actionId);
         require(_maxPositionSize > _minPositionSize, "Invalid position size range");
         require(_maxExpiry > _minExpiry, "Invalid expiry range");
         require(_minExpiry >= 1 minutes, "Expiry too short");
@@ -604,6 +739,7 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         minExpiry = _minExpiry;
 
         emit RiskParametersUpdated(_maxPositionSize, _minPositionSize, _maxExpiry, _minExpiry);
+        emit ActionExecuted(actionId);
     }
 
     function getPositionInfo(uint256 tokenId)
@@ -654,6 +790,21 @@ contract DualInvestmentManagerUpgradeable is Initializable, Ownable, ReentrancyG
         uint256 pricePerToken = settlementEngine.priceOracle().getUnderlyingPrice(PToken(cToken));
 
         return (underlyingAmount * pricePerToken) / 1e18;
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Action already queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Action not queued");
+        require(block.timestamp >= executeAfter, "Action not ready");
+        delete queuedActions[actionId];
     }
 
     /**

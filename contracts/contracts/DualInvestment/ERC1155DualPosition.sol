@@ -18,11 +18,13 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
     // Position data structure
     struct Position {
         address user;
+        address underlying; // Underlying asset address used for tokenId derivation
+        uint256 marketId; // Market identifier used for tokenId derivation
         address cTokenIn; // Input cToken (collateral)
         address cTokenOut; // Output cToken (settlement asset)
         uint128 notional; // Notional amount
         uint64 expiry; // Expiry timestamp
-        uint64 strike; // Strike price (18 decimals)
+        uint128 strike; // Strike price (18 decimals)
         uint8 direction; // 0 = call, 1 = put
         bool settled; // Settlement status
     }
@@ -30,6 +32,7 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
     // Mappings
     mapping(uint256 => Position) public positions;
     mapping(address => bool) public authorizedMinters;
+    mapping(uint256 => uint256) public totalSupply;
 
     // Events
     event PositionCreated(
@@ -39,11 +42,12 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
         address cTokenOut,
         uint128 notional,
         uint64 expiry,
-        uint64 strike,
+        uint128 strike,
         uint8 direction
     );
 
     event PositionSettled(uint256 indexed tokenId, address indexed user, bool aboveStrike, uint256 payout);
+    event AuthorizedMinterUpdated(address indexed minter, bool authorized);
 
     modifier onlyAuthorized() {
         require(authorizedMinters[msg.sender], "Not authorized to mint");
@@ -60,7 +64,7 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
      * @param direction Position direction (0=call, 1=put)
      * @param marketId Market identifier
      */
-    function generateTokenId(address underlying, uint64 strike, uint64 expiry, uint8 direction, uint256 marketId)
+    function generateTokenId(address underlying, uint128 strike, uint64 expiry, uint8 direction, uint256 marketId)
         public
         pure
         returns (uint256)
@@ -75,7 +79,7 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
     function generateTokenIdForUser(
         address user,
         address underlying,
-        uint64 strike,
+        uint128 strike,
         uint64 expiry,
         uint8 direction,
         uint256 marketId
@@ -97,14 +101,29 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
     {
         require(to != address(0), "Cannot mint to zero address");
         require(amount > 0, "Amount must be greater than zero");
+        require(position.user == to, "Recipient mismatch");
+        require(position.underlying != address(0), "Invalid underlying");
+        require(position.marketId != 0, "Invalid market id");
         require(position.expiry > block.timestamp, "Position already expired");
         require(position.direction == DIRECTION_CALL || position.direction == DIRECTION_PUT, "Invalid direction");
 
-        // Store position data
-        positions[tokenId] = position;
+        uint256 expectedTokenId = generateTokenIdForUser(
+            position.user, position.underlying, position.strike, position.expiry, position.direction, position.marketId
+        );
+        require(tokenId == expectedTokenId, "TokenId mismatch");
+
+        // Store position data on first mint, otherwise require exact match
+        Position storage existing = positions[tokenId];
+        if (existing.user == address(0)) {
+            positions[tokenId] = position;
+        } else {
+            require(!existing.settled, "Position already settled");
+            require(_positionsEqual(existing, position), "Position mismatch");
+        }
 
         // Mint the token
         _mint(to, tokenId, amount, "");
+        totalSupply[tokenId] += amount;
 
         emit PositionCreated(
             tokenId,
@@ -125,13 +144,16 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
      * @param amount Amount to burn
      */
     function burnPosition(address from, uint256 tokenId, uint256 amount) external onlyAuthorized nonReentrant {
+        require(amount > 0, "Amount must be greater than zero");
         require(balanceOf(from, tokenId) >= amount, "Insufficient balance");
+        require(positions[tokenId].user == from, "Not position owner");
 
         _burn(from, tokenId, amount);
+        totalSupply[tokenId] -= amount;
 
         // Mark as settled if fully burned
         Position storage position = positions[tokenId];
-        if (balanceOf(from, tokenId) == 0) {
+        if (totalSupply[tokenId] == 0) {
             position.settled = true;
         }
     }
@@ -143,6 +165,13 @@ contract ERC1155DualPosition is ERC1155, Ownable, ReentrancyGuard {
      */
     function setAuthorizedMinter(address minter, bool authorized) external onlyOwner {
         authorizedMinters[minter] = authorized;
+        emit AuthorizedMinterUpdated(minter, authorized);
+    }
+
+    function _positionsEqual(Position storage a, Position memory b) internal view returns (bool) {
+        return a.user == b.user && a.underlying == b.underlying && a.marketId == b.marketId
+            && a.cTokenIn == b.cTokenIn && a.cTokenOut == b.cTokenOut && a.notional == b.notional
+            && a.expiry == b.expiry && a.strike == b.strike && a.direction == b.direction && a.settled == b.settled;
     }
 
     /**

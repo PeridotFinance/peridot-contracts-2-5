@@ -126,8 +126,8 @@ contract MarginManagerTest is Test {
         oracle.setDirectPrice(address(weth), 2000e18);
 
         manager = new MarginManager(address(comptroller), address(oracle));
-        manager.configureMarket(address(cUsdc), address(usdc), true, true, true, true, true, 300, 50, 100);
-        manager.configureMarket(address(cWeth), address(weth), true, true, true, true, true, 300, 50, 100);
+        _queueConfigureMarket(address(cUsdc), address(usdc), true, true, true, true, true, 300, 50, 100);
+        _queueConfigureMarket(address(cWeth), address(weth), true, true, true, true, true, 300, 50, 100);
 
         mockRouter = new MockPancakeV3Router();
         mockRouter.setRate(5e14);
@@ -138,7 +138,7 @@ contract MarginManagerTest is Test {
         vm.warp(block.timestamp + actionDelay);
         router.setManager(address(manager));
         router.setPoolWhitelist(address(usdc), address(weth), POOL_FEE, true);
-        manager.setRouterAdapter(address(router));
+        _queueSetRouterAdapter(address(router));
 
         usdc.mint(USER, 10_000e18);
         weth.mint(USER, 100e18);
@@ -193,13 +193,13 @@ contract MarginManagerTest is Test {
     function testRepayUnlocksAfterLock() public {
         address sma = _enable();
 
-        manager.setThresholds(10_000, 10_500, 10_800);
+        _queueSetThresholds(10_000, 10_500, 10_800);
 
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 400e18, address(0));
+        manager.borrow(address(usdc), 400e18, USER);
 
         vm.prank(USER);
         manager.withdraw(address(usdc), 500e18, USER);
@@ -226,7 +226,7 @@ contract MarginManagerTest is Test {
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(weth), 0.2e18, address(0));
+        manager.borrow(address(weth), 0.2e18, sma);
 
         uint256 borrowBefore = cWeth.borrowBalanceStored(sma);
         assertEq(weth.balanceOf(sma), 0.2e18, "weth balance before repay");
@@ -280,7 +280,7 @@ contract MarginManagerTest is Test {
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 200e18, address(0));
+        manager.borrow(address(usdc), 200e18, sma);
 
         uint256 amountIn = 100e18;
         uint256 minOut = _managerMinOut(amountIn);
@@ -300,11 +300,11 @@ contract MarginManagerTest is Test {
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 700e18, address(0));
+        manager.borrow(address(usdc), 700e18, sma);
 
         vm.prank(USER);
         vm.expectRevert("Manager: health factor low");
-        manager.borrow(address(usdc), 150e18, address(0));
+        manager.borrow(address(usdc), 150e18, sma);
 
         uint256 amountIn = 700e18;
         uint256 minOut = _managerMinOut(amountIn);
@@ -316,7 +316,7 @@ contract MarginManagerTest is Test {
         manager.supplyFromBalance(address(weth), amountOut);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 150e18, address(0));
+        manager.borrow(address(usdc), 150e18, sma);
 
         assertGt(cWeth.balanceOf(sma), 0, "supplied WETH collateral");
     }
@@ -341,7 +341,7 @@ contract MarginManagerTest is Test {
     }
 
     function testBorrowAccruesOpenFeeAndSweep() public {
-        manager.setFees(50, 0);
+        _queueSetFees(50, 0);
         _enable();
 
         vm.prank(USER);
@@ -365,7 +365,7 @@ contract MarginManagerTest is Test {
     }
 
     function testWithdrawAccruesCloseFee() public {
-        manager.setFees(0, 50);
+        _queueSetFees(0, 50);
         _enable();
 
         vm.prank(USER);
@@ -385,8 +385,8 @@ contract MarginManagerTest is Test {
 
     function testFeeRecipientReceivesBorrowFee() public {
         address recipient = address(0xBEEF);
-        manager.setFeeRecipient(recipient);
-        manager.setFees(50, 0);
+        _queueSetFeeRecipient(recipient);
+        _queueSetFees(50, 0);
         _enable();
 
         vm.prank(USER);
@@ -403,13 +403,13 @@ contract MarginManagerTest is Test {
     }
 
     function testTradeSlippageGuard() public {
-        _enable();
+        address sma = _enable();
 
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 100e18, address(0));
+        manager.borrow(address(usdc), 100e18, sma);
 
         uint256 amountIn = 1e18;
         uint256 minOut = _managerMinOut(amountIn);
@@ -423,13 +423,13 @@ contract MarginManagerTest is Test {
     }
 
     function testTradeOracleDeviationGuard() public {
-        _enable();
+        address sma = _enable();
 
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(usdc), 100e18, address(0));
+        manager.borrow(address(usdc), 100e18, sma);
 
         uint256 amountIn = 1e18;
         uint256 minOut = _managerMinOut(amountIn);
@@ -451,7 +451,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         weth.transfer(sma, 1e18);
 
-        manager.configureMarket(address(cWeth), address(weth), true, false, true, true, true, 300, 50, 100);
+        _queueConfigureMarket(address(cWeth), address(weth), true, false, true, true, true, 300, 50, 100);
 
         vm.prank(USER);
         vm.expectRevert("Manager: deposits paused");
@@ -464,7 +464,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
-        manager.configureMarket(address(cWeth), address(weth), true, false, true, true, true, 300, 50, 100);
+        _queueConfigureMarket(address(cWeth), address(weth), true, false, true, true, true, 300, 50, 100);
 
         vm.prank(USER);
         vm.expectRevert("Manager: deposits paused");
@@ -477,7 +477,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
-        manager.configureMarket(address(cWeth), address(weth), true, true, true, true, false, 300, 50, 100);
+        _queueConfigureMarket(address(cWeth), address(weth), true, true, true, true, false, 300, 50, 100);
 
         vm.prank(USER);
         vm.expectRevert("Manager: trades paused");
@@ -490,7 +490,7 @@ contract MarginManagerTest is Test {
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
-        manager.configureMarket(address(cUsdc), address(usdc), true, true, true, true, false, 300, 50, 100);
+        _queueConfigureMarket(address(cUsdc), address(usdc), true, true, true, true, false, 300, 50, 100);
 
         uint256 amountIn = 100e18;
         uint256 minOut = _managerMinOut(amountIn);
@@ -523,17 +523,112 @@ contract MarginManagerTest is Test {
     }
 
     function testRiskMetricsRevertWhenBorrowPriceZero() public {
+        address sma = _enable();
+
+        vm.prank(USER);
+        manager.deposit(address(usdc), 1_000e18);
+
+        vm.prank(USER);
+        manager.borrow(address(weth), 0.2e18, sma);
+
+        oracle.setDirectPrice(address(weth), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(MarginRiskLib.PriceUnavailable.selector, address(cWeth)));
+        manager.getAccountMetrics(USER);
+    }
+
+    function testBorrowRevertsWithZeroRecipient() public {
         _enable();
 
         vm.prank(USER);
         manager.deposit(address(usdc), 1_000e18);
 
         vm.prank(USER);
-        manager.borrow(address(weth), 0.2e18, address(0));
+        vm.expectRevert("Manager: invalid recipient");
+        manager.borrow(address(usdc), 100e18, address(0));
+    }
 
-        oracle.setDirectPrice(address(weth), 0);
+    function testOpenLeveragedPositionRevertsOnLowHealthFactor() public {
+        _enable();
 
-        vm.expectRevert(abi.encodeWithSelector(MarginRiskLib.PriceUnavailable.selector, address(cWeth)));
-        manager.getAccountMetrics(USER);
+        _queueSetThresholds(10_000, 20_000, 20_500);
+
+        vm.prank(USER);
+        manager.deposit(address(usdc), 1_000e18);
+
+        vm.prank(USER);
+        vm.expectRevert("Manager: health factor low");
+        manager.openLeveragedPosition(address(usdc), address(usdc), 500e18, 0, bytes(""));
+    }
+
+    function _queueSetRouterAdapter(address newAdapter) internal {
+        manager.queueSetRouterAdapter(newAdapter);
+        vm.warp(block.timestamp + manager.actionDelay());
+        manager.setRouterAdapter(newAdapter);
+    }
+
+    function _queueConfigureMarket(
+        address cToken,
+        address underlying,
+        bool active,
+        bool depositsEnabled,
+        bool borrowsEnabled,
+        bool withdrawalsEnabled,
+        bool tradesEnabled,
+        uint16 maxLeverageX100,
+        uint16 tradeSlippageBps,
+        uint16 oracleDeviationBps
+    ) internal {
+        manager.queueConfigureMarket(
+            cToken,
+            underlying,
+            active,
+            depositsEnabled,
+            borrowsEnabled,
+            withdrawalsEnabled,
+            tradesEnabled,
+            maxLeverageX100,
+            tradeSlippageBps,
+            oracleDeviationBps
+        );
+        vm.warp(block.timestamp + manager.actionDelay());
+        manager.configureMarket(
+            cToken,
+            underlying,
+            active,
+            depositsEnabled,
+            borrowsEnabled,
+            withdrawalsEnabled,
+            tradesEnabled,
+            maxLeverageX100,
+            tradeSlippageBps,
+            oracleDeviationBps
+        );
+    }
+
+    function _queueSetThresholds(
+        uint16 _hfMinWithdrawBps,
+        uint16 _hfLockBps,
+        uint16 _hfUnlockBps
+    ) internal {
+        manager.queueSetThresholds(
+            _hfMinWithdrawBps,
+            _hfLockBps,
+            _hfUnlockBps
+        );
+        vm.warp(block.timestamp + manager.actionDelay());
+        manager.setThresholds(_hfMinWithdrawBps, _hfLockBps, _hfUnlockBps);
+    }
+
+    function _queueSetFees(uint16 _openFeeBps, uint16 _closeFeeBps) internal {
+        manager.queueSetFees(_openFeeBps, _closeFeeBps);
+        vm.warp(block.timestamp + manager.actionDelay());
+        manager.setFees(_openFeeBps, _closeFeeBps);
+    }
+
+    function _queueSetFeeRecipient(address newRecipient) internal {
+        manager.queueSetFeeRecipient(newRecipient);
+        vm.warp(block.timestamp + manager.actionDelay());
+        manager.setFeeRecipient(newRecipient);
     }
 }

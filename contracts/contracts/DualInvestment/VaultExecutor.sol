@@ -12,13 +12,12 @@ import "./PancakeSwapAdapter.sol";
 /**
  * @title VaultExecutor
  * @notice Manages cToken operations for dual investment positions
- * @dev Redeems user cTokens, supplies underlying to protocol account, manages settlement withdrawals
+ * @dev Redeems user cTokens, supplies underlying to the vault, manages settlement withdrawals
  */
 contract VaultExecutor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    // Protocol account that will accrue interest during position lock
-    address public protocolAccount;
+    uint256 public constant MIN_ACTION_DELAY = 1 hours;
 
     // Authorized managers who can execute vault operations
     mapping(address => bool) public authorizedManagers;
@@ -32,6 +31,9 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
     // Swap adapter for DEX interactions (V2/V3)
     address public swapAdapter;
 
+    uint256 public actionDelay;
+    mapping(bytes32 => uint256) public queuedActions;
+
     // Events
     event UserCTokensRedeemed(
         address indexed user, address indexed cToken, uint256 cTokenAmount, uint256 underlyingAmount
@@ -41,21 +43,25 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
 
     event UnderlyingWithdrawnFromProtocol(address indexed cToken, uint256 cTokensRedeemed, uint256 underlyingAmount);
 
-    event ProtocolAccountUpdated(address oldAccount, address newAccount);
     event SwapAdapterUpdated(address oldAdapter, address newAdapter);
+    event AuthorizedManagerUpdated(address indexed manager, bool authorized);
+    event ActionDelayUpdated(uint256 newDelay);
+    event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
+    event ActionCanceled(bytes32 indexed actionId);
+    event ActionExecuted(bytes32 indexed actionId);
 
     modifier onlyAuthorized() {
         require(authorizedManagers[msg.sender], "Not authorized");
         _;
     }
 
-    constructor(address _protocolAccount) Ownable(msg.sender) {
-        require(_protocolAccount != address(0), "Invalid protocol account");
-        protocolAccount = _protocolAccount;
+    constructor() Ownable(msg.sender) {
+        actionDelay = MIN_ACTION_DELAY;
+        emit ActionDelayUpdated(actionDelay);
     }
 
     /**
-     * @notice Redeem user's cTokens and supply underlying to protocol account
+     * @notice Redeem user's cTokens and supply underlying back into the market
      * @param user User whose cTokens to redeem
      * @param cToken cToken contract to redeem from
      * @param cTokenAmount Amount of cTokens to redeem
@@ -129,10 +135,17 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         uint256 exchangeRate = pToken.exchangeRateStored();
         uint256 cTokensToRedeem = (underlyingAmount * 1e18) / exchangeRate;
 
-        // Ensure we don't try to redeem more than we have
+        // Ensure we don't try to redeem more than we have or track
         uint256 availableCTokens = pToken.balanceOf(address(this));
+        uint256 trackedCTokens = protocolSuppliedAmounts[cToken];
         if (cTokensToRedeem > availableCTokens) {
             cTokensToRedeem = availableCTokens;
+        }
+        if (cTokensToRedeem > trackedCTokens) {
+            cTokensToRedeem = trackedCTokens;
+        }
+        if (cTokensToRedeem == 0) {
+            return 0;
         }
 
         // Redeem cTokens for underlying (track delta)
@@ -156,9 +169,12 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @notice Configure DEX router used for swaps
      */
     function setSwapAdapter(address newAdapter) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setSwapAdapter", newAdapter));
+        _consumeAction(actionId);
         address old = swapAdapter;
         swapAdapter = newAdapter;
         emit SwapAdapterUpdated(old, newAdapter);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -283,6 +299,10 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
         cTokensMinted = postCTokenBal - preCTokenBal;
         require(pToken.transfer(recipient, cTokensMinted), "cToken transfer failed");
 
+        if (recipient == address(this)) {
+            protocolSuppliedAmounts[cToken] += cTokensMinted;
+        }
+
         return cTokensMinted;
     }
 
@@ -375,18 +395,11 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param authorized Authorization status
      */
     function setAuthorizedManager(address manager, bool authorized) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setAuthorizedManager", manager, authorized));
+        _consumeAction(actionId);
         authorizedManagers[manager] = authorized;
-    }
-
-    /**
-     * @notice Update protocol account
-     * @param newProtocolAccount New protocol account address
-     */
-    function setProtocolAccount(address newProtocolAccount) external onlyOwner {
-        require(newProtocolAccount != address(0), "Invalid protocol account");
-        address oldAccount = protocolAccount;
-        protocolAccount = newProtocolAccount;
-        emit ProtocolAccountUpdated(oldAccount, newProtocolAccount);
+        emit AuthorizedManagerUpdated(manager, authorized);
+        emit ActionExecuted(actionId);
     }
 
     /**
@@ -396,7 +409,61 @@ contract VaultExecutor is Ownable, ReentrancyGuard {
      * @param amount Amount to withdraw
      */
     function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("emergencyWithdraw", token, to, amount));
+        _consumeAction(actionId);
         require(to != address(0), "Invalid recipient");
         IERC20(token).safeTransfer(to, amount);
+        emit ActionExecuted(actionId);
+    }
+
+    function setActionDelay(uint256 newDelay) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("setActionDelay", newDelay));
+        _consumeAction(actionId);
+        require(newDelay >= actionDelay, "Delay cannot decrease");
+        require(newDelay >= MIN_ACTION_DELAY, "Delay too short");
+        actionDelay = newDelay;
+        emit ActionDelayUpdated(newDelay);
+        emit ActionExecuted(actionId);
+    }
+
+    function cancelAction(bytes32 actionId) external onlyOwner {
+        require(queuedActions[actionId] != 0, "Action not queued");
+        delete queuedActions[actionId];
+        emit ActionCanceled(actionId);
+    }
+
+    function queueSetSwapAdapter(address newAdapter) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setSwapAdapter", newAdapter)));
+    }
+
+    function queueSetAuthorizedManager(address manager, bool authorized) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setAuthorizedManager", manager, authorized)));
+    }
+
+    function queueEmergencyWithdraw(address token, address to, uint256 amount)
+        external
+        onlyOwner
+        returns (bytes32 actionId)
+    {
+        actionId = _queueAction(keccak256(abi.encode("emergencyWithdraw", token, to, amount)));
+    }
+
+    function queueSetActionDelay(uint256 newDelay) external onlyOwner returns (bytes32 actionId) {
+        actionId = _queueAction(keccak256(abi.encode("setActionDelay", newDelay)));
+    }
+
+    function _queueAction(bytes32 actionId) internal returns (bytes32) {
+        require(queuedActions[actionId] == 0, "Action already queued");
+        uint256 executeAfter = block.timestamp + actionDelay;
+        queuedActions[actionId] = executeAfter;
+        emit ActionQueued(actionId, executeAfter);
+        return actionId;
+    }
+
+    function _consumeAction(bytes32 actionId) internal {
+        uint256 executeAfter = queuedActions[actionId];
+        require(executeAfter != 0, "Action not queued");
+        require(block.timestamp >= executeAfter, "Action not ready");
+        delete queuedActions[actionId];
     }
 }
