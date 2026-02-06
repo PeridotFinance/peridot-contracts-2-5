@@ -6,6 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC3156FlashBorrower} from "../PTokenInterfaces.sol";
 
 import {SmartMarginAccount} from "./SmartMarginAccount.sol";
 import {MarginRiskLib, IPeridottrollerView} from "./MarginRiskLib.sol";
@@ -19,7 +20,7 @@ import {PToken} from "../PToken.sol";
  * @notice Entrypoint for Peridot cross-margin accounts.
  * @dev Deploys EIP-1167 SmartMarginAccount clones and orchestrates deposits, withdrawals, and risk gating.
  */
-contract MarginManager is Ownable, ReentrancyGuard {
+contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
     using MarginRiskLib for IPeridottrollerView;
 
@@ -71,6 +72,30 @@ contract MarginManager is Ownable, ReentrancyGuard {
     mapping(address => uint256) public protocolFees; // token => accrued amount
     mapping(address => address[]) private accountMarkets;
     mapping(address => mapping(address => bool)) private accountMarketsSet;
+
+    // ─── Atomic position opening state ────────────────────────────────────────
+
+    /// @dev Temporary storage for atomic position callback
+    struct PendingAtomicPosition {
+        address user;
+        address sma;
+        address inputAsset;
+        address outputAsset;
+        address inputPToken;
+        address outputPToken;
+        uint256 userContribution;
+        uint256 flashAmount;
+        uint256 minOutputAmount;
+        uint16 leverageX100;
+        bool isLong;
+        bool active;
+    }
+
+    PendingAtomicPosition private _atomicPending;
+
+    /// @notice Callback success identifier
+    bytes32 private constant FLASH_CALLBACK_SUCCESS =
+        keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     event BorrowingEnabled(address indexed user, address sma);
     event Deposit(address indexed user, address indexed asset, uint256 amount);
@@ -165,6 +190,24 @@ contract MarginManager is Ownable, ReentrancyGuard {
     event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
     event ActionCanceled(bytes32 indexed actionId);
     event ActionExecuted(bytes32 indexed actionId);
+    event AtomicLongOpened(
+        address indexed user,
+        address indexed quoteAsset,
+        address indexed baseAsset,
+        uint256 userCollateral,
+        uint256 borrowedAmount,
+        uint256 baseAcquired,
+        uint256 healthFactorBps
+    );
+    event AtomicShortOpened(
+        address indexed user,
+        address indexed baseAsset,
+        address indexed quoteAsset,
+        uint256 userCollateral,
+        uint256 borrowedAmount,
+        uint256 quoteAcquired,
+        uint256 healthFactorBps
+    );
 
     constructor(
         address _peridottroller,
@@ -842,6 +885,380 @@ contract MarginManager is Ownable, ReentrancyGuard {
 
         return repayAmount;
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ATOMIC POSITION OPENING (FLASHLOAN-BASED)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function openLeveragedPositionAtomic(
+        address quoteAsset,
+        address baseAsset,
+        uint256 userCollateral,
+        uint16 leverageX100,
+        uint256 minBaseReceived,
+        bytes calldata routerData
+    ) external nonReentrant returns (uint256 baseAcquired) {
+        require(userCollateral > 0, "Manager: zero collateral");
+        require(leverageX100 >= 100, "Manager: leverage < 1x");
+        require(minBaseReceived > 0, "Manager: zero min output");
+
+        Account storage account = accounts[msg.sender];
+        require(account.sma != address(0), "Manager: no account");
+        require(!account.withdrawalsLocked, "Manager: account locked");
+
+        (address quotePToken, MarketConfig memory quoteConfig, ) = _getMarketForAsset(
+            quoteAsset
+        );
+        (address basePToken, MarketConfig memory baseConfig, ) = _getMarketForAsset(
+            baseAsset
+        );
+
+        require(quoteConfig.active && quoteConfig.borrowsEnabled, "Manager: quote market unavailable");
+        require(baseConfig.active && baseConfig.depositsEnabled, "Manager: base market unavailable");
+
+        uint16 maxLev = _effectiveLeverageCap(
+            _resolveLeverageCap(quoteConfig.maxLeverageX100),
+            _resolveLeverageCap(baseConfig.maxLeverageX100)
+        );
+        require(leverageX100 <= maxLev, "Manager: leverage exceeds cap");
+
+        uint256 totalNotional = (userCollateral * leverageX100) / 100;
+        uint256 flashAmount = totalNotional - userCollateral;
+        require(flashAmount > 0, "Manager: zero borrow");
+
+        IERC20(quoteAsset).safeTransferFrom(msg.sender, address(this), userCollateral);
+
+        _atomicPending = PendingAtomicPosition({
+            user: msg.sender,
+            sma: account.sma,
+            inputAsset: quoteAsset,
+            outputAsset: baseAsset,
+            inputPToken: quotePToken,
+            outputPToken: basePToken,
+            userContribution: userCollateral,
+            flashAmount: flashAmount,
+            minOutputAmount: minBaseReceived,
+            leverageX100: leverageX100,
+            isLong: true,
+            active: true
+        });
+
+        bool success = PErc20(quotePToken).flashLoan(
+            IERC3156FlashBorrower(address(this)),
+            quoteAsset,
+            flashAmount,
+            routerData
+        );
+        require(success, "Manager: flashloan failed");
+
+        baseAcquired = _atomicPending.minOutputAmount;
+        delete _atomicPending;
+        return baseAcquired;
+    }
+
+    function openShortPositionAtomic(
+        address baseAsset,
+        address quoteAsset,
+        uint256 userCollateral,
+        uint16 leverageX100,
+        uint256 minQuoteReceived,
+        bytes calldata routerData
+    ) external nonReentrant returns (uint256 quoteReceived) {
+        require(userCollateral > 0, "Manager: zero collateral");
+        require(leverageX100 >= 100, "Manager: leverage < 1x");
+        require(minQuoteReceived > 0, "Manager: zero min output");
+
+        Account storage account = accounts[msg.sender];
+        require(account.sma != address(0), "Manager: no account");
+        require(!account.withdrawalsLocked, "Manager: account locked");
+
+        (address basePToken, MarketConfig memory baseConfig, ) = _getMarketForAsset(baseAsset);
+        (address quotePToken, MarketConfig memory quoteConfig, ) = _getMarketForAsset(quoteAsset);
+
+        require(baseConfig.active && baseConfig.borrowsEnabled, "Manager: base market unavailable");
+        require(quoteConfig.active && quoteConfig.depositsEnabled, "Manager: quote market unavailable");
+
+        uint16 maxLev = _effectiveLeverageCap(
+            _resolveLeverageCap(baseConfig.maxLeverageX100),
+            _resolveLeverageCap(quoteConfig.maxLeverageX100)
+        );
+        require(leverageX100 <= maxLev, "Manager: leverage exceeds cap");
+
+        uint256 quotePrice = priceOracle.getUnderlyingPrice(PToken(quotePToken));
+        uint256 basePrice = priceOracle.getUnderlyingPrice(PToken(basePToken));
+        require(quotePrice > 0 && basePrice > 0, "Manager: invalid prices");
+
+        uint256 collateralValue = (userCollateral * quotePrice) / EXP_SCALE;
+        uint256 totalExposureValue = (collateralValue * leverageX100) / 100;
+        uint256 borrowValue = totalExposureValue - collateralValue;
+        uint256 flashAmount = (borrowValue * EXP_SCALE) / basePrice;
+        require(flashAmount > 0, "Manager: zero borrow");
+
+        IERC20(quoteAsset).safeTransferFrom(msg.sender, address(this), userCollateral);
+
+        _atomicPending = PendingAtomicPosition({
+            user: msg.sender,
+            sma: account.sma,
+            inputAsset: baseAsset,
+            outputAsset: quoteAsset,
+            inputPToken: basePToken,
+            outputPToken: quotePToken,
+            userContribution: userCollateral,
+            flashAmount: flashAmount,
+            minOutputAmount: minQuoteReceived,
+            leverageX100: leverageX100,
+            isLong: false,
+            active: true
+        });
+
+        bool success = PErc20(basePToken).flashLoan(
+            IERC3156FlashBorrower(address(this)),
+            baseAsset,
+            flashAmount,
+            routerData
+        );
+        require(success, "Manager: flashloan failed");
+
+        quoteReceived = _atomicPending.minOutputAmount;
+        delete _atomicPending;
+        return quoteReceived;
+    }
+
+    function onFlashLoan(
+        address initiator,
+        address token,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata data
+    ) external override returns (bytes32) {
+        require(initiator == address(this), "Manager: invalid initiator");
+        require(_atomicPending.active, "Manager: no pending operation");
+
+        PendingAtomicPosition memory p = _atomicPending;
+
+        require(msg.sender == p.inputPToken, "Manager: unexpected lender");
+        require(token == p.inputAsset, "Manager: unexpected token");
+        require(amount == p.flashAmount, "Manager: unexpected amount");
+
+        if (p.isLong) {
+            _executeAtomicLong(p, amount, fee, data);
+        } else {
+            _executeAtomicShort(p, amount, fee, data);
+        }
+
+        return FLASH_CALLBACK_SUCCESS;
+    }
+
+    function _executeAtomicLong(
+        PendingAtomicPosition memory p,
+        uint256 flashAmount,
+        uint256 flashFee,
+        bytes calldata routerData
+    ) internal {
+        uint256 totalSwapInput = p.userContribution + flashAmount;
+
+        if (openFeeBps > 0) {
+            uint256 protocolFee = (totalSwapInput * openFeeBps) / BPS_SCALE;
+            if (protocolFee > 0) {
+                address recipient = feeRecipient != address(0) ? feeRecipient : address(this);
+                if (recipient == address(this)) {
+                    protocolFees[p.inputAsset] += protocolFee;
+                } else {
+                    IERC20(p.inputAsset).safeTransfer(recipient, protocolFee);
+                }
+                totalSwapInput -= protocolFee;
+                emit FeesAccrued(p.inputAsset, protocolFee);
+            }
+        }
+
+        uint256 baseAcquired = _atomicSwap(
+            p.inputAsset,
+            p.outputAsset,
+            totalSwapInput,
+            p.minOutputAmount,
+            routerData
+        );
+        require(baseAcquired >= p.minOutputAmount, "Manager: insufficient output");
+
+        IERC20(p.outputAsset).safeTransfer(p.sma, baseAcquired);
+        uint256 mintResult = SmartMarginAccount(p.sma).mint(p.outputPToken, baseAcquired);
+        require(mintResult == 0, "Manager: mint failed");
+        SmartMarginAccount(p.sma).enterMarket(p.outputPToken);
+        _ensureUserMarket(p.user, p.outputPToken);
+
+        uint256 totalRepay = flashAmount + flashFee;
+        uint256 borrowResult = SmartMarginAccount(p.sma).borrow(p.inputPToken, totalRepay);
+        require(borrowResult == 0, "Manager: borrow failed");
+        _ensureUserMarket(p.user, p.inputPToken);
+        SmartMarginAccount(p.sma).transferOut(p.inputAsset, address(this), totalRepay);
+
+        IERC20(p.inputAsset).forceApprove(msg.sender, totalRepay);
+
+        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
+            peridottroller,
+            priceOracle,
+            p.sma,
+            hfMinWithdrawBps,
+            _getUserMarkets(p.user)
+        );
+        require(postMetrics.healthFactorBps >= hfLockBps, "Manager: health factor too low");
+
+        uint16 leverageCap = _effectiveLeverageCap(
+            _resolveLeverageCap(marketConfigs[p.inputPToken].maxLeverageX100),
+            _resolveLeverageCap(marketConfigs[p.outputPToken].maxLeverageX100)
+        );
+        _enforceLeverage(postMetrics, leverageCap);
+        _syncLockState(p.user, accounts[p.user], postMetrics.healthFactorBps);
+
+        _atomicPending.minOutputAmount = baseAcquired;
+
+        emit AtomicLongOpened(
+            p.user,
+            p.inputAsset,
+            p.outputAsset,
+            p.userContribution,
+            totalRepay,
+            baseAcquired,
+            postMetrics.healthFactorBps
+        );
+    }
+
+    function _executeAtomicShort(
+        PendingAtomicPosition memory p,
+        uint256 flashAmount,
+        uint256 flashFee,
+        bytes calldata routerData
+    ) internal {
+        uint256 quoteReceived = _atomicSwap(
+            p.inputAsset,
+            p.outputAsset,
+            flashAmount,
+            p.minOutputAmount,
+            routerData
+        );
+        require(quoteReceived >= p.minOutputAmount, "Manager: insufficient output");
+
+        uint256 totalCollateral = quoteReceived + p.userContribution;
+        if (openFeeBps > 0) {
+            uint256 protocolFee = (totalCollateral * openFeeBps) / BPS_SCALE;
+            if (protocolFee > 0) {
+                address recipient = feeRecipient != address(0) ? feeRecipient : address(this);
+                if (recipient == address(this)) {
+                    protocolFees[p.outputAsset] += protocolFee;
+                } else {
+                    IERC20(p.outputAsset).safeTransfer(recipient, protocolFee);
+                }
+                totalCollateral -= protocolFee;
+                emit FeesAccrued(p.outputAsset, protocolFee);
+            }
+        }
+
+        IERC20(p.outputAsset).safeTransfer(p.sma, totalCollateral);
+        uint256 mintResult = SmartMarginAccount(p.sma).mint(p.outputPToken, totalCollateral);
+        require(mintResult == 0, "Manager: mint failed");
+        SmartMarginAccount(p.sma).enterMarket(p.outputPToken);
+        _ensureUserMarket(p.user, p.outputPToken);
+
+        uint256 totalRepay = flashAmount + flashFee;
+        uint256 borrowResult = SmartMarginAccount(p.sma).borrow(p.inputPToken, totalRepay);
+        require(borrowResult == 0, "Manager: borrow failed");
+        _ensureUserMarket(p.user, p.inputPToken);
+        SmartMarginAccount(p.sma).transferOut(p.inputAsset, address(this), totalRepay);
+
+        IERC20(p.inputAsset).forceApprove(msg.sender, totalRepay);
+
+        MarginRiskLib.AccountMetrics memory postMetrics = MarginRiskLib.computeAccountMetricsForMarkets(
+            peridottroller,
+            priceOracle,
+            p.sma,
+            hfMinWithdrawBps,
+            _getUserMarkets(p.user)
+        );
+        require(postMetrics.healthFactorBps >= hfLockBps, "Manager: health factor too low");
+
+        uint16 leverageCap = _effectiveLeverageCap(
+            _resolveLeverageCap(marketConfigs[p.inputPToken].maxLeverageX100),
+            _resolveLeverageCap(marketConfigs[p.outputPToken].maxLeverageX100)
+        );
+        _enforceLeverage(postMetrics, leverageCap);
+        _syncLockState(p.user, accounts[p.user], postMetrics.healthFactorBps);
+
+        _atomicPending.minOutputAmount = quoteReceived;
+
+        emit AtomicShortOpened(
+            p.user,
+            p.inputAsset,
+            p.outputAsset,
+            p.userContribution,
+            totalRepay,
+            quoteReceived,
+            postMetrics.healthFactorBps
+        );
+    }
+
+    function _atomicSwap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        bytes calldata routerData
+    ) internal returns (uint256 amountOut) {
+        require(routerAdapter != address(0), "Manager: no router");
+
+        IERC20(tokenIn).forceApprove(routerAdapter, amountIn);
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(address(this));
+
+        IMarginRouterAdapter(routerAdapter).swap(
+            address(this),
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOutMin,
+            routerData
+        );
+
+        uint256 balanceAfter = IERC20(tokenOut).balanceOf(address(this));
+        amountOut = balanceAfter - balanceBefore;
+
+        IERC20(tokenIn).forceApprove(routerAdapter, 0);
+        return amountOut;
+    }
+
+    function previewAtomicLong(
+        address quoteAsset,
+        uint256 userCollateral,
+        uint16 leverageX100
+    )
+        external
+        view
+        returns (uint256 totalNotional, uint256 borrowAmount, uint256 flashFee)
+    {
+        totalNotional = (userCollateral * leverageX100) / 100;
+        borrowAmount = totalNotional - userCollateral;
+        address quotePToken = underlyingToMarket[quoteAsset];
+        flashFee = PErc20(quotePToken).flashFee(quoteAsset, borrowAmount);
+    }
+
+    function previewAtomicShort(
+        address baseAsset,
+        address quoteAsset,
+        uint256 userCollateral,
+        uint16 leverageX100
+    ) external view returns (uint256 baseToBorrow, uint256 flashFee) {
+        address quotePToken = underlyingToMarket[quoteAsset];
+        address basePToken = underlyingToMarket[baseAsset];
+
+        uint256 quotePrice = priceOracle.getUnderlyingPrice(PToken(quotePToken));
+        uint256 basePrice = priceOracle.getUnderlyingPrice(PToken(basePToken));
+
+        uint256 collateralValue = (userCollateral * quotePrice) / EXP_SCALE;
+        uint256 totalExposure = (collateralValue * leverageX100) / 100;
+        uint256 borrowValue = totalExposure - collateralValue;
+
+        baseToBorrow = (borrowValue * EXP_SCALE) / basePrice;
+        flashFee = PErc20(basePToken).flashFee(baseAsset, baseToBorrow);
+    }
+
 
     function getAccountState(
         address user
