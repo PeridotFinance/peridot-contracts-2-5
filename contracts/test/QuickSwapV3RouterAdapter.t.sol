@@ -117,6 +117,11 @@ contract QuickSwapV3RouterAdapterTest is Test {
         assertEq(router.lastAmountIn(), amountIn);
         assertEq(router.lastAmountOutMin(), minOut);
         assertEq(router.lastRecipient(), fromAccount);
+
+        // allowance cleared
+        assertEq(IERC20(address(tokenIn)).allowance(address(adapter), address(router)), 0);
+        // no leftover tokenIn on adapter
+        assertEq(tokenIn.balanceOf(address(adapter)), 0);
     }
 
     function testRevertOnSlippage() public {

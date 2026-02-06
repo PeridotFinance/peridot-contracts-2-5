@@ -1204,9 +1204,49 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
         bytes calldata routerData
     ) internal returns (uint256 amountOut) {
         require(routerAdapter != address(0), "Manager: no router");
+        (
+            address cTokenIn,
+            MarketConfig memory configIn,
+            bool isUnderlyingIn
+        ) = _getMarketForAsset(tokenIn);
+        (
+            address cTokenOut,
+            MarketConfig memory configOut,
+            bool isUnderlyingOut
+        ) = _getMarketForAsset(tokenOut);
+
+        require(isUnderlyingIn && isUnderlyingOut, "Manager: only underlying");
+        require(configIn.active && configOut.active, "Manager: market inactive");
+        require(
+            configIn.tradesEnabled && configOut.tradesEnabled,
+            "Manager: trades paused"
+        );
+
+        uint256 priceIn = priceOracle.getUnderlyingPrice(PToken(cTokenIn));
+        uint256 priceOut = priceOracle.getUnderlyingPrice(PToken(cTokenOut));
+        require(priceIn > 0 && priceOut > 0, "Manager: price zero");
+
+        uint256 expectedOut = (amountIn * priceIn) / priceOut;
+        require(expectedOut > 0, "Manager: expectedOut zero");
+
+        uint16 slippageLimit = _minPositive(
+            configIn.tradeSlippageBps,
+            configOut.tradeSlippageBps
+        );
+        if (slippageLimit > 0) {
+            uint256 managerMinOut = (expectedOut *
+                (BPS_SCALE - slippageLimit)) / BPS_SCALE;
+            require(amountOutMin >= managerMinOut, "Manager: minOut too low");
+        }
+        uint16 deviationLimit = _minPositive(
+            configIn.oracleDeviationBps,
+            configOut.oracleDeviationBps
+        );
+
+        uint256 tokenInBefore = IERC20(tokenIn).balanceOf(address(this));
+        uint256 tokenOutBefore = IERC20(tokenOut).balanceOf(address(this));
 
         IERC20(tokenIn).forceApprove(routerAdapter, amountIn);
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(address(this));
 
         IMarginRouterAdapter(routerAdapter).swap(
             address(this),
@@ -1217,8 +1257,25 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
             routerData
         );
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(address(this));
-        amountOut = balanceAfter - balanceBefore;
+        uint256 tokenInAfter = IERC20(tokenIn).balanceOf(address(this));
+        uint256 tokenOutAfter = IERC20(tokenOut).balanceOf(address(this));
+
+        require(tokenInBefore >= tokenInAfter, "Manager: tokenIn underflow");
+        uint256 actualAmountIn = tokenInBefore - tokenInAfter;
+        require(actualAmountIn <= amountIn, "Manager: excess tokenIn taken");
+
+        amountOut = tokenOutAfter - tokenOutBefore;
+        require(amountOut >= amountOutMin, "Manager: insufficient output");
+
+        _enforceTradeBounds(
+            actualAmountIn,
+            amountOut,
+            expectedOut,
+            priceIn,
+            priceOut,
+            slippageLimit,
+            deviationLimit
+        );
 
         IERC20(tokenIn).forceApprove(routerAdapter, 0);
         return amountOut;

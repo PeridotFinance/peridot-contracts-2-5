@@ -152,6 +152,13 @@ contract QuickSwapV3RouterAdapter is IMarginRouterAdapter, Ownable {
 
         require(amountOut >= minAmountOut, "Adapter: slippage");
 
+        // Reset allowance and sweep any dust back to the caller for safety
+        tokenInContract.forceApprove(address(router), 0);
+        uint256 leftover = tokenInContract.balanceOf(address(this));
+        if (leftover > 0) {
+            tokenInContract.safeTransfer(fromAccount, leftover);
+        }
+
         emit SwapExecuted(fromAccount, tokenIn, tokenOut, amountIn, amountOut);
     }
 
