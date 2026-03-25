@@ -9,9 +9,9 @@ import {MarginLiquidation} from "../contracts/margin/MarginLiquidation.sol";
 contract DeployMarginLiquidation is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address manager = 0x06624E8d03A13F28828b8523bACa9568D154044E;
+        address manager = vm.envAddress("MARGIN_MANAGER");
 
-        address ownerOverride = 0xCED23360932B80d18fdEAEAa573202E80A584804;
+        address ownerOverride = _tryEnvAddress("LIQ_OWNER");
         address owner = ownerOverride != address(0)
             ? ownerOverride
             : vm.addr(deployerKey);

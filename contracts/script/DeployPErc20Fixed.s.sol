@@ -22,15 +22,15 @@ import "../contracts/PErc20Delegator.sol";
 contract DeployPErc20Fixed is Script {
     // --- CONFIGURATION ---
     address constant UNDERLYING_ERC20_ADDRESS =
-        0x8498312A6B3CbD158bf0c93AbdCF29E6e4F55081;
+        0xE9CC37904875B459Fa5D0FE37680d36F1ED55e38;
     address constant COMPTROLLER_ADDRESS =
-        0x6D208789f0a978aF789A3C8Ba515749598940716;
+        0xC4FE7BD6b9EdD67bF2ba5daa317D7cd80E1913bb;
     address constant INTEREST_RATE_MODEL_ADDRESS =
-        0x1FB287E1c4F7B4c6b511f4d190523814593Ad84e;
+        0x60a8BD81f90526560344C63279210BC067a489a5;
 
-    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e26;
-    string constant PTOKEN_NAME = "Peridot gMON";
-    string constant PTOKEN_SYMBOL = "pgMON"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
+    uint256 constant INITIAL_EXCHANGE_RATE_MANTISSA = 2e14;
+    string constant PTOKEN_NAME = "Peridot USDC";
+    string constant PTOKEN_SYMBOL = "pUSDC"; // Underlying decimals	Constant to use 6=2e14, 8=2e16, 18=2e26
     uint8 constant PTOKEN_DECIMALS = 8;
 
     function run() public {

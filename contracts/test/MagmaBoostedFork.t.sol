@@ -154,6 +154,52 @@ contract MagmaBoostedForkTest is Test {
         assertTrue(vaultAssets > 0, "Should have assets in vault");
     }
 
+    function testForkYieldDiagnosticsAfter2Hours() public {
+        IMagma magmaVault = IMagma(magma);
+
+        uint256 mintAmount = 10e18;
+        vm.startPrank(testUser);
+        IERC20(wmon).approve(address(delegator), mintAmount);
+        require(PErc20(address(delegator)).mint(mintAmount) == 0, "mint failed");
+        vm.stopPrank();
+
+        uint256 shares0 = IERC20(magma).balanceOf(address(delegator));
+        uint256 assets0 = magmaVault.convertToAssets(shares0);
+        uint256 rate0 = magmaVault.convertToAssets(1e18);
+        uint256 exchangeRateStored0 = PToken(address(delegator)).exchangeRateStored();
+        uint256 exchangeRateCurrent0 = PToken(address(delegator)).exchangeRateCurrent();
+
+        console.log("=== BEFORE (fork) ===");
+        console.log("block.number:", block.number);
+        console.log("block.timestamp:", block.timestamp);
+        console.log("shares0:", shares0);
+        console.log("assets0:", assets0);
+        console.log("rate0 (assets per 1e18 shares):", rate0);
+        console.log("exchangeRateStored0:", exchangeRateStored0);
+        console.log("exchangeRateCurrent0:", exchangeRateCurrent0);
+
+        vm.warp(block.timestamp + 2 hours);
+        vm.rollFork(block.number + 1000);
+
+        uint256 shares1 = IERC20(magma).balanceOf(address(delegator));
+        uint256 assets1 = magmaVault.convertToAssets(shares1);
+        uint256 rate1 = magmaVault.convertToAssets(1e18);
+        uint256 exchangeRateStored1 = PToken(address(delegator)).exchangeRateStored();
+        uint256 exchangeRateCurrent1 = PToken(address(delegator)).exchangeRateCurrent();
+
+        console.log("=== AFTER (fork, warp + rollFork) ===");
+        console.log("block.number:", block.number);
+        console.log("block.timestamp:", block.timestamp);
+        console.log("shares1:", shares1);
+        console.log("assets1:", assets1);
+        console.log("rate1 (assets per 1e18 shares):", rate1);
+        console.log("exchangeRateStored1:", exchangeRateStored1);
+        console.log("exchangeRateCurrent1:", exchangeRateCurrent1);
+
+        assertEq(shares1, shares0, "shares should stay unchanged");
+        assertGe(rate1, rate0, "magma rate should not decrease");
+    }
+
     function _ensureForkOrSkip() internal {
         try vm.activeFork() returns (uint256) {
             return;
