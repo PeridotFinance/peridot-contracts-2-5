@@ -218,6 +218,47 @@ contract MagmaBoostedTest is Test {
         console.log("Yield accrued successfully!");
     }
 
+    function testDiagnostics_WarpDoesNotChangeMockMagmaRate() public {
+        uint256 mintAmount = 1000e18;
+        vm.startPrank(user1);
+        wmon.approve(address(delegator), mintAmount);
+        require(PErc20(address(delegator)).mint(mintAmount) == 0, "mint failed");
+        vm.stopPrank();
+
+        uint256 shares0 = magma.balanceOf(address(delegator));
+        uint256 assets0 = magma.convertToAssets(shares0);
+        uint256 rate0 = magma.convertToAssets(1e18);
+        uint256 exchangeRateStored0 = PToken(address(delegator)).exchangeRateStored();
+        uint256 exchangeRateCurrent0 = PToken(address(delegator)).exchangeRateCurrent();
+
+        console.log("=== BEFORE (mock magma) ===");
+        console.log("shares0:", shares0);
+        console.log("assets0:", assets0);
+        console.log("rate0 (assets per 1e18 shares):", rate0);
+        console.log("exchangeRateStored0:", exchangeRateStored0);
+        console.log("exchangeRateCurrent0:", exchangeRateCurrent0);
+
+        vm.warp(block.timestamp + 2 hours);
+        vm.roll(block.number + 500);
+
+        uint256 shares1 = magma.balanceOf(address(delegator));
+        uint256 assets1 = magma.convertToAssets(shares1);
+        uint256 rate1 = magma.convertToAssets(1e18);
+        uint256 exchangeRateStored1 = PToken(address(delegator)).exchangeRateStored();
+        uint256 exchangeRateCurrent1 = PToken(address(delegator)).exchangeRateCurrent();
+
+        console.log("=== AFTER (warp + roll, mock magma) ===");
+        console.log("shares1:", shares1);
+        console.log("assets1:", assets1);
+        console.log("rate1 (assets per 1e18 shares):", rate1);
+        console.log("exchangeRateStored1:", exchangeRateStored1);
+        console.log("exchangeRateCurrent1:", exchangeRateCurrent1);
+
+        assertEq(shares1, shares0, "shares should stay unchanged");
+        assertEq(rate1, rate0, "mock magma rate changes only via simulateYield()");
+        assertEq(assets1, assets0, "assets should stay unchanged when mock rate is flat");
+    }
+
     function testAsyncRedemptionFlow() public {
         MagmaBoostedDelegate delegate = MagmaBoostedDelegate(address(delegator));
 

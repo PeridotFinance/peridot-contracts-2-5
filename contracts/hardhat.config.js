@@ -1,5 +1,4 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("@nomicfoundation/hardhat-foundry");
 
 const dotenv = require("dotenv");
 const path = require("path");
@@ -12,96 +11,80 @@ module.exports = {
       {
         version: "0.5.16",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.6.6",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.6.12",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.8.0",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.8.20",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.8.24",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
       {
         version: "0.8.26",
         settings: {
-          optimizer: {
-            enabled: false,
-            runs: 200,
-          },
+          optimizer: { enabled: false, runs: 200 },
         },
       },
       {
         version: "0.8.27",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+      {
+        version: "0.8.30",
+        settings: {
+          optimizer: { enabled: true, runs: 200 },
+          viaIR: true,
+          metadata: {
+            bytecodeHash: "none",
+            useLiteralContent: true,
           },
         },
       },
     ],
   },
   networks: {
-    /*amoy: {
-      url: process.env.MUMBAI_URL,
-      accounts: [process.env.PRIVATE_KEY_TEST],
-    },
-    sepolia: {
-      url: process.env.SEPOLIA_URL,
-      accounts: [process.env.PRIVATE_KEY_TEST],
-    },*/
     arbitrumSepolia: {
       url: process.env.ARBITRUM_SEPOLIA_URL,
-      accounts: [process.env.PRIVATE_KEY_TEST],
+      accounts: process.env.PRIVATE_KEY_TEST ? [process.env.PRIVATE_KEY_TEST] : [],
+    },
+    "somnia-testnet": {
+      url: process.env.SOMNIARPC || "https://dream-rpc.somnia.network",
+      accounts: process.env.PRIVATEMAIN ? [process.env.PRIVATEMAIN] : [],
+      chainId: 50312,
     },
   },
   etherscan: {
     apiKey: {
-      /* amoy: process.env.POLYGONSCAN_KEY,
-      sepolia: process.env.ETHERSCAN_KEY, */
-      arbitrumSepolia: process.env.ARBITRUMSCAN_KEY,
+      arbitrumSepolia: process.env.ARBITRUMSCAN_KEY || "",
+      "somnia-testnet": "empty",
+    },
     customChains: [
       {
         network: "arbitrumSepolia",
@@ -109,6 +92,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-sepolia.arbiscan.io/api",
           browserURL: "https://sepolia.arbiscan.io/",
+        },
+      },
+      {
+        network: "somnia-testnet",
+        chainId: 50312,
+        urls: {
+          apiURL: "https://somnia.w3us.site/api",
+          browserURL: "https://somnia.w3us.site",
         },
       },
     ],

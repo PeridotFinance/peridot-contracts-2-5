@@ -29,13 +29,13 @@ contract DeployPErc20Generic is Script {
         uint256 pk = vm.envUint("PRIVATEMAIN");
         address deployer = vm.addr(pk);
 
-        address underlying = 0x6Bfe75D1ad432050eA973C3A3DcD88F02e2444C3;
-        address comptroller = 0x6fC0c15531CB5901ac72aB3CFCd9dF6E99552e14;
-        address irm = 0x22B129f93dfe3A63cBB644a86dBD695be5deE511;
+        address underlying = 0xB911C192ed1d6428A12F2Cf8F636B00c34e68a2a;
+        address comptroller = 0xC4FE7BD6b9EdD67bF2ba5daa317D7cd80E1913bb;
+        address irm = 0x60a8BD81f90526560344C63279210BC067a489a5;
 
         uint256 initialExchangeRate = 2e26;
-        string memory name = "Peridot Microsoft (Ondo Tokenized)";
-        string memory symbol = "pMSOFTon";
+        string memory name = "Peridot P";
+        string memory symbol = "pP";
 
         uint8 decimals = 8; // sensible default
 

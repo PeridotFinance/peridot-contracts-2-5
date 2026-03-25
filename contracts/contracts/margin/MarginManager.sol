@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC3156FlashBorrower} from "../PTokenInterfaces.sol";
+import {IERC3156FlashBorrower, IERC3156FlashLender} from "../PTokenInterfaces.sol";
 
 import {SmartMarginAccount} from "./SmartMarginAccount.sol";
 import {MarginRiskLib, IPeridottrollerView} from "./MarginRiskLib.sol";
@@ -943,7 +943,8 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
             active: true
         });
 
-        bool success = PErc20(quotePToken).flashLoan(
+        IERC3156FlashLender lender = _resolveFlashloanLender(quotePToken);
+        bool success = lender.flashLoan(
             IERC3156FlashBorrower(address(this)),
             quoteAsset,
             flashAmount,
@@ -1011,7 +1012,8 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
             active: true
         });
 
-        bool success = PErc20(basePToken).flashLoan(
+        IERC3156FlashLender lender = _resolveFlashloanLender(basePToken);
+        bool success = lender.flashLoan(
             IERC3156FlashBorrower(address(this)),
             baseAsset,
             flashAmount,
@@ -1293,7 +1295,10 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
         totalNotional = (userCollateral * leverageX100) / 100;
         borrowAmount = totalNotional - userCollateral;
         address quotePToken = underlyingToMarket[quoteAsset];
-        flashFee = PErc20(quotePToken).flashFee(quoteAsset, borrowAmount);
+        flashFee = _resolveFlashloanLender(quotePToken).flashFee(
+            quoteAsset,
+            borrowAmount
+        );
     }
 
     function previewAtomicShort(
@@ -1313,7 +1318,21 @@ contract MarginManager is Ownable, ReentrancyGuard, IERC3156FlashBorrower {
         uint256 borrowValue = totalExposure - collateralValue;
 
         baseToBorrow = (borrowValue * EXP_SCALE) / basePrice;
-        flashFee = PErc20(basePToken).flashFee(baseAsset, baseToBorrow);
+        flashFee = _resolveFlashloanLender(basePToken).flashFee(
+            baseAsset,
+            baseToBorrow
+        );
+    }
+
+    function _resolveFlashloanLender(
+        address fallbackPToken
+    ) internal view returns (IERC3156FlashLender lender) {
+        address provider = flashloanProvider;
+        if (provider != address(0)) {
+            require(provider != fallbackPToken, "Manager: lender equals debt market");
+            return IERC3156FlashLender(provider);
+        }
+        return IERC3156FlashLender(fallbackPToken);
     }
 
 
