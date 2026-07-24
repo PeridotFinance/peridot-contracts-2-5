@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {TokenErrorReporter} from "../contracts/ErrorReporter.sol";
 import {BoostedPErc20} from "../contracts/boosted/BoostedPErc20.sol";
 import {BoostedPErc20Immutable} from "../contracts/boosted/BoostedPErc20Immutable.sol";
 import {IBoostedYieldAdapter} from "../contracts/interfaces/IBoostedYieldAdapter.sol";
@@ -275,7 +276,7 @@ contract BoostedPErc20Test is Test {
         assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
     }
 
-    function testPauseSurvivesAdapterFailureAndPreservesIdleExit() public {
+    function testPauseSurvivesAdapterFailureAndPricesIdleExitConservatively() public {
         failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
         boosted.setBoostAdapter(failingAdapter);
 
@@ -292,15 +293,20 @@ contract BoostedPErc20Test is Test {
         boosted.setBoostPaused(true);
 
         assertTrue(boosted.boostPaused(), "boost paused");
-        assertEq(boosted.totalManagedAssets(), mintAmount, "cached accounting remains available");
+        assertEq(boosted.totalManagedAssets(), 200e18, "unproven adapter assets excluded");
+        assertEq(boosted.exchangeRateStored(), 4e15, "idle assets set conservative rate");
         assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
+        uint256 pTokenBalanceBeforeIdleExit = boosted.balanceOf(alice);
         vm.prank(alice);
         boosted.redeemUnderlying(100e18);
         assertEq(underlying.balanceOf(alice), 100e18, "idle exit succeeds");
+        assertEq(
+            pTokenBalanceBeforeIdleExit - boosted.balanceOf(alice), 25_000e18, "idle exit bears unresolved adapter risk"
+        );
 
         uint256 pTokenBalanceBefore = boosted.balanceOf(alice);
         vm.prank(alice);
-        vm.expectRevert(bytes("ERC20: transfer amount exceeds balance"));
+        vm.expectRevert(TokenErrorReporter.RedeemTransferOutNotPossible.selector);
         boosted.redeemUnderlying(200e18);
         assertEq(boosted.balanceOf(alice), pTokenBalanceBefore, "adapter-backed exit has no drift");
     }

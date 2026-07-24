@@ -21,7 +21,7 @@ contract BoostedPErc20 is PErc20 {
     /// @notice Fraction (scaled by 1e18) of total assets to keep as idle liquidity on the pToken.
     uint256 public liquidityBufferMantissa = 1e17; // 10%
 
-    /// @notice When true the adapter is bypassed and funds stay on the pToken.
+    /// @notice When true the adapter is bypassed and its assets are excluded from market accounting.
     bool public boostPaused;
 
     /// @notice Conservative ceiling for adapter assets included in market accounting.
@@ -294,7 +294,7 @@ contract BoostedPErc20 is PErc20 {
             return 0;
         }
         if (boostPaused) {
-            return accountedAdapterAssets;
+            return 0;
         }
         uint256 reported = adapter.totalUnderlying();
         require(reported >= accountedAdapterAssets, "BoostedPErc20: adapter loss requires sync");
