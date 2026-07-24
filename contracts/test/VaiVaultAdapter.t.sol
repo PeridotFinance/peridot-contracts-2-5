@@ -72,6 +72,7 @@ contract VaiVaultAdapterTest is Test {
         uint256 expectedBuffer = (mintAmount * LIQUIDITY_BUFFER) / 1e18;
         assertApproxEqAbs(onHand, expectedBuffer, 1, "buffer mismatch");
         assertApproxEqAbs(staked, mintAmount - expectedBuffer, 1, "staked mismatch");
+        assertEq(underlying.allowance(address(adapter), address(vault)), 0, "vault allowance");
     }
 
     function testRedeemPullsStakeBack() public {
@@ -130,5 +131,46 @@ contract VaiVaultAdapterTest is Test {
         assertEq(staked, 0, "paused vault should remain empty");
         assertEq(underlying.balanceOf(address(boosted)), mintAmount, "funds should remain on the market");
         assertEq(underlying.allowance(address(boosted), address(adapter)), 0, "adapter allowance should remain zero");
+        assertEq(underlying.allowance(address(adapter), address(vault)), 0, "vault allowance should remain zero");
+    }
+
+    function testForcedIdleUnderlyingIsCountedAndRecoverable() public {
+        underlying.mint(address(adapter), 25e18);
+        assertEq(adapter.totalUnderlying(), 25e18);
+
+        vm.prank(address(boosted));
+        uint256 returned = adapter.withdrawAll(ALICE);
+
+        assertEq(returned, 25e18);
+        assertEq(underlying.balanceOf(ALICE), 25e18);
+        assertEq(adapter.totalUnderlying(), 0);
+    }
+
+    function testWithdrawAllRejectsUnderpayment() public {
+        uint256 mintAmount = 100e18;
+        underlying.mint(ALICE, mintAmount);
+        vm.startPrank(ALICE);
+        underlying.approve(address(boosted), mintAmount);
+        boosted.mint(mintAmount);
+        vm.stopPrank();
+        (uint256 staked,) = vault.userInfo(address(adapter));
+        vault.setWithdrawalShortfall(1);
+
+        vm.startPrank(address(boosted));
+        vm.expectRevert(abi.encodeWithSelector(VaiVaultAdapter.WithdrawalSlippage.selector, staked, staked - 1));
+        adapter.withdrawAll(ALICE);
+        vm.stopPrank();
+
+        (uint256 stakedAfter,) = vault.userInfo(address(adapter));
+        assertEq(stakedAfter, staked, "withdrawal should revert atomically");
+    }
+
+    function testWithdrawalRejectsZeroRecipient() public {
+        underlying.mint(address(adapter), 1e18);
+
+        vm.startPrank(address(boosted));
+        vm.expectRevert(VaiVaultAdapter.InvalidRecipient.selector);
+        adapter.withdraw(address(0), 1e18);
+        vm.stopPrank();
     }
 }

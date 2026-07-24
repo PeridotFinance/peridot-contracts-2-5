@@ -5,7 +5,7 @@ import {IBoostedYieldAdapter} from "../contracts/interfaces/IBoostedYieldAdapter
 import {MockErc20} from "./MockErc20.sol";
 
 contract MockInstantYieldAdapter is IBoostedYieldAdapter {
-    address public immutable owner;
+    address public immutable override owner;
     address public immutable override underlying;
     uint256 public reportBonus;
 

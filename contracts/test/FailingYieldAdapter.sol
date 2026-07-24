@@ -5,7 +5,7 @@ import {IBoostedYieldAdapter} from "../contracts/interfaces/IBoostedYieldAdapter
 import {MockErc20} from "./MockErc20.sol";
 
 contract FailingYieldAdapter is IBoostedYieldAdapter {
-    address public immutable owner;
+    address public immutable override owner;
     address public immutable override underlying;
 
     bool public failTotalUnderlying;
@@ -23,12 +23,10 @@ contract FailingYieldAdapter is IBoostedYieldAdapter {
         _;
     }
 
-    function setFailFlags(
-        bool totalUnderlyingFail,
-        bool depositFail,
-        bool withdrawFail,
-        bool withdrawAllFail
-    ) external onlyOwner {
+    function setFailFlags(bool totalUnderlyingFail, bool depositFail, bool withdrawFail, bool withdrawAllFail)
+        external
+        onlyOwner
+    {
         failTotalUnderlying = totalUnderlyingFail;
         failDeposit = depositFail;
         failWithdraw = withdrawFail;

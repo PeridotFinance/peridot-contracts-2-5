@@ -10,6 +10,7 @@ contract MockVaiVault {
     IERC20 public immutable vai;
     address public admin;
     bool public vaultPaused;
+    uint256 public withdrawalShortfall;
 
     struct UserInfo {
         uint256 amount;
@@ -32,6 +33,10 @@ contract MockVaiVault {
         vaultPaused = paused;
     }
 
+    function setWithdrawalShortfall(uint256 shortfall) external onlyAdmin {
+        withdrawalShortfall = shortfall;
+    }
+
     function deposit(uint256 amount) external {
         require(!vaultPaused, "MockVaiVault: paused");
         if (amount == 0) {
@@ -45,7 +50,8 @@ contract MockVaiVault {
         UserInfo storage info = userInfo[msg.sender];
         require(amount <= info.amount, "MockVaiVault: insufficient stake");
         info.amount -= amount;
-        vai.safeTransfer(msg.sender, amount);
+        uint256 sent = amount > withdrawalShortfall ? amount - withdrawalShortfall : 0;
+        vai.safeTransfer(msg.sender, sent);
     }
 
     function pendingRewards(address account) external view returns (uint256) {

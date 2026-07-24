@@ -51,6 +51,7 @@ contract BoostedPErc20 is PErc20 {
 
         if (address(adapter) != address(0)) {
             require(adapter.underlying() == underlying, "BoostedPErc20: adapter underlying mismatch");
+            require(adapter.owner() == address(this), "BoostedPErc20: adapter owner mismatch");
             require(adapter.totalUnderlying() == 0, "BoostedPErc20: adapter not empty");
             boostAdapter = adapter;
             boostPaused = false;

@@ -26,7 +26,7 @@ contract BoostedPErc20Immutable is BoostedPErc20 {
     ) {
         // Validate admin address to prevent permanent lock-out
         require(admin_ != address(0), "BoostedPErc20Immutable: zero admin");
-        
+
         // The deployer is the temporary admin for initialization
         admin = payable(msg.sender);
 
@@ -45,5 +45,6 @@ contract BoostedPErc20Immutable is BoostedPErc20 {
         // Hand over admin privileges to the designated admin address
         // This is final and cannot be changed (immutable contract)
         admin = admin_;
+        emit NewAdmin(msg.sender, admin_);
     }
 }

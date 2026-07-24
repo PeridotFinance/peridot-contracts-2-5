@@ -5,6 +5,9 @@ pragma solidity ^0.8.20;
  * @notice Interface for a yield adapter that can deploy and withdraw an underlying asset instantly.
  */
 interface IBoostedYieldAdapter {
+    /// @notice Returns the boosted pToken authorized to operate this adapter.
+    function owner() external view returns (address);
+
     /// @notice Returns the ERC20 underlying asset managed by the adapter.
     function underlying() external view returns (address);
 

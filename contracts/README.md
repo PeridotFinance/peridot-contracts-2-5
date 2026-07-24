@@ -65,10 +65,13 @@ reconciles the reviewed value through `syncAdapterAssets(expectedAssets)`. Repor
 do not become collateral automatically. Deposits increase the accounting ceiling only by
 the lesser of the observed adapter increase and the exact underlying spent.
 
-The pToken grants the adapter an exact allowance only while depositing and revokes it
-before returning. A failed emergency withdrawal still pauses boosting and leaves the
-allowance at zero. While paused, redemptions backed by the local liquidity buffer remain
-available, but adapter-backed exits stay fail-closed until the strategy recovers.
+Adapter onboarding also verifies that the adapter's immutable `owner()` is the pToken.
+The pToken and adapters grant exact allowances only for the active deposit and revoke
+them before returning. Supported adapters include directly held underlying in their net
+withdrawable value and sweep it during withdrawal, so accidental transfers are recoverable.
+A failed emergency withdrawal still pauses boosting and leaves the allowance at zero.
+While paused, redemptions backed by the local liquidity buffer remain available, but
+adapter-backed exits stay fail-closed until the strategy recovers.
 
 ### Robinhood pUSDG activation order
 

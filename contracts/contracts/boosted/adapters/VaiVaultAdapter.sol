@@ -14,7 +14,7 @@ contract VaiVaultAdapter is IBoostedYieldAdapter {
     using SafeERC20 for IERC20;
 
     /// @notice Boosted pToken allowed to interact with this adapter.
-    address public immutable owner;
+    address public immutable override owner;
 
     /// @notice VAI ERC20 token managed by the adapter.
     address public immutable override underlying;
@@ -28,6 +28,8 @@ contract VaiVaultAdapter is IBoostedYieldAdapter {
     error WithdrawalTooLarge();
     error DepositSlippage(uint256 expected, uint256 actual);
     error WithdrawalSlippage(uint256 expected, uint256 actual);
+    error InvalidRecipient();
+    error BalanceMismatch();
 
     event Deposited(uint256 amount);
     event Withdrawn(address indexed recipient, uint256 amount);
@@ -48,18 +50,14 @@ contract VaiVaultAdapter is IBoostedYieldAdapter {
         owner = owner_;
         underlying = underlying_;
         vault = IVaiVault(vault_);
-
-        // Pre-approve the vault for maximal allowance to avoid repeated approvals.
-        IERC20 token = IERC20(underlying_);
-        token.forceApprove(vault_, type(uint256).max);
     }
 
     /**
-     * @notice Returns the total VAI managed by this adapter (staked balance in the vault).
+     * @notice Returns all VAI immediately available from the adapter and vault.
      */
     function totalUnderlying() external view override returns (uint256) {
         (uint256 amount,) = vault.userInfo(address(this));
-        return amount;
+        return amount + IERC20(underlying).balanceOf(address(this));
     }
 
     /**
@@ -81,7 +79,9 @@ contract VaiVaultAdapter is IBoostedYieldAdapter {
         uint256 received = token.balanceOf(address(this)) - balanceBefore;
 
         uint256 stakedBefore = _stakedBalance();
+        token.forceApprove(address(vault), received);
         vault.deposit(received);
+        token.forceApprove(address(vault), 0);
         uint256 stakedAfter = _stakedBalance();
 
         if (stakedAfter < stakedBefore + received) {
@@ -99,48 +99,73 @@ contract VaiVaultAdapter is IBoostedYieldAdapter {
         if (amount == 0) {
             return 0;
         }
-
-        uint256 staked = _stakedBalance();
-        if (staked == 0) {
-            revert NothingStaked();
-        }
-        if (amount > staked) {
-            revert WithdrawalTooLarge();
+        if (recipient == address(0)) {
+            revert InvalidRecipient();
         }
 
         IERC20 token = IERC20(underlying);
-        uint256 balanceBefore = token.balanceOf(address(this));
-
-        vault.withdraw(amount);
-
-        uint256 received = token.balanceOf(address(this)) - balanceBefore;
-        if (received < amount) {
-            revert WithdrawalSlippage(amount, received);
+        uint256 idle = token.balanceOf(address(this));
+        uint256 staked = _stakedBalance();
+        if (idle == 0 && staked == 0) {
+            revert NothingStaked();
+        }
+        if (amount > idle + staked) {
+            revert WithdrawalTooLarge();
         }
 
-        token.safeTransfer(recipient, received);
-        emit Withdrawn(recipient, received);
-        return received;
+        if (idle < amount) {
+            uint256 amountFromVault = amount - idle;
+            uint256 balanceBefore = token.balanceOf(address(this));
+            vault.withdraw(amountFromVault);
+            uint256 balanceAfter = token.balanceOf(address(this));
+            uint256 received = balanceAfter - balanceBefore;
+            if (received != amountFromVault) {
+                revert WithdrawalSlippage(amountFromVault, received);
+            }
+        }
+
+        uint256 recipientBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 recipientAfter = token.balanceOf(recipient);
+        if (recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount) {
+            revert BalanceMismatch();
+        }
+        emit Withdrawn(recipient, amount);
+        return amount;
     }
 
     /**
      * @notice Withdraws the full staked balance to `recipient`.
      */
     function withdrawAll(address recipient) external override onlyOwner returns (uint256 withdrawn) {
-        uint256 staked = _stakedBalance();
-        if (staked == 0) {
-            return 0;
+        if (recipient == address(0)) {
+            revert InvalidRecipient();
         }
 
         IERC20 token = IERC20(underlying);
-        uint256 balanceBefore = token.balanceOf(address(this));
+        uint256 staked = _stakedBalance();
+        if (staked != 0) {
+            uint256 balanceBefore = token.balanceOf(address(this));
+            vault.withdraw(staked);
+            uint256 balanceAfter = token.balanceOf(address(this));
+            uint256 received = balanceAfter - balanceBefore;
+            if (received < staked) {
+                revert WithdrawalSlippage(staked, received);
+            }
+        }
 
-        vault.withdraw(staked);
-        uint256 received = token.balanceOf(address(this)) - balanceBefore;
-
-        token.safeTransfer(recipient, received);
-        emit WithdrawnAll(recipient, received);
-        return received;
+        uint256 amount = token.balanceOf(address(this));
+        if (amount == 0) {
+            return 0;
+        }
+        uint256 recipientBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 recipientAfter = token.balanceOf(recipient);
+        if (recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount) {
+            revert BalanceMismatch();
+        }
+        emit WithdrawnAll(recipient, amount);
+        return amount;
     }
 
     function _stakedBalance() internal view returns (uint256 amount) {

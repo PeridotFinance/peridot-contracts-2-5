@@ -15,7 +15,7 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
     using SafeERC20 for IERC20;
 
     /// @notice Boosted pToken allowed to interact with this adapter.
-    address public immutable owner;
+    address public immutable override owner;
 
     /// @notice Underlying ERC20 token managed by the adapter.
     address public immutable override underlying;
@@ -27,6 +27,8 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
 
     error NotOwner();
     error NotEnoughFunds();
+    error InvalidRecipient();
+    error BalanceMismatch();
 
     modifier onlyOwner() {
         if (msg.sender != owner) {
@@ -49,13 +51,14 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
      * @notice Returns the underlying amount immediately withdrawable after the instant fee.
      */
     function totalUnderlying() external view override returns (uint256) {
+        uint256 idleAssets = IERC20(underlying).balanceOf(address(this));
         uint256 shares = vault.balanceOf(address(this));
         uint256 grossAssets = vault.convertToAssets(shares);
         uint256 fee = vault.instantRedemptionFee();
         if (fee >= FEE_DENOMINATOR) {
-            return 0;
+            return idleAssets;
         }
-        return Math.mulDiv(grossAssets, FEE_DENOMINATOR - fee, FEE_DENOMINATOR);
+        return idleAssets + Math.mulDiv(grossAssets, FEE_DENOMINATOR - fee, FEE_DENOMINATOR);
     }
 
     /**
@@ -89,39 +92,83 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
         if (amount == 0) {
             return 0;
         }
-
-        // Calculate needed shares accounting for fee
-        uint256 fee = vault.instantRedemptionFee();
-
-        // Gross = Net / (1 - fee)
-        // We calculate shares for the Gross amount
-        uint256 shares = vault.convertToShares(amount);
-
-        if (fee < FEE_DENOMINATOR) {
-            shares = (shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - fee);
-            // Add slight buffer for rounding
-            shares = shares + 1;
+        if (recipient == address(0)) {
+            revert InvalidRecipient();
         }
 
-        uint256 ownedShares = vault.balanceOf(address(this));
-        if (shares > ownedShares) {
-            shares = ownedShares;
+        IERC20 token = IERC20(underlying);
+        uint256 idleAssets = token.balanceOf(address(this));
+        if (idleAssets < amount) {
+            uint256 amountFromVault = amount - idleAssets;
+            uint256 fee = vault.instantRedemptionFee();
+            if (fee >= FEE_DENOMINATOR) {
+                revert NotEnoughFunds();
+            }
+
+            uint256 grossAssets =
+                Math.mulDiv(amountFromVault, FEE_DENOMINATOR, FEE_DENOMINATOR - fee, Math.Rounding.Ceil);
+            uint256 shares = vault.convertToShares(grossAssets);
+            if (vault.convertToAssets(shares) < grossAssets) {
+                if (shares == type(uint256).max) {
+                    revert NotEnoughFunds();
+                }
+                shares += 1;
+            }
+
+            uint256 ownedShares = vault.balanceOf(address(this));
+            if (shares == 0 || shares > ownedShares) {
+                revert NotEnoughFunds();
+            }
+
+            uint256 balanceBefore = token.balanceOf(address(this));
+            uint256 reportedReceived = vault.instantRedeem(shares, address(this), address(this));
+            uint256 balanceAfter = token.balanceOf(address(this));
+            if (
+                balanceAfter < balanceBefore || balanceAfter - balanceBefore != reportedReceived
+                    || balanceAfter < amount
+            ) {
+                revert NotEnoughFunds();
+            }
         }
 
-        // instantRedeem(shares, receiver, owner)
-        uint256 assetsReceived = vault.instantRedeem(shares, recipient, address(this));
-
-        return assetsReceived;
+        uint256 recipientBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 recipientAfter = token.balanceOf(recipient);
+        if (recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount) {
+            revert BalanceMismatch();
+        }
+        return amount;
     }
 
     /**
      * @notice Withdraws all assets via instant redemption.
      */
     function withdrawAll(address recipient) external override onlyOwner returns (uint256) {
+        if (recipient == address(0)) {
+            revert InvalidRecipient();
+        }
+
+        IERC20 token = IERC20(underlying);
         uint256 shares = vault.balanceOf(address(this));
-        if (shares == 0) {
+        if (shares != 0) {
+            uint256 balanceBefore = token.balanceOf(address(this));
+            uint256 reportedReceived = vault.instantRedeem(shares, address(this), address(this));
+            uint256 balanceAfter = token.balanceOf(address(this));
+            if (balanceAfter < balanceBefore || balanceAfter - balanceBefore != reportedReceived) {
+                revert BalanceMismatch();
+            }
+        }
+
+        uint256 amount = token.balanceOf(address(this));
+        if (amount == 0) {
             return 0;
         }
-        return vault.instantRedeem(shares, recipient, address(this));
+        uint256 recipientBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 recipientAfter = token.balanceOf(recipient);
+        if (recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount) {
+            revert BalanceMismatch();
+        }
+        return amount;
     }
 }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {BoostedPErc20} from "../contracts/boosted/BoostedPErc20.sol";
 import {BoostedPErc20Immutable} from "../contracts/boosted/BoostedPErc20Immutable.sol";
 import {IBoostedYieldAdapter} from "../contracts/interfaces/IBoostedYieldAdapter.sol";
@@ -72,6 +73,43 @@ contract BoostedPErc20Test is Test {
         assertApproxEqAbs(onHand, expectedBuffer, 1, "buffer on hand");
         assertApproxEqAbs(boosted.totalManagedAssets(), mintAmount, 1, "total managed assets view");
         assertEq(underlying.allowance(address(boosted), address(adapter)), 0, "adapter allowance");
+    }
+
+    function testAdapterOnboardingRequiresPTokenOwnership() public {
+        MockInstantYieldAdapter wrongOwner = new MockInstantYieldAdapter(address(underlying), address(this));
+
+        vm.expectRevert(bytes("BoostedPErc20: adapter owner mismatch"));
+        boosted.setBoostAdapter(wrongOwner);
+
+        assertEq(address(boosted.boostAdapter()), address(adapter));
+    }
+
+    function testImmutableConstructorEmitsAdminHandoff() public {
+        address designatedAdmin = address(0xBEEF);
+        vm.recordLogs();
+        BoostedPErc20Immutable market = new BoostedPErc20Immutable(
+            address(underlying),
+            comptroller,
+            interestModel,
+            INITIAL_EXCHANGE_RATE,
+            "Boosted Event Test",
+            "bpEVENT",
+            18,
+            payable(designatedAdmin),
+            IBoostedYieldAdapter(address(0)),
+            LIQUIDITY_BUFFER
+        );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 eventSignature = keccak256("NewAdmin(address,address)");
+        bool found;
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(market) && logs[i].topics[0] == eventSignature) {
+                (address oldAdmin, address newAdmin) = abi.decode(logs[i].data, (address, address));
+                found = oldAdmin == address(this) && newAdmin == designatedAdmin;
+                break;
+            }
+        }
+        assertTrue(found, "admin handoff event");
     }
 
     function testRedeemPullsFromAdapterToSatisfyLiquidity() public {
