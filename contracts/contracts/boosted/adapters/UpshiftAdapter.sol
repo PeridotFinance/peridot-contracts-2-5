@@ -5,6 +5,7 @@ import {IBoostedYieldAdapter} from "../../interfaces/IBoostedYieldAdapter.sol";
 import {IUpshift} from "../../interfaces/IUpshift.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title UpshiftAdapter
@@ -42,18 +43,19 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
         owner = owner_;
         underlying = underlying_;
         vault = IUpshift(vault_);
-
-        // Pre-approve the vault for maximal allowance.
-        IERC20(underlying_).forceApprove(vault_, type(uint256).max);
     }
 
     /**
-     * @notice Returns the total assets managed by this adapter.
-     * @dev Uses convertToAssets which returns the value of shares held.
+     * @notice Returns the underlying amount immediately withdrawable after the instant fee.
      */
     function totalUnderlying() external view override returns (uint256) {
         uint256 shares = vault.balanceOf(address(this));
-        return vault.convertToAssets(shares);
+        uint256 grossAssets = vault.convertToAssets(shares);
+        uint256 fee = vault.instantRedemptionFee();
+        if (fee >= FEE_DENOMINATOR) {
+            return 0;
+        }
+        return Math.mulDiv(grossAssets, FEE_DENOMINATOR - fee, FEE_DENOMINATOR);
     }
 
     /**
@@ -72,7 +74,9 @@ contract UpshiftAdapter is IBoostedYieldAdapter {
         uint256 received = token.balanceOf(address(this)) - balanceBefore;
 
         // Deposit into Upshift
+        token.forceApprove(address(vault), received);
         vault.deposit(received, address(this));
+        token.forceApprove(address(vault), 0);
 
         return received;
     }

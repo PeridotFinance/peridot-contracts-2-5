@@ -114,7 +114,7 @@ contract VaiVaultAdapterTest is Test {
         assertEq(underlying.balanceOf(address(boosted)), mintAmount, "funds returned to market");
     }
 
-    function testMintRevertsWhileVaultPaused() public {
+    function testMintKeepsFundsLocalWhileVaultPaused() public {
         vault.setVaultPaused(true);
 
         uint256 mintAmount = 100e18;
@@ -122,8 +122,13 @@ contract VaiVaultAdapterTest is Test {
 
         vm.startPrank(ALICE);
         underlying.approve(address(boosted), mintAmount);
-        vm.expectRevert(VaiVaultAdapter.VaultPaused.selector);
-        boosted.mint(mintAmount);
+        uint256 result = boosted.mint(mintAmount);
         vm.stopPrank();
+
+        (uint256 staked,) = vault.userInfo(address(adapter));
+        assertEq(result, 0, "mint should succeed");
+        assertEq(staked, 0, "paused vault should remain empty");
+        assertEq(underlying.balanceOf(address(boosted)), mintAmount, "funds should remain on the market");
+        assertEq(underlying.allowance(address(boosted), address(adapter)), 0, "adapter allowance should remain zero");
     }
 }

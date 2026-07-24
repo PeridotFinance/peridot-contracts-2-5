@@ -10,7 +10,8 @@ interface IBoostedYieldAdapter {
 
     /**
      * @notice Returns the total amount of underlying that can be withdrawn immediately for the owner.
-     * @dev Implementations should include any assets deployed in third-party protocols plus idle balances.
+     * @dev Must be net of instant-redemption fees and slippage. Implementations may include
+     *      deployed and idle assets only when both are immediately available to `withdraw`.
      */
     function totalUnderlying() external view returns (uint256);
 

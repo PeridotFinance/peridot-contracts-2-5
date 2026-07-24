@@ -71,6 +71,7 @@ contract BoostedPErc20Test is Test {
         uint256 expectedBuffer = (mintAmount * LIQUIDITY_BUFFER) / 1e18;
         assertApproxEqAbs(onHand, expectedBuffer, 1, "buffer on hand");
         assertApproxEqAbs(boosted.totalManagedAssets(), mintAmount, 1, "total managed assets view");
+        assertEq(underlying.allowance(address(boosted), address(adapter)), 0, "adapter allowance");
     }
 
     function testRedeemPullsFromAdapterToSatisfyLiquidity() public {
@@ -123,22 +124,27 @@ contract BoostedPErc20Test is Test {
         assertEq(onHand, mintAmount, "all funds returned");
     }
 
-    function testAdapterTotalUnderlyingFailureKeepsFundsLocal() public {
+    function testAdapterTotalUnderlyingFailureBlocksCheapMint() public {
         failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
         boosted.setBoostAdapter(failingAdapter);
+        uint256 mintAmount = 1_000e18;
+        underlying.mint(alice, mintAmount);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), mintAmount);
+        boosted.mint(mintAmount / 2);
+        vm.stopPrank();
+
+        uint256 supplyBefore = boosted.totalSupply();
+        uint256 balanceBefore = underlying.balanceOf(alice);
         vm.prank(address(boosted));
         failingAdapter.setFailFlags(true, false, false, false);
 
-        uint256 mintAmount = 1_000e18;
-        underlying.mint(alice, mintAmount);
+        vm.prank(alice);
+        vm.expectRevert(bytes("adapter: totalUnderlying fail"));
+        boosted.mint(mintAmount / 2);
 
-        vm.startPrank(alice);
-        underlying.approve(address(boosted), mintAmount);
-        uint256 res = boosted.mint(mintAmount);
-        vm.stopPrank();
-
-        assertEq(res, 0, "mint result");
-        assertEq(underlying.balanceOf(address(boosted)), mintAmount, "funds stay local");
+        assertEq(boosted.totalSupply(), supplyBefore, "supply unchanged");
+        assertEq(underlying.balanceOf(alice), balanceBefore, "underlying unchanged");
     }
 
     function testAdapterDepositFailureDoesNotRevertMint() public {
@@ -157,9 +163,10 @@ contract BoostedPErc20Test is Test {
 
         assertEq(res, 0, "mint result");
         assertEq(underlying.balanceOf(address(boosted)), mintAmount, "deposit failure keeps cash local");
+        assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
     }
 
-    function testAdapterWithdrawFailureDoesNotRevertRebalance() public {
+    function testPauseSurvivesAdapterFailureAndPreservesIdleExit() public {
         failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
         boosted.setBoostAdapter(failingAdapter);
 
@@ -172,8 +179,73 @@ contract BoostedPErc20Test is Test {
         vm.stopPrank();
 
         vm.prank(address(boosted));
-        failingAdapter.setFailFlags(false, false, true, false);
-        boosted.setLiquidityBufferMantissa(9e17);
-        assertTrue(true, "rebalance handled withdraw failure");
+        failingAdapter.setFailFlags(false, false, true, true);
+        boosted.setBoostPaused(true);
+
+        assertTrue(boosted.boostPaused(), "boost paused");
+        assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
+        vm.prank(alice);
+        boosted.redeemUnderlying(100e18);
+        assertEq(underlying.balanceOf(alice), 100e18, "idle exit succeeds");
+    }
+
+    function testEmergencyWithdrawalFailureStillPausesAndRevokes() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(false, false, false, true);
+
+        boosted.emergencyWithdrawAdapter(address(this));
+
+        assertTrue(boosted.boostPaused(), "boost paused");
+        assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
+    }
+
+    function testSpoofedAdapterIncreaseCannotInflateMarketAssets() public {
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+
+        uint256 managedBefore = boosted.totalManagedAssets();
+        adapter.setReportBonus(10_000e18);
+
+        assertEq(boosted.totalManagedAssets(), managedBefore, "report capped by accounting");
+        assertEq(boosted.exchangeRateStored(), INITIAL_EXCHANGE_RATE, "rate not inflated");
+    }
+
+    function testAdapterLossFailsClosedUntilAdminReconciles() public {
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+        underlying.burn(address(adapter), 100e18);
+
+        vm.expectRevert(bytes("BoostedPErc20: adapter loss requires sync"));
+        boosted.totalManagedAssets();
+
+        boosted.syncAdapterAssets(700e18);
+        assertEq(boosted.totalManagedAssets(), 900e18, "loss reconciled");
+    }
+
+    function testAdminSyncExplicitlyCreditsRealizedYield() public {
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+        underlying.mint(address(adapter), 100e18);
+
+        assertEq(boosted.totalManagedAssets(), 1_000e18, "yield capped before sync");
+        boosted.syncAdapterAssets(900e18);
+        assertEq(boosted.totalManagedAssets(), 1_100e18, "reviewed yield credited");
     }
 }

@@ -7,6 +7,7 @@ import {MockErc20} from "./MockErc20.sol";
 contract MockInstantYieldAdapter is IBoostedYieldAdapter {
     address public immutable owner;
     address public immutable override underlying;
+    uint256 public reportBonus;
 
     constructor(address underlying_, address owner_) {
         underlying = underlying_;
@@ -19,7 +20,11 @@ contract MockInstantYieldAdapter is IBoostedYieldAdapter {
     }
 
     function totalUnderlying() external view override returns (uint256) {
-        return MockErc20(underlying).balanceOf(address(this));
+        return MockErc20(underlying).balanceOf(address(this)) + reportBonus;
+    }
+
+    function setReportBonus(uint256 bonus) external {
+        reportBonus = bonus;
     }
 
     function deposit(uint256 amount) external override onlyOwner returns (uint256 deposited) {

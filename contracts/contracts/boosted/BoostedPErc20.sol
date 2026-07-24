@@ -21,15 +21,16 @@ contract BoostedPErc20 is PErc20 {
     /// @notice When true the adapter is bypassed and funds stay on the pToken.
     bool public boostPaused;
 
-    event BoostAdapterUpdated(
-        address indexed oldAdapter,
-        address indexed newAdapter,
-        uint256 withdrawn
-    );
+    /// @notice Conservative ceiling for adapter assets included in market accounting.
+    uint256 public accountedAdapterAssets;
+
+    event BoostAdapterUpdated(address indexed oldAdapter, address indexed newAdapter, uint256 withdrawn);
     event LiquidityBufferUpdated(uint256 previousMantissa, uint256 newMantissa);
     event BoostPausedUpdated(bool paused);
     event BoostFundsDeployed(uint256 amountDeployed);
     event BoostFundsPulled(uint256 amountPulled);
+    event BoostAdapterWithdrawalFailed();
+    event AdapterAssetsSynced(uint256 previousAssets, uint256 newAssets);
 
     /**
      * @notice Sets a new boost adapter. Withdraws all funds from the previous adapter before switching.
@@ -42,17 +43,16 @@ contract BoostedPErc20 is PErc20 {
         uint256 withdrawn;
 
         if (oldAdapter != address(0)) {
-            withdrawn = boostAdapter.withdrawAll(address(this));
             _clearAdapterAllowance(oldAdapter);
+            withdrawn = boostAdapter.withdrawAll(address(this));
+            require(boostAdapter.totalUnderlying() == 0, "BoostedPErc20: old adapter not empty");
+            accountedAdapterAssets = 0;
         }
 
         if (address(adapter) != address(0)) {
-            require(
-                adapter.underlying() == underlying,
-                "BoostedPErc20: adapter underlying mismatch"
-            );
+            require(adapter.underlying() == underlying, "BoostedPErc20: adapter underlying mismatch");
+            require(adapter.totalUnderlying() == 0, "BoostedPErc20: adapter not empty");
             boostAdapter = adapter;
-            _ensureAdapterAllowance();
             boostPaused = false;
             _rebalanceBuffer();
         } else {
@@ -83,18 +83,23 @@ contract BoostedPErc20 is PErc20 {
     function setBoostPaused(bool pause) public {
         require(msg.sender == admin, "BoostedPErc20: only admin");
         if (pause == boostPaused) {
+            if (pause && address(boostAdapter) != address(0)) {
+                _clearAdapterAllowance(address(boostAdapter));
+            }
             return;
         }
         boostPaused = pause;
         if (pause) {
             if (address(boostAdapter) != address(0)) {
-                uint256 amount = boostAdapter.withdrawAll(address(this));
-                emit BoostFundsPulled(amount);
-                // Revoke allowance to prevent compromised adapter from pulling funds while paused
                 _clearAdapterAllowance(address(boostAdapter));
+                try boostAdapter.withdrawAll(address(this)) returns (uint256 amount) {
+                    _decreaseAccountedAssets(amount);
+                    emit BoostFundsPulled(amount);
+                } catch {
+                    emit BoostAdapterWithdrawalFailed();
+                }
             }
         } else {
-            _ensureAdapterAllowance();
             _rebalanceBuffer();
         }
         emit BoostPausedUpdated(pause);
@@ -108,12 +113,32 @@ contract BoostedPErc20 is PErc20 {
         require(msg.sender == admin, "BoostedPErc20: only admin");
         require(recipient != address(0), "BoostedPErc20: recipient zero");
         IBoostedYieldAdapter adapter = boostAdapter;
-        require(
-            address(adapter) != address(0),
-            "BoostedPErc20: adapter not set"
-        );
-        uint256 withdrawn = adapter.withdrawAll(recipient);
-        emit BoostFundsPulled(withdrawn);
+        require(address(adapter) != address(0), "BoostedPErc20: adapter not set");
+        boostPaused = true;
+        _clearAdapterAllowance(address(adapter));
+        try adapter.withdrawAll(recipient) returns (uint256 withdrawn) {
+            _decreaseAccountedAssets(withdrawn);
+            emit BoostFundsPulled(withdrawn);
+        } catch {
+            emit BoostAdapterWithdrawalFailed();
+        }
+        emit BoostPausedUpdated(true);
+    }
+
+    /**
+     * @notice Reconciles the conservative adapter ceiling to an explicitly reviewed value.
+     * @dev Yield is not admitted into collateral accounting until the admin supplies the
+     *      exact currently reported, immediately withdrawable amount.
+     */
+    function syncAdapterAssets(uint256 expectedAssets) external {
+        require(msg.sender == admin, "BoostedPErc20: only admin");
+        IBoostedYieldAdapter adapter = boostAdapter;
+        require(address(adapter) != address(0), "BoostedPErc20: adapter not set");
+        uint256 reported = adapter.totalUnderlying();
+        require(reported == expectedAssets, "BoostedPErc20: adapter balance changed");
+        uint256 previous = accountedAdapterAssets;
+        accountedAdapterAssets = reported;
+        emit AdapterAssetsSynced(previous, reported);
     }
 
     /**
@@ -133,10 +158,7 @@ contract BoostedPErc20 is PErc20 {
     /**
      * @dev After the protocol pulls tokens in, forward the excess above the buffer into the adapter.
      */
-    function doTransferIn(
-        address from,
-        uint256 amount
-    ) internal override returns (uint256) {
+    function doTransferIn(address from, uint256 amount) internal override returns (uint256) {
         uint256 actual = super.doTransferIn(from, amount);
         _rebalanceBuffer();
         return actual;
@@ -145,10 +167,7 @@ contract BoostedPErc20 is PErc20 {
     /**
      * @dev Before transferring tokens out make sure enough liquidity is on-hand, pulling from the adapter as needed.
      */
-    function doTransferOut(
-        address payable to,
-        uint256 amount
-    ) internal override {
+    function doTransferOut(address payable to, uint256 amount) internal override {
         _ensureLiquidity(amount);
         super.doTransferOut(to, amount);
         _rebalanceBuffer();
@@ -172,9 +191,21 @@ contract BoostedPErc20 is PErc20 {
         }
 
         uint256 shortfall = amount - localCash;
-        try adapter.withdraw(address(this), shortfall) returns (uint256 pulled) {
-            emit BoostFundsPulled(pulled);
-        } catch {}
+        uint256 adapterBalanceBefore = adapter.totalUnderlying();
+        uint256 balanceBefore = _localCash();
+        uint256 pulled = adapter.withdraw(address(this), shortfall);
+        uint256 balanceAfter = _localCash();
+        uint256 adapterBalanceAfter = adapter.totalUnderlying();
+        require(
+            balanceAfter >= balanceBefore && balanceAfter - balanceBefore == pulled,
+            "BoostedPErc20: withdrawal balance mismatch"
+        );
+        require(
+            adapterBalanceBefore >= adapterBalanceAfter && adapterBalanceBefore - adapterBalanceAfter >= pulled,
+            "BoostedPErc20: adapter withdrawal mismatch"
+        );
+        _decreaseAccountedAssets(adapterBalanceBefore - adapterBalanceAfter);
+        emit BoostFundsPulled(pulled);
 
         uint256 newCash = super.getCashPrior();
         require(newCash >= amount, "BoostedPErc20: liquidity shortfall");
@@ -193,30 +224,55 @@ contract BoostedPErc20 is PErc20 {
         }
 
         uint256 localCash = super.getCashPrior();
-        (bool balanceOk, uint256 adapterBalance) = _adapterBalanceSafe();
-        if (!balanceOk) {
-            return;
-        }
+        uint256 adapterBalance = _adapterBalance();
         uint256 totalAssets = localCash + adapterBalance;
         if (totalAssets == 0) {
             return;
         }
 
-        uint256 targetBuffer = (totalAssets * liquidityBufferMantissa) /
-            MANTISSA_ONE;
+        uint256 targetBuffer = (totalAssets * liquidityBufferMantissa) / MANTISSA_ONE;
 
         if (localCash > targetBuffer) {
             uint256 toDeposit = localCash - targetBuffer;
             if (toDeposit > 0) {
-                _ensureAdapterAllowance();
+                uint256 adapterBalanceBefore = adapter.totalUnderlying();
+                _setAdapterAllowance(toDeposit);
+                uint256 balanceBefore = _localCash();
                 try adapter.deposit(toDeposit) returns (uint256 deployed) {
+                    _clearAdapterAllowance(address(adapter));
+                    uint256 balanceAfter = _localCash();
+                    uint256 adapterBalanceAfter = adapter.totalUnderlying();
+                    require(
+                        balanceBefore >= balanceAfter && balanceBefore - balanceAfter == deployed
+                            && deployed == toDeposit,
+                        "BoostedPErc20: deposit balance mismatch"
+                    );
+                    require(adapterBalanceAfter >= adapterBalanceBefore, "BoostedPErc20: adapter deposit mismatch");
+                    uint256 reportedIncrease = adapterBalanceAfter - adapterBalanceBefore;
+                    accountedAdapterAssets += reportedIncrease < deployed ? reportedIncrease : deployed;
                     emit BoostFundsDeployed(deployed);
-                } catch {}
+                } catch {
+                    _clearAdapterAllowance(address(adapter));
+                }
             }
         } else if (targetBuffer > localCash) {
             uint256 deficit = targetBuffer - localCash;
             if (deficit > 0) {
+                uint256 adapterBalanceBefore = adapter.totalUnderlying();
+                uint256 balanceBefore = _localCash();
                 try adapter.withdraw(address(this), deficit) returns (uint256 pulled) {
+                    uint256 balanceAfter = _localCash();
+                    uint256 adapterBalanceAfter = adapter.totalUnderlying();
+                    require(
+                        balanceAfter >= balanceBefore && balanceAfter - balanceBefore == pulled,
+                        "BoostedPErc20: withdrawal balance mismatch"
+                    );
+                    require(
+                        adapterBalanceBefore >= adapterBalanceAfter
+                            && adapterBalanceBefore - adapterBalanceAfter >= pulled,
+                        "BoostedPErc20: adapter withdrawal mismatch"
+                    );
+                    _decreaseAccountedAssets(adapterBalanceBefore - adapterBalanceAfter);
                     emit BoostFundsPulled(pulled);
                 } catch {}
             }
@@ -228,42 +284,35 @@ contract BoostedPErc20 is PErc20 {
     }
 
     function _adapterBalance() internal view returns (uint256) {
-        (bool ok, uint256 balance) = _adapterBalanceSafe();
-        return ok ? balance : 0;
-    }
-
-    function _adapterBalanceSafe() internal view returns (bool ok, uint256 balance) {
-        if (boostPaused) {
-            return (true, 0);
-        }
         IBoostedYieldAdapter adapter = boostAdapter;
         if (address(adapter) == address(0)) {
-            return (true, 0);
+            return 0;
         }
-        try adapter.totalUnderlying() returns (uint256 reported) {
-            return (true, reported);
-        } catch {
-            return (false, 0);
-        }
+        uint256 reported = adapter.totalUnderlying();
+        require(reported >= accountedAdapterAssets, "BoostedPErc20: adapter loss requires sync");
+        return accountedAdapterAssets;
     }
 
-    function _ensureAdapterAllowance() internal {
+    function _setAdapterAllowance(uint256 amount) internal {
         IBoostedYieldAdapter adapter = boostAdapter;
         if (address(adapter) == address(0)) {
             return;
         }
         EIP20Interface token = EIP20Interface(underlying);
-        uint256 allowance = token.allowance(address(this), address(adapter));
-        if (allowance < type(uint256).max / 2) {
-            token.approve(address(adapter), 0);
-            token.approve(address(adapter), type(uint256).max);
-        }
+        require(token.approve(address(adapter), 0), "BoostedPErc20: approve reset failed");
+        require(token.approve(address(adapter), amount), "BoostedPErc20: approve failed");
     }
 
     function _clearAdapterAllowance(address adapter) internal {
         if (adapter == address(0)) {
             return;
         }
-        EIP20Interface(underlying).approve(adapter, 0);
+        EIP20Interface token = EIP20Interface(underlying);
+        require(token.approve(adapter, 0), "BoostedPErc20: approve reset failed");
+        require(token.allowance(address(this), adapter) == 0, "BoostedPErc20: allowance not revoked");
+    }
+
+    function _decreaseAccountedAssets(uint256 amount) internal {
+        accountedAdapterAssets = amount >= accountedAdapterAssets ? 0 : accountedAdapterAssets - amount;
     }
 }

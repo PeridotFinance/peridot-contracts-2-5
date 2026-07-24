@@ -56,6 +56,20 @@ See `addresses.MD` for the full list (spokes, markets, adapters).
   `forge script script/DeployRobinhoodBoostedDelegator.s.sol:DeployRobinhoodBoostedDelegator --rpc-url $ROBINHOOD_RPC_URL --broadcast`
 - Verify (BscScan): `forge verify-contract --chain bsc <address> <path:Contract> --etherscan-api-key $BNB_KEY`
 
+### Generic instant-yield adapters
+
+`BoostedPErc20` accepts only adapters whose `totalUnderlying()` is the net amount
+immediately withdrawable after fees and slippage. Adapter reports must remain at least
+the market's internally accounted amount; a lower report fails closed until the admin
+reconciles the reviewed value through `syncAdapterAssets(expectedAssets)`. Reported gains
+do not become collateral automatically. Deposits increase the accounting ceiling only by
+the lesser of the observed adapter increase and the exact underlying spent.
+
+The pToken grants the adapter an exact allowance only while depositing and revokes it
+before returning. A failed emergency withdrawal still pauses boosting and leaves the
+allowance at zero. While paused, redemptions backed by the local liquidity buffer remain
+available, but adapter-backed exits stay fail-closed until the strategy recovers.
+
 ### Robinhood pUSDG activation order
 
 `RobinhoodBoostedDelegate` is a specialized `PErc20Delegate`; do not connect the paired
