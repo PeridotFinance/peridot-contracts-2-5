@@ -274,6 +274,24 @@ contract BoostedPErc20Test is Test {
         assertEq(boosted.totalManagedAssets(), 900e18, "loss reconciled");
     }
 
+    function testForcedDustCannotBlockReviewedLossSync() public {
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+        underlying.burn(address(adapter), 100e18);
+        underlying.mint(address(adapter), 1);
+
+        vm.expectRevert(bytes("BoostedPErc20: adapter balance below expected"));
+        boosted.syncAdapterAssets(700e18 + 2);
+
+        boosted.syncAdapterAssets(700e18);
+        assertEq(boosted.accountedAdapterAssets(), 700e18, "only reviewed assets credited");
+        assertEq(boosted.totalManagedAssets(), 900e18, "forced dust remains uncredited");
+        assertEq(adapter.totalUnderlying(), 700e18 + 1, "dust remains recoverable");
+    }
+
     function testAdminSyncExplicitlyCreditsRealizedYield() public {
         underlying.mint(alice, 1_000e18);
         vm.startPrank(alice);

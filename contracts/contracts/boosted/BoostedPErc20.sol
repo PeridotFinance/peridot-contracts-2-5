@@ -129,17 +129,18 @@ contract BoostedPErc20 is PErc20 {
     /**
      * @notice Reconciles the conservative adapter ceiling to an explicitly reviewed value.
      * @dev Yield is not admitted into collateral accounting until the admin supplies the
-     *      exact currently reported, immediately withdrawable amount.
+     *      reviewed amount. A larger live report is left uncredited, so forced transfers
+     *      cannot block loss reconciliation or inflate market accounting.
      */
     function syncAdapterAssets(uint256 expectedAssets) external {
         require(msg.sender == admin, "BoostedPErc20: only admin");
         IBoostedYieldAdapter adapter = boostAdapter;
         require(address(adapter) != address(0), "BoostedPErc20: adapter not set");
         uint256 reported = adapter.totalUnderlying();
-        require(reported == expectedAssets, "BoostedPErc20: adapter balance changed");
+        require(reported >= expectedAssets, "BoostedPErc20: adapter balance below expected");
         uint256 previous = accountedAdapterAssets;
-        accountedAdapterAssets = reported;
-        emit AdapterAssetsSynced(previous, reported);
+        accountedAdapterAssets = expectedAssets;
+        emit AdapterAssetsSynced(previous, expectedAssets);
     }
 
     /**
