@@ -12,6 +12,43 @@ import {MockInterestRateModel} from "./MockInterestRateModel.sol";
 import {MockInstantYieldAdapter} from "./MockInstantYieldAdapter.sol";
 import {FailingYieldAdapter} from "./FailingYieldAdapter.sol";
 
+contract MockNoReturnErc20 {
+    string public constant name = "No Return Token";
+    string public constant symbol = "NRT";
+    uint8 public constant decimals = 18;
+
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function approve(address spender, uint256 amount) external {
+        allowance[msg.sender][spender] = amount;
+    }
+
+    function transfer(address recipient, uint256 amount) external {
+        _transfer(msg.sender, recipient, amount);
+    }
+
+    function transferFrom(address sender, address recipient, uint256 amount) external {
+        uint256 currentAllowance = allowance[sender][msg.sender];
+        require(currentAllowance >= amount, "ALLOWANCE");
+        allowance[sender][msg.sender] = currentAllowance - amount;
+        _transfer(sender, recipient, amount);
+    }
+
+    function mint(address recipient, uint256 amount) external {
+        totalSupply += amount;
+        balanceOf[recipient] += amount;
+    }
+
+    function _transfer(address sender, address recipient, uint256 amount) internal {
+        require(recipient != address(0), "RECIPIENT");
+        require(balanceOf[sender] >= amount, "BALANCE");
+        balanceOf[sender] -= amount;
+        balanceOf[recipient] += amount;
+    }
+}
+
 contract BoostedPErc20Test is Test {
     uint256 constant INITIAL_EXCHANGE_RATE = 2e16; // 0.02 scaled by 1e18
     uint256 constant LIQUIDITY_BUFFER = 2e17; // 20%
@@ -73,6 +110,40 @@ contract BoostedPErc20Test is Test {
         assertApproxEqAbs(onHand, expectedBuffer, 1, "buffer on hand");
         assertApproxEqAbs(boosted.totalManagedAssets(), mintAmount, 1, "total managed assets view");
         assertEq(underlying.allowance(address(boosted), address(adapter)), 0, "adapter allowance");
+    }
+
+    function testExactAdapterAllowanceSupportsNoReturnToken() public {
+        MockNoReturnErc20 noReturnToken = new MockNoReturnErc20();
+        BoostedPErc20 noReturnMarket = BoostedPErc20(
+            address(
+                new BoostedPErc20Immutable(
+                    address(noReturnToken),
+                    comptroller,
+                    interestModel,
+                    INITIAL_EXCHANGE_RATE,
+                    "Boosted No Return",
+                    "bpNRT",
+                    18,
+                    payable(admin),
+                    IBoostedYieldAdapter(address(0)),
+                    LIQUIDITY_BUFFER
+                )
+            )
+        );
+        MockInstantYieldAdapter noReturnAdapter =
+            new MockInstantYieldAdapter(address(noReturnToken), address(noReturnMarket));
+        noReturnMarket.setBoostAdapter(noReturnAdapter);
+
+        noReturnToken.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        noReturnToken.approve(address(noReturnMarket), 1_000e18);
+        uint256 result = noReturnMarket.mint(1_000e18);
+        vm.stopPrank();
+
+        assertEq(result, 0);
+        assertEq(noReturnToken.balanceOf(address(noReturnMarket)), 200e18);
+        assertEq(noReturnAdapter.totalUnderlying(), 800e18);
+        assertEq(noReturnToken.allowance(address(noReturnMarket), address(noReturnAdapter)), 0);
     }
 
     function testAdapterOnboardingRequiresPTokenOwnership() public {

@@ -2,14 +2,17 @@
 pragma solidity ^0.8.20;
 
 import "../PErc20.sol";
-import "../EIP20Interface.sol";
 import "../interfaces/IBoostedYieldAdapter.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title Peridot's Boosted PErc20
  * @notice Extends PErc20 by deploying idle liquidity into an external yield adapter that supports instant withdrawals.
  */
 contract BoostedPErc20 is PErc20 {
+    using SafeERC20 for IERC20;
+
     uint256 internal constant MANTISSA_ONE = 1e18;
 
     /// @notice Adapter that manages external yield for this market.
@@ -282,7 +285,7 @@ contract BoostedPErc20 is PErc20 {
     }
 
     function _localCash() internal view returns (uint256) {
-        return EIP20Interface(underlying).balanceOf(address(this));
+        return IERC20(underlying).balanceOf(address(this));
     }
 
     function _adapterBalance() internal view returns (uint256) {
@@ -303,17 +306,15 @@ contract BoostedPErc20 is PErc20 {
         if (address(adapter) == address(0)) {
             return;
         }
-        EIP20Interface token = EIP20Interface(underlying);
-        require(token.approve(address(adapter), 0), "BoostedPErc20: approve reset failed");
-        require(token.approve(address(adapter), amount), "BoostedPErc20: approve failed");
+        IERC20(underlying).forceApprove(address(adapter), amount);
     }
 
     function _clearAdapterAllowance(address adapter) internal {
         if (adapter == address(0)) {
             return;
         }
-        EIP20Interface token = EIP20Interface(underlying);
-        require(token.approve(adapter, 0), "BoostedPErc20: approve reset failed");
+        IERC20 token = IERC20(underlying);
+        token.forceApprove(adapter, 0);
         require(token.allowance(address(this), adapter) == 0, "BoostedPErc20: allowance not revoked");
     }
 

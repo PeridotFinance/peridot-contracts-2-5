@@ -2,9 +2,12 @@
 pragma solidity ^0.8.20;
 
 import {IBoostedYieldAdapter} from "../contracts/interfaces/IBoostedYieldAdapter.sol";
-import {MockErc20} from "./MockErc20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract MockInstantYieldAdapter is IBoostedYieldAdapter {
+    using SafeERC20 for IERC20;
+
     address public immutable override owner;
     address public immutable override underlying;
     uint256 public reportBonus;
@@ -20,7 +23,7 @@ contract MockInstantYieldAdapter is IBoostedYieldAdapter {
     }
 
     function totalUnderlying() external view override returns (uint256) {
-        return MockErc20(underlying).balanceOf(address(this)) + reportBonus;
+        return IERC20(underlying).balanceOf(address(this)) + reportBonus;
     }
 
     function setReportBonus(uint256 bonus) external {
@@ -31,7 +34,7 @@ contract MockInstantYieldAdapter is IBoostedYieldAdapter {
         if (amount == 0) {
             return 0;
         }
-        require(MockErc20(underlying).transferFrom(owner, address(this), amount), "adapter: deposit transfer failed");
+        IERC20(underlying).safeTransferFrom(owner, address(this), amount);
         return amount;
     }
 
@@ -39,14 +42,14 @@ contract MockInstantYieldAdapter is IBoostedYieldAdapter {
         if (amount == 0) {
             return 0;
         }
-        require(MockErc20(underlying).transfer(recipient, amount), "adapter: withdraw transfer failed");
+        IERC20(underlying).safeTransfer(recipient, amount);
         return amount;
     }
 
     function withdrawAll(address recipient) external override onlyOwner returns (uint256 withdrawn) {
-        uint256 balance = MockErc20(underlying).balanceOf(address(this));
+        uint256 balance = IERC20(underlying).balanceOf(address(this));
         if (balance > 0) {
-            require(MockErc20(underlying).transfer(recipient, balance), "adapter: withdraw all transfer failed");
+            IERC20(underlying).safeTransfer(recipient, balance);
         }
         return balance;
     }
