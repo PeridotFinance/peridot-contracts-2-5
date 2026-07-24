@@ -61,7 +61,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param redeemTokens The number of pTokens to redeem into underlying
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeem(uint256 redeemTokens) external override returns (uint256) {
+    function redeem(uint256 redeemTokens) external virtual override returns (uint256) {
         redeemInternal(redeemTokens);
         return NO_ERROR;
     }
@@ -72,7 +72,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param redeemAmount The amount of underlying to redeem
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeemUnderlying(uint256 redeemAmount) external override returns (uint256) {
+    function redeemUnderlying(uint256 redeemAmount) external virtual override returns (uint256) {
         redeemUnderlyingInternal(redeemAmount);
         return NO_ERROR;
     }

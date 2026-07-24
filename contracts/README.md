@@ -30,6 +30,8 @@ See `addresses.MD` for the full list (spokes, markets, adapters).
 - PERIDOT incentives (supply/borrow rewards) with on-chain claiming
 - xPeridot vault + staking with APR and tiered rewards (V2)
 - Chainlink-integrated price oracle with staleness fallback
+- Robinhood Chain pUSDG market whose delegator is the USDG side account of the paired
+  NVDA/USDG vault
 
 ## Repository Layout
 
@@ -50,7 +52,36 @@ See `addresses.MD` for the full list (spokes, markets, adapters).
 - Local node: `anvil`
 - Deploy Comptroller (BNB): `forge script script/DeployPeridottroller.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`
 - Deploy pToken: `forge script script/DeployPErc20Fixed.s.sol --rpc-url $BNBMAIN_RPC --private-key $PRIVATE_KEY --broadcast`
+- Deploy the initially paused Robinhood pUSDG delegator:
+  `forge script script/DeployRobinhoodBoostedDelegator.s.sol:DeployRobinhoodBoostedDelegator --rpc-url $ROBINHOOD_RPC_URL --broadcast`
 - Verify (BscScan): `forge verify-contract --chain bsc <address> <path:Contract> --etherscan-api-key $BNB_KEY`
+
+### Robinhood pUSDG activation order
+
+`RobinhoodBoostedDelegate` is a specialized `PErc20Delegate`; do not connect the paired
+vault through the generic `IBoostedYieldAdapter`. Delegate calls execute from the
+`PErc20Delegator`, so the deployed pUSDG delegator is the vault's `USDG_SIDE_ACCOUNT`.
+
+1. Deploy the delegate and delegator with empty initialization data. It starts
+   unconfigured and paused.
+2. Register the production `NVDA/USDG` vault pair with the delegator as its USDG side
+   account.
+3. From the pToken admin/timelock, queue `setVaultConfig(vault, pairId, buffer, operator)`,
+   wait for `actionDelay`, then execute `_setVaultConfig`.
+4. Through vault governance, unpause allocation for the production pair while leaving
+   settlement swaps paused.
+5. Queue `setVaultPaused(false)`, wait, execute it, and verify the delegator remains the
+   vault-reported side account and its vault allowance is zero after operations.
+
+`ConfigureRobinhoodBoostedDelegator.s.sol` emits the queue/execute timelock payload for
+each pUSDG admin action. Choose one of `queue-config`, `execute-config`,
+`queue-unpause`, or `execute-unpause` through `PUSDG_ADMIN_ACTION`. It prints calldata by
+default; `DIRECT_ADMIN_BROADCAST=true` is an explicit EOA-admin-only escape hatch.
+
+Exchange-rate accounting includes the full `accountedAssets` claim. Cash/liquidity checks
+include only `liquidAssets`. Vault withdrawal loss is applied before redemption tokens
+are burned or underlying is paid, while idle-only exits remain available if the vault's
+LP path is unavailable.
 
 Environment
 
