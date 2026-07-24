@@ -290,6 +290,9 @@ contract BoostedPErc20 is PErc20 {
         if (address(adapter) == address(0)) {
             return 0;
         }
+        if (boostPaused) {
+            return accountedAdapterAssets;
+        }
         uint256 reported = adapter.totalUnderlying();
         require(reported >= accountedAdapterAssets, "BoostedPErc20: adapter loss requires sync");
         return accountedAdapterAssets;

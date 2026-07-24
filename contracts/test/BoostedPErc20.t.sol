@@ -217,14 +217,21 @@ contract BoostedPErc20Test is Test {
         vm.stopPrank();
 
         vm.prank(address(boosted));
-        failingAdapter.setFailFlags(false, false, true, true);
+        failingAdapter.setFailFlags(true, false, true, true);
         boosted.setBoostPaused(true);
 
         assertTrue(boosted.boostPaused(), "boost paused");
+        assertEq(boosted.totalManagedAssets(), mintAmount, "cached accounting remains available");
         assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
         vm.prank(alice);
         boosted.redeemUnderlying(100e18);
         assertEq(underlying.balanceOf(alice), 100e18, "idle exit succeeds");
+
+        uint256 pTokenBalanceBefore = boosted.balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert(bytes("ERC20: transfer amount exceeds balance"));
+        boosted.redeemUnderlying(200e18);
+        assertEq(boosted.balanceOf(alice), pTokenBalanceBefore, "adapter-backed exit has no drift");
     }
 
     function testEmergencyWithdrawalFailureStillPausesAndRevokes() public {
