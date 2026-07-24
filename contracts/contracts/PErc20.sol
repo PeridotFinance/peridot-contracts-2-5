@@ -50,7 +50,7 @@ contract PErc20 is PToken, PErc20Interface {
      * @param mintAmount The amount of the underlying asset to supply
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function mint(uint256 mintAmount) external override returns (uint256) {
+    function mint(uint256 mintAmount) external virtual override returns (uint256) {
         mintInternal(mintAmount);
         return NO_ERROR;
     }

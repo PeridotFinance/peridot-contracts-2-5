@@ -255,6 +255,15 @@ contract BoostedPErc20Test is Test {
 
         assertEq(boosted.totalSupply(), supplyBefore, "supply unchanged");
         assertEq(underlying.balanceOf(alice), balanceBefore, "underlying unchanged");
+        assertEq(boosted.totalManagedAssets(), 100e18, "unproven adapter value excluded");
+
+        uint256 pTokenBalanceBefore = boosted.balanceOf(alice);
+        vm.prank(alice);
+        boosted.redeemUnderlying(50e18);
+
+        assertEq(underlying.balanceOf(alice), balanceBefore + 50e18, "idle exit remains available");
+        assertEq(pTokenBalanceBefore - boosted.balanceOf(alice), 12_500e18, "idle exit uses conservative rate");
+        assertTrue(boosted.boostPaused(), "failed post-exit rebalance trips circuit breaker");
     }
 
     function testAdapterDepositFailureDoesNotRevertMint() public {
@@ -274,6 +283,7 @@ contract BoostedPErc20Test is Test {
         assertEq(res, 0, "mint result");
         assertEq(underlying.balanceOf(address(boosted)), mintAmount, "deposit failure keeps cash local");
         assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "allowance revoked");
+        assertTrue(boosted.boostPaused(), "adapter failure trips circuit breaker");
     }
 
     function testPauseSurvivesAdapterFailureAndPricesIdleExitConservatively() public {
@@ -351,11 +361,90 @@ contract BoostedPErc20Test is Test {
         vm.stopPrank();
         underlying.burn(address(adapter), 100e18);
 
+        assertEq(boosted.totalManagedAssets(), 200e18, "unproven adapter assets excluded");
+        assertEq(boosted.exchangeRateStored(), 4e15, "loss uses conservative rate");
+
+        underlying.mint(alice, 100e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 100e18);
         vm.expectRevert(bytes("BoostedPErc20: adapter loss requires sync"));
-        boosted.totalManagedAssets();
+        boosted.mint(100e18);
+        vm.stopPrank();
+
+        uint256 balanceBeforeIdleExit = underlying.balanceOf(alice);
+        vm.prank(alice);
+        boosted.redeemUnderlying(100e18);
+        assertTrue(boosted.boostPaused(), "failed post-exit rebalance trips circuit breaker");
+        assertEq(underlying.balanceOf(alice), balanceBeforeIdleExit + 100e18, "idle exit remains available");
 
         boosted.syncAdapterAssets(700e18);
-        assertEq(boosted.totalManagedAssets(), 900e18, "loss reconciled");
+        boosted.setBoostPaused(false);
+        assertEq(boosted.totalManagedAssets(), 800e18, "loss reconciled");
+    }
+
+    function testRevertingAdapterCanBeDetachedReplacedAndRecovered() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(true, false, false, true);
+
+        MockInstantYieldAdapter replacement = new MockInstantYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(replacement);
+
+        assertEq(address(boosted.boostAdapter()), address(replacement), "replacement active");
+        assertEq(boosted.totalManagedAssets(), 200e18, "detached assets excluded");
+        assertEq(underlying.allowance(address(boosted), address(failingAdapter)), 0, "old allowance revoked");
+
+        underlying.mint(alice, 100e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 100e18);
+        vm.expectRevert(bytes("BoostedPErc20: detached adapter unresolved"));
+        boosted.mint(100e18);
+        vm.stopPrank();
+
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(false, false, false, false);
+        boosted.resolveDetachedBoostAdapter(address(failingAdapter), false);
+
+        assertEq(failingAdapter.totalUnderlying(), 0, "old adapter empty");
+        assertEq(replacement.totalUnderlying(), 800e18, "recovered funds rebalanced");
+        assertEq(underlying.balanceOf(address(boosted)), 200e18, "buffer restored");
+        assertEq(boosted.totalManagedAssets(), 1_000e18, "all value restored");
+    }
+
+    function testDetachedAdapterCanBeWrittenOffBeforeMintingResumes() public {
+        failingAdapter = new FailingYieldAdapter(address(underlying), address(boosted));
+        boosted.setBoostAdapter(failingAdapter);
+
+        underlying.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 1_000e18);
+        boosted.mint(1_000e18);
+        vm.stopPrank();
+
+        vm.prank(address(boosted));
+        failingAdapter.setFailFlags(true, false, false, true);
+        boosted.setBoostAdapter(IBoostedYieldAdapter(address(0)));
+
+        underlying.mint(alice, 100e18);
+        vm.startPrank(alice);
+        underlying.approve(address(boosted), 100e18);
+        vm.expectRevert(bytes("BoostedPErc20: detached adapter unresolved"));
+        boosted.mint(100e18);
+        vm.stopPrank();
+
+        boosted.resolveDetachedBoostAdapter(address(failingAdapter), true);
+
+        vm.prank(alice);
+        assertEq(boosted.mint(100e18), 0, "mint resumes after governance write-off");
+        assertEq(boosted.totalManagedAssets(), 300e18, "written-off adapter remains excluded");
     }
 
     function testForcedDustCannotBlockReviewedLossSync() public {
