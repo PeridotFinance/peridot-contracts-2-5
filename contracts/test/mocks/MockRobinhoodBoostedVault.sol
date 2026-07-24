@@ -12,6 +12,8 @@ contract MockRobinhoodBoostedVault is IRobinhoodBoostedVault {
     uint256 public liquid;
     uint256 public pendingLoss;
     bool public withdrawalReverts;
+    bool public accountedReadReverts;
+    bool public liquidReadReverts;
     address public lastDepositor;
 
     constructor(MockErc20 token_, bytes32 pairId_) {
@@ -29,6 +31,11 @@ contract MockRobinhoodBoostedVault is IRobinhoodBoostedVault {
 
     function setWithdrawalReverts(bool value) external {
         withdrawalReverts = value;
+    }
+
+    function setReadReverts(bool accountedValue, bool liquidValue) external {
+        accountedReadReverts = accountedValue;
+        liquidReadReverts = liquidValue;
     }
 
     function investAll() external {
@@ -78,11 +85,13 @@ contract MockRobinhoodBoostedVault is IRobinhoodBoostedVault {
 
     function accountedAssets(bytes32 pairId_, address token_) external view override returns (uint256) {
         require(pairId_ == pairId && token_ == address(token), "mock: wrong pair");
+        require(!accountedReadReverts, "mock: accounted read blocked");
         return accounted;
     }
 
     function liquidAssets(bytes32 pairId_, address token_) external view override returns (uint256) {
         require(pairId_ == pairId && token_ == address(token), "mock: wrong pair");
+        require(!liquidReadReverts, "mock: liquid read blocked");
         return liquid;
     }
 

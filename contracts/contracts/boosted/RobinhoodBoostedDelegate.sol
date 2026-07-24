@@ -54,6 +54,9 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     uint256 public actionDelay;
     mapping(bytes32 => uint256) public queuedActions;
 
+    /// @dev Requires a live accounted-assets report while a mint prices new pTokens.
+    bool internal mintVaultAssetsValidated;
+
     event RobinhoodVaultConfigured(
         address indexed vault, bytes32 indexed pairId, uint256 bufferMantissa, address indexed operator
     );
@@ -108,6 +111,18 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
 
     function vaultLiquidAssets() external view returns (uint256) {
         return _vaultLiquidAssets();
+    }
+
+    /**
+     * @notice Supplies USDG only when the vault claim used for mint pricing is live.
+     * @dev Other operations use conservative zero-value fallbacks so vault read failures
+     *      cannot freeze local cash while new suppliers cannot dilute existing holders.
+     */
+    function mint(uint256 mintAmount) external override returns (uint256) {
+        mintVaultAssetsValidated = true;
+        mintInternal(mintAmount);
+        mintVaultAssetsValidated = false;
+        return NO_ERROR;
     }
 
     /**
@@ -339,7 +354,9 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     function _rebalanceVault(bool allowWithdrawal) internal {
         if (vaultPaused || !_vaultConfigured()) return;
         uint256 localCash = super.getCashPrior();
-        uint256 accounted = _vaultAccountedAssets();
+        (bool accountedValid, uint256 accounted) = _tryVaultAccountedAssets();
+        (bool liquidValid,) = _tryVaultLiquidAssets();
+        if (!accountedValid || !liquidValid) return;
         uint256 totalAssets = localCash + accounted;
         if (totalAssets == 0) return;
 
@@ -375,7 +392,8 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
         returns (uint256 returned, uint256 realizedLoss, bool success)
     {
         if (requested == 0 || !_vaultConfigured()) return (0, 0, false);
-        uint256 accounted = _vaultAccountedAssets();
+        (bool accountedValid, uint256 accounted) = _tryVaultAccountedAssets();
+        if (!accountedValid) return (0, 0, false);
         if (requested > accounted) requested = accounted;
         if (requested == 0) return (0, 0, false);
 
@@ -404,7 +422,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
         if (buffer_ > MANTISSA_ONE) revert InvalidBuffer();
         if (operator_ == address(0)) revert InvalidOperator();
         if (_vaultConfigured() && (vault_ != address(robinhoodVault) || pairId_ != robinhoodPairId)) {
-            if (_vaultAccountedAssets() != 0) revert OldVaultNotEmpty();
+            if (robinhoodVault.accountedAssets(robinhoodPairId, underlying) != 0) revert OldVaultNotEmpty();
         }
         _validateVault(vault_, pairId_);
         robinhoodVault = IRobinhoodBoostedVault(vault_);
@@ -427,12 +445,33 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
 
     function _vaultAccountedAssets() internal view returns (uint256) {
         if (!_vaultConfigured()) return 0;
-        return robinhoodVault.accountedAssets(robinhoodPairId, underlying);
+        if (mintVaultAssetsValidated) {
+            return robinhoodVault.accountedAssets(robinhoodPairId, underlying);
+        }
+        (bool valid, uint256 assets) = _tryVaultAccountedAssets();
+        return valid ? assets : 0;
     }
 
     function _vaultLiquidAssets() internal view returns (uint256) {
         if (!_vaultConfigured()) return 0;
-        return robinhoodVault.liquidAssets(robinhoodPairId, underlying);
+        (bool valid, uint256 assets) = _tryVaultLiquidAssets();
+        return valid ? assets : 0;
+    }
+
+    function _tryVaultAccountedAssets() internal view returns (bool valid, uint256 assets) {
+        try robinhoodVault.accountedAssets(robinhoodPairId, underlying) returns (uint256 value) {
+            return (true, value);
+        } catch {
+            return (false, 0);
+        }
+    }
+
+    function _tryVaultLiquidAssets() internal view returns (bool valid, uint256 assets) {
+        try robinhoodVault.liquidAssets(robinhoodPairId, underlying) returns (uint256 value) {
+            return (true, value);
+        } catch {
+            return (false, 0);
+        }
     }
 
     function _vaultConfigured() internal view returns (bool) {

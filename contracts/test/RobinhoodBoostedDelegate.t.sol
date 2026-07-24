@@ -133,6 +133,49 @@ contract RobinhoodBoostedDelegateTest is Test {
         assertEq(PErc20(address(delegator)).balanceOf(user), 4_500e9);
     }
 
+    function testLiquidReadFailureFallsBackToLocalCash() external {
+        _mint(1_000e6);
+        vault.investAll();
+        vault.setReadReverts(false, true);
+
+        assertEq(PErc20(address(delegator)).getCash(), 200e6);
+        assertEq(boosted.totalManagedAssets(), 1_000e6);
+        assertEq(PErc20(address(delegator)).exchangeRateStored(), INITIAL_EXCHANGE_RATE);
+
+        uint256 tokensForOneHundred = (100e6 * 1e18) / INITIAL_EXCHANGE_RATE;
+        vm.prank(user);
+        PErc20(address(delegator)).redeem(tokensForOneHundred);
+
+        assertEq(usdg.balanceOf(user), 9_100e6);
+        assertEq(usdg.balanceOf(address(delegator)), 100e6);
+        assertEq(vault.accounted(), 800e6);
+    }
+
+    function testAccountedReadFailureIsConservativeAndBlocksCheapMint() external {
+        _mint(1_000e6);
+        vault.investAll();
+        vault.setReadReverts(true, true);
+
+        assertEq(PErc20(address(delegator)).getCash(), 200e6);
+        assertEq(boosted.totalManagedAssets(), 200e6);
+        assertEq(PErc20(address(delegator)).exchangeRateStored(), 4e13);
+
+        uint256 supplyBefore = PErc20(address(delegator)).totalSupply();
+        uint256 balanceBefore = usdg.balanceOf(user);
+        vm.prank(user);
+        vm.expectRevert(bytes("mock: accounted read blocked"));
+        PErc20(address(delegator)).mint(10e6);
+        assertEq(PErc20(address(delegator)).totalSupply(), supplyBefore);
+        assertEq(usdg.balanceOf(user), balanceBefore);
+
+        vm.prank(user);
+        PErc20(address(delegator)).redeemUnderlying(100e6);
+
+        assertEq(usdg.balanceOf(user), balanceBefore + 100e6);
+        assertEq(usdg.balanceOf(address(delegator)), 100e6);
+        assertEq(vault.accounted(), 800e6);
+    }
+
     function testLpBackedRedeemFailsClosedDuringVaultIncidentWithoutDrift() external {
         _mint(1_000e6);
         vault.investAll();
