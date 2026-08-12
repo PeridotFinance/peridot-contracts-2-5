@@ -151,3 +151,13 @@ contract PeridottrollerV7Storage is PeridottrollerV6Storage {
     /// @notice Accounting storage mapping account addresses to how much PERIDOT they owe the protocol.
     mapping(address => uint256) public peridotReceivable;
 }
+
+/**
+ * @notice Storage appended for isolated margin accounts.
+ * @dev Never reorder: Unitroller deployments rely on append-only storage.
+ */
+contract PeridottrollerV8Storage is PeridottrollerV7Storage {
+    address public isolatedMarginRiskHook;
+    address public isolatedMarginRegistrar;
+    mapping(address => bool) public isolatedMarginAccounts;
+}

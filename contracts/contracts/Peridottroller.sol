@@ -8,13 +8,14 @@ import "./PeridottrollerInterface.sol";
 import "./PeridottrollerStorage.sol";
 import "./Unitroller.sol";
 import "./Governance/Peridot.sol";
+import {IIsolatedMarginRiskHook} from "./margin/interfaces/IIsolatedMarginRiskHook.sol";
 
 /**
  * @title Peridot's Peridottroller Contract
  * @author Peridot
  */
 contract Peridottroller is
-    PeridottrollerV7Storage,
+    PeridottrollerV8Storage,
     PeridottrollerInterface,
     PeridottrollerErrorReporter,
     ExponentialNoError
@@ -73,6 +74,10 @@ contract Peridottroller is
 
     /// @notice Emitted when borrow cap guardian is changed
     event NewBorrowCapGuardian(address oldBorrowCapGuardian, address newBorrowCapGuardian);
+
+    event IsolatedMarginRiskHookUpdated(address indexed oldHook, address indexed newHook);
+    event IsolatedMarginRegistrarUpdated(address indexed oldRegistrar, address indexed newRegistrar);
+    event IsolatedMarginAccountRegistered(address indexed account);
 
     /// @notice Emitted when PERIDOT is granted by admin
     event PeridotGranted(address recipient, uint256 amount);
@@ -294,7 +299,18 @@ contract Peridottroller is
      * @return 0 if the redeem is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
     function redeemAllowed(address pToken, address redeemer, uint256 redeemTokens) external override returns (uint256) {
-        uint256 allowed = redeemAllowedInternal(pToken, redeemer, redeemTokens);
+        uint256 allowed;
+        if (isolatedMarginAccounts[redeemer]) {
+            try IIsolatedMarginRiskHook(isolatedMarginRiskHook).redeemAllowed(redeemer, pToken, redeemTokens) returns (
+                bool hookAllowed
+            ) {
+                allowed = hookAllowed ? uint256(Error.NO_ERROR) : uint256(Error.INSUFFICIENT_LIQUIDITY);
+            } catch {
+                allowed = uint256(Error.REJECTION);
+            }
+        } else {
+            allowed = redeemAllowedInternal(pToken, redeemer, redeemTokens);
+        }
         if (allowed != uint256(Error.NO_ERROR)) {
             return allowed;
         }
@@ -395,13 +411,23 @@ contract Peridottroller is
             require(nextTotalBorrows < borrowCap, "market borrow cap reached");
         }
 
-        (Error err,, uint256 shortfall) =
-            getHypotheticalAccountLiquidityInternal(borrower, PToken(pToken), 0, borrowAmount);
-        if (err != Error.NO_ERROR) {
-            return uint256(err);
-        }
-        if (shortfall > 0) {
-            return uint256(Error.INSUFFICIENT_LIQUIDITY);
+        if (isolatedMarginAccounts[borrower]) {
+            try IIsolatedMarginRiskHook(isolatedMarginRiskHook).borrowAllowed(borrower, pToken, borrowAmount) returns (
+                bool hookAllowed
+            ) {
+                if (!hookAllowed) return uint256(Error.INSUFFICIENT_LIQUIDITY);
+            } catch {
+                return uint256(Error.REJECTION);
+            }
+        } else {
+            (Error err,, uint256 shortfall) =
+                getHypotheticalAccountLiquidityInternal(borrower, PToken(pToken), 0, borrowAmount);
+            if (err != Error.NO_ERROR) {
+                return uint256(err);
+            }
+            if (shortfall > 0) {
+                return uint256(Error.INSUFFICIENT_LIQUIDITY);
+            }
         }
 
         // Keep the flywheel moving
@@ -507,6 +533,12 @@ contract Peridottroller is
 
         if (!markets[pTokenBorrowed].isListed || !markets[pTokenCollateral].isListed) {
             return uint256(Error.MARKET_NOT_LISTED);
+        }
+
+        // Isolated accounts use the dedicated equity/maintenance-margin liquidator.
+        // Never expose them to the controller's collateral-factor liquidation path.
+        if (isolatedMarginAccounts[borrower]) {
+            return uint256(Error.INSUFFICIENT_SHORTFALL);
         }
 
         uint256 borrowBalance = PToken(pTokenBorrowed).borrowBalanceStored(borrower);
@@ -645,9 +677,20 @@ contract Peridottroller is
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!transferGuardianPaused, "transfer is paused");
 
-        // Currently the only consideration is whether or not
-        //  the src is allowed to redeem this many tokens
-        uint256 allowed = redeemAllowedInternal(pToken, src, transferTokens);
+        uint256 allowed;
+        if (isolatedMarginAccounts[src]) {
+            try IIsolatedMarginRiskHook(isolatedMarginRiskHook).transferAllowed(src, pToken, transferTokens) returns (
+                bool hookAllowed
+            ) {
+                allowed = hookAllowed ? uint256(Error.NO_ERROR) : uint256(Error.INSUFFICIENT_LIQUIDITY);
+            } catch {
+                allowed = uint256(Error.REJECTION);
+            }
+        } else {
+            // Currently the only consideration is whether or not
+            // the src is allowed to redeem this many tokens.
+            allowed = redeemAllowedInternal(pToken, src, transferTokens);
+        }
         if (allowed != uint256(Error.NO_ERROR)) {
             return allowed;
         }
@@ -1075,6 +1118,32 @@ contract Peridottroller is
 
         // Emit NewBorrowCapGuardian(OldBorrowCapGuardian, NewBorrowCapGuardian)
         emit NewBorrowCapGuardian(oldBorrowCapGuardian, newBorrowCapGuardian);
+    }
+
+    function _setIsolatedMarginRiskHook(address newHook) external returns (uint256) {
+        if (msg.sender != admin) return uint256(Error.UNAUTHORIZED);
+        require(newHook.code.length > 0, "invalid isolated margin hook");
+        address oldHook = isolatedMarginRiskHook;
+        isolatedMarginRiskHook = newHook;
+        emit IsolatedMarginRiskHookUpdated(oldHook, newHook);
+        return uint256(Error.NO_ERROR);
+    }
+
+    function _setIsolatedMarginRegistrar(address newRegistrar) external returns (uint256) {
+        if (msg.sender != admin) return uint256(Error.UNAUTHORIZED);
+        require(newRegistrar.code.length > 0, "invalid isolated margin registrar");
+        address oldRegistrar = isolatedMarginRegistrar;
+        isolatedMarginRegistrar = newRegistrar;
+        emit IsolatedMarginRegistrarUpdated(oldRegistrar, newRegistrar);
+        return uint256(Error.NO_ERROR);
+    }
+
+    function registerIsolatedMarginAccount(address account) external {
+        require(msg.sender == isolatedMarginRegistrar, "only isolated margin registrar");
+        require(account.code.length > 0, "invalid isolated margin account");
+        require(!isolatedMarginAccounts[account], "isolated margin account exists");
+        isolatedMarginAccounts[account] = true;
+        emit IsolatedMarginAccountRegistered(account);
     }
 
     /**
