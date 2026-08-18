@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {Peridottroller} from "../contracts/Peridottroller.sol";
+import {PToken} from "../contracts/PToken.sol";
 import {PeridotTransparentProxy} from "../contracts/proxy/PeridotTransparentProxy.sol";
 import {AvalanchePriceOracle} from "../contracts/margin/AvalanchePriceOracle.sol";
 import {IsolatedMarginAccountFactory} from "../contracts/margin/IsolatedMarginAccountFactory.sol";
@@ -16,10 +17,6 @@ import {IsolatedMarginSwapModule} from "../contracts/margin/IsolatedMarginSwapMo
 import {IsolatedMarginVaultUpgradeable} from "../contracts/margin/IsolatedMarginVaultUpgradeable.sol";
 import {MarginFeeDistributorUpgradeable} from "../contracts/margin/MarginFeeDistributorUpgradeable.sol";
 import {MarginInsuranceFundUpgradeable} from "../contracts/margin/MarginInsuranceFundUpgradeable.sol";
-
-interface IOperatorRouterAdapter {
-    function setOperator(address operator, bool allowed) external;
-}
 
 /**
  * @notice Deploys and wires the isolated-margin stack for Avalanche C-Chain.
@@ -157,15 +154,15 @@ contract DeployIsolatedMarginAvalanche is Script {
         deployed.feeDistributor.setFeeCollector(address(deployed.executor), true);
         deployed.insuranceFund.setLiquidator(address(deployed.liquidator));
 
-        _configureMarketsAndFeeds(deployed.oracle, deployed.vault);
+        address[] memory pTokens = _configureMarketsAndFeeds(deployed.oracle, deployed.vault);
 
-        if (vm.envOr("CONFIGURE_ADAPTER_OPERATOR", false)) {
-            IOperatorRouterAdapter(routerAdapter).setOperator(address(deployed.swapModule), true);
-        }
-        if (vm.envOr("WIRE_CONTROLLER", false)) {
+        bool wireController = vm.envOr("WIRE_CONTROLLER", false);
+        if (wireController) {
             require(
                 Peridottroller(controllerAddress).admin() == deployer, "DeployMargin: deployer not controller admin"
             );
+        }
+        if (wireController) {
             require(
                 Peridottroller(controllerAddress)._setIsolatedMarginRiskHook(address(deployed.riskEngine)) == 0,
                 "DeployMargin: hook wiring failed"
@@ -175,6 +172,7 @@ contract DeployIsolatedMarginAvalanche is Script {
                 "DeployMargin: registrar wiring failed"
             );
         }
+        _validateControllerPrices(controllerAddress, pTokens);
 
         deployed.oracle.transferOwnership(finalOwner);
         deployed.insuranceFund.transferOwnership(finalOwner);
@@ -187,8 +185,11 @@ contract DeployIsolatedMarginAvalanche is Script {
         _log(deployed);
     }
 
-    function _configureMarketsAndFeeds(AvalanchePriceOracle oracle, IsolatedMarginVaultUpgradeable vault) internal {
-        address[] memory pTokens = vm.envAddress("MARGIN_PTOKENS", ",");
+    function _configureMarketsAndFeeds(AvalanchePriceOracle oracle, IsolatedMarginVaultUpgradeable vault)
+        internal
+        returns (address[] memory pTokens)
+    {
+        pTokens = vm.envAddress("MARGIN_PTOKENS", ",");
         address[] memory assets = vm.envAddress("MARGIN_ASSETS", ",");
         address[] memory feeds = vm.envAddress("MARGIN_CHAINLINK_FEEDS", ",");
         uint256[] memory maxAges = vm.envUint("MARGIN_FEED_MAX_AGES", ",");
@@ -202,6 +203,15 @@ contract DeployIsolatedMarginAvalanche is Script {
             oracle.configureFeed(assets[i], feeds[i], uint32(maxAges[i]));
             oracle.registerMarket(pTokens[i], assets[i]);
             vault.setPTokenAllowed(pTokens[i], true);
+        }
+    }
+
+    function _validateControllerPrices(address controllerAddress, address[] memory pTokens) internal view {
+        for (uint256 i = 0; i < pTokens.length; i++) {
+            require(
+                Peridottroller(controllerAddress).oracle().getUnderlyingPrice(PToken(pTokens[i])) > 0,
+                "DeployMargin: controller price unavailable"
+            );
         }
     }
 
@@ -225,5 +235,6 @@ contract DeployIsolatedMarginAvalanche is Script {
         console2.log("IsolatedMarginAccountFactory", address(d.accountFactory));
         console2.log("IsolatedMarginExecutor", address(d.executor));
         console2.log("IsolatedMarginLiquidator", address(d.liquidator));
+        console2.log("Margin opens start paused; wire controller and adapter, then timelock-unpause");
     }
 }

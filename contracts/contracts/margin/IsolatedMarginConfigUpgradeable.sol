@@ -67,6 +67,7 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         __Ownable_init(owner_);
 
         actionDelay = actionDelay_;
+        opensPaused = true;
         routerAdapter = routerAdapter_;
         flashLoanProvider = flashLoanProvider_;
         insuranceFund = insuranceFund_;
@@ -76,6 +77,7 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         insuranceShareBps = 5_000;
 
         emit ActionDelayConfigured(actionDelay_);
+        emit OpensPaused(true);
         emit ExecutionEndpointsConfigured(routerAdapter_, flashLoanProvider_);
         emit FeeRecipientsConfigured(insuranceFund_, treasury_);
         emit FeesConfigured(0, 0, 5_000, 5_000, 0);

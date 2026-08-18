@@ -621,6 +621,12 @@ contract Peridottroller is
             return uint256(Error.MARKET_NOT_LISTED);
         }
 
+        // Dedicated margin liquidation redeems authorized collateral directly.
+        // Do not let any listed pToken reach isolated balances through seize().
+        if (isolatedMarginAccounts[borrower]) {
+            return uint256(Error.INSUFFICIENT_SHORTFALL);
+        }
+
         if (PToken(pTokenCollateral).peridottroller() != PToken(pTokenBorrowed).peridottroller()) {
             return uint256(Error.COMPTROLLER_MISMATCH);
         }

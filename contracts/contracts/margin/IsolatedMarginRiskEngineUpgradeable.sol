@@ -212,6 +212,14 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
             maxRepayUnderlying = debt;
         } else {
             maxRepayUnderlying = Math.mulDiv(debt, pairRisk.maxLiquidationBps, BPS);
+            uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, maxRepayUnderlying);
+            uint256 requiredSeizeValueUsd =
+                Math.mulDiv(repayValueUsd, BPS + pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
+            uint256 requiredPositionPTokens =
+                _pTokenForUsd(accountConfig.positionPToken, requiredSeizeValueUsd, Math.Rounding.Ceil);
+            if (requiredPositionPTokens >= PErc20(accountConfig.positionPToken).balanceOf(account)) {
+                maxRepayUnderlying = debt;
+            }
         }
         previousHealthFactorBps = currentMetrics.healthFactorBps;
         accountConfig.status = IsolatedMarginTypes.Status.LIQUIDATING;
@@ -333,6 +341,16 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         uint256 priceUsd = oracle.getPrice(asset);
         if (priceUsd == 0) revert PriceUnavailable(asset);
         return IsolatedMarginMath.valueUsd(underlyingAmount, IERC20Metadata(asset).decimals(), priceUsd);
+    }
+
+    function _pTokenForUsd(address pToken, uint256 valueUsd, Math.Rounding rounding) internal view returns (uint256) {
+        address asset = oracle.marketAsset(pToken);
+        if (asset == address(0)) revert PriceUnavailable(asset);
+        uint256 priceUsd = oracle.getPrice(asset);
+        if (priceUsd == 0) revert PriceUnavailable(asset);
+        return IsolatedMarginMath.pTokenForUsd(
+            valueUsd, IERC20Metadata(asset).decimals(), priceUsd, PErc20(pToken).exchangeRateStored(), rounding
+        );
     }
 
     function _metrics(address account, uint256 additionalBorrow)

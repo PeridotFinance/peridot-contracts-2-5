@@ -445,6 +445,28 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertLt(pUsd.balanceOf(address(insuranceFund)), insuranceBefore, "insurance was not used");
         }
 
+        function testLiquidationPromotesToFullWhenPartialWouldExhaustPositionCollateral() public {
+            uint256 positionId = _openLong(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            usd.mint(USER, 230e18);
+            vm.startPrank(USER);
+            pUsd.mint(230e18);
+            marginVault.deposit(address(pUsd), 230e18);
+            executor.addCollateral(positionId, 230e18);
+            vm.stopPrank();
+
+            _setAvaxPriceAndRates(40e6);
+            IsolatedMarginTypes.AccountMetrics memory metrics = riskEngine.getMetrics(position.account);
+            assertTrue(riskEngine.isLiquidatable(position.account), "position should be liquidatable");
+            assertGt(metrics.healthFactorBps, 5_000, "configured full-liquidation threshold reached");
+
+            liquidator.liquidate(_liquidationParams(positionId));
+
+            assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.LIQUIDATED));
+            assertEq(pUsd.borrowBalanceStored(position.account), 0, "debt remains after promoted full liquidation");
+        }
+
         function testNormalAccountStillUsesConventionalCollateralFactor() public {
             avax.mint(NORMAL_USER, 100e18);
             vm.startPrank(NORMAL_USER);
@@ -468,6 +490,16 @@ contract MarginTestAggregator is AggregatorV3Interface {
             uint256 allowed =
                 controller.liquidateBorrowAllowed(address(pUsd), address(pAvax), address(this), position.account, 1e18);
             assertTrue(allowed != 0, "native collateral-factor liquidation was enabled");
+        }
+
+        function testControllerRejectsDirectSeizeForIsolatedAccount() public {
+            uint256 positionId = _openLong(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            uint256 allowed = controller.seizeAllowed(
+                address(pAvax), address(pUsd), address(this), position.account, 1e18
+            );
+            assertTrue(allowed != 0, "direct pToken seizure was enabled");
         }
 
         function _deployLendingMarkets() internal {
@@ -623,9 +655,11 @@ contract MarginTestAggregator is AggregatorV3Interface {
             });
             config.queuePairRisk(address(pUsd), address(pAvax), address(pUsd), pairRisk);
             config.queuePairRisk(address(pUsd), address(pUsd), address(pAvax), pairRisk);
+            config.queueUnpauseOpens();
             vm.warp(block.timestamp + config.actionDelay());
             config.setPairRisk(address(pUsd), address(pAvax), address(pUsd), pairRisk);
             config.setPairRisk(address(pUsd), address(pUsd), address(pAvax), pairRisk);
+            config.unpauseOpens();
         }
 
         function _seedBalances() internal {

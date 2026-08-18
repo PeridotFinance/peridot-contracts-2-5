@@ -9,6 +9,7 @@ import {IsolatedMarginTypes} from "../contracts/margin/IsolatedMarginTypes.sol";
 /**
  * @notice Queues or executes one Avalanche isolated-margin pair configuration.
  * @dev Run once with EXECUTE=false, wait config.actionDelay(), then rerun with EXECUTE=true.
+ *      Set UNPAUSE_OPENS=true only after controller and adapter wiring have been verified.
  */
 contract ConfigureIsolatedMarginPairAvalanche is Script {
     function run() external returns (bytes32 actionId) {
@@ -36,12 +37,19 @@ contract ConfigureIsolatedMarginPairAvalanche is Script {
         });
 
         vm.startBroadcast(deployerKey);
+        bool unpauseOpens = vm.envOr("UNPAUSE_OPENS", false);
         if (vm.envOr("EXECUTE", false)) {
             config.setPairRisk(marginPToken, positionPToken, debtPToken, risk);
+            if (unpauseOpens) config.unpauseOpens();
             actionId = keccak256(abi.encode("pairRisk", config.pairKey(marginPToken, positionPToken, debtPToken), risk));
             console2.log("Executed pair risk action");
         } else {
             actionId = config.queuePairRisk(marginPToken, positionPToken, debtPToken, risk);
+            if (unpauseOpens) {
+                bytes32 unpauseActionId = config.queueUnpauseOpens();
+                console2.log("Queued unpause action");
+                console2.logBytes32(unpauseActionId);
+            }
             console2.log("Queued pair risk action");
             console2.log("Execute after", config.queuedActions(actionId));
         }
