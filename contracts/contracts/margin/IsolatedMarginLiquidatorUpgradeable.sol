@@ -102,6 +102,7 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         bool fullyLiquidated
     );
     event InsuranceExcessReturned(address indexed pToken, uint256 underlyingAmount, uint256 pTokenAmount);
+    event UnderlyingDustReturned(address indexed pToken, address indexed recipient, uint256 underlyingAmount);
 
     constructor() {
         _disableInitializers();
@@ -285,10 +286,8 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
             available = IERC20(token).balanceOf(address(this)) - pending.baseDebtBalance;
             if (insuranceProceeds > shortfall) {
                 uint256 excessUnderlying = insuranceProceeds - shortfall;
-                uint256 returnedPTokens = _mintPToken(pending.debtPToken, excessUnderlying);
-                IERC20(pending.debtPToken).safeTransfer(address(insuranceFund), returnedPTokens);
+                _returnInsuranceExcess(pending.debtPToken, excessUnderlying);
                 available -= excessUnderlying;
-                emit InsuranceExcessReturned(pending.debtPToken, excessUnderlying, returnedPTokens);
             }
         }
         if (available < totalFlashRepayment) revert LiquidationError(22);
@@ -307,7 +306,9 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
                 uint256 marginUnderlying = marginAsset == token
                     ? userResidual
                     : _swap(token, marginAsset, userResidual, minMarginUnderlying, pairRisk, debtToMarginSwapData);
-                returnedMarginPTokens = _mintPToken(pending.marginPToken, marginUnderlying);
+                returnedMarginPTokens = _mintPTokenOrReturnUnderlying(
+                    pending.marginPToken, marginUnderlying, _getPosition(pending.positionId).owner
+                );
             }
         }
 
@@ -366,6 +367,35 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         if (PErc20(pToken).mint(underlyingAmount) != 0) revert LiquidationError(24);
         IERC20(asset).forceApprove(pToken, 0);
         mintedPTokens = PErc20(pToken).balanceOf(address(this)) - beforeBalance;
+    }
+
+    function _returnInsuranceExcess(address pToken, uint256 underlyingAmount)
+        internal
+        returns (uint256 returnedPTokens)
+    {
+        returnedPTokens = _mintPTokenOrReturnUnderlying(pToken, underlyingAmount, address(insuranceFund));
+        if (returnedPTokens > 0) {
+            IERC20(pToken).safeTransfer(address(insuranceFund), returnedPTokens);
+        }
+        emit InsuranceExcessReturned(pToken, underlyingAmount, returnedPTokens);
+    }
+
+    function _mintPTokenOrReturnUnderlying(address pToken, uint256 underlyingAmount, address dustRecipient)
+        internal
+        returns (uint256 mintedPTokens)
+    {
+        address asset = quoter.assetForMarket(pToken);
+
+        // pToken minting rounds down. If the amount cannot represent even one
+        // pToken unit, return the underlying instead of donating it to market cash.
+        if (Math.mulDiv(underlyingAmount, 1e18, PErc20(pToken).exchangeRateStored()) == 0) {
+            IERC20(asset).safeTransfer(dustRecipient, underlyingAmount);
+            emit UnderlyingDustReturned(pToken, dustRecipient, underlyingAmount);
+            return 0;
+        }
+
+        mintedPTokens = _mintPToken(pToken, underlyingAmount);
+        if (mintedPTokens == 0) revert LiquidationError(26);
     }
 
     function _swap(

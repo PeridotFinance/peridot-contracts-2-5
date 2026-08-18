@@ -88,6 +88,12 @@ contract MarginTestAggregator is AggregatorV3Interface {
         }
     }
 
+    contract IsolatedMarginLiquidatorHarness is IsolatedMarginLiquidatorUpgradeable {
+        function returnInsuranceExcessForTest(address pToken, uint256 underlyingAmount) external returns (uint256) {
+            return _returnInsuranceExcess(pToken, underlyingAmount);
+        }
+    }
+
     contract MutableMarginInterestRateModel is InterestRateModel {
         uint256 public borrowRate;
 
@@ -536,6 +542,24 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertGt(pAvax.balanceOf(address(insuranceFund)), insuranceAvaxBefore, "insurance excess not returned");
         }
 
+        function testSubPTokenInsuranceExcessReturnsUnderlyingWithoutDonation() public {
+            assertTrue(usd.transfer(address(pUsd), 1e18), "market donation failed");
+            assertGt(pUsd.exchangeRateStored(), 1e18, "test requires a sub-pToken amount");
+
+            assertTrue(usd.transfer(address(liquidator), 1), "dust transfer failed");
+            uint256 marketCashBefore = usd.balanceOf(address(pUsd));
+            uint256 insuranceUnderlyingBefore = usd.balanceOf(address(insuranceFund));
+
+            uint256 returnedPTokens =
+                IsolatedMarginLiquidatorHarness(address(liquidator)).returnInsuranceExcessForTest(address(pUsd), 1);
+
+            assertEq(returnedPTokens, 0, "dust unexpectedly minted pTokens");
+            assertEq(usd.balanceOf(address(pUsd)), marketCashBefore, "dust was donated to market cash");
+            assertEq(
+                usd.balanceOf(address(insuranceFund)), insuranceUnderlyingBefore + 1, "insurance dust was not returned"
+            );
+        }
+
         function testTerminalCloseRequiresRawZeroDebt() public {
             uint256 positionId = _openLong(200);
             IsolatedMarginTypes.Position memory position = _position(positionId);
@@ -772,7 +796,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             accountFactory.setExecutor(address(executor));
             liquidator = IsolatedMarginLiquidatorUpgradeable(
                 _proxy(
-                    address(new IsolatedMarginLiquidatorUpgradeable()),
+                    address(new IsolatedMarginLiquidatorHarness()),
                     abi.encodeWithSelector(
                         IsolatedMarginLiquidatorUpgradeable.initialize.selector,
                         address(executor),
