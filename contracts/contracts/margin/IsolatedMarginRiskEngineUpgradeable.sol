@@ -6,6 +6,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import {IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
 import {IsolatedMarginMath} from "./IsolatedMarginMath.sol";
 import {IsolatedMarginTypes} from "./IsolatedMarginTypes.sol";
@@ -164,6 +165,16 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.CLOSING);
     }
 
+    /// @notice Starts an in-kind recovery exit without consulting price feeds.
+    /// @dev The executor must accrue the debt market first. Only raw-zero-debt accounts qualify.
+    function beginDebtFreeClose(address account) external onlyExecutor {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
+        accountConfig.status = IsolatedMarginTypes.Status.CLOSING;
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.CLOSING);
+    }
+
     function finishClose(address account, uint256 previousHealthFactorBps, bool fullyClosed)
         external
         onlyExecutor
@@ -171,11 +182,11 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     {
         AccountConfig storage accountConfig = accounts[account];
         require(accountConfig.status == IsolatedMarginTypes.Status.CLOSING, "RiskEngine: not closing");
-        currentMetrics = _metrics(account, 0);
         if (fullyClosed) {
-            require(currentMetrics.debtValueUsd == 0, "RiskEngine: debt remains");
+            require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
             accountConfig.status = IsolatedMarginTypes.Status.CLOSED;
         } else {
+            currentMetrics = _metrics(account, 0);
             require(currentMetrics.equityUsd > 0, "RiskEngine: negative equity");
             require(currentMetrics.healthFactorBps >= previousHealthFactorBps, "RiskEngine: close worsened health");
             accountConfig.status = IsolatedMarginTypes.Status.ACTIVE;
@@ -195,29 +206,34 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
 
         IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
         uint256 debt = PErc20(accountConfig.debtPToken).borrowBalanceStored(account);
-        bool partialWouldNotImprove;
-        if (currentMetrics.equityUsd <= 0) {
-            partialWouldNotImprove = true;
-        } else {
-            uint256 adjustedEquity =
-                Math.mulDiv(uint256(currentMetrics.equityUsd), BPS + pairRisk.liquidationBonusBps, BPS);
-            uint256 bonusThreshold =
-                Math.mulDiv(currentMetrics.grossAssetValueUsd, pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
-            partialWouldNotImprove = adjustedEquity <= bonusThreshold;
-        }
         if (
             currentMetrics.healthFactorBps <= pairRisk.fullLiquidationHealthBps
-                || currentMetrics.debtValueUsd <= DUST_DEBT_VALUE_USD || partialWouldNotImprove
+                || currentMetrics.debtValueUsd <= DUST_DEBT_VALUE_USD
         ) {
             maxRepayUnderlying = debt;
         } else {
             maxRepayUnderlying = Math.mulDiv(debt, pairRisk.maxLiquidationBps, BPS);
-            uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, maxRepayUnderlying);
-            uint256 requiredSeizeValueUsd =
-                Math.mulDiv(repayValueUsd, BPS + pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
+            (uint256 requiredSeizeValueUsd,) = _liquidationQuote(accountConfig, maxRepayUnderlying);
             uint256 requiredPositionPTokens =
                 _pTokenForUsd(accountConfig.positionPToken, requiredSeizeValueUsd, Math.Rounding.Ceil);
-            if (requiredPositionPTokens >= PErc20(accountConfig.positionPToken).balanceOf(account)) {
+            uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, maxRepayUnderlying);
+            uint256 projectedGrossAssetValueUsd = currentMetrics.grossAssetValueUsd > requiredSeizeValueUsd
+                ? currentMetrics.grossAssetValueUsd - requiredSeizeValueUsd
+                : 0;
+            uint256 projectedDebtValueUsd =
+                currentMetrics.debtValueUsd > repayValueUsd ? currentMetrics.debtValueUsd - repayValueUsd : 0;
+            IsolatedMarginTypes.AccountMetrics memory projectedMetrics = IsolatedMarginMath.calculateMetrics(
+                projectedGrossAssetValueUsd,
+                projectedDebtValueUsd,
+                pairRisk.initialMarginBps,
+                pairRisk.maintenanceMarginBps
+            );
+            bool partialWouldNotImprove = projectedMetrics.healthFactorBps < pairRisk.liquidationTargetBps
+                && projectedMetrics.healthFactorBps <= currentMetrics.healthFactorBps;
+            if (
+                requiredSeizeValueUsd >= currentMetrics.grossAssetValueUsd || partialWouldNotImprove
+                    || requiredPositionPTokens >= PErc20(accountConfig.positionPToken).balanceOf(account)
+            ) {
                 maxRepayUnderlying = debt;
             }
         }
@@ -233,11 +249,11 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     {
         AccountConfig storage accountConfig = accounts[account];
         require(accountConfig.status == IsolatedMarginTypes.Status.LIQUIDATING, "RiskEngine: not liquidating");
-        currentMetrics = _metrics(account, 0);
         if (fullyLiquidated) {
-            require(currentMetrics.debtValueUsd == 0, "RiskEngine: debt remains");
+            require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
             accountConfig.status = IsolatedMarginTypes.Status.LIQUIDATED;
         } else {
+            currentMetrics = _metrics(account, 0);
             IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
             require(
                 currentMetrics.healthFactorBps >= pairRisk.liquidationTargetBps
@@ -341,6 +357,40 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         uint256 priceUsd = oracle.getPrice(asset);
         if (priceUsd == 0) revert PriceUnavailable(asset);
         return IsolatedMarginMath.valueUsd(underlyingAmount, IERC20Metadata(asset).decimals(), priceUsd);
+    }
+
+    function getLiquidationQuote(address account, uint256 repayUnderlying)
+        external
+        view
+        returns (uint256 seizeValueUsd, uint256 flashFeeUnderlying)
+    {
+        require(isIsolatedMarginAccount[account] && repayUnderlying > 0, "RiskEngine: invalid quote");
+        return _liquidationQuote(accounts[account], repayUnderlying);
+    }
+
+    function _liquidationQuote(AccountConfig memory accountConfig, uint256 repayUnderlying)
+        internal
+        view
+        returns (uint256 seizeValueUsd, uint256 flashFeeUnderlying)
+    {
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        address debtAsset = oracle.marketAsset(accountConfig.debtPToken);
+        address positionAsset = oracle.marketAsset(accountConfig.positionPToken);
+        address lender = config.flashLoanProvider();
+        require(debtAsset != address(0) && positionAsset != address(0), "RiskEngine: market missing");
+        require(lender.code.length > 0, "RiskEngine: lender unavailable");
+
+        flashFeeUnderlying = IERC3156FlashLender(lender).flashFee(debtAsset, repayUnderlying);
+        uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, repayUnderlying);
+        uint256 flashFeeValueUsd = underlyingValueUsd(accountConfig.debtPToken, flashFeeUnderlying);
+        uint256 bonusValueUsd = Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
+        seizeValueUsd = repayValueUsd + flashFeeValueUsd + bonusValueUsd;
+
+        // The seized collateral is sold into the debt asset. Reserve enough input
+        // to repay at the worst output permitted by the pair's swap bound.
+        if (positionAsset != debtAsset) {
+            seizeValueUsd = Math.mulDiv(seizeValueUsd, BPS, BPS - pairRisk.maxSlippageBps, Math.Rounding.Ceil);
+        }
     }
 
     function _pTokenForUsd(address pToken, uint256 valueUsd, Math.Rounding rounding) internal view returns (uint256) {

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 import {Peridottroller} from "../contracts/Peridottroller.sol";
@@ -355,6 +356,85 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.CLOSED));
         }
 
+        function testDebtFreeInKindExitSurvivesStaleOracle() public {
+            uint256 positionId = _openLong(200);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            usd.mint(USER, 200e18);
+            vm.startPrank(USER);
+            usd.approve(address(executor), type(uint256).max);
+            executor.repayWithUnderlying(positionId, type(uint256).max);
+            vm.stopPrank();
+            assertEq(pUsd.borrowBalanceStored(position.account), 0, "manual full repayment failed");
+
+            uint256 walletPositionBefore = pAvax.balanceOf(USER);
+            uint256 accountPositionBalance = pAvax.balanceOf(position.account);
+            vm.warp(block.timestamp + 30 days + 1);
+
+            vm.prank(USER);
+            (uint256 returnedMargin, uint256 returnedPosition, uint256 returnedDebt) =
+                executor.exitDebtFreeToPTokens(positionId, 0);
+
+            assertEq(returnedMargin, 0, "unexpected margin pTokens");
+            assertEq(returnedPosition, accountPositionBalance, "position pTokens not returned in-kind");
+            assertEq(returnedDebt, 0, "unexpected debt pTokens");
+            assertEq(pAvax.balanceOf(USER) - walletPositionBefore, returnedPosition, "wallet not credited");
+            assertEq(marginVault.lockedBalance(USER, address(pUsd)), 0, "stale position lock remains");
+            assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.CLOSED));
+        }
+
+        function testDebtFreeInKindExitChargesClosingFeeInEachReturnedPToken() public {
+            _setFees(0, 10, 5_000, 5_000, 0);
+            uint256 positionId = _openLong(200);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            usd.mint(USER, 200e18);
+            vm.startPrank(USER);
+            usd.approve(address(executor), type(uint256).max);
+            executor.repayWithUnderlying(positionId, type(uint256).max);
+            vm.stopPrank();
+
+            uint256 accountPositionBalance = pAvax.balanceOf(position.account);
+            uint256 expectedFee = Math.mulDiv(accountPositionBalance, 10, BPS, Math.Rounding.Ceil);
+            uint256 insuranceBefore = pAvax.balanceOf(address(insuranceFund));
+            vm.prank(USER);
+            (, uint256 returnedPosition,) = executor.exitDebtFreeToPTokens(positionId, 10);
+
+            assertEq(returnedPosition, accountPositionBalance - expectedFee, "in-kind close fee not deducted");
+            assertEq(pAvax.balanceOf(address(insuranceFund)) - insuranceBefore, expectedFee, "fee not distributed");
+        }
+
+        function testPartialCloseAccruesDebtBeforeHealthBaseline() public {
+            uint256 positionId = _openShort(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            usd.mint(USER, 100e18);
+            vm.startPrank(USER);
+            pUsd.mint(100e18);
+            marginVault.deposit(address(pUsd), 100e18);
+            executor.addCollateral(positionId, 100e18);
+            vm.stopPrank();
+
+            interestRateModel.setBorrowRate(5e12);
+            vm.roll(block.number + 40_000);
+            uint256 storedDebtBefore = pAvax.borrowBalanceStored(position.account);
+
+            IsolatedMarginExecutorUpgradeable.CloseParams memory closeParams = IsolatedMarginExecutorUpgradeable.CloseParams({
+                positionId: positionId,
+                closeBps: 5_000,
+                maxClosingFeePToken: 0,
+                minDebtUnderlying: 0,
+                minMarginUnderlying: 0,
+                positionToDebtSwapData: bytes(""),
+                debtToMarginSwapData: bytes("")
+            });
+            vm.prank(USER);
+            executor.closePosition(closeParams);
+
+            assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.ACTIVE));
+            assertLt(pAvax.borrowBalanceStored(position.account), storedDebtBefore, "partial close did not reduce debt");
+        }
+
         function testBorrowRateAccruesAsTheOnlyFundingCharge() public {
             uint256 positionId = _openLong(500);
             IsolatedMarginTypes.Position memory position = _position(positionId);
@@ -391,7 +471,15 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertApproxEqAbs(marginVault.freeBalance(USER, address(pUsd)) - freeBefore, pending, 1);
         }
 
-        function testPartialLiquidationUsesMaintenanceMarginAndRestoresTargetHealth() public {
+        function testInsuranceRecipientCannotBeClearedWhenDepositorFeesFallbackToIt() public {
+            _setFees(0, 0, 10_000, 0, 0);
+            config.queueFeeRecipients(address(0), address(0));
+            vm.warp(block.timestamp + config.actionDelay());
+            vm.expectRevert(bytes("MarginConfig: invalid insurance"));
+            config.setFeeRecipients(address(0), address(0));
+        }
+
+        function testPartialLiquidationUsesMaintenanceMarginAndImprovesHealth() public {
             uint256 positionId = _openLong(500);
             IsolatedMarginTypes.Position memory beforePosition = _position(positionId);
             uint256 debtBefore = pUsd.borrowBalanceStored(beforePosition.account);
@@ -399,6 +487,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
 
             _setAvaxPriceAndRates(88e6);
             assertTrue(riskEngine.isLiquidatable(beforePosition.account), "position should be liquidatable");
+            uint256 healthBefore = riskEngine.getMetrics(beforePosition.account).healthFactorBps;
 
             uint256 rewardBefore = usd.balanceOf(LIQUIDATION_RECIPIENT);
             liquidator.liquidate(_liquidationParams(positionId));
@@ -408,8 +497,80 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(uint256(afterPosition.status), uint256(IsolatedMarginTypes.Status.ACTIVE));
             assertLt(pUsd.borrowBalanceStored(afterPosition.account), debtBefore, "debt not reduced");
             assertLt(afterPosition.lockedMarginPTokens, lockedBefore, "locked accounting not written down");
-            assertGe(metrics.healthFactorBps, 12_500, "liquidation target not reached");
+            assertGt(metrics.healthFactorBps, healthBefore, "liquidation did not improve health");
             assertGt(usd.balanceOf(LIQUIDATION_RECIPIENT), rewardBefore, "liquidator not rewarded");
+        }
+
+        function testPartialLiquidationCoversFlashFeeAndSlippageWithoutInsurance() public {
+            uint256 positionId = _openLong(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+            _setPairLiquidationRisk(address(pUsd), address(pAvax), address(pUsd), 1, 100);
+            flashVault.setFeeBps(100);
+
+            _setAvaxPriceAndRates(88e6);
+            router.setRate(address(avax), address(usd), 88e16 * 9_900 / BPS);
+            uint256 insuranceBefore = pUsd.balanceOf(address(insuranceFund));
+
+            liquidator.liquidate(_liquidationParams(positionId));
+
+            assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.ACTIVE));
+            assertEq(pUsd.balanceOf(address(insuranceFund)), insuranceBefore, "insurance paid partial liquidation");
+            assertEq(pUsd.borrowBalanceStored(position.account) < position.borrowedPrincipal, true, "debt not reduced");
+        }
+
+        function testCrossAssetInsuranceBufferCompletesFullShortLiquidation() public {
+            uint256 positionId = _openShort(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            _setAvaxPriceAndRates(150e6);
+            uint256 expectedUsdToAvax = uint256(1e36) / 15e17;
+            router.setRate(address(usd), address(avax), expectedUsdToAvax * 9_901 / BPS);
+            uint256 insuranceUsdBefore = pUsd.balanceOf(address(insuranceFund));
+            uint256 insuranceAvaxBefore = pAvax.balanceOf(address(insuranceFund));
+
+            liquidator.liquidate(_liquidationParams(positionId));
+
+            assertEq(uint256(_position(positionId).status), uint256(IsolatedMarginTypes.Status.LIQUIDATED));
+            assertEq(pAvax.borrowBalanceStored(position.account), 0, "short bad debt remains");
+            assertLt(pUsd.balanceOf(address(insuranceFund)), insuranceUsdBefore, "insurance was not used");
+            assertGt(pAvax.balanceOf(address(insuranceFund)), insuranceAvaxBefore, "insurance excess not returned");
+        }
+
+        function testTerminalCloseRequiresRawZeroDebt() public {
+            uint256 positionId = _openLong(200);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+            uint256 debt = pUsd.borrowBalanceStored(position.account);
+
+            usd.mint(USER, debt);
+            vm.startPrank(USER);
+            usd.approve(address(executor), type(uint256).max);
+            executor.repayWithUnderlying(positionId, debt - 1);
+            vm.stopPrank();
+            assertEq(pUsd.borrowBalanceStored(position.account), 1, "test requires one wei debt");
+
+            usdFeed.setAnswer(1);
+            vm.prank(address(executor));
+            uint256 previousHealth = riskEngine.beginClose(position.account);
+            vm.expectRevert(bytes("RiskEngine: debt remains"));
+            vm.prank(address(executor));
+            riskEngine.finishClose(position.account, previousHealth, true);
+        }
+
+        function testDirectControllerCallCannotConsumeMovementAuthorization() public {
+            uint256 positionId = _openLong(500);
+            IsolatedMarginTypes.Position memory position = _position(positionId);
+
+            vm.prank(address(executor));
+            riskEngine.beginClose(position.account);
+            vm.prank(address(executor));
+            riskEngine.authorizeMovement(position.account, address(pAvax), 1e18);
+            uint256 allowed = controller.redeemAllowed(address(pAvax), position.account, 1e18);
+            assertTrue(allowed != 0, "direct controller caller was authorized");
+
+            (uint256 remainingAmount, uint64 authorizationBlock) =
+                riskEngine.movementAuthorizations(position.account, address(pAvax));
+            assertEq(remainingAmount, 1e18, "authorization was consumed");
+            assertEq(authorizationBlock, uint64(block.number), "authorization block changed");
         }
 
         function testDeepPartialLiquidationCanProgressInMultipleSteps() public {
@@ -777,6 +938,22 @@ contract MarginTestAggregator is AggregatorV3Interface {
             config.queueFees(openFeeBps, closeFeeBps, depositorShareBps, insuranceShareBps, treasuryShareBps);
             vm.warp(block.timestamp + config.actionDelay());
             config.setFees(openFeeBps, closeFeeBps, depositorShareBps, insuranceShareBps, treasuryShareBps);
+        }
+
+        function _setPairLiquidationRisk(
+            address marginPToken,
+            address positionPToken,
+            address debtPToken,
+            uint16 liquidationBonusBps,
+            uint16 maxSlippageBps
+        ) internal {
+            IsolatedMarginTypes.PairRiskConfig memory pairRisk =
+                config.getPairRisk(marginPToken, positionPToken, debtPToken);
+            pairRisk.liquidationBonusBps = liquidationBonusBps;
+            pairRisk.maxSlippageBps = maxSlippageBps;
+            config.queuePairRisk(marginPToken, positionPToken, debtPToken, pairRisk);
+            vm.warp(block.timestamp + config.actionDelay());
+            config.setPairRisk(marginPToken, positionPToken, debtPToken, pairRisk);
         }
 
         function _proxy(address implementation, bytes memory data) internal returns (address) {

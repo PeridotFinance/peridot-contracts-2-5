@@ -22,6 +22,8 @@ import {MarginInsuranceFundUpgradeable} from "../contracts/margin/MarginInsuranc
  * @notice Deploys and wires the isolated-margin stack for Avalanche C-Chain.
  * @dev All addresses are environment-driven; this script deliberately contains no Somnia constants.
  *      Pair risk is queued separately with ConfigureIsolatedMarginPairAvalanche because it is timelocked.
+ *      The margin risk engine intentionally uses its dedicated Chainlink oracle while the lending controller
+ *      retains its existing oracle; both must price every configured market before deployment succeeds.
  */
 contract DeployIsolatedMarginAvalanche is Script {
     struct Deployment {

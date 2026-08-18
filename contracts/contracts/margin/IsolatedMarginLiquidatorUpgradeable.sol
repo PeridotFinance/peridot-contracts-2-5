@@ -101,6 +101,7 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         uint256 liquidatorReward,
         bool fullyLiquidated
     );
+    event InsuranceExcessReturned(address indexed pToken, uint256 underlyingAmount, uint256 pTokenAmount);
 
     constructor() {
         _disableInitializers();
@@ -155,8 +156,7 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         uint256 collateralPTokens = positionBalance;
         uint256 lockedReduction = position.lockedMarginPTokens;
         if (!fullyLiquidated) {
-            uint256 repayValueUsd = riskEngine.underlyingValueUsd(position.debtPToken, maxRepayAmount);
-            uint256 seizeValueUsd = Math.mulDiv(repayValueUsd, BPS + pairRisk.liquidationBonusBps, BPS);
+            (uint256 seizeValueUsd,) = riskEngine.getLiquidationQuote(position.account, maxRepayAmount);
             collateralPTokens = quoter.feePToken(position.positionPToken, seizeValueUsd);
             if (collateralPTokens > positionBalance) collateralPTokens = positionBalance;
             lockedReduction =
@@ -278,19 +278,27 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         uint256 totalFlashRepayment = amount + fee;
         uint256 available = IERC20(token).balanceOf(address(this)) - pending.baseDebtBalance;
         if (available < totalFlashRepayment) {
-            _coverShortfall(
+            uint256 shortfall = totalFlashRepayment - available;
+            uint256 insuranceProceeds = _coverShortfall(
                 pending.marginPToken, token, totalFlashRepayment - available, pairRisk, collateralToDebtSwapData
             );
             available = IERC20(token).balanceOf(address(this)) - pending.baseDebtBalance;
+            if (insuranceProceeds > shortfall) {
+                uint256 excessUnderlying = insuranceProceeds - shortfall;
+                uint256 returnedPTokens = _mintPToken(pending.debtPToken, excessUnderlying);
+                IERC20(pending.debtPToken).safeTransfer(address(insuranceFund), returnedPTokens);
+                available -= excessUnderlying;
+                emit InsuranceExcessReturned(pending.debtPToken, excessUnderlying, returnedPTokens);
+            }
         }
         if (available < totalFlashRepayment) revert LiquidationError(22);
 
         uint256 surplus = available - totalFlashRepayment;
-        uint256 rewardUnderlying = surplus;
+        uint256 rewardUnderlying;
         uint256 returnedMarginPTokens;
-        if (pending.fullyLiquidated && surplus > 0) {
+        if (surplus > 0) {
             uint256 repayValueUsd = quoter.underlyingValueUsd(token, amount);
-            uint256 bonusValueUsd = Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS);
+            uint256 bonusValueUsd = Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
             uint256 rewardCap = quoter.underlyingForUsd(token, bonusValueUsd, Math.Rounding.Floor);
             rewardUnderlying = surplus < rewardCap ? surplus : rewardCap;
             uint256 userResidual = surplus - rewardUnderlying;
@@ -323,17 +331,25 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         uint256 shortfall,
         IsolatedMarginTypes.PairRiskConfig memory pairRisk,
         bytes memory marginToDebtSwapData
-    ) internal {
+    ) internal returns (uint256 debtAssetReceived) {
         uint256 coverageValueUsd = quoter.underlyingValueUsd(debtAsset, shortfall);
-        uint256 requestedPTokens = quoter.feePToken(marginPToken, coverageValueUsd);
-        uint256 providedPTokens = insuranceFund.provideCoverage(marginPToken, address(this), requestedPTokens);
-        if (providedPTokens == 0) return;
-
         address marginAsset = quoter.assetForMarket(marginPToken);
+        if (marginAsset != debtAsset) {
+            coverageValueUsd = Math.mulDiv(coverageValueUsd, BPS, BPS - pairRisk.maxSlippageBps, Math.Rounding.Ceil);
+        }
+        uint256 requestedPTokens = quoter.feePToken(marginPToken, coverageValueUsd);
+        if (marginAsset != debtAsset) requestedPTokens += 1;
+        uint256 providedPTokens = insuranceFund.provideCoverage(marginPToken, address(this), requestedPTokens);
+        if (providedPTokens == 0) return 0;
+
+        uint256 debtBalanceBefore = IERC20(debtAsset).balanceOf(address(this));
         uint256 marginUnderlying = _redeemOwnPToken(marginPToken, providedPTokens);
         if (marginAsset != debtAsset) {
-            _swap(marginAsset, debtAsset, marginUnderlying, 0, pairRisk, marginToDebtSwapData);
+            uint256 expectedOut = quoter.expectedOut(marginAsset, debtAsset, marginUnderlying);
+            uint256 protocolMinOut = Math.mulDiv(expectedOut, BPS - pairRisk.maxSlippageBps, BPS);
+            _swap(marginAsset, debtAsset, marginUnderlying, protocolMinOut, pairRisk, marginToDebtSwapData);
         }
+        debtAssetReceived = IERC20(debtAsset).balanceOf(address(this)) - debtBalanceBefore;
     }
 
     function _redeemOwnPToken(address pToken, uint256 amount) internal returns (uint256 underlyingReceived) {

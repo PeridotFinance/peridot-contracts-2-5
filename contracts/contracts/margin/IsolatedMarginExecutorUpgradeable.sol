@@ -114,6 +114,15 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         uint256 healthFactorBps,
         bool fullyClosed
     );
+    event DebtFreePTokenExit(
+        uint256 indexed positionId,
+        uint256 returnedMarginPTokens,
+        uint256 returnedPositionPTokens,
+        uint256 returnedDebtPTokens,
+        uint256 marginFeePTokens,
+        uint256 positionFeePTokens,
+        uint256 debtFeePTokens
+    );
 
     constructor() {
         _disableInitializers();
@@ -328,6 +337,9 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         if (position.marginPToken != position.positionPToken) {
             PErc20(position.marginPToken).exchangeRateCurrent();
         }
+        // Accrue the debt before the risk engine snapshots pre-close health.
+        // Otherwise the post-close comparison can mix stored and current debt.
+        uint256 currentDebt = PErc20(position.debtPToken).borrowBalanceCurrent(position.account);
         uint256 previousHealthFactorBps = riskEngine.beginClose(position.account);
         IsolatedMarginTypes.AccountMetrics memory preMetrics = riskEngine.getMetrics(position.account);
         uint256 closedNotionalUsd = Math.mulDiv(preMetrics.grossAssetValueUsd, params.closeBps, BPS);
@@ -336,7 +348,6 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         );
         if (closingFeePToken > params.maxClosingFeePToken) revert ExecutorError(25);
 
-        uint256 currentDebt = PErc20(position.debtPToken).borrowBalanceCurrent(position.account);
         uint256 debtToRepay =
             params.closeBps == BPS ? currentDebt : Math.mulDiv(currentDebt, params.closeBps, BPS, Math.Rounding.Ceil);
         uint256 positionPTokenBalance = PErc20(position.positionPToken).balanceOf(position.account);
@@ -415,6 +426,70 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
             closingFeePToken,
             postMetrics.healthFactorBps,
             fullyClosed
+        );
+    }
+
+    /**
+     * @notice Exits a fully repaid position in-kind without reading prices or swapping assets.
+     * @dev This is the user-controlled recovery path during an oracle or router outage. Margin
+     *      pTokens return to the margin vault; distinct position/debt pTokens return to the wallet.
+     *      The configured close fee is charged proportionally in each returned pToken.
+     */
+    function exitDebtFreeToPTokens(uint256 positionId, uint16 maxClosingFeeBps)
+        external
+        nonReentrant
+        returns (uint256 returnedMarginPTokens, uint256 returnedPositionPTokens, uint256 returnedDebtPTokens)
+    {
+        IsolatedMarginTypes.Position storage position = _activeOwnedPosition(positionId);
+        uint16 closingFeeBps = config.closeFeeBps();
+        if (closingFeeBps > maxClosingFeeBps) revert ExecutorError(54);
+
+        PErc20(position.debtPToken).borrowBalanceCurrent(position.account);
+        if (PErc20(position.debtPToken).borrowBalanceStored(position.account) != 0) revert ExecutorError(55);
+        riskEngine.beginDebtFreeClose(position.account);
+
+        uint256 marginFeePTokens;
+        uint256 positionFeePTokens;
+        uint256 debtFeePTokens;
+        (returnedMarginPTokens, marginFeePTokens) =
+            _inKindExitAmount(position.account, position.marginPToken, closingFeeBps);
+
+        if (position.positionPToken != position.marginPToken) {
+            (returnedPositionPTokens, positionFeePTokens) =
+                _inKindExitAmount(position.account, position.positionPToken, closingFeeBps);
+            _returnPToken(position.account, position.positionPToken, position.owner, returnedPositionPTokens);
+        }
+        if (position.debtPToken != position.marginPToken && position.debtPToken != position.positionPToken) {
+            (returnedDebtPTokens, debtFeePTokens) =
+                _inKindExitAmount(position.account, position.debtPToken, closingFeeBps);
+            _returnPToken(position.account, position.debtPToken, position.owner, returnedDebtPTokens);
+        }
+
+        uint256 lockedReduction = position.lockedMarginPTokens;
+        if (returnedMarginPTokens > 0) {
+            riskEngine.authorizeMovement(position.account, position.marginPToken, returnedMarginPTokens);
+            IsolatedMarginAccount(position.account)
+                .approveToken(position.marginPToken, address(vault), returnedMarginPTokens);
+        }
+        vault.releaseFromPosition(positionId, lockedReduction, returnedMarginPTokens);
+        if (returnedMarginPTokens > 0) {
+            IsolatedMarginAccount(position.account).approveToken(position.marginPToken, address(vault), 0);
+        }
+
+        riskEngine.finishClose(position.account, 0, true);
+        position.lockedMarginPTokens = 0;
+        position.borrowedPrincipal = 0;
+        position.status = IsolatedMarginTypes.Status.CLOSED;
+
+        emit PositionClosed(positionId, uint16(BPS), 0, returnedMarginPTokens, marginFeePTokens, 0, true);
+        emit DebtFreePTokenExit(
+            positionId,
+            returnedMarginPTokens,
+            returnedPositionPTokens,
+            returnedDebtPTokens,
+            marginFeePTokens,
+            positionFeePTokens,
+            debtFeePTokens
         );
     }
 
@@ -583,6 +658,26 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         IsolatedMarginAccount(account).approveToken(pToken, address(feeDistributor), feeAmount);
         feeDistributor.collectFee(pToken, account, feeAmount);
         IsolatedMarginAccount(account).approveToken(pToken, address(feeDistributor), 0);
+    }
+
+    function _inKindExitAmount(address account, address pToken, uint16 closingFeeBps)
+        internal
+        returns (uint256 returnedAmount, uint256 feeAmount)
+    {
+        uint256 balance = PErc20(pToken).balanceOf(account);
+        if (balance == 0) return (0, 0);
+        if (closingFeeBps > 0) {
+            feeAmount = Math.mulDiv(balance, closingFeeBps, BPS, Math.Rounding.Ceil);
+            if (feeAmount > balance) feeAmount = balance;
+            _collectPositionFee(account, pToken, feeAmount);
+        }
+        returnedAmount = balance - feeAmount;
+    }
+
+    function _returnPToken(address account, address pToken, address recipient, uint256 amount) internal {
+        if (amount == 0) return;
+        riskEngine.authorizeMovement(account, pToken, amount);
+        IsolatedMarginAccount(account).transferToken(pToken, recipient, amount);
     }
 
     function _swap(

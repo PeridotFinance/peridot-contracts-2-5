@@ -301,6 +301,8 @@ contract Peridottroller is
     function redeemAllowed(address pToken, address redeemer, uint256 redeemTokens) external override returns (uint256) {
         uint256 allowed;
         if (isolatedMarginAccounts[redeemer]) {
+            if (!markets[pToken].isListed) return uint256(Error.MARKET_NOT_LISTED);
+            if (msg.sender != pToken) return uint256(Error.UNAUTHORIZED);
             try IIsolatedMarginRiskHook(isolatedMarginRiskHook).redeemAllowed(redeemer, pToken, redeemTokens) returns (
                 bool hookAllowed
             ) {
@@ -685,6 +687,8 @@ contract Peridottroller is
 
         uint256 allowed;
         if (isolatedMarginAccounts[src]) {
+            if (!markets[pToken].isListed) return uint256(Error.MARKET_NOT_LISTED);
+            if (msg.sender != pToken) return uint256(Error.UNAUTHORIZED);
             try IIsolatedMarginRiskHook(isolatedMarginRiskHook).transferAllowed(src, pToken, transferTokens) returns (
                 bool hookAllowed
             ) {

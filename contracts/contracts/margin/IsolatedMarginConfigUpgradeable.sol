@@ -267,13 +267,13 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         _validateRecipientsForShares(insuranceFund_, treasury_, insuranceShareBps, treasuryShareBps);
     }
 
-    function _validateRecipientsForShares(
-        address insuranceFund_,
-        address treasury_,
-        uint16 insuranceShareBps_,
-        uint16 treasuryShareBps_
-    ) internal pure {
-        require(insuranceShareBps_ == 0 || insuranceFund_ != address(0), "MarginConfig: zero insurance");
+    function _validateRecipientsForShares(address insuranceFund_, address treasury_, uint16, uint16 treasuryShareBps_)
+        internal
+        view
+    {
+        // Depositor fees fall back to insurance while a pToken pool has no shares,
+        // so insurance must remain a live recipient even when its explicit split is zero.
+        require(insuranceFund_.code.length > 0, "MarginConfig: invalid insurance");
         require(treasuryShareBps_ == 0 || treasury_ != address(0), "MarginConfig: zero treasury");
     }
 
