@@ -1,5 +1,10 @@
 ## Peridot Pancake V3 LP Vault Market Design
 
+> **Status:** The Pancake boosted pToken implementations are retired. This
+> document remains as design context for the standalone Pancake V3 vault and
+> oracle components, which are still used independently of the retired boosted
+> market.
+
 ### Goal
 Enable Peridot users to **supply PancakeSwap v3 LP liquidity** as collateral, while continuing to earn **farm APY** from Pancake, plus **borrow interest** from Peridot markets.
 

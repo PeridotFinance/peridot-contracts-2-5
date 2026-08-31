@@ -73,6 +73,14 @@ A failed emergency withdrawal still pauses boosting and leaves the allowance at 
 While paused, redemptions backed by the local liquidity buffer remain available, but
 adapter-backed exits stay fail-closed until the strategy recovers.
 
+### Retired boosted integrations
+
+The Folks Finance boosted market, PancakeSwap boosted pToken markets, and Venus
+VAI vault adapter are retired and their implementation, deployment, and test
+artifacts have been removed. Existing deployments are historical and are not
+supported for new deployment or upgrade from this repository. The Magma boosted
+delegate remains supported.
+
 ### Robinhood pUSDG activation order
 
 `RobinhoodBoostedDelegate` is a specialized `PErc20Delegate`; do not connect the paired

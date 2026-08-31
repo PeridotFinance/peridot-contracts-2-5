@@ -75,32 +75,7 @@ Tests for dual investment structured products.
 - Settlement: < 300k gas (O(1) regardless of depositor count)
 - Emergency Withdraw: < 200k gas
 
-### 4. PancakeV3BoostedGasStress.t.sol
-
-Tests specifically for PancakeSwap V3 boosted markets with MasterChef integration.
-
-**Scenarios Tested:**
-
-- `testGas_ManyUsersMintPancakeBoosted`: 100 users minting in batches of 10
-- `testGas_HarvestWithManyStakers`: Harvest rewards with 100 stakers
-- `testGas_RebalanceAfterManyOperations`: Rebalance after 50+ operations
-- `testGas_StakeUnstakeRepeated`: 5 stake/unstake cycles
-- `testGas_LargeDepositWithdrawalCycle`: 30 large deposits and withdrawals
-- `testGas_InterestAccrualUnderLoad`: Interest accrual with 100 users after 1 year
-- `testGas_ExchangeRateCalculationLoad`: Exchange rate calculation with varied deposits
-- `testGas_BufferManagementExtreme`: Buffer stress with low 5% buffer setting
-
-**Gas Limits:**
-
-- 100th Mint: < 500k gas
-- Harvest: < 400k gas (O(1))
-- Rebalance: < 350k gas
-- Stake/Unstake: < 300k gas each
-- Withdrawal: < 600k gas
-- Interest Accrual: < 200k gas
-- Exchange Rate: < 50k gas
-
-### 5. MorphoMagmaBoostedGasStress.t.sol
+### 4. MorphoMagmaBoostedGasStress.t.sol
 
 Tests for Morpho and Magma protocol integrations with their specific features.
 
@@ -152,9 +127,6 @@ forge test --match-path "test/gas/MarginGasStress.t.sol" -vv
 
 # Dual investment
 forge test --match-path "test/gas/DualInvestmentGasStress.t.sol" -vv
-
-# PancakeSwap V3
-forge test --match-path "test/gas/PancakeV3BoostedGasStress.t.sol" -vv
 
 # Morpho & Magma
 forge test --match-path "test/gas/MorphoMagmaBoostedGasStress.t.sol" -vv
