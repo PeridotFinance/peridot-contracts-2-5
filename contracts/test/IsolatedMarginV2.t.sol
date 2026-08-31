@@ -456,7 +456,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(marginVault.lockedBalance(USER, address(pUsd)), 100e18, "funding changed pToken share ledger");
         }
 
-        function testConfigurableOpeningFeeIsDistributedInSamePTokenPool() public {
+        function testConfigurableOpeningFeeUsesImmediateAndTimeWeightedPTokenRewards() public {
             _setFees(10, 10, 6_000, 3_000, 1_000);
             uint256 insuranceBefore = pUsd.balanceOf(address(insuranceFund));
             uint256 treasuryBefore = pUsd.balanceOf(TREASURY);
@@ -466,15 +466,150 @@ contract MarginTestAggregator is AggregatorV3Interface {
             vm.prank(USER);
             executor.openPosition(params);
 
-            uint256 pending = feeDistributor.pendingRewards(USER, address(pUsd));
-            assertApproxEqAbs(pending, 3e17, 2, "depositor share incorrect");
+            uint256 immediatePending = feeDistributor.pendingRewards(USER, address(pUsd));
+            assertApproxEqAbs(immediatePending, 6e16, 1e6, "immediate depositor share incorrect");
             assertApproxEqAbs(pUsd.balanceOf(address(insuranceFund)) - insuranceBefore, 15e16, 2, "insurance share");
             assertApproxEqAbs(pUsd.balanceOf(TREASURY) - treasuryBefore, 5e16, 2, "treasury share");
+            assertEq(
+                marginVault.eligibleShares(USER, address(pUsd)),
+                marginVault.freeBalance(USER, address(pUsd)) + marginVault.lockedBalance(USER, address(pUsd)),
+                "free and locked shares not both eligible"
+            );
+
+            vm.warp(block.timestamp + config.feeStreamDuration());
+            uint256 fullyVested = feeDistributor.pendingRewards(USER, address(pUsd));
+            assertApproxEqAbs(fullyVested, 3e17, 1e6, "streamed depositor share incorrect");
 
             uint256 freeBefore = marginVault.freeBalance(USER, address(pUsd));
             vm.prank(USER);
             marginVault.settle(address(pUsd));
-            assertApproxEqAbs(marginVault.freeBalance(USER, address(pUsd)) - freeBefore, pending, 1);
+            assertApproxEqAbs(marginVault.freeBalance(USER, address(pUsd)) - freeBefore, fullyVested, 1);
+        }
+
+        function testFeeRewardsAccrueLinearlyOverSevenDays() public {
+            _setFees(0, 0, 10_000, 0, 0);
+            feeDistributor.setFeeCollector(address(this), true);
+            pUsd.approve(address(feeDistributor), type(uint256).max);
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+            uint256 streamStart = block.timestamp;
+
+            assertEq(config.feeImmediateShareBps(), 2_000, "wrong default immediate share");
+            assertEq(config.feeStreamDuration(), 7 days, "wrong default stream duration");
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 14e18, 1e6, "wrong immediate reward");
+
+            vm.warp(streamStart + 3.5 days);
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 42e18, 1e6, "half stream not accrued");
+
+            vm.warp(streamStart + 7 days);
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 70e18, 1e6, "full stream not accrued");
+        }
+
+        function testLateDepositorOnlyEarnsTheRemainingFeeStream() public {
+            _setFees(0, 0, 10_000, 0, 0);
+            feeDistributor.setFeeCollector(address(this), true);
+            pUsd.approve(address(feeDistributor), type(uint256).max);
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+            uint256 streamStart = block.timestamp;
+
+            vm.warp(streamStart + 3.5 days);
+            uint256 aliceShares = marginVault.eligibleShares(USER, address(pUsd));
+            pUsd.transfer(NORMAL_USER, aliceShares);
+            vm.startPrank(NORMAL_USER);
+            pUsd.approve(address(marginVault), aliceShares);
+            marginVault.deposit(address(pUsd), aliceShares);
+            vm.stopPrank();
+
+            assertEq(feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 0, "late user received past rewards");
+            vm.warp(streamStart + 7 days);
+
+            assertApproxEqAbs(
+                feeDistributor.pendingRewards(USER, address(pUsd)), 56e18, 1e6, "original user reward incorrect"
+            );
+            assertApproxEqAbs(
+                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 14e18, 1e6, "late user reward incorrect"
+            );
+        }
+
+        function testNewFeeRollsTheUnvestedStreamIntoAFullNewPeriod() public {
+            _setFees(0, 0, 10_000, 0, 0);
+            feeDistributor.setFeeCollector(address(this), true);
+            pUsd.approve(address(feeDistributor), type(uint256).max);
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+            uint256 firstStreamStart = block.timestamp;
+
+            vm.warp(firstStreamStart + 3.5 days);
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+            uint256 secondStreamStart = block.timestamp;
+            assertApproxEqAbs(
+                feeDistributor.pendingRewards(USER, address(pUsd)), 56e18, 1e6, "rollover checkpoint incorrect"
+            );
+
+            vm.warp(secondStreamStart + 7 days);
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 140e18, 1e6, "rollover lost rewards");
+        }
+
+        function testFeeStreamPausesWithoutSharesAndResumesForFutureLiquidity() public {
+            _setFees(0, 0, 10_000, 0, 0);
+            feeDistributor.setFeeCollector(address(this), true);
+            pUsd.approve(address(feeDistributor), type(uint256).max);
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+
+            vm.prank(USER);
+            marginVault.settle(address(pUsd));
+            uint256 aliceShares = marginVault.eligibleShares(USER, address(pUsd));
+            vm.prank(USER);
+            marginVault.withdraw(address(pUsd), aliceShares);
+            assertEq(marginVault.eligibleShares(USER, address(pUsd)), 0, "original shares remain");
+
+            uint256 emptySince = block.timestamp;
+            vm.warp(emptySince + 3.5 days);
+            pUsd.transfer(NORMAL_USER, 120e18);
+            vm.startPrank(NORMAL_USER);
+            pUsd.approve(address(marginVault), 120e18);
+            marginVault.deposit(address(pUsd), 120e18);
+            vm.stopPrank();
+            uint256 resumedAt = block.timestamp;
+
+            assertEq(feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 0, "paused stream leaked rewards");
+            vm.warp(resumedAt + 7 days);
+            assertApproxEqAbs(
+                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 56e18, 1e6, "paused stream did not resume"
+            );
+        }
+
+        function testDepositorFeeFallsBackToInsuranceWhenNoSharesExist() public {
+            uint256 aliceShares = marginVault.eligibleShares(USER, address(pUsd));
+            vm.prank(USER);
+            marginVault.withdraw(address(pUsd), aliceShares);
+            assertEq(marginVault.eligibleShares(USER, address(pUsd)), 0, "shares remain");
+
+            _setFees(0, 0, 10_000, 0, 0);
+            feeDistributor.setFeeCollector(address(this), true);
+            pUsd.approve(address(feeDistributor), type(uint256).max);
+            uint256 insuranceBefore = pUsd.balanceOf(address(insuranceFund));
+            feeDistributor.collectFee(address(pUsd), address(this), 70e18);
+
+            assertEq(pUsd.balanceOf(address(insuranceFund)) - insuranceBefore, 70e18, "fallback not insured");
+            assertEq(feeDistributor.pendingRewards(USER, address(pUsd)), 0, "empty pool accrued rewards");
+        }
+
+        function testFeeDistributionConfigurationIsDelayedAndBounded() public {
+            assertEq(config.feeImmediateShareBps(), 2_000);
+            assertEq(config.feeStreamDuration(), 7 days);
+
+            vm.expectRevert(bytes("MarginConfig: invalid immediate share"));
+            config.queueFeeDistribution(999, 7 days);
+            vm.expectRevert(bytes("MarginConfig: invalid stream duration"));
+            config.queueFeeDistribution(1_500, 31 days);
+
+            config.queueFeeDistribution(1_500, 14 days);
+            vm.expectRevert(bytes("MarginConfig: not ready"));
+            config.setFeeDistribution(1_500, 14 days);
+            vm.warp(block.timestamp + config.actionDelay());
+            config.setFeeDistribution(1_500, 14 days);
+
+            assertEq(config.feeImmediateShareBps(), 1_500);
+            assertEq(config.feeStreamDuration(), 14 days);
         }
 
         function testInsuranceRecipientCannotBeClearedWhenDepositorFeesFallbackToIt() public {

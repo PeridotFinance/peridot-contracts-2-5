@@ -11,6 +11,8 @@ interface IIsolatedMarginConfig {
     function depositorShareBps() external view returns (uint16);
     function insuranceShareBps() external view returns (uint16);
     function treasuryShareBps() external view returns (uint16);
+    function feeImmediateShareBps() external view returns (uint16);
+    function feeStreamDuration() external view returns (uint32);
     function insuranceFund() external view returns (address);
     function treasury() external view returns (address);
     function routerAdapter() external view returns (address);

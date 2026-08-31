@@ -20,6 +20,9 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
         uint256 rewardIndex;
         uint256 totalShares;
         uint256 rewardReserve;
+        uint256 rewardRate;
+        uint256 lastUpdate;
+        uint256 periodFinish;
     }
 
     struct UserReward {
@@ -40,6 +43,13 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
     event SharesUpdated(address indexed pToken, address indexed user, uint256 oldShares, uint256 newShares);
     event FeeCollected(
         address indexed pToken, uint256 amount, uint256 depositorAmount, uint256 insuranceAmount, uint256 treasuryAmount
+    );
+    event RewardStreamUpdated(
+        address indexed pToken,
+        uint256 immediateReward,
+        uint256 scheduledReward,
+        uint256 rewardRate,
+        uint256 periodFinish
     );
     event RewardsClaimed(address indexed pToken, address indexed user, uint256 amount);
 
@@ -96,12 +106,13 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
         uint256 treasuryAmount = amount - depositorAmount - insuranceAmount;
 
         Pool storage pool = pools[pToken];
+        _updatePool(pool);
         if (pool.totalShares == 0) {
             insuranceAmount += depositorAmount;
             depositorAmount = 0;
         } else if (depositorAmount > 0) {
             pool.rewardReserve += depositorAmount;
-            pool.rewardIndex += Math.mulDiv(depositorAmount, INDEX_SCALE, pool.totalShares);
+            _scheduleDepositorRewards(pToken, pool, depositorAmount);
         }
 
         if (insuranceAmount > 0) IERC20(pToken).safeTransfer(config.insuranceFund(), insuranceAmount);
@@ -126,15 +137,66 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
     function pendingRewards(address user, address pToken) external view returns (uint256) {
         UserReward memory userReward = userRewards[pToken][user];
         Pool memory pool = pools[pToken];
-        if (userReward.shares == 0 || pool.rewardIndex <= userReward.index) return userReward.accrued;
-        return userReward.accrued + Math.mulDiv(userReward.shares, pool.rewardIndex - userReward.index, INDEX_SCALE);
+        uint256 currentIndex = _currentRewardIndex(pool);
+        if (userReward.shares == 0 || currentIndex <= userReward.index) return userReward.accrued;
+        return userReward.accrued + Math.mulDiv(userReward.shares, currentIndex - userReward.index, INDEX_SCALE);
     }
 
     function _checkpoint(Pool storage pool, UserReward storage userReward) internal {
+        _updatePool(pool);
         if (userReward.shares > 0 && pool.rewardIndex > userReward.index) {
             userReward.accrued += Math.mulDiv(userReward.shares, pool.rewardIndex - userReward.index, INDEX_SCALE);
         }
         userReward.index = pool.rewardIndex;
+    }
+
+    function _scheduleDepositorRewards(address pToken, Pool storage pool, uint256 depositorAmount) internal {
+        uint256 immediateReward = Math.mulDiv(depositorAmount, config.feeImmediateShareBps(), BPS);
+        uint256 newStreamReward = depositorAmount - immediateReward;
+        uint256 remainingStream =
+            block.timestamp < pool.periodFinish ? (pool.periodFinish - block.timestamp) * pool.rewardRate : 0;
+        uint256 streamDuration = config.feeStreamDuration();
+        uint256 streamBudget = remainingStream + newStreamReward;
+        uint256 rewardRate = streamBudget / streamDuration;
+        uint256 scheduledReward = rewardRate * streamDuration;
+
+        // Make sub-duration rounding immediately claimable instead of leaving pToken dust stranded.
+        immediateReward += streamBudget - scheduledReward;
+        if (immediateReward > 0) {
+            pool.rewardIndex += Math.mulDiv(immediateReward, INDEX_SCALE, pool.totalShares);
+        }
+
+        pool.rewardRate = rewardRate;
+        pool.lastUpdate = block.timestamp;
+        pool.periodFinish = block.timestamp + streamDuration;
+        emit RewardStreamUpdated(pToken, immediateReward, scheduledReward, pool.rewardRate, pool.periodFinish);
+    }
+
+    function _updatePool(Pool storage pool) internal {
+        if (pool.totalShares == 0) {
+            // Pause an existing stream while nobody is eligible rather than burning or stranding it.
+            if (pool.rewardRate > 0 && pool.lastUpdate < pool.periodFinish) {
+                pool.periodFinish = block.timestamp + (pool.periodFinish - pool.lastUpdate);
+            }
+            pool.lastUpdate = block.timestamp;
+            return;
+        }
+
+        uint256 applicableTime = block.timestamp < pool.periodFinish ? block.timestamp : pool.periodFinish;
+        if (applicableTime <= pool.lastUpdate) return;
+        uint256 streamedReward = (applicableTime - pool.lastUpdate) * pool.rewardRate;
+        if (streamedReward > 0) {
+            pool.rewardIndex += Math.mulDiv(streamedReward, INDEX_SCALE, pool.totalShares);
+        }
+        pool.lastUpdate = applicableTime;
+    }
+
+    function _currentRewardIndex(Pool memory pool) internal view returns (uint256) {
+        if (pool.totalShares == 0) return pool.rewardIndex;
+        uint256 applicableTime = block.timestamp < pool.periodFinish ? block.timestamp : pool.periodFinish;
+        if (applicableTime <= pool.lastUpdate) return pool.rewardIndex;
+        uint256 streamedReward = (applicableTime - pool.lastUpdate) * pool.rewardRate;
+        return pool.rewardIndex + Math.mulDiv(streamedReward, INDEX_SCALE, pool.totalShares);
     }
 
     uint256[40] private __gap;

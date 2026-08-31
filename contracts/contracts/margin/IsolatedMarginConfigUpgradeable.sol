@@ -12,6 +12,12 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
     uint256 public constant override BPS = 10_000;
     uint16 public constant MAX_OPEN_FEE_BPS = 100;
     uint16 public constant MAX_CLOSE_FEE_BPS = 100;
+    uint16 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 2_000;
+    uint16 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 1_000;
+    uint16 public constant MAX_FEE_IMMEDIATE_SHARE_BPS = 2_000;
+    uint32 public constant DEFAULT_FEE_STREAM_DURATION = 7 days;
+    uint32 public constant MIN_FEE_STREAM_DURATION = 1 days;
+    uint32 public constant MAX_FEE_STREAM_DURATION = 30 days;
     uint256 public constant MIN_ACTION_DELAY = 1 hours;
 
     uint256 public actionDelay;
@@ -31,6 +37,12 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
     mapping(bytes32 pair => IsolatedMarginTypes.PairRiskConfig) private _pairRisk;
     mapping(bytes32 actionId => uint256 executeAfter) public queuedActions;
 
+    // Appended after the original mappings to preserve proxy storage layout. The boolean lets an
+    // upgraded pre-streaming proxy use safe defaults until governance explicitly configures it.
+    uint16 private _feeImmediateShareBps;
+    uint32 private _feeStreamDuration;
+    bool private _feeDistributionConfigured;
+
     event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
     event ActionCanceled(bytes32 indexed actionId);
     event ActionExecuted(bytes32 indexed actionId);
@@ -42,6 +54,7 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         uint16 insuranceShareBps,
         uint16 treasuryShareBps
     );
+    event FeeDistributionConfigured(uint16 immediateShareBps, uint32 streamDuration);
     event FeeRecipientsConfigured(address indexed insuranceFund, address indexed treasury);
     event ExecutionEndpointsConfigured(address indexed routerAdapter, address indexed flashLoanProvider);
     event PairRiskConfigured(bytes32 indexed pair, IsolatedMarginTypes.PairRiskConfig config);
@@ -75,12 +88,24 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
 
         depositorShareBps = 5_000;
         insuranceShareBps = 5_000;
+        _feeImmediateShareBps = DEFAULT_FEE_IMMEDIATE_SHARE_BPS;
+        _feeStreamDuration = DEFAULT_FEE_STREAM_DURATION;
+        _feeDistributionConfigured = true;
 
         emit ActionDelayConfigured(actionDelay_);
         emit OpensPaused(true);
         emit ExecutionEndpointsConfigured(routerAdapter_, flashLoanProvider_);
         emit FeeRecipientsConfigured(insuranceFund_, treasury_);
         emit FeesConfigured(0, 0, 5_000, 5_000, 0);
+        emit FeeDistributionConfigured(DEFAULT_FEE_IMMEDIATE_SHARE_BPS, DEFAULT_FEE_STREAM_DURATION);
+    }
+
+    function feeImmediateShareBps() external view override returns (uint16) {
+        return _feeDistributionConfigured ? _feeImmediateShareBps : DEFAULT_FEE_IMMEDIATE_SHARE_BPS;
+    }
+
+    function feeStreamDuration() external view override returns (uint32) {
+        return _feeDistributionConfigured ? _feeStreamDuration : DEFAULT_FEE_STREAM_DURATION;
     }
 
     function pairKey(address marginPToken, address positionPToken, address debtPToken)
@@ -134,6 +159,26 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         insuranceShareBps = insuranceShareBps_;
         treasuryShareBps = treasuryShareBps_;
         emit FeesConfigured(openFeeBps_, closeFeeBps_, depositorShareBps_, insuranceShareBps_, treasuryShareBps_);
+    }
+
+    /// @notice Queues how the depositor portion of margin fees is split between immediate and streamed rewards.
+    function queueFeeDistribution(uint16 immediateShareBps_, uint32 streamDuration_)
+        external
+        onlyOwner
+        returns (bytes32)
+    {
+        _validateFeeDistribution(immediateShareBps_, streamDuration_);
+        return _queue(keccak256(abi.encode("feeDistribution", immediateShareBps_, streamDuration_)));
+    }
+
+    function setFeeDistribution(uint16 immediateShareBps_, uint32 streamDuration_) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encode("feeDistribution", immediateShareBps_, streamDuration_));
+        _consume(actionId);
+        _validateFeeDistribution(immediateShareBps_, streamDuration_);
+        _feeImmediateShareBps = immediateShareBps_;
+        _feeStreamDuration = streamDuration_;
+        _feeDistributionConfigured = true;
+        emit FeeDistributionConfigured(immediateShareBps_, streamDuration_);
     }
 
     function queueFeeRecipients(address insuranceFund_, address treasury_) external onlyOwner returns (bytes32) {
@@ -263,6 +308,17 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         _validateRecipientsForShares(insuranceFund, treasury, insuranceShareBps_, treasuryShareBps_);
     }
 
+    function _validateFeeDistribution(uint16 immediateShareBps_, uint32 streamDuration_) internal pure {
+        require(
+            immediateShareBps_ >= MIN_FEE_IMMEDIATE_SHARE_BPS && immediateShareBps_ <= MAX_FEE_IMMEDIATE_SHARE_BPS,
+            "MarginConfig: invalid immediate share"
+        );
+        require(
+            streamDuration_ >= MIN_FEE_STREAM_DURATION && streamDuration_ <= MAX_FEE_STREAM_DURATION,
+            "MarginConfig: invalid stream duration"
+        );
+    }
+
     function _validateRecipients(address insuranceFund_, address treasury_) internal view {
         _validateRecipientsForShares(insuranceFund_, treasury_, insuranceShareBps, treasuryShareBps);
     }
@@ -293,5 +349,5 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         emit ActionExecuted(actionId);
     }
 
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 }
