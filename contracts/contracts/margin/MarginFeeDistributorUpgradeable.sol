@@ -15,6 +15,12 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
 
     uint256 public constant INDEX_SCALE = 1e36;
     uint256 public constant BPS = 10_000;
+    uint256 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 2_000;
+    uint256 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 1_000;
+    uint256 public constant MAX_FEE_IMMEDIATE_SHARE_BPS = 2_000;
+    uint256 public constant DEFAULT_FEE_STREAM_DURATION = 7 days;
+    uint256 public constant MIN_FEE_STREAM_DURATION = 1 days;
+    uint256 public constant MAX_FEE_STREAM_DURATION = 30 days;
 
     struct Pool {
         uint256 rewardIndex;
@@ -151,11 +157,11 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
     }
 
     function _scheduleDepositorRewards(address pToken, Pool storage pool, uint256 depositorAmount) internal {
-        uint256 immediateReward = Math.mulDiv(depositorAmount, config.feeImmediateShareBps(), BPS);
+        uint256 immediateReward = Math.mulDiv(depositorAmount, _feeImmediateShareBps(), BPS);
         uint256 newStreamReward = depositorAmount - immediateReward;
         uint256 remainingStream =
             block.timestamp < pool.periodFinish ? (pool.periodFinish - block.timestamp) * pool.rewardRate : 0;
-        uint256 streamDuration = config.feeStreamDuration();
+        uint256 streamDuration = _feeStreamDuration();
         uint256 streamBudget = remainingStream + newStreamReward;
         uint256 rewardRate = streamBudget / streamDuration;
         uint256 scheduledReward = rewardRate * streamDuration;
@@ -170,6 +176,32 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
         pool.lastUpdate = block.timestamp;
         pool.periodFinish = block.timestamp + streamDuration;
         emit RewardStreamUpdated(pToken, immediateReward, scheduledReward, pool.rewardRate, pool.periodFinish);
+    }
+
+    function _feeImmediateShareBps() internal view returns (uint256 immediateShareBps) {
+        (bool success, bytes memory returnData) =
+            address(config).staticcall(abi.encodeWithSelector(IIsolatedMarginConfig.feeImmediateShareBps.selector));
+        // Preserve fee collection if this implementation is upgraded before a legacy config proxy.
+        if (!success || returnData.length < 32) return DEFAULT_FEE_IMMEDIATE_SHARE_BPS;
+
+        immediateShareBps = abi.decode(returnData, (uint256));
+        require(
+            immediateShareBps >= MIN_FEE_IMMEDIATE_SHARE_BPS && immediateShareBps <= MAX_FEE_IMMEDIATE_SHARE_BPS,
+            "FeeDistributor: invalid immediate share"
+        );
+    }
+
+    function _feeStreamDuration() internal view returns (uint256 streamDuration) {
+        (bool success, bytes memory returnData) =
+            address(config).staticcall(abi.encodeWithSelector(IIsolatedMarginConfig.feeStreamDuration.selector));
+        // Match the config's pre-upgrade default until the new selector becomes available.
+        if (!success || returnData.length < 32) return DEFAULT_FEE_STREAM_DURATION;
+
+        streamDuration = abi.decode(returnData, (uint256));
+        require(
+            streamDuration >= MIN_FEE_STREAM_DURATION && streamDuration <= MAX_FEE_STREAM_DURATION,
+            "FeeDistributor: invalid stream duration"
+        );
     }
 
     function _updatePool(Pool storage pool) internal {

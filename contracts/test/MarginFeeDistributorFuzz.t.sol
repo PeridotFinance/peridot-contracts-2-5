@@ -32,6 +32,53 @@ contract MarginFeeFuzzConfig {
     }
 }
 
+contract MarginFeeLegacyConfig {
+    uint16 public constant depositorShareBps = 10_000;
+    uint16 public constant insuranceShareBps = 0;
+    uint16 public constant treasuryShareBps = 0;
+
+    address public immutable insuranceFund;
+    address public immutable treasury;
+
+    constructor(address insuranceFund_, address treasury_) {
+        insuranceFund = insuranceFund_;
+        treasury = treasury_;
+    }
+}
+
+contract MarginFeeDistributorLegacyConfigTest is Test {
+    address internal constant ALICE = address(0xA11CE);
+    address internal constant INSURANCE = address(0x1A5);
+    address internal constant TREASURY = address(0x7EA5);
+
+    function testDistributorUpgradeBeforeConfigUsesSafeFeeStreamDefaults() public {
+        vm.warp(1_000_000);
+        MockErc20 pToken = new MockErc20("Peridot Test Share", "pTEST", 18);
+        MarginFeeLegacyConfig legacyConfig = new MarginFeeLegacyConfig(INSURANCE, TREASURY);
+        MarginFeeDistributorUpgradeable distributor = MarginFeeDistributorUpgradeable(
+            address(
+                new PeridotTransparentProxy(
+                    address(new MarginFeeDistributorUpgradeable()),
+                    address(this),
+                    abi.encodeCall(MarginFeeDistributorUpgradeable.initialize, (address(this), address(legacyConfig)))
+                )
+            )
+        );
+        distributor.setVault(address(this));
+        distributor.setFeeCollector(address(this), true);
+        distributor.updateShares(ALICE, address(pToken), 100e18);
+
+        uint256 fee = 756e18;
+        pToken.mint(address(this), fee);
+        pToken.approve(address(distributor), fee);
+        distributor.collectFee(address(pToken), address(this), fee);
+
+        assertEq(distributor.pendingRewards(ALICE, address(pToken)), 151.2e18, "legacy immediate reward");
+        vm.warp(block.timestamp + 7 days);
+        assertEq(distributor.pendingRewards(ALICE, address(pToken)), fee, "legacy seven-day stream");
+    }
+}
+
 abstract contract MarginFeeFuzzFixture is Test {
     uint256 internal constant BPS = 10_000;
     uint256 internal constant IMMEDIATE_SHARE_BPS = 2_000;
