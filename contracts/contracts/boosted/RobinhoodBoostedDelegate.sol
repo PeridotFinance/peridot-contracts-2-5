@@ -114,6 +114,15 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
+     * @notice Vault-held USDG that can actually be released right now.
+     * @dev Falls to zero while LP liquidity is open and the oracle guard is unhealthy. The
+     *      gap against `vaultLiquidAssets` is the amount held in custody but unreachable.
+     */
+    function vaultWithdrawableAssets() external view returns (uint256) {
+        return _vaultWithdrawableAssets();
+    }
+
+    /**
      * @notice Supplies USDG only when the vault claim used for mint pricing is live.
      * @dev Other operations use conservative zero-value fallbacks so vault read failures
      *      cannot freeze local cash while new suppliers cannot dilute existing holders.
@@ -126,11 +135,15 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @dev Cash checks use only local USDG plus the vault's idle USDG. LP-backed claims
-     *      are included in exchange-rate accounting but are not reported as immediately liquid.
+     * @dev Cash checks use local USDG plus only the vault USDG that is releasable in this
+     *      block. Vault idle is not unconditionally reachable: while LP liquidity is open,
+     *      every principal reduction routes through the oracle-guarded settle path, so idle
+     *      sitting behind an unhealthy oracle is custody, not cash. Counting it here would
+     *      understate utilization, underprice the borrow rate, and let borrows and redeems
+     *      pass the controller's cash check and then revert in `doTransferOut`.
      */
     function getCashPrior() internal view override returns (uint256) {
-        return super.getCashPrior() + _vaultLiquidAssets();
+        return super.getCashPrior() + _vaultWithdrawableAssets();
     }
 
     /**
@@ -468,6 +481,20 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
 
     function _tryVaultLiquidAssets() internal view returns (bool valid, uint256 assets) {
         try robinhoodVault.liquidAssets(robinhoodPairId, underlying) returns (uint256 value) {
+            return (true, value);
+        } catch {
+            return (false, 0);
+        }
+    }
+
+    function _vaultWithdrawableAssets() internal view returns (uint256) {
+        if (!_vaultConfigured()) return 0;
+        (bool valid, uint256 assets) = _tryVaultWithdrawableAssets();
+        return valid ? assets : 0;
+    }
+
+    function _tryVaultWithdrawableAssets() internal view returns (bool valid, uint256 assets) {
+        try robinhoodVault.withdrawableAssets(robinhoodPairId, underlying) returns (uint256 value) {
             return (true, value);
         } catch {
             return (false, 0);

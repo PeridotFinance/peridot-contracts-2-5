@@ -14,6 +14,8 @@ contract MockRobinhoodBoostedVault is IRobinhoodBoostedVault {
     bool public withdrawalReverts;
     bool public accountedReadReverts;
     bool public liquidReadReverts;
+    bool public liquidityOpen;
+    bool public oracleUnhealthy;
     address public lastDepositor;
 
     constructor(MockErc20 token_, bytes32 pairId_) {
@@ -93,6 +95,23 @@ contract MockRobinhoodBoostedVault is IRobinhoodBoostedVault {
         require(pairId_ == pairId && token_ == address(token), "mock: wrong pair");
         require(!liquidReadReverts, "mock: liquid read blocked");
         return liquid;
+    }
+
+    /// @dev Mirrors the vault: idle is only reachable when no LP liquidity is open or the
+    ///      oracle guard is healthy. `liquidityOpen` + `oracleUnhealthy` reproduce that state.
+    function withdrawableAssets(bytes32 pairId_, address token_) external view override returns (uint256) {
+        require(pairId_ == pairId && token_ == address(token), "mock: wrong pair");
+        require(!liquidReadReverts, "mock: liquid read blocked");
+        if (liquidityOpen && oracleUnhealthy) return 0;
+        return liquid;
+    }
+
+    function setLiquidityOpen(bool value) external {
+        liquidityOpen = value;
+    }
+
+    function setOracleUnhealthy(bool value) external {
+        oracleUnhealthy = value;
     }
 
     function sideAccount(bytes32 pairId_, address token_) external view override returns (address) {

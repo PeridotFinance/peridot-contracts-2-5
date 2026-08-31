@@ -15,5 +15,11 @@ interface IRobinhoodBoostedVault {
 
     function liquidAssets(bytes32 pairId, address token) external view returns (uint256);
 
+    /// @notice Idle assets the vault can actually release in this block.
+    /// @dev Diverges from `liquidAssets` whenever LP liquidity is open, because idle is then
+    ///      reachable only through the oracle-guarded settle path. Use this for cash and
+    ///      utilization accounting; `liquidAssets` reports custody and overstates access.
+    function withdrawableAssets(bytes32 pairId, address token) external view returns (uint256);
+
     function sideAccount(bytes32 pairId, address token) external view returns (address);
 }

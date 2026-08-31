@@ -77,6 +77,27 @@ contract RobinhoodBoostedDelegateTest is Test {
         assertEq(PErc20(address(delegator)).exchangeRateStored(), INITIAL_EXCHANGE_RATE);
     }
 
+    function testCashExcludesVaultIdleThatIsUnreachableBehindOpenLiquidity() external {
+        _mint(1_000e6);
+
+        // 800 deployed, 200 local buffer. The vault still holds idle USDG in custody, but
+        // with LP liquidity open and the oracle guard down that idle cannot be released.
+        vault.setLiquidityOpen(true);
+        vault.setOracleUnhealthy(true);
+
+        uint256 custody = boosted.vaultLiquidAssets();
+        assertGt(custody, 0, "vault holds idle in custody");
+        assertEq(boosted.vaultWithdrawableAssets(), 0, "none of it is reachable");
+        // Cash must not count custody the vault will refuse to release, or borrows and
+        // redeems pass the controller check and then revert inside doTransferOut.
+        assertEq(PErc20(address(delegator)).getCash(), 200e6);
+
+        // Once the guard is healthy again the same idle becomes real cash.
+        vault.setOracleUnhealthy(false);
+        assertEq(boosted.vaultWithdrawableAssets(), custody);
+        assertEq(PErc20(address(delegator)).getCash(), 200e6 + custody);
+    }
+
     function testRedeemAppliesVaultLossBeforeBurnAndTransfer() external {
         _mint(1_000e6);
         vault.investAll();
