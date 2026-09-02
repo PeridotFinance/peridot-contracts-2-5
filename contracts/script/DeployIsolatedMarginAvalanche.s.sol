@@ -5,6 +5,7 @@ import {Script, console2} from "forge-std/Script.sol";
 
 import {Peridottroller} from "../contracts/Peridottroller.sol";
 import {PToken} from "../contracts/PToken.sol";
+import {PErc20} from "../contracts/PErc20.sol";
 import {PeridotTransparentProxy} from "../contracts/proxy/PeridotTransparentProxy.sol";
 import {AvalanchePriceOracle} from "../contracts/margin/AvalanchePriceOracle.sol";
 import {IsolatedMarginAccountFactory} from "../contracts/margin/IsolatedMarginAccountFactory.sol";
@@ -19,13 +20,16 @@ import {MarginFeeDistributorUpgradeable} from "../contracts/margin/MarginFeeDist
 import {MarginInsuranceFundUpgradeable} from "../contracts/margin/MarginInsuranceFundUpgradeable.sol";
 
 /**
- * @notice Deploys and wires the isolated-margin stack for Avalanche C-Chain.
+ * @notice Deploys and wires the isolated-margin stack for Avalanche Fuji.
  * @dev All addresses are environment-driven; this script deliberately contains no Somnia constants.
+ *      Mainnet is intentionally rejected until Fuji lifecycle tests, live-route tests, and an external audit pass.
  *      Pair risk is queued separately with ConfigureIsolatedMarginPairAvalanche because it is timelocked.
  *      The margin risk engine intentionally uses its dedicated Chainlink oracle while the lending controller
  *      retains its existing oracle; both must price every configured market before deployment succeeds.
  */
 contract DeployIsolatedMarginAvalanche is Script {
+    uint256 private constant AVALANCHE_FUJI_CHAIN_ID = 43_113;
+
     struct Deployment {
         AvalanchePriceOracle oracle;
         MarginInsuranceFundUpgradeable insuranceFund;
@@ -41,7 +45,7 @@ contract DeployIsolatedMarginAvalanche is Script {
     }
 
     function run() external returns (Deployment memory deployed) {
-        _requireAvalanche();
+        _requireFuji();
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
         address finalOwner = vm.envAddress("MARGIN_OWNER");
@@ -156,7 +160,11 @@ contract DeployIsolatedMarginAvalanche is Script {
         deployed.feeDistributor.setFeeCollector(address(deployed.executor), true);
         deployed.insuranceFund.setLiquidator(address(deployed.liquidator));
 
-        address[] memory pTokens = _configureMarketsAndFeeds(deployed.oracle, deployed.vault);
+        require(deployed.config.opensPaused(), "DeployMargin: opens not paused");
+        require(deployed.config.feeImmediateShareBps() == 0, "DeployMargin: immediate fee enabled");
+        require(deployed.config.feeStreamDuration() == 7 days, "DeployMargin: unexpected fee stream");
+
+        address[] memory pTokens = _configureMarketsAndFeeds(deployed.oracle, deployed.vault, controllerAddress);
 
         bool wireController = vm.envOr("WIRE_CONTROLLER", false);
         if (wireController) {
@@ -187,10 +195,11 @@ contract DeployIsolatedMarginAvalanche is Script {
         _log(deployed);
     }
 
-    function _configureMarketsAndFeeds(AvalanchePriceOracle oracle, IsolatedMarginVaultUpgradeable vault)
-        internal
-        returns (address[] memory pTokens)
-    {
+    function _configureMarketsAndFeeds(
+        AvalanchePriceOracle oracle,
+        IsolatedMarginVaultUpgradeable vault,
+        address controllerAddress
+    ) internal returns (address[] memory pTokens) {
         pTokens = vm.envAddress("MARGIN_PTOKENS", ",");
         address[] memory assets = vm.envAddress("MARGIN_ASSETS", ",");
         address[] memory feeds = vm.envAddress("MARGIN_CHAINLINK_FEEDS", ",");
@@ -201,7 +210,15 @@ contract DeployIsolatedMarginAvalanche is Script {
             "DeployMargin: market array length"
         );
         for (uint256 i = 0; i < pTokens.length; i++) {
+            require(pTokens[i].code.length > 0, "DeployMargin: pToken not contract");
+            require(assets[i].code.length > 0, "DeployMargin: asset not contract");
+            require(feeds[i].code.length > 0, "DeployMargin: feed not contract");
+            require(address(PToken(pTokens[i]).peridottroller()) == controllerAddress, "DeployMargin: wrong controller");
+            require(PErc20(pTokens[i]).underlying() == assets[i], "DeployMargin: wrong market asset");
             require(maxAges[i] <= type(uint32).max, "DeployMargin: max age overflow");
+            for (uint256 j = 0; j < i; j++) {
+                require(pTokens[j] != pTokens[i], "DeployMargin: duplicate pToken");
+            }
             oracle.configureFeed(assets[i], feeds[i], uint32(maxAges[i]));
             oracle.registerMarket(pTokens[i], assets[i]);
             vault.setPTokenAllowed(pTokens[i], true);
@@ -221,12 +238,12 @@ contract DeployIsolatedMarginAvalanche is Script {
         return address(new PeridotTransparentProxy(implementation, proxyAdminOwner, data));
     }
 
-    function _requireAvalanche() internal view {
-        require(block.chainid == 43_114 || block.chainid == 43_113, "DeployMargin: Avalanche only");
+    function _requireFuji() internal view {
+        require(block.chainid == AVALANCHE_FUJI_CHAIN_ID, "DeployMargin: Fuji only");
     }
 
     function _log(Deployment memory d) internal pure {
-        console2.log("AvalanchePriceOracle", address(d.oracle));
+        console2.log("Avalanche Fuji PriceOracle", address(d.oracle));
         console2.log("MarginInsuranceFund", address(d.insuranceFund));
         console2.log("IsolatedMarginConfig", address(d.config));
         console2.log("MarginFeeDistributor", address(d.feeDistributor));
