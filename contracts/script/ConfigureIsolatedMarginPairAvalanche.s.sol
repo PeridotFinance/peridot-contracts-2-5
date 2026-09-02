@@ -16,6 +16,7 @@ import {IMarginPriceOracle} from "../contracts/margin/interfaces/IMarginPriceOra
 /**
  * @notice Queues or executes one Avalanche Fuji isolated-margin pair configuration.
  * @dev Run once with EXECUTE=false, wait config.actionDelay(), then rerun with EXECUTE=true.
+ *      Use MARGIN_DEPLOYER with Forge's --account and --sender options; never export a raw private key.
  *      Mainnet is intentionally rejected. Set UNPAUSE_OPENS=true only after every explicit Fuji gate passes.
  */
 contract ConfigureIsolatedMarginPairAvalanche is Script {
@@ -25,15 +26,16 @@ contract ConfigureIsolatedMarginPairAvalanche is Script {
 
     function run() external returns (bytes32 actionId) {
         require(block.chainid == AVALANCHE_FUJI_CHAIN_ID, "ConfigureMargin: Fuji only");
-        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.envAddress("MARGIN_DEPLOYER");
         IsolatedMarginConfigUpgradeable config =
             IsolatedMarginConfigUpgradeable(vm.envAddress("ISOLATED_MARGIN_CONFIG"));
         address marginPToken = vm.envAddress("MARGIN_PTOKEN");
         address positionPToken = vm.envAddress("POSITION_PTOKEN");
         address debtPToken = vm.envAddress("DEBT_PTOKEN");
 
+        require(deployer != address(0), "ConfigureMargin: zero deployer");
         require(address(config).code.length > 0, "ConfigureMargin: config not contract");
-        require(config.owner() == vm.addr(deployerKey), "ConfigureMargin: broadcaster not owner");
+        require(config.owner() == deployer, "ConfigureMargin: broadcaster not owner");
         address pairController = _validatePairMarkets(marginPToken, positionPToken, debtPToken);
 
         IsolatedMarginTypes.PairRiskConfig memory risk = riskFromEnvironment();
@@ -44,7 +46,7 @@ contract ConfigureIsolatedMarginPairAvalanche is Script {
             _requireFujiUnpauseGates(config, marginPToken, positionPToken, debtPToken, pairController);
         }
 
-        vm.startBroadcast(deployerKey);
+        vm.startBroadcast(deployer);
         if (vm.envOr("EXECUTE", false)) {
             config.setPairRisk(marginPToken, positionPToken, debtPToken, risk);
             if (unpauseOpens) config.unpauseOpens();

@@ -22,6 +22,7 @@ import {MarginInsuranceFundUpgradeable} from "../contracts/margin/MarginInsuranc
 /**
  * @notice Deploys and wires the isolated-margin stack for Avalanche Fuji.
  * @dev All addresses are environment-driven; this script deliberately contains no Somnia constants.
+ *      Use MARGIN_DEPLOYER with Forge's --account and --sender options; never export a raw private key.
  *      Mainnet is intentionally rejected until Fuji lifecycle tests, live-route tests, and an external audit pass.
  *      Pair risk is queued separately with ConfigureIsolatedMarginPairAvalanche because it is timelocked.
  *      The margin risk engine intentionally uses its dedicated Chainlink oracle while the lending controller
@@ -46,8 +47,7 @@ contract DeployIsolatedMarginAvalanche is Script {
 
     function run() external returns (Deployment memory deployed) {
         _requireFuji();
-        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerKey);
+        address deployer = vm.envAddress("MARGIN_DEPLOYER");
         address finalOwner = vm.envAddress("MARGIN_OWNER");
         address treasury = vm.envAddress("MARGIN_TREASURY");
         address controllerAddress = vm.envAddress("PERIDOTTROLLER");
@@ -55,12 +55,13 @@ contract DeployIsolatedMarginAvalanche is Script {
         address flashLoanProvider = vm.envAddress("MARGIN_FLASH_LENDER");
         uint256 actionDelay = vm.envOr("MARGIN_ACTION_DELAY", uint256(24 hours));
 
+        require(deployer != address(0), "DeployMargin: zero deployer");
         require(finalOwner != address(0) && treasury != address(0), "DeployMargin: zero governance address");
         require(controllerAddress.code.length > 0, "DeployMargin: controller not contract");
         require(routerAdapter.code.length > 0, "DeployMargin: router adapter not contract");
         require(flashLoanProvider.code.length > 0, "DeployMargin: flash lender not contract");
 
-        vm.startBroadcast(deployerKey);
+        vm.startBroadcast(deployer);
         deployed.oracle = new AvalanchePriceOracle(deployer);
         deployed.insuranceFund = MarginInsuranceFundUpgradeable(
             _proxy(

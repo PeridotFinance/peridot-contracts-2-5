@@ -8,7 +8,11 @@ import {IsolatedMarginConfigUpgradeable} from "../contracts/margin/IsolatedMargi
 import {IsolatedMarginMath} from "../contracts/margin/IsolatedMarginMath.sol";
 import {IsolatedMarginTypes} from "../contracts/margin/IsolatedMarginTypes.sol";
 import {ConfigureIsolatedMarginPairAvalanche} from "../script/ConfigureIsolatedMarginPairAvalanche.s.sol";
+import {ConfigureLFJLBRouterAdapterAvalanche} from "../script/ConfigureLFJLBRouterAdapterAvalanche.s.sol";
 import {DeployIsolatedMarginAvalanche} from "../script/DeployIsolatedMarginAvalanche.s.sol";
+import {DeployLFJLBRouterAdapterAvalanche} from "../script/DeployLFJLBRouterAdapterAvalanche.s.sol";
+import {DeploySimpleFlashLoanVaultAvalanche} from "../script/DeploySimpleFlashLoanVaultAvalanche.s.sol";
+import {FundSimpleFlashLoanVaultAvalanche} from "../script/FundSimpleFlashLoanVaultAvalanche.s.sol";
 
 contract FujiPolicyCode {}
 
@@ -107,6 +111,10 @@ contract ConfigureIsolatedMarginPairAvalancheHarness is ConfigureIsolatedMarginP
 contract IsolatedMarginFujiPolicyTest is Test {
     ConfigureIsolatedMarginPairAvalancheHarness internal configureScript;
     DeployIsolatedMarginAvalanche internal deployScript;
+    ConfigureLFJLBRouterAdapterAvalanche internal configureAdapterScript;
+    DeployLFJLBRouterAdapterAvalanche internal deployAdapterScript;
+    DeploySimpleFlashLoanVaultAvalanche internal deployFlashVaultScript;
+    FundSimpleFlashLoanVaultAvalanche internal fundFlashVaultScript;
 
     FujiPolicyCode internal controller;
     FujiPolicyCode internal otherController;
@@ -120,6 +128,10 @@ contract IsolatedMarginFujiPolicyTest is Test {
     function setUp() public {
         configureScript = new ConfigureIsolatedMarginPairAvalancheHarness();
         deployScript = new DeployIsolatedMarginAvalanche();
+        configureAdapterScript = new ConfigureLFJLBRouterAdapterAvalanche();
+        deployAdapterScript = new DeployLFJLBRouterAdapterAvalanche();
+        deployFlashVaultScript = new DeploySimpleFlashLoanVaultAvalanche();
+        fundFlashVaultScript = new FundSimpleFlashLoanVaultAvalanche();
 
         controller = new FujiPolicyCode();
         otherController = new FujiPolicyCode();
@@ -213,6 +225,30 @@ contract IsolatedMarginFujiPolicyTest is Test {
         vm.chainId(43_114);
         vm.expectRevert(bytes("ConfigureMargin: Fuji only"));
         configureScript.run();
+    }
+
+    function testAdapterDeploymentScriptRejectsAvalancheMainnet() public {
+        vm.chainId(43_114);
+        vm.expectRevert(bytes("DeployLFJAdapter: Fuji only"));
+        deployAdapterScript.run();
+    }
+
+    function testAdapterConfigurationScriptRejectsAvalancheMainnet() public {
+        vm.chainId(43_114);
+        vm.expectRevert(bytes("ConfigureLFJAdapter: Fuji only"));
+        configureAdapterScript.run();
+    }
+
+    function testFlashVaultDeploymentScriptRejectsAvalancheMainnet() public {
+        vm.chainId(43_114);
+        vm.expectRevert(bytes("DeployFlashVault: Fuji only"));
+        deployFlashVaultScript.run();
+    }
+
+    function testFlashVaultFundingScriptRejectsAvalancheMainnet() public {
+        vm.chainId(43_114);
+        vm.expectRevert(bytes("FundFlashVault: Fuji only"));
+        fundFlashVaultScript.run();
     }
 
     function _unpauseFixture()
