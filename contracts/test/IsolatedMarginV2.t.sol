@@ -456,7 +456,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(marginVault.lockedBalance(USER, address(pUsd)), 100e18, "funding changed pToken share ledger");
         }
 
-        function testConfigurableOpeningFeeUsesImmediateAndTimeWeightedPTokenRewards() public {
+        function testConfigurableOpeningFeeUsesTimeWeightedPTokenRewards() public {
             _setFees(10, 10, 6_000, 3_000, 1_000);
             uint256 insuranceBefore = pUsd.balanceOf(address(insuranceFund));
             uint256 treasuryBefore = pUsd.balanceOf(TREASURY);
@@ -467,7 +467,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             executor.openPosition(params);
 
             uint256 immediatePending = feeDistributor.pendingRewards(USER, address(pUsd));
-            assertApproxEqAbs(immediatePending, 6e16, 1e6, "immediate depositor share incorrect");
+            assertApproxEqAbs(immediatePending, 0, 1e6, "depositor fee accrued immediately");
             assertApproxEqAbs(pUsd.balanceOf(address(insuranceFund)) - insuranceBefore, 15e16, 2, "insurance share");
             assertApproxEqAbs(pUsd.balanceOf(TREASURY) - treasuryBefore, 5e16, 2, "treasury share");
             assertEq(
@@ -493,12 +493,12 @@ contract MarginTestAggregator is AggregatorV3Interface {
             feeDistributor.collectFee(address(pUsd), address(this), 70e18);
             uint256 streamStart = block.timestamp;
 
-            assertEq(config.feeImmediateShareBps(), 2_000, "wrong default immediate share");
+            assertEq(config.feeImmediateShareBps(), 0, "wrong default immediate share");
             assertEq(config.feeStreamDuration(), 7 days, "wrong default stream duration");
-            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 14e18, 1e6, "wrong immediate reward");
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 0, 1e6, "fee accrued immediately");
 
             vm.warp(streamStart + 3.5 days);
-            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 42e18, 1e6, "half stream not accrued");
+            assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 35e18, 1e6, "half stream not accrued");
 
             vm.warp(streamStart + 7 days);
             assertApproxEqAbs(feeDistributor.pendingRewards(USER, address(pUsd)), 70e18, 1e6, "full stream not accrued");
@@ -523,10 +523,10 @@ contract MarginTestAggregator is AggregatorV3Interface {
             vm.warp(streamStart + 7 days);
 
             assertApproxEqAbs(
-                feeDistributor.pendingRewards(USER, address(pUsd)), 56e18, 1e6, "original user reward incorrect"
+                feeDistributor.pendingRewards(USER, address(pUsd)), 52.5e18, 1e6, "original user reward incorrect"
             );
             assertApproxEqAbs(
-                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 14e18, 1e6, "late user reward incorrect"
+                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 17.5e18, 1e6, "late user reward incorrect"
             );
         }
 
@@ -541,7 +541,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             feeDistributor.collectFee(address(pUsd), address(this), 70e18);
             uint256 secondStreamStart = block.timestamp;
             assertApproxEqAbs(
-                feeDistributor.pendingRewards(USER, address(pUsd)), 56e18, 1e6, "rollover checkpoint incorrect"
+                feeDistributor.pendingRewards(USER, address(pUsd)), 35e18, 1e6, "rollover checkpoint incorrect"
             );
 
             vm.warp(secondStreamStart + 7 days);
@@ -573,7 +573,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 0, "paused stream leaked rewards");
             vm.warp(resumedAt + 7 days);
             assertApproxEqAbs(
-                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 56e18, 1e6, "paused stream did not resume"
+                feeDistributor.pendingRewards(NORMAL_USER, address(pUsd)), 70e18, 1e6, "paused stream did not resume"
             );
         }
 
@@ -594,11 +594,11 @@ contract MarginTestAggregator is AggregatorV3Interface {
         }
 
         function testFeeDistributionConfigurationIsDelayedAndBounded() public {
-            assertEq(config.feeImmediateShareBps(), 2_000);
+            assertEq(config.feeImmediateShareBps(), 0);
             assertEq(config.feeStreamDuration(), 7 days);
 
             vm.expectRevert(bytes("MarginConfig: invalid immediate share"));
-            config.queueFeeDistribution(999, 7 days);
+            config.queueFeeDistribution(2_001, 7 days);
             vm.expectRevert(bytes("MarginConfig: invalid stream duration"));
             config.queueFeeDistribution(1_500, 31 days);
 

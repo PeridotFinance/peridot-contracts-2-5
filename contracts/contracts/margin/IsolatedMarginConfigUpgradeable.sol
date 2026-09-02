@@ -12,8 +12,9 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
     uint256 public constant override BPS = 10_000;
     uint16 public constant MAX_OPEN_FEE_BPS = 100;
     uint16 public constant MAX_CLOSE_FEE_BPS = 100;
-    uint16 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 2_000;
-    uint16 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 1_000;
+    // Zero immediate share is the anti-sniping launch default. A nonzero value is a delayed governance opt-in.
+    uint16 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 0;
+    uint16 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 0;
     uint16 public constant MAX_FEE_IMMEDIATE_SHARE_BPS = 2_000;
     uint32 public constant DEFAULT_FEE_STREAM_DURATION = 7 days;
     uint32 public constant MIN_FEE_STREAM_DURATION = 1 days;

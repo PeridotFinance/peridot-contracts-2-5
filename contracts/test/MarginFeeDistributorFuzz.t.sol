@@ -13,7 +13,7 @@ contract MarginFeeFuzzConfig {
     uint16 public constant depositorShareBps = 10_000;
     uint16 public constant insuranceShareBps = 0;
     uint16 public constant treasuryShareBps = 0;
-    uint16 public feeImmediateShareBps = 2_000;
+    uint16 public feeImmediateShareBps = 0;
     uint32 public feeStreamDuration = 7 days;
 
     address public immutable insuranceFund;
@@ -25,7 +25,7 @@ contract MarginFeeFuzzConfig {
     }
 
     function setFeeDistribution(uint16 immediateShareBps_, uint32 streamDuration_) external {
-        require(immediateShareBps_ >= 1_000 && immediateShareBps_ <= 2_000, "fuzz config: immediate share");
+        require(immediateShareBps_ <= 2_000, "fuzz config: immediate share");
         require(streamDuration_ >= 1 days && streamDuration_ <= 30 days, "fuzz config: stream duration");
         feeImmediateShareBps = immediateShareBps_;
         feeStreamDuration = streamDuration_;
@@ -73,7 +73,7 @@ contract MarginFeeDistributorLegacyConfigTest is Test {
         pToken.approve(address(distributor), fee);
         distributor.collectFee(address(pToken), address(this), fee);
 
-        assertEq(distributor.pendingRewards(ALICE, address(pToken)), 151.2e18, "legacy immediate reward");
+        assertEq(distributor.pendingRewards(ALICE, address(pToken)), 0, "legacy stream accrued immediately");
         vm.warp(block.timestamp + 7 days);
         assertEq(distributor.pendingRewards(ALICE, address(pToken)), fee, "legacy seven-day stream");
     }
@@ -81,7 +81,7 @@ contract MarginFeeDistributorLegacyConfigTest is Test {
 
 abstract contract MarginFeeFuzzFixture is Test {
     uint256 internal constant BPS = 10_000;
-    uint256 internal constant IMMEDIATE_SHARE_BPS = 2_000;
+    uint256 internal constant IMMEDIATE_SHARE_BPS = 0;
     uint256 internal constant STREAM_DURATION = 7 days;
     address internal constant ALICE = address(0xA11CE);
     address internal constant BOB = address(0xB0B);
@@ -271,7 +271,7 @@ contract MarginFeeDistributorFuzzTest is MarginFeeFuzzFixture {
     ) public {
         uint256 fee = bound(feeSeed, 1, 1e30);
         uint256 shares = bound(sharesSeed, 1, 1e30);
-        uint16 immediateShareBps = uint16(bound(immediateShareSeed, 1_000, 2_000));
+        uint16 immediateShareBps = uint16(bound(immediateShareSeed, 0, 2_000));
         uint32 streamDuration = uint32(bound(durationSeed, 1 days, 30 days));
         uint256 elapsed = bound(elapsedSeed, 0, streamDuration);
         config.setFeeDistribution(immediateShareBps, streamDuration);
@@ -296,6 +296,20 @@ contract MarginFeeDistributorFuzzTest is MarginFeeFuzzFixture {
         assertEq(pToken.balanceOf(INSURANCE), fee, "empty-pool fee did not reach insurance");
         assertEq(_reserve(), 0, "empty pool retained a depositor reserve");
         assertEq(pToken.balanceOf(address(distributor)), 0, "empty pool stranded fee tokens");
+    }
+
+    function testFuzzSameBlockDepositAndWithdrawalCannotSnipePercentageFee(uint256 feeSeed) public {
+        uint256 fee = bound(feeSeed, 1e18, 1e30);
+        _deposit(ALICE, 100e18);
+        _deposit(BOB, 100e18);
+        _collectFee(fee);
+
+        vm.prank(BOB);
+        vault.withdraw(address(pToken), 100e18);
+
+        uint256 capturedRoundingDust = pToken.balanceOf(BOB) - 100e18;
+        assertLt(capturedRoundingDust, STREAM_DURATION, "same-block depositor captured percentage fee rewards");
+        assertEq(distributor.pendingRewards(BOB, address(pToken)), 0, "exited depositor retained streamed rewards");
     }
 }
 
@@ -370,7 +384,7 @@ contract MarginFeeStatefulHandler is Test {
     }
 
     function configureFeeDistribution(uint256 immediateShareSeed, uint256 durationSeed) external {
-        uint16 immediateShareBps = uint16(bound(immediateShareSeed, 1_000, 2_000));
+        uint16 immediateShareBps = uint16(bound(immediateShareSeed, 0, 2_000));
         uint32 streamDuration = uint32(bound(durationSeed, 1 days, 30 days));
         config.setFeeDistribution(immediateShareBps, streamDuration);
     }

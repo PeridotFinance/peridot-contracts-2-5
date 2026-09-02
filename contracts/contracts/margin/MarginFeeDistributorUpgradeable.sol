@@ -15,8 +15,9 @@ contract MarginFeeDistributorUpgradeable is Initializable, OwnableUpgradeable, R
 
     uint256 public constant INDEX_SCALE = 1e36;
     uint256 public constant BPS = 10_000;
-    uint256 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 2_000;
-    uint256 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 1_000;
+    // Keep this legacy-config fallback aligned with IsolatedMarginConfigUpgradeable's anti-sniping default.
+    uint256 public constant DEFAULT_FEE_IMMEDIATE_SHARE_BPS = 0;
+    uint256 public constant MIN_FEE_IMMEDIATE_SHARE_BPS = 0;
     uint256 public constant MAX_FEE_IMMEDIATE_SHARE_BPS = 2_000;
     uint256 public constant DEFAULT_FEE_STREAM_DURATION = 7 days;
     uint256 public constant MIN_FEE_STREAM_DURATION = 1 days;
