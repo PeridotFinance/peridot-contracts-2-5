@@ -54,6 +54,23 @@ forge test --match-contract AvalancheFujiLendingDeploymentForkTest \
   --skip P_OFTAdapterUpgradeable.t.sol
 ```
 
+## 0. Prepare the seed assets when the deployer holds only AVAX
+
+`PrepareAvalancheFujiLendingSeed` wraps the configured AVAX amount and swaps part of the resulting WAVAX through the official LFJ V2.1 bin-step-20 pool. Its minimum output comes from the live Chainlink AVAX/USD and USDC/USD prices, bounded by `PREPARE_MAX_SLIPPAGE_BPS`. It also reserves the configured native AVAX balance for deployment gas.
+
+Simulate and review the quoted minimum and final balances before adding `--broadcast`:
+
+```bash
+forge script script/PrepareAvalancheFujiLendingSeed.s.sol:PrepareAvalancheFujiLendingSeed \
+  --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
+  --account "$FOUNDRY_ACCOUNT" \
+  --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
+  -vvvv
+```
+
 ## 1. Deploy the lending base
 
 Simulate first:
@@ -63,6 +80,9 @@ forge script script/DeployAvalancheFujiLendingMarkets.s.sol:DeployAvalancheFujiL
   --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
   --account "$FOUNDRY_ACCOUNT" \
   --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
   -vvvv
 ```
 
@@ -77,12 +97,18 @@ forge script script/DeployLFJLBRouterAdapterAvalanche.s.sol:DeployLFJLBRouterAda
   --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
   --account "$FOUNDRY_ACCOUNT" \
   --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
   -vvvv
 
 forge script script/DeploySimpleFlashLoanVaultAvalanche.s.sol:DeploySimpleFlashLoanVaultAvalanche \
   --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
   --account "$FOUNDRY_ACCOUNT" \
   --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
   -vvvv
 ```
 
@@ -97,6 +123,9 @@ forge script script/DeployIsolatedMarginAvalanche.s.sol:DeployIsolatedMarginAval
   --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
   --account "$FOUNDRY_ACCOUNT" \
   --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
   -vvvv
 ```
 
@@ -111,6 +140,9 @@ forge script script/ActivateAvalancheFujiMarginMarkets.s.sol:ActivateAvalancheFu
   --rpc-url "$AVALANCHE_FUJI_RPC_URL" \
   --account "$FOUNDRY_ACCOUNT" \
   --sender "$MARGIN_DEPLOYER" \
+  --skip P_OFTAdapter.sol \
+  --skip P_OFTAdapterUpgradeable.sol \
+  --skip P_OFTAdapterUpgradeable.t.sol \
   -vvvv
 ```
 

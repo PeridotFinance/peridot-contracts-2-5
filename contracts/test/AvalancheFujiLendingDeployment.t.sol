@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ConfigurableJumpRateModelV2} from "../contracts/ConfigurableJumpRateModelV2.sol";
 import {InterestRateModel} from "../contracts/InterestRateModel.sol";
@@ -20,6 +21,7 @@ import {SimpleFlashLoanVault} from "../contracts/margin/SimpleFlashLoanVault.sol
 import {DeployAvalancheFujiLendingMarkets} from "../script/DeployAvalancheFujiLendingMarkets.s.sol";
 import {DeployIsolatedMarginAvalanche} from "../script/DeployIsolatedMarginAvalanche.s.sol";
 import {ActivateAvalancheFujiMarginMarkets} from "../script/ActivateAvalancheFujiMarginMarkets.s.sol";
+import {PrepareAvalancheFujiLendingSeed} from "../script/PrepareAvalancheFujiLendingSeed.s.sol";
 import {MockErc20} from "./MockErc20.sol";
 
 contract ConfigurableJumpRateModelV2Test is Test {
@@ -220,6 +222,13 @@ contract AvalancheFujiDeploymentChainGateTest is Test {
         vm.expectRevert("ActivateFujiMarkets: Fuji only");
         script.run();
     }
+
+    function testSeedPreparationScriptRejectsAvalancheMainnet() public {
+        vm.chainId(43_114);
+        PrepareAvalancheFujiLendingSeed script = new PrepareAvalancheFujiLendingSeed();
+        vm.expectRevert("PrepareFujiSeed: Fuji only");
+        script.run();
+    }
 }
 
 contract AvalancheFujiLendingDeploymentForkTest is Test {
@@ -228,6 +237,34 @@ contract AvalancheFujiLendingDeploymentForkTest is Test {
     address private constant FUJI_LFJ_USDC = 0xB6076C93701D6a07266c31066B298AeC6dd65c2d;
     address private constant FUJI_AVAX_USD_FEED = 0x5498BB86BC934c8D34FDA08E81D444153d0D06aD;
     address private constant FUJI_USDC_USD_FEED = 0x97FE42a7E96640D932bbc0e1580c73E705A8EB73;
+
+    function testPreparesSeedAssetsThroughLiveFujiPool() public {
+        string memory rpcUrl = vm.envOr("AVALANCHE_FUJI_RPC_URL", string(""));
+        if (bytes(rpcUrl).length == 0) return;
+        vm.createSelectFork(rpcUrl);
+        vm.deal(address(this), 2 ether);
+
+        uint256 wrapAmount = 0.5 ether;
+        uint256 swapAmount = 0.3 ether;
+        uint256 nativeGasReserve = 0.75 ether;
+        uint256 wavaxSeed = 0.1 ether;
+        string memory deployer = vm.toString(address(this));
+        vm.setEnv("MARGIN_DEPLOYER", deployer);
+        vm.setEnv("PREPARE_WRAP_AVAX_AMOUNT", vm.toString(wrapAmount));
+        vm.setEnv("PREPARE_SWAP_WAVAX_AMOUNT", vm.toString(swapAmount));
+        vm.setEnv("PREPARE_MAX_SLIPPAGE_BPS", "500");
+        vm.setEnv("PREPARE_MIN_NATIVE_GAS_BALANCE", vm.toString(nativeGasReserve));
+        vm.setEnv("LENDING_WAVAX_SEED_AMOUNT", vm.toString(wavaxSeed));
+        vm.setEnv("LENDING_USDC_SEED_AMOUNT", "2000000");
+
+        uint256 usdcReceived = new PrepareAvalancheFujiLendingSeed().run();
+
+        assertGe(usdcReceived, 2e6);
+        assertEq(IERC20(FUJI_WAVAX).balanceOf(address(this)), 0.2 ether);
+        assertEq(IERC20(FUJI_LFJ_USDC).balanceOf(address(this)), usdcReceived);
+        assertEq(IERC20(FUJI_WAVAX).allowance(address(this), FUJI_LFJ_ROUTER), 0);
+        assertEq(address(this).balance, 1.5 ether);
+    }
 
     function testDeploysFreshPausedLendingBaseAgainstLiveFujiContracts() public {
         string memory rpcUrl = vm.envOr("AVALANCHE_FUJI_RPC_URL", string(""));
