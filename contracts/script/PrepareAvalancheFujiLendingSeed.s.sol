@@ -14,6 +14,15 @@ interface IWavax is IERC20 {
     function deposit() external payable;
 }
 
+interface ILFJLBPairQuote {
+    function getTokenX() external view returns (address);
+    function getTokenY() external view returns (address);
+    function getSwapOut(uint128 amountIn, bool swapForY)
+        external
+        view
+        returns (uint128 amountInLeft, uint128 amountOut, uint128 fee);
+}
+
 /**
  * @notice Converts Fuji AVAX into the WAVAX and LFJ USDC required to seed the lending markets.
  * @dev This is an operator preparation script, not a protocol contract. Its minimum USDC output is
@@ -24,10 +33,11 @@ contract PrepareAvalancheFujiLendingSeed is Script {
 
     uint256 private constant AVALANCHE_FUJI_CHAIN_ID = 43_113;
     uint256 private constant BPS = 10_000;
-    uint256 private constant SWAP_DEADLINE_BUFFER = 10 minutes;
+    uint256 private constant SWAP_DEADLINE_BUFFER = 60 seconds;
     uint256 private constant BIN_STEP = 20;
 
     address private constant DEFAULT_LFJ_ROUTER = 0x18556DA13313f3532c54711497A8FedAC273220E;
+    address private constant DEFAULT_LFJ_PAIR = 0x0B16Fd47Cbf5350eBDe20aA813Db8E58846cd5D2;
     address private constant DEFAULT_WAVAX = 0xd00ae08403B9bbb9124bB305C09058E32C39A48c;
     address private constant DEFAULT_LFJ_USDC = 0xB6076C93701D6a07266c31066B298AeC6dd65c2d;
     address private constant DEFAULT_AVAX_USD_FEED = 0x5498BB86BC934c8D34FDA08E81D444153d0D06aD;
@@ -38,6 +48,7 @@ contract PrepareAvalancheFujiLendingSeed is Script {
 
         address deployer = vm.envAddress("MARGIN_DEPLOYER");
         address routerAddress = vm.envOr("LFJ_LB_ROUTER", DEFAULT_LFJ_ROUTER);
+        address pairAddress = vm.envOr("FUJI_LFJ_WAVAX_USDC_PAIR", DEFAULT_LFJ_PAIR);
         address wavax = vm.envOr("FUJI_WAVAX", DEFAULT_WAVAX);
         address usdc = vm.envOr("FUJI_LFJ_USDC", DEFAULT_LFJ_USDC);
         address avaxUsdFeed = vm.envOr("FUJI_AVAX_USD_FEED", DEFAULT_AVAX_USD_FEED);
@@ -53,13 +64,19 @@ contract PrepareAvalancheFujiLendingSeed is Script {
 
         require(deployer != address(0), "PrepareFujiSeed: zero deployer");
         require(routerAddress.code.length > 0, "PrepareFujiSeed: router not contract");
+        require(pairAddress.code.length > 0, "PrepareFujiSeed: pair not contract");
         require(wavax.code.length > 0 && usdc.code.length > 0, "PrepareFujiSeed: token not contract");
         require(IERC20Metadata(wavax).decimals() == 18, "PrepareFujiSeed: WAVAX decimals");
         require(IERC20Metadata(usdc).decimals() == 6, "PrepareFujiSeed: USDC decimals");
         require(ILFJLBRouter(routerAddress).getWNATIVE() == wavax, "PrepareFujiSeed: wrong router WAVAX");
+        require(
+            ILFJLBPairQuote(pairAddress).getTokenX() == wavax && ILFJLBPairQuote(pairAddress).getTokenY() == usdc,
+            "PrepareFujiSeed: wrong pair"
+        );
         require(wrapAmount > 0 && swapAmount > 0, "PrepareFujiSeed: zero amount");
+        require(swapAmount <= type(uint128).max, "PrepareFujiSeed: swap too large");
         require(requiredWavax > 0 && requiredUsdc > 0, "PrepareFujiSeed: zero target");
-        require(maxSlippageBps <= 1_000, "PrepareFujiSeed: slippage too high");
+        require(maxSlippageBps <= 500, "PrepareFujiSeed: slippage too high");
         require(
             avaxFeedMaxAge > 0 && avaxFeedMaxAge <= type(uint32).max && usdcFeedMaxAge > 0
                 && usdcFeedMaxAge <= type(uint32).max,
@@ -74,7 +91,11 @@ contract PrepareAvalancheFujiLendingSeed is Script {
         uint256 avaxPrice = _readPrice(avaxUsdFeed, "AVAX / USD", avaxFeedMaxAge);
         uint256 usdcPrice = _readPrice(usdcUsdFeed, "USDC / USD", usdcFeedMaxAge);
         uint256 expectedUsdc = Math.mulDiv(Math.mulDiv(swapAmount, avaxPrice, 1e18), 1e6, usdcPrice);
-        uint256 minUsdcOut = Math.mulDiv(expectedUsdc, BPS - maxSlippageBps, BPS);
+        uint256 oracleMinUsdcOut = Math.mulDiv(expectedUsdc, BPS - maxSlippageBps, BPS);
+        (uint128 amountInLeft, uint128 quotedUsdc,) = ILFJLBPairQuote(pairAddress).getSwapOut(uint128(swapAmount), true);
+        require(amountInLeft == 0 && quotedUsdc > 0, "PrepareFujiSeed: incomplete pair quote");
+        uint256 poolMinUsdcOut = Math.mulDiv(uint256(quotedUsdc), BPS - maxSlippageBps, BPS);
+        uint256 minUsdcOut = oracleMinUsdcOut > poolMinUsdcOut ? oracleMinUsdcOut : poolMinUsdcOut;
         require(minUsdcOut > 0, "PrepareFujiSeed: zero minimum output");
         require(currentUsdc + minUsdcOut >= requiredUsdc, "PrepareFujiSeed: insufficient USDC minimum");
 
@@ -97,7 +118,9 @@ contract PrepareAvalancheFujiLendingSeed is Script {
         console2.log("Fuji WAVAX balance", IERC20(wavax).balanceOf(deployer));
         console2.log("Fuji LFJ USDC balance", IERC20(usdc).balanceOf(deployer));
         console2.log("LFJ USDC received", usdcReceived);
-        console2.log("Chainlink-derived minimum USDC", minUsdcOut);
+        console2.log("Chainlink-derived minimum USDC", oracleMinUsdcOut);
+        console2.log("Pool-derived minimum USDC", poolMinUsdcOut);
+        console2.log("Enforced minimum USDC", minUsdcOut);
     }
 
     function _path(address wavax, address usdc) private pure returns (ILFJLBRouter.Path memory path) {

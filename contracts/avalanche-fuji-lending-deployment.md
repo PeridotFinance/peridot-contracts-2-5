@@ -25,6 +25,7 @@ The supplied Fuji addresses are:
 
 - WAVAX: `0xd00ae08403B9bbb9124bB305C09058E32C39A48c`
 - LFJ USDC: `0xB6076C93701D6a07266c31066B298AeC6dd65c2d`
+- LFJ WAVAX/USDC pair: `0x0B16Fd47Cbf5350eBDe20aA813Db8E58846cd5D2`
 - Chainlink AVAX/USD: `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD`
 - Chainlink USDC/USD: `0x97FE42a7E96640D932bbc0e1580c73E705A8EB73`
 - LFJ router: `0x18556DA13313f3532c54711497A8FedAC273220E`
@@ -56,7 +57,7 @@ forge test --match-contract AvalancheFujiLendingDeploymentForkTest \
 
 ## 0. Prepare the seed assets when the deployer holds only AVAX
 
-`PrepareAvalancheFujiLendingSeed` wraps the configured AVAX amount and swaps part of the resulting WAVAX through the official LFJ V2.1 bin-step-20 pool. Its minimum output comes from the live Chainlink AVAX/USD and USDC/USD prices, bounded by `PREPARE_MAX_SLIPPAGE_BPS`. It also reserves the configured native AVAX balance for deployment gas.
+`PrepareAvalancheFujiLendingSeed` wraps the configured AVAX amount and swaps part of the resulting WAVAX through the official LFJ V2.1 bin-step-20 pool. It applies `PREPARE_MAX_SLIPPAGE_BPS` to both the live LFJ pair quote and the Chainlink AVAX/USD-to-USDC/USD value, then enforces the higher minimum with a 60-second deadline. It also reserves the configured native AVAX balance for deployment gas.
 
 Simulate and review the quoted minimum and final balances before adding `--broadcast`:
 

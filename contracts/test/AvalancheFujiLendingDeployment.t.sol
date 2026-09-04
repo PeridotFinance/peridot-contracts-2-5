@@ -252,7 +252,7 @@ contract AvalancheFujiLendingDeploymentForkTest is Test {
         vm.setEnv("MARGIN_DEPLOYER", deployer);
         vm.setEnv("PREPARE_WRAP_AVAX_AMOUNT", vm.toString(wrapAmount));
         vm.setEnv("PREPARE_SWAP_WAVAX_AMOUNT", vm.toString(swapAmount));
-        vm.setEnv("PREPARE_MAX_SLIPPAGE_BPS", "500");
+        vm.setEnv("PREPARE_MAX_SLIPPAGE_BPS", "100");
         vm.setEnv("PREPARE_MIN_NATIVE_GAS_BALANCE", vm.toString(nativeGasReserve));
         vm.setEnv("LENDING_WAVAX_SEED_AMOUNT", vm.toString(wavaxSeed));
         vm.setEnv("LENDING_USDC_SEED_AMOUNT", "2000000");
