@@ -132,11 +132,30 @@ to nothing, and every margin account backed by one becomes instantly liquidatabl
 at a valuation that is not real. With the oracle unavailable roughly a quarter of
 the time, that is an ordinary weekend rather than a tail event.
 
-Fix by splitting the two consumers: keep the degrade-to-zero path for redemption,
-and give margin a strict read — either an `exchangeRateStoredStrict()` on the
-delegate that reverts rather than degrading, or a margin oracle that refuses to
-price a pToken whose vault read is currently failing. A revert blocks a
-liquidation; a zero causes one.
+The strict path already exists. During `mint` the delegate sets
+`mintVaultAssetsValidated`, which makes the same read revert instead of
+degrading, so a new supplier cannot mint at a fake-cheap rate. The asymmetry is
+already recognized; it was simply never extended to collateral valuation.
+
+**Recommended fix: oracle-side.** Have the Robinhood `IMarginPriceOracle` return
+`address(0)` from `marketAsset(pToken)` when that pToken's vault read is
+currently failing. `pTokenValueUsd` already reverts `PriceUnavailable` on a zero
+asset, so the valuation fails closed instead of computing a collapsed number.
+This is per-pToken, chain-local, and needs **no changes to the shared margin
+core**.
+
+Rejected alternative: an `exchangeRateStoredStrict()` on the delegate. The risk
+engine reads `exchangeRateStored()` from `pTokenValueUsd`, the quoter, the
+executor and the liquidator, all shared with the Avalanche markets, so a strict
+variant means editing every one of those call sites for a Robinhood-specific
+problem. Note also that `getPrice(asset)` cannot carry the fix: it only sees the
+asset, so returning zero there would poison USDG for every market that uses it.
+
+The deliberate tradeoff is that liquidations on these markets are blocked during
+a vault outage rather than executing at a fake price. A wrongful mass liquidation
+is unrecoverable and a delayed one is not, and this is consistent regardless:
+`StockSimplePriceOracle`'s staleness check already blocks NVDA liquidations in
+the same window.
 
 ## Risk parameters
 
@@ -168,9 +187,9 @@ liquidation; a zero causes one.
 
 - **Governance multisig address.** Gates production TVL. The two-phase migration
   tooling in the vault repo is written and tested and waits only on an address.
-- **Strict-read shape** for the blocking finding: a new delegate method, or
-  oracle-side refusal. The delegate method is tighter; the oracle-side one avoids
-  touching a market that will already be live.
+- **Confirm the oracle-side fix** for the blocking finding, rather than a strict
+  delegate method. The recommendation is above; it needs a sign-off because it
+  means liquidations fail closed during a vault outage.
 - **Whether NVDA suppliers get an opt-in** the way USDG suppliers do. A USDG
   depositor moving from roughly zero price risk to some is a categorical change;
   an NVDA depositor moving from full NVDA volatility to that minus a small IL
