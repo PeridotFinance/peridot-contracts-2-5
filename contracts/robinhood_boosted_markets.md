@@ -40,6 +40,42 @@ emergency mode false. The production `NVDA/USDG` pair has never been registered.
 EOA `0x94696d767e65a75581145646960FA0eC886cE5d2`.** Migrating those roles to the
 approved multisig gates production TVL for the markets as much as for the vault.
 
+## Prerequisite: the lending core is not on Robinhood Chain
+
+An earlier draft of this plan assumed a Peridottroller and interest-rate model
+already existed on 4663. They do not. Neither does a price oracle or any pToken.
+The boosted markets cannot be deployed until the lending base is standing, so
+that base is step one rather than an assumed input.
+
+Model it on `DeployAvalancheFujiLendingMarkets.s.sol`, which deploys and wires:
+
+| Component | Robinhood equivalent |
+| --- | --- |
+| `Peridot` governance token | fresh deployment |
+| Price oracle | `StockSimplePriceOracle`, not `AvalanchePriceOracle` — it carries the per-asset stock flag and separate staleness threshold |
+| `Unitroller` | unchanged |
+| Chain-pinned controller | `PeridottrollerRobinhood` (added alongside this plan) |
+| `PErc20Delegate` | unchanged, for any plain market |
+| `ConfigurableJumpRateModelV2` | unchanged, parameters below |
+| Market bootstrapper | Robinhood equivalent of `AvalancheFujiMarketBootstrapper` |
+
+`PeridottrollerRobinhood` mirrors `PeridottrollerAvalancheFuji`: `Peridottroller`
+plus a chain-id guard and an immutable PERIDOT token address. The guard matters
+more here than on a testnet — this implementation backs markets whose underlying
+is a tokenized equity priced by a feed that only updates while its market is
+open, so the staleness policy chosen for 4663 must not be reachable elsewhere.
+
+**`LENDING_BLOCKS_PER_YEAR` must be changed from the Fuji default.** Measured
+over 200,000 blocks on 4663: 20,163 seconds, or **0.1008s per block**, which is
+**312,810,593 blocks per year**. The Fuji default is `31_536_000`, assuming one
+block per second.
+
+`ConfigurableJumpRateModelV2` derives `ratePerBlock = ratePerYear /
+blocksPerYear`. Deploying with the Fuji default on a chain producing ten times
+as many blocks makes interest accrue at roughly **ten times the intended annual
+rate**. Re-measure at deployment time rather than copying the number above, and
+assert it in the deploy script rather than leaving it an env default.
+
 ## Markets to build
 
 `RobinhoodBoostedDelegate` already exists (522 lines) and is **token-agnostic**:
@@ -201,11 +237,14 @@ the same window.
 
 ## Sequencing
 
-1. Exchange-rate hardening, folded into the margin oracle (B2). No longer
-   sequenced first, since it does not gate the markets or margin.
-2. Script cleanups: side-neutral naming, and the `PRIVATE_KEY` removal.
-3. Deploy and configure both markets plus the oracle; register the production
-   pair with everything paused.
+1. **Lending base on 4663.** `Peridot` token, `StockSimplePriceOracle`,
+   `Unitroller` + `PeridottrollerRobinhood`, `PErc20Delegate`, rate model, close
+   factor and liquidation incentive. Nothing below can start until this exists.
+2. **Both boosted pTokens**, deployed by the now side-neutral
+   `DeployRobinhoodBoostedDelegator` with `UNDERLYING` set per side, then listed
+   on the controller with collateral factors and borrow caps.
+3. **Register the production `NVDA/USDG` pair** in the vault with each pToken as
+   its side account, everything paused, then configure the delegates.
 4. Production pair canary **with the reserve funded** — this also closes the one
    waterfall leg the vault's post-upgrade canary could not reach, since the
    reserve was empty and the deficit went straight to the settlement swap.
@@ -218,6 +257,10 @@ the same window.
 
 - **Governance multisig address.** Gates production TVL. The two-phase migration
   tooling in the vault repo is written and tested and waits only on an address.
+  Deferred for now; the timelock's roles remain with the deployer EOA.
+- **Rate model parameters**, and in particular the real block time on 4663, which
+  sets `LENDING_BLOCKS_PER_YEAR`.
+- **Seed amounts and borrow caps** for the first two markets.
 - **Confirm the oracle-side fix** for the blocking finding, rather than a strict
   delegate method. The recommendation is above; it needs a sign-off because it
   means liquidations fail closed during a vault outage.
