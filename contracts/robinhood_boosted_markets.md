@@ -137,23 +137,37 @@ distributed), `StockSimplePriceOracle`, `Unitroller` + `PeridottrollerRobinhood`
 the rate model, one shared `RobinhoodBoostedDelegate`, both markets, and an
 atomic list-and-seed through `RobinhoodMarketBootstrapper`.
 
-Measure the accrual clock first. It is `block.number`, which is L1-derived here,
-not the L2 height `eth_blockNumber` reports:
+The accrual clock is settled by documentation, not measurement. Robinhood Chain's
+own docs state that `block.number` returns an estimate of the **L1 Ethereum block
+number**, not the chain's own height, and warn against using it as a per-block
+counter. Arbitrum's docs give the mechanism: `block.number` is the parent-chain
+block at which the sequencer received the transaction.
 
-```bash
-MC=0xcA11bde05977b3631167028862bE2a173976CA11
-cast call $MC 'getBlockNumber()(uint256)' --rpc-url "$ROBINHOOD_RPC_URL"   # solidity clock
-cast block-number --rpc-url "$ROBINHOOD_RPC_URL"                           # L2 clock, NOT this
+Robinhood Chain is an Arbitrum L2 settling to Ethereum, so the accrual clock is
+Ethereum's 12-second slot:
+
+```
+LENDING_BLOCKS_PER_YEAR = 31,536,000 / 12 = 2,628,000
 ```
 
-Sample it twice a few minutes apart, divide 31,536,000 by the seconds per
-solidity block, and use that. The script range-asserts the result between
-2,000,000 and 4,000,000 so a per-second or per-L2-block value cannot slip in.
+An independent check agreed: sampling the deployed Multicall3's
+`getBlockNumber()` gave ~11s per solidity block over a 99-second window.
+
+The widely quoted 100ms figure is the **L2** block time and is the wrong clock
+here. Using it would give ~315,000,000 and misprice every rate by two orders of
+magnitude; the Fuji per-second default of 31,536,000 is wrong by one. The script
+range-asserts between 2,000,000 and 4,000,000 so neither can slip through.
+
+One consequence worth knowing: because many L2 blocks share a single
+`block.number`, interest accrues in steps as the L1 height advances rather than
+smoothly. That is correct for Compound-style accrual, which works on deltas, but
+it means a burst of transactions in the same L1 block accrues nothing between
+them.
 
 ```bash
 export DEPLOYER=0x94696d767e65a75581145646960FA0eC886cE5d2
 export LENDING_OWNER=$DEPLOYER            # move to the timelock before real TVL
-export LENDING_BLOCKS_PER_YEAR=2628000    # re-measure; ~12s L1 cadence
+export LENDING_BLOCKS_PER_YEAR=2628000    # Ethereum 12s slot; see above
 
 export LENDING_NVDA_SEED_AMOUNT=20000000000000000      # 0.02 NVDA
 export LENDING_USDG_SEED_AMOUNT=4000000                # 4 USDG
