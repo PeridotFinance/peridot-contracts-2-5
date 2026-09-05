@@ -129,6 +129,58 @@ deployment of the same implementation, not a second contract.
 and binds every broadcast to an explicit public address with `--account`. Bring
 this script to that standard before it touches mainnet.
 
+## Lending base deployment
+
+`DeployRobinhoodLendingMarkets.s.sol` deploys the whole base in one broadcast and
+hands admin back to the deployer: PERIDOT token (constructor pin only, never
+distributed), `StockSimplePriceOracle`, `Unitroller` + `PeridottrollerRobinhood`,
+the rate model, one shared `RobinhoodBoostedDelegate`, both markets, and an
+atomic list-and-seed through `RobinhoodMarketBootstrapper`.
+
+Measure the accrual clock first. It is `block.number`, which is L1-derived here,
+not the L2 height `eth_blockNumber` reports:
+
+```bash
+MC=0xcA11bde05977b3631167028862bE2a173976CA11
+cast call $MC 'getBlockNumber()(uint256)' --rpc-url "$ROBINHOOD_RPC_URL"   # solidity clock
+cast block-number --rpc-url "$ROBINHOOD_RPC_URL"                           # L2 clock, NOT this
+```
+
+Sample it twice a few minutes apart, divide 31,536,000 by the seconds per
+solidity block, and use that. The script range-asserts the result between
+2,000,000 and 4,000,000 so a per-second or per-L2-block value cannot slip in.
+
+```bash
+export DEPLOYER=0x94696d767e65a75581145646960FA0eC886cE5d2
+export LENDING_OWNER=$DEPLOYER            # move to the timelock before real TVL
+export LENDING_BLOCKS_PER_YEAR=2628000    # re-measure; ~12s L1 cadence
+
+export LENDING_NVDA_SEED_AMOUNT=20000000000000000      # 0.02 NVDA
+export LENDING_USDG_SEED_AMOUNT=4000000                # 4 USDG
+export LENDING_NVDA_BORROW_CAP=4350000000000000000     # 4.35 NVDA, ~$1,000
+export LENDING_USDG_BORROW_CAP=1000000000              # 1,000 USDG
+
+forge script script/DeployRobinhoodLendingMarkets.s.sol:DeployRobinhoodLendingMarkets \
+  --rpc-url "$ROBINHOOD_RPC_URL" --account "$FOUNDRY_ACCOUNT" --sender "$DEPLOYER" \
+  --skip 'test/P_OFT*' 'contracts/layerzero/*' -vvvv
+```
+
+Simulate first, then rerun with `--broadcast`.
+
+The markets land listed, seeded, borrowing paused, flash loans paused, and with
+**zero collateral factor**. Collateral factors and borrow unpausing come later
+through governance, after the vault pair is registered and canaried.
+
+USDG has no Chainlink feed on this chain, so the script pins it at one dollar
+with `setDirectPrice`. That is fine while USDG holds its peg and wrong the moment
+it does not; revisit if a USDG/USD feed is deployed.
+
+**Never redeem the whole seed.** The seed pTokens end up with the deployer. Its
+job is to keep `totalSupply` far from zero — at 8-decimal pTokens and the 0.02
+initial rate, a $5 seed leaves about 25 billion pToken units, which makes mint
+rounding worth fractions of a cent. Redeeming all of it returns `totalSupply` to
+zero and re-opens the first-depositor exposure the bootstrapper closes.
+
 ## Feed availability
 
 The RHNVDA/USD feed `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` is
