@@ -107,9 +107,11 @@ markets unmodified. Robinhood Chain lacks two chain-specific seams:
 
 Then deploy through `DeployMarginStackWithProxies.s.sol` and set `PairRiskConfig`.
 
-## Blocking finding: the exchange-rate fallback
+## Hardening: the exchange-rate fallback
 
-**Margin must not be enabled on these markets until this is fixed.**
+**Not a blocker.** An earlier draft of this document called it one, on the
+assumption that a feed outage could trigger it. That is wrong and is corrected
+below.
 
 `RobinhoodBoostedDelegate._vaultAccountedAssets()` returns `0` when the vault
 read reverts, and `exchangeRateStoredInternal` computes:
@@ -127,17 +129,40 @@ position as:
 underlyingFromPToken(pTokenAmount, PErc20(pToken).exchangeRateStored()) * price(asset)
 ```
 
-So a vault read failure prices every boosted-pToken collateral position at close
-to nothing, and every margin account backed by one becomes instantly liquidatable
-at a valuation that is not real. With the oracle unavailable roughly a quarter of
-the time, that is an ordinary weekend rather than a tail event.
+So a vault read failure would price every boosted-pToken collateral position at
+close to nothing, making every margin account backed by one liquidatable at a
+valuation that is not real.
+
+**How often can that actually happen? Rarely.** `accountedAssets` is a pure
+ledger read:
+
+```solidity
+function accountedAssets(bytes32 pairId, address token) external view returns (uint256) {
+    (, uint256 principal) = _sideAmounts(pairId, token);
+    return principal;
+}
+```
+
+It touches no oracle and reverts only on `UnknownPair` or `UnsupportedToken`. A
+stale feed does **not** trigger it. The failure needs a genuine vault fault: an
+unregistered pair, a token that is not one of the pair's two, or the vault proxy
+pointing at broken code. Collateral valuation is therefore oracle-independent,
+and the 25.9% stale window above does not put margin positions at risk of
+wrongful liquidation.
+
+The oracle-dependent read is `withdrawableAssets`, which feeds `getCashPrior`.
+That governs borrow and redeem availability, and a liquidator's ability to exit
+seized collateral — not valuation.
+
+Fix it anyway, as defense in depth: if the vault ever is broken, mass wrongful
+liquidation should not compound the failure.
 
 The strict path already exists. During `mint` the delegate sets
 `mintVaultAssetsValidated`, which makes the same read revert instead of
 degrading, so a new supplier cannot mint at a fake-cheap rate. The asymmetry is
 already recognized; it was simply never extended to collateral valuation.
 
-**Recommended fix: oracle-side.** Have the Robinhood `IMarginPriceOracle` return
+**Fix: oracle-side.** Have the Robinhood `IMarginPriceOracle` return
 `address(0)` from `marketAsset(pToken)` when that pToken's vault read is
 currently failing. `pTokenValueUsd` already reverts `PriceUnavailable` on a zero
 asset, so the valuation fails closed instead of computing a collapsed number.
@@ -170,8 +195,8 @@ the same window.
 
 ## Sequencing
 
-1. Exchange-rate integrity fix. Small, self-contained, gates all margin work, and
-   shipping it first means the markets deploy with it already in place.
+1. Exchange-rate hardening, folded into the margin oracle (B2). No longer
+   sequenced first, since it does not gate the markets or margin.
 2. Script cleanups: side-neutral naming, and the `PRIVATE_KEY` removal.
 3. Deploy and configure both markets plus the oracle; register the production
    pair with everything paused.
