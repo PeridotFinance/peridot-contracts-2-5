@@ -8,10 +8,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /**
  * @title RobinhoodBoostedDelegate
- * @notice USDG pToken implementation that directly owns one side of a Robinhood paired vault.
+ * @notice Boosted pToken implementation that directly owns one side of a Robinhood paired vault.
  * @dev Calls the vault from the delegator address, so the pToken itself remains the configured
- *      USDG side account. The generic IBoostedYieldAdapter must not sit between this contract
- *      and the vault because it cannot propagate realized strategy losses.
+ *      side account. Side-neutral: every vault call routes through `underlying`, so one
+ *      implementation serves both the stock-side and the USDG-side market. The generic
+ *      IBoostedYieldAdapter must not sit between this contract and the vault because it cannot
+ *      propagate realized strategy losses.
  */
 contract RobinhoodBoostedDelegate is PErc20Delegate {
     using SafeERC20 for IERC20;
@@ -41,7 +43,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     IRobinhoodBoostedVault public robinhoodVault;
     bytes32 public robinhoodPairId;
 
-    /// @notice Fraction of managed USDG retained locally, scaled by 1e18.
+    /// @notice Fraction of managed underlying retained locally, scaled by 1e18.
     uint256 public vaultBufferMantissa;
 
     /// @notice Blocks new vault deposits. Existing vault claims remain part of exchange-rate accounting.
@@ -80,7 +82,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     /**
      * @notice Initializes delegate-specific storage when installed behind PErc20Delegator.
      * @dev Empty data is the normal deployment path. Governance registers the production
-     *      pair with the delegator as USDG side account, then configures this delegate.
+     *      pair with the delegator as that side's account, then configures this delegate.
      */
     function _becomeImplementation(bytes memory data) public override {
         if (msg.sender != admin) revert OnlyAdmin();
@@ -99,7 +101,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @notice Returns all locally held and vault-accounted USDG.
+     * @notice Returns all locally held and vault-accounted underlying.
      */
     function totalManagedAssets() external view returns (uint256) {
         return super.getCashPrior() + _vaultAccountedAssets();
@@ -114,7 +116,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @notice Vault-held USDG that can actually be released right now.
+     * @notice Vault-held underlying that can actually be released right now.
      * @dev Falls to zero while LP liquidity is open and the oracle guard is unhealthy. The
      *      gap against `vaultLiquidAssets` is the amount held in custody but unreachable.
      */
@@ -123,7 +125,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @notice Supplies USDG only when the vault claim used for mint pricing is live.
+     * @notice Supplies underlying only when the vault claim used for mint pricing is live.
      * @dev Other operations use conservative zero-value fallbacks so vault read failures
      *      cannot freeze local cash while new suppliers cannot dilute existing holders.
      */
@@ -135,7 +137,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @dev Cash checks use local USDG plus only the vault USDG that is releasable in this
+     * @dev Cash checks use local underlying plus only the vault balance releasable in this
      *      block. Vault idle is not unconditionally reachable: while LP liquidity is open,
      *      every principal reduction routes through the oracle-guarded settle path, so idle
      *      sitting behind an unhealthy oracle is custody, not cash. Counting it here would
@@ -183,7 +185,7 @@ contract RobinhoodBoostedDelegate is PErc20Delegate {
     }
 
     /**
-     * @notice Redeems an exact USDG amount using the post-vault-operation exchange rate.
+     * @notice Redeems an exact underlying amount using the post-vault-operation exchange rate.
      * @dev A newly recognized loss increases the number of pTokens burned for the exact output.
      */
     function redeemUnderlying(uint256 redeemAmount) external override nonReentrant returns (uint256) {

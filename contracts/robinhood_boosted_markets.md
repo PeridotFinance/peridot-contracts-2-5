@@ -59,10 +59,16 @@ deployment of the same implementation, not a second contract.
 3. **Oracle** — register both underlyings on `StockSimplePriceOracle`, flag NVDA
    as a stock asset, and size `stockChainlinkPriceStaleThreshold` against
    measured feed behaviour rather than a guess (see below).
-4. **Exposure dial** — set each side's LP exposure with that market's own
-   `vaultBufferMantissa`, not by splitting plain and boosted markets per side.
-   `rebalance` deploys `min(stockValue, usdgValue)`, so splitting both sides
-   would let the smaller boosted market throttle the whole pair.
+4. **Exposure dial — decided.** One vault-wired market per asset, with each
+   side's LP exposure set by that market's own `vaultBufferMantissa`. No separate
+   plain market per asset. `rebalance` deploys `min(stockValue, usdgValue)`, so
+   splitting each asset into plain and boosted markets would let whichever
+   boosted market is smaller throttle the entire pair, even with plenty of the
+   other asset sitting unused next door.
+
+   The consequence is that supplying to either market means accepting a bounded
+   amount of LP exposure with no opt-out. That has to be stated plainly in the
+   market documentation rather than left implicit.
 
 `DeployRobinhoodBoostedDelegator.s.sol` currently reads
 `vm.envUint("PRIVATE_KEY")`. The vault repository forbids plaintext key env vars
@@ -215,7 +221,6 @@ the same window.
 - **Confirm the oracle-side fix** for the blocking finding, rather than a strict
   delegate method. The recommendation is above; it needs a sign-off because it
   means liquidations fail closed during a vault outage.
-- **Whether NVDA suppliers get an opt-in** the way USDG suppliers do. A USDG
-  depositor moving from roughly zero price risk to some is a categorical change;
-  an NVDA depositor moving from full NVDA volatility to that minus a small IL
-  term is marginal. Defensible either way, but it needs disclosing.
+- **Disclosure wording** for the bounded-exposure model now that the dial is
+  settled. Neither market offers an opt-out, so the risk statement has to be
+  explicit at the point of supply, not buried in docs.

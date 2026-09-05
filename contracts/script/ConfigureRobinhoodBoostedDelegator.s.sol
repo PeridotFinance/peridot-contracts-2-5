@@ -7,29 +7,35 @@ import {RobinhoodBoostedDelegate} from "../contracts/boosted/RobinhoodBoostedDel
 import {IRobinhoodBoostedVault} from "../contracts/interfaces/IRobinhoodBoostedVault.sol";
 
 /**
- * @notice Builds one pUSDG admin payload for the two-step vault activation.
- * @dev Payload output is the default because the pToken admin should be a timelock.
- *      Direct EOA execution requires DIRECT_ADMIN_BROADCAST=true.
+ * @notice Builds one boosted-market admin payload for the two-step vault activation.
+ * @dev Side-neutral: works for either market of a paired vault. PAIR_LABEL selects the pair,
+ *      so the canary and production pairs cannot be confused for one another.
+ *
+ *      Payload output is the default because the pToken admin should be a timelock. Direct
+ *      execution requires DIRECT_ADMIN_BROADCAST=true and binds to the public ADMIN_ACTOR
+ *      address; this script accepts no private key.
  */
 contract ConfigureRobinhoodBoostedDelegator is Script {
     uint256 internal constant ROBINHOOD_CHAIN_ID = 4663;
-    bytes32 public constant PAIR_ID = keccak256("NVDA/USDG");
 
     function run() external {
         require(block.chainid == ROBINHOOD_CHAIN_ID, "WRONG_CHAIN");
-        RobinhoodBoostedDelegate pToken = RobinhoodBoostedDelegate(vm.envAddress("PUSDG_DELEGATOR"));
+        string memory pairLabel = vm.envString("PAIR_LABEL");
+        require(bytes(pairLabel).length != 0, "EMPTY_PAIR_LABEL");
+        bytes32 PAIR_ID = keccak256(bytes(pairLabel));
+        RobinhoodBoostedDelegate pToken = RobinhoodBoostedDelegate(vm.envAddress("BOOSTED_DELEGATOR"));
         address vault = vm.envAddress("ROBINHOOD_VAULT");
         address operator = vm.envAddress("VAULT_OPERATOR");
         uint256 buffer = vm.envUint("VAULT_BUFFER_MANTISSA");
-        require(address(pToken).code.length != 0, "PUSDG_NOT_CONTRACT");
+        require(address(pToken).code.length != 0, "DELEGATOR_NOT_CONTRACT");
         require(vault.code.length != 0, "VAULT_NOT_CONTRACT");
         require(operator != address(0) && buffer <= 1e18, "INVALID_VAULT_CONFIG");
         require(
             IRobinhoodBoostedVault(vault).sideAccount(PAIR_ID, pToken.underlying()) == address(pToken),
-            "PUSDG_NOT_SIDE_ACCOUNT"
+            "DELEGATOR_NOT_SIDE_ACCOUNT"
         );
 
-        bytes32 action = keccak256(bytes(vm.envString("PUSDG_ADMIN_ACTION")));
+        bytes32 action = keccak256(bytes(vm.envString("ADMIN_ACTION")));
         bytes memory data;
         bytes32 expectedActionId;
         if (action == keccak256("queue-config")) {
@@ -45,9 +51,11 @@ contract ConfigureRobinhoodBoostedDelegator is Script {
             data = abi.encodeCall(RobinhoodBoostedDelegate._setVaultPaused, (false));
             expectedActionId = keccak256(abi.encode("setVaultPaused", false));
         } else {
-            revert("UNKNOWN_PUSDG_ADMIN_ACTION");
+            revert("UNKNOWN_ADMIN_ACTION");
         }
 
+        console2.log("pair label", pairLabel);
+        console2.log("underlying", pToken.underlying());
         console2.log("expected internal action id");
         console2.logBytes32(expectedActionId);
         if (!vm.envOr("DIRECT_ADMIN_BROADCAST", false)) {
@@ -58,8 +66,9 @@ contract ConfigureRobinhoodBoostedDelegator is Script {
             return;
         }
 
-        uint256 adminKey = vm.envUint("ADMIN_PRIVATE_KEY");
-        vm.startBroadcast(adminKey);
+        address adminActor = vm.envAddress("ADMIN_ACTOR");
+        require(adminActor != address(0), "ZERO_ADMIN_ACTOR");
+        vm.startBroadcast(adminActor);
         (bool success, bytes memory returnData) = address(pToken).call(data);
         vm.stopBroadcast();
         if (!success) {
