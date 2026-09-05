@@ -65,16 +65,34 @@ more here than on a testnet — this implementation backs markets whose underlyi
 is a tokenized equity priced by a feed that only updates while its market is
 open, so the staleness policy chosen for 4663 must not be reachable elsewhere.
 
-**`LENDING_BLOCKS_PER_YEAR` must be changed from the Fuji default.** Measured
-over 200,000 blocks on 4663: 20,163 seconds, or **0.1008s per block**, which is
-**312,810,593 blocks per year**. The Fuji default is `31_536_000`, assuming one
-block per second.
+**`LENDING_BLOCKS_PER_YEAR` must be changed from the Fuji default, and the
+obvious way to measure it is wrong.**
+
+Robinhood Chain is an Arbitrum Orbit chain, so Solidity's `block.number` is
+**not** the L2 block number that `eth_blockNumber` reports. Confirmed against the
+deployed Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11`: its
+`getBlockNumber()` returned `25,909,774` while the RPC reported `54,959,398` at
+the same moment. Interest accrual uses `block.number`, so the L2 figure is the
+wrong clock.
+
+| Clock | Block time | Blocks/year |
+| --- | ---: | ---: |
+| `eth_blockNumber` (L2) | ~0.099s | ~318,500,000 |
+| **`block.number` (what accrual uses)** | **~11s** | **~2,870,000** |
 
 `ConfigurableJumpRateModelV2` derives `ratePerBlock = ratePerYear /
-blocksPerYear`. Deploying with the Fuji default on a chain producing ten times
-as many blocks makes interest accrue at roughly **ten times the intended annual
-rate**. Re-measure at deployment time rather than copying the number above, and
-assert it in the deploy script rather than leaving it an env default.
+blocksPerYear`, so the Fuji default of `31_536_000` — about eleven times the real
+figure — would accrue interest at roughly **one eleventh of the intended rate**.
+Using the naive L2 measurement instead would err by a factor of a hundred in the
+other direction.
+
+The correct value comfortably satisfies the model's
+`MAX_BLOCKS_PER_YEAR = 100_000_000` bound, so no change to the rate model is
+needed. The ~11s figure comes from a 99-second window, which is all the public
+node will serve historically; it is consistent with Ethereum L1 block times, so
+expect something near `2_628_000`. **Re-measure over a longer window against an
+archive node before deploying, and assert the value in the deploy script rather
+than leaving it an env default.**
 
 ## Markets to build
 
