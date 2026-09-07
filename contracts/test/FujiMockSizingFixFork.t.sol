@@ -42,12 +42,7 @@ contract FujiMockSizingFixForkTest is Test {
         vm.createSelectFork(rpc, 58_243_366);
         assertEq(block.chainid, 43_113);
         require(!CONFIG.opensPaused(), "expected activated fork");
-        IsolatedMarginQuoter fresh = new IsolatedMarginQuoter(address(CONFIG), address(RISK.oracle()));
-        vm.etch(address(EX.quoter()), address(fresh).code);
-        bytes32 slot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
-        address implementation = address(uint160(uint256(vm.load(address(EX), slot))));
-        require(implementation.code.length > 0, "implementation missing");
-        vm.etch(implementation, address(new IsolatedMarginExecutorUpgradeable()).code);
+        _installOpeningCode();
         _refresh();
         vm.prank(OWNER);
         USD.transfer(USER, MARGIN * 10);
@@ -55,6 +50,16 @@ contract FujiMockSizingFixForkTest is Test {
         USD.approve(address(VAULT), MARGIN * 10);
         VAULT.deposit(address(USD), MARGIN * 10);
         vm.stopPrank();
+    }
+
+    /// @dev Override in the real migration fork suite; the original regression intentionally uses substitution.
+    function _installOpeningCode() internal virtual {
+        IsolatedMarginQuoter fresh = new IsolatedMarginQuoter(address(CONFIG), address(RISK.oracle()));
+        vm.etch(address(EX.quoter()), address(fresh).code);
+        bytes32 slot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+        address implementation = address(uint160(uint256(vm.load(address(EX), slot))));
+        require(implementation.code.length > 0, "implementation missing");
+        vm.etch(implementation, address(new IsolatedMarginExecutorUpgradeable()).code);
     }
 
     function testFixedTwoXLongAndShortAtAllowedExecutionLoss() public {

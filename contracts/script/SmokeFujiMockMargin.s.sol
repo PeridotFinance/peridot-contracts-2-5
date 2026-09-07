@@ -9,6 +9,10 @@ import {IsolatedMarginExecutorUpgradeable} from "../contracts/margin/IsolatedMar
 import {IsolatedMarginRiskEngineUpgradeable} from "../contracts/margin/IsolatedMarginRiskEngineUpgradeable.sol";
 import {IsolatedMarginTypes} from "../contracts/margin/IsolatedMarginTypes.sol";
 import {PErc20} from "../contracts/PErc20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {
+    IsolatedMarginExecutorFujiQuoterMigration
+} from "../contracts/margin/IsolatedMarginExecutorFujiQuoterMigration.sol";
 
 /// @notice Fixed-address, MOCK-FUJI-ONLY 2x smoke test. No risk configuration or minting.
 /// @dev run(): refresh mock rounds, deposit $200-equivalent existing pTokens, round-trip $100 margin
@@ -33,6 +37,11 @@ contract SmokeFujiMockMargin is Script {
 
     function run() external {
         _confirm();
+        require(address(EX.quoter()) != 0x6c68ef73728337e5D8212a11CFeDDdF1B4Ff23eD, "Smoke: migrate quoter first");
+        require(
+            IsolatedMarginExecutorFujiQuoterMigration(address(EX)).initializedVersion() == 2,
+            "Smoke: migration incomplete"
+        );
         require(!CONFIG.opensPaused(), "Smoke: opens paused");
         require(AF.owner() == OWNER && UF.owner() == OWNER, "Smoke: feed ownership");
         require(AF.answer() == 10e8 && UF.answer() == 1e8, "Smoke: changed scenario");
@@ -82,6 +91,17 @@ contract SmokeFujiMockMargin is Script {
     }
 
     function _roundTrip(bool short) private {
+        // These accrual calls are explicit transactions in a broadcast run. Quotes are not inclusion guarantees.
+        uint256 exchangeRate = USD.exchangeRateCurrent();
+        require(AVAX.accrueInterest() == 0, "Smoke: accrue AVAX");
+        (, uint256 minimum) = EX.quoter()
+            .quoteOpen(
+                address(USD),
+                short ? address(USD) : address(AVAX),
+                short ? address(AVAX) : address(USD),
+                Math.mulDiv(MARGIN, exchangeRate, 1e18),
+                200
+            );
         uint256 id = EX.openPosition(
             IsolatedMarginExecutorUpgradeable.OpenParams(
                 address(USD),
@@ -90,7 +110,7 @@ contract SmokeFujiMockMargin is Script {
                 MARGIN,
                 200,
                 0,
-                short ? 199_800_000 : 19.8e18,
+                minimum,
                 short ? IsolatedMarginTypes.Side.SHORT : IsolatedMarginTypes.Side.LONG,
                 ""
             )

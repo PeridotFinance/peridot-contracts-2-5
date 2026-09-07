@@ -53,17 +53,17 @@ contract FujiMockLeverageDistanceForkTest is Test {
         vm.stopPrank();
     }
 
-    function testActualSmokeScriptAndSeparatePTokenWithdrawal() public {
+    function testUpdatedSmokeRejectsOldStackBeforeAnyTransfers() public {
         vm.setEnv("CONFIRM_FUJI_MOCK_ONLY", "true");
         uint256 before = USD.balanceOf(OWNER);
         SmokeFujiMockMargin script = new SmokeFujiMockMargin();
+        vm.expectRevert("Smoke: migrate quoter first");
         script.run();
         assertEq(USD.allowance(OWNER, address(VAULT)), 0);
         assertEq(USD.totalBorrows(), 0);
         assertEq(AVAX.totalBorrows(), 0);
-        script.withdraw();
         assertEq(VAULT.freeBalance(OWNER, address(USD)), 0);
-        assertApproxEqAbs(USD.balanceOf(OWNER), before, 100_000);
+        assertEq(USD.balanceOf(OWNER), before);
     }
 
     function testLiveTwoXLongFlowAndBoundary() public {
