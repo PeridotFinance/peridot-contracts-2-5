@@ -265,10 +265,10 @@ contract MarginTestAggregator is AggregatorV3Interface {
 
             assertTrue(controller.isolatedMarginAccounts(position.account), "account not registered in controller");
             assertLe(metrics.leverageX100, 500, "leverage cap exceeded");
-            assertGe(metrics.leverageX100, 495, "position did not reach requested leverage");
+            assertGe(metrics.leverageX100, 475, "excessive sizing reserve");
             assertGe(metrics.healthFactorBps, 19_900, "five-x position starts near liquidation");
-            assertGt(pAvax.balanceOf(position.account), 490e18, "position collateral not supplied as pTokens");
-            assertGt(pUsd.borrowBalanceStored(position.account), 390e18, "borrow leg missing");
+            assertGt(pAvax.balanceOf(position.account), 475e18, "position collateral not supplied as pTokens");
+            assertGt(pUsd.borrowBalanceStored(position.account), 375e18, "borrow leg missing");
 
             (, uint256 collateralFactor,) = controller.markets(address(pAvax));
             assertEq(collateralFactor, 1e17, "test must use a low conventional collateral factor");
@@ -283,9 +283,9 @@ contract MarginTestAggregator is AggregatorV3Interface {
             assertEq(position.positionPToken, address(pUsd));
             assertEq(position.debtPToken, address(pAvax));
             assertLe(metrics.leverageX100, 500);
-            assertGe(metrics.leverageX100, 495);
-            assertGt(pUsd.balanceOf(position.account), 490e18, "short proceeds are not earning supply APY");
-            assertGt(pAvax.borrowBalanceStored(position.account), 390e18, "short debt missing");
+            assertGe(metrics.leverageX100, 475);
+            assertGt(pUsd.balanceOf(position.account), 475e18, "short proceeds are not earning supply APY");
+            assertGt(pAvax.borrowBalanceStored(position.account), 375e18, "short debt missing");
         }
 
         function testLockedSharesRemainVisibleAndPositionPTokensCaptureSupplyYield() public {
@@ -310,7 +310,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
                 positionId: positionId,
                 closeBps: uint16(BPS),
                 maxClosingFeePToken: 0,
-                minDebtUnderlying: 495e18,
+                minDebtUnderlying: riskEngine.getMetrics(position.account).grossAssetValueUsd * 99 / 100,
                 minMarginUnderlying: 0,
                 positionToDebtSwapData: bytes(""),
                 debtToMarginSwapData: bytes("")
@@ -626,7 +626,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
             uint256 debtBefore = pUsd.borrowBalanceStored(beforePosition.account);
             uint256 lockedBefore = beforePosition.lockedMarginPTokens;
 
-            _setAvaxPriceAndRates(88e6);
+            _setAvaxPriceAndRates(87e6);
             assertTrue(riskEngine.isLiquidatable(beforePosition.account), "position should be liquidatable");
             uint256 healthBefore = riskEngine.getMetrics(beforePosition.account).healthFactorBps;
 
@@ -648,8 +648,8 @@ contract MarginTestAggregator is AggregatorV3Interface {
             _setPairLiquidationRisk(address(pUsd), address(pAvax), address(pUsd), 1, 100);
             flashVault.setFeeBps(100);
 
-            _setAvaxPriceAndRates(88e6);
-            router.setRate(address(avax), address(usd), 88e16 * 9_900 / BPS);
+            _setAvaxPriceAndRates(87e6);
+            router.setRate(address(avax), address(usd), 87e16 * 9_900 / BPS);
             uint256 insuranceBefore = pUsd.balanceOf(address(insuranceFund));
 
             liquidator.liquidate(_liquidationParams(positionId));
@@ -1010,11 +1010,15 @@ contract MarginTestAggregator is AggregatorV3Interface {
         }
 
         function _openLong(uint16 leverageX100) internal returns (uint256 positionId) {
+            IsolatedMarginExecutorUpgradeable.OpenParams memory params = _longParams(leverageX100);
             vm.prank(USER);
-            return executor.openPosition(_longParams(leverageX100));
+            return executor.openPosition(params);
         }
 
         function _openShort(uint16 leverageX100) internal returns (uint256 positionId) {
+            (, uint256 minimum) = quoter.quoteOpen(
+                address(pUsd), address(pUsd), address(pAvax), 100e18 * pUsd.exchangeRateStored() / 1e18, leverageX100
+            );
             IsolatedMarginExecutorUpgradeable.OpenParams memory params = IsolatedMarginExecutorUpgradeable.OpenParams({
                 marginPToken: address(pUsd),
                 positionPToken: address(pUsd),
@@ -1022,7 +1026,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
                 marginPTokenAmount: 100e18,
                 leverageX100: leverageX100,
                 maxOpeningFeePToken: 0,
-                minPositionUnderlying: 496e18,
+                minPositionUnderlying: minimum,
                 side: IsolatedMarginTypes.Side.SHORT,
                 swapData: bytes("")
             });
@@ -1035,6 +1039,9 @@ contract MarginTestAggregator is AggregatorV3Interface {
             view
             returns (IsolatedMarginExecutorUpgradeable.OpenParams memory)
         {
+            (, uint256 minimum) = quoter.quoteOpen(
+                address(pUsd), address(pAvax), address(pUsd), 100e18 * pUsd.exchangeRateStored() / 1e18, leverageX100
+            );
             return IsolatedMarginExecutorUpgradeable.OpenParams({
                 marginPToken: address(pUsd),
                 positionPToken: address(pAvax),
@@ -1042,7 +1049,7 @@ contract MarginTestAggregator is AggregatorV3Interface {
                 marginPTokenAmount: 100e18,
                 leverageX100: leverageX100,
                 maxOpeningFeePToken: 0,
-                minPositionUnderlying: uint256(leverageX100) * 99e16,
+                minPositionUnderlying: minimum,
                 side: IsolatedMarginTypes.Side.LONG,
                 swapData: bytes("")
             });

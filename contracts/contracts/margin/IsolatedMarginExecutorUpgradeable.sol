@@ -178,6 +178,9 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         }
 
         PErc20(params.marginPToken).exchangeRateCurrent();
+        // Quote against the same accrued exchange rates used by mint/borrow in the callback.
+        if (PErc20(params.positionPToken).accrueInterest() != 0) revert ExecutorError(57);
+        if (PErc20(params.debtPToken).accrueInterest() != 0) revert ExecutorError(57);
         uint256 marginValueUsd = riskEngine.pTokenValueUsd(params.marginPToken, params.marginPTokenAmount);
         uint256 requestedNotionalUsd = Math.mulDiv(marginValueUsd, params.leverageX100, LEVERAGE_SCALE);
         uint256 openingFeePToken = quoter.feePToken(
@@ -200,8 +203,8 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         uint256 marginUnderlying = IsolatedMarginAccount(account).redeem(params.marginPToken, params.marginPTokenAmount);
         IsolatedMarginAccount(account).transferToken(marginAsset, address(this), marginUnderlying);
 
-        uint256 flashAmount = quoter.flashAmountForLeverage(
-            debtAsset, riskEngine.underlyingValueUsd(params.marginPToken, marginUnderlying), params.leverageX100
+        (uint256 flashAmount,) = quoter.quoteOpen(
+            params.marginPToken, params.positionPToken, params.debtPToken, marginUnderlying, params.leverageX100
         );
         if (flashAmount == 0) revert ExecutorError(18);
 
@@ -241,6 +244,12 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         delete _pending;
         riskEngine.activateAccount(account);
         IsolatedMarginTypes.AccountMetrics memory metrics = riskEngine.getMetrics(account);
+        // The user's requested leverage is also a hard ceiling, even if callback costs or
+        // external state differ from the conservative pre-swap quote. Do not round the ratio down.
+        if (
+            metrics.debtValueUsd
+                > Math.mulDiv(metrics.grossAssetValueUsd, params.leverageX100 - LEVERAGE_SCALE, params.leverageX100)
+        ) revert ExecutorError(56);
 
         positions[positionId] = IsolatedMarginTypes.Position({
             id: positionId,

@@ -234,6 +234,78 @@ contract FujiMockMarginLifecycleTest is Test {
         _roundTrip(true, 500);
     }
 
+    function testFiveXLongAndShortWithHalfAndFullSlippageReturnPTokens() public {
+        _activate(500);
+        for (uint256 side; side < 2; ++side) {
+            for (uint256 haircut = 50; haircut <= 100; haircut += 50) {
+                // Exactly 1% floored to six decimals may breach the separate USD oracle bound.
+                e.adapter.setExecutionBps(uint16(10_000 - (side == 1 && haircut == 100 ? 99 : haircut)));
+                uint256 before = e.margin.vault.freeBalance(USER, address(e.lending.pUsdc));
+                uint256 id = _open(side == 1, 500);
+                IsolatedMarginTypes.Position memory p = _position(id);
+                IsolatedMarginTypes.AccountMetrics memory m = e.margin.riskEngine.getMetrics(p.account);
+                assertGt(m.healthFactorBps, 19_900);
+                assertLe(m.leverageX100, 500);
+                assertGe(m.leverageX100, 485);
+                assertGe(uint256(m.equityUsd), m.initialRequirementUsd);
+                // At least 10% adverse-price room survives even the worst allowed execution loss.
+                e.avaxFeed.setAnswer(side == 1 ? int256(11e8) : int256(9e8));
+                assertFalse(e.margin.riskEngine.isLiquidatable(p.account));
+                e.avaxFeed.setAnswer(10e8);
+                e.adapter.setExecutionBps(10_000);
+                vm.prank(USER);
+                e.margin.executor
+                    .closePosition(IsolatedMarginExecutorUpgradeable.CloseParams(id, 10_000, 0, 0, 0, "", ""));
+                assertEq(PToken(p.debtPToken).borrowBalanceStored(p.account), 0);
+                assertEq(e.margin.vault.lockedBalance(USER, address(e.lending.pUsdc)), 0);
+                assertGe(e.margin.vault.freeBalance(USER, address(e.lending.pUsdc)), before - MARGIN_SHARES * 6 / 100);
+            }
+        }
+        uint256 free = e.margin.vault.freeBalance(USER, address(e.lending.pUsdc));
+        uint256 walletBefore = e.lending.pUsdc.balanceOf(USER);
+        vm.prank(USER);
+        e.margin.vault.withdraw(address(e.lending.pUsdc), free);
+        assertEq(e.lending.pUsdc.balanceOf(USER), walletBefore + free);
+    }
+
+    function testFiveXOpeningReservesFlashFeeAndSlippageTogether() public {
+        _activate(500);
+        e.lender.setFeeBps(50);
+        e.adapter.setExecutionBps(9901);
+        for (uint256 side; side < 2; ++side) {
+            uint256 id = _open(side == 1, 500);
+            IsolatedMarginTypes.AccountMetrics memory m = e.margin.riskEngine.getMetrics(_position(id).account);
+            assertLe(m.leverageX100, 500);
+            assertGt(m.healthFactorBps, 19_900);
+            assertGe(uint256(m.equityUsd), m.initialRequirementUsd);
+        }
+    }
+
+    function testStrongerUserMinimumRemainsAuthoritativeAfterResizing() public {
+        _activate(500);
+        IsolatedMarginExecutorUpgradeable.OpenParams memory params = _params(false, 500);
+        params.minPositionUnderlying = 50e18; // Old perfect-fill notional is not silently lowered.
+        vm.prank(USER);
+        vm.expectRevert("FujiMock: minimum output");
+        e.margin.executor.openPosition(params);
+        assertEq(e.margin.vault.lockedBalance(USER, address(e.lending.pUsdc)), 0);
+        assertEq(e.lending.pUsdc.totalBorrows(), 0);
+    }
+
+    function testFuzzOpeningReservesCostsAcrossTwoToFiveX(uint16 leverage, uint16 loss, uint16 fee, bool short) public {
+        _activate(500);
+        leverage = uint16(bound(leverage, 200, 500));
+        loss = uint16(bound(loss, 0, 99));
+        fee = uint16(bound(fee, 0, 100));
+        e.adapter.setExecutionBps(10_000 - loss);
+        e.lender.setFeeBps(fee);
+        uint256 id = _open(short, leverage);
+        IsolatedMarginTypes.AccountMetrics memory m = e.margin.riskEngine.getMetrics(_position(id).account);
+        assertLe(m.leverageX100, leverage);
+        assertGe(uint256(m.equityUsd), m.initialRequirementUsd);
+        assertFalse(e.margin.riskEngine.isLiquidatable(_position(id).account));
+    }
+
     function testInterestAccruesAndIncreasesSupplyValue() public {
         _activate(500);
         uint256 id = _open(false, 500);
@@ -282,7 +354,7 @@ contract FujiMockMarginLifecycleTest is Test {
         _activate(500);
         uint256 id = _open(false, 500);
         address account = _position(id).account;
-        e.avaxFeed.setAnswer(8.8e8);
+        e.avaxFeed.setAnswer(8.7e8);
         uint256 health = e.margin.riskEngine.getMetrics(account).healthFactorBps;
         assertTrue(e.margin.riskEngine.isLiquidatable(account));
         e.margin.liquidator.liquidate(_liquidation(id));
@@ -348,7 +420,8 @@ contract FujiMockMarginLifecycleTest is Test {
         IsolatedMarginTypes.Position memory p = _position(id);
         IsolatedMarginTypes.AccountMetrics memory m = e.margin.riskEngine.getMetrics(p.account);
         assertLe(m.leverageX100, leverage);
-        assertGe(m.leverageX100, leverage - 1);
+        // A request is a ceiling; parity execution retains the reserved 1% loss headroom.
+        assertGe(m.leverageX100, uint256(leverage) * 95 / 100);
         assertGt(m.healthFactorBps, 10_000);
         (, uint256 cf,) = e.lending.controller.markets(p.positionPToken);
         assertEq(cf, 0);
@@ -370,6 +443,14 @@ contract FujiMockMarginLifecycleTest is Test {
         view
         returns (IsolatedMarginExecutorUpgradeable.OpenParams memory)
     {
+        (, uint256 minimum) = e.margin.quoter
+            .quoteOpen(
+                address(e.lending.pUsdc),
+                short ? address(e.lending.pUsdc) : address(e.lending.pWavax),
+                short ? address(e.lending.pWavax) : address(e.lending.pUsdc),
+                MARGIN_SHARES * e.lending.pUsdc.exchangeRateStored() / 1e18,
+                leverage
+            );
         return IsolatedMarginExecutorUpgradeable.OpenParams(
             address(e.lending.pUsdc),
             short ? address(e.lending.pUsdc) : address(e.lending.pWavax),
@@ -377,7 +458,7 @@ contract FujiMockMarginLifecycleTest is Test {
             MARGIN_SHARES,
             leverage,
             0,
-            short ? uint256(leverage) * 1e6 * 999 / 1000 : uint256(leverage) * 1e17 * 99 / 100,
+            minimum,
             short ? IsolatedMarginTypes.Side.SHORT : IsolatedMarginTypes.Side.LONG,
             ""
         );
