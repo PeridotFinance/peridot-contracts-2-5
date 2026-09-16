@@ -35,9 +35,48 @@ registration and the first LP position are recorded in the vault repository at
 | `bpNVDA` | `0xa155cccb986774ae818b3f10f07d01d1b7a47b26` |
 | `bpUSDG` | `0x55aed0569c8f0d166d71face57b57c2f2624a563` |
 
-Both markets carry a 50% `vaultBufferMantissa`. Collateral factors are zero and
-borrowing is paused, so the markets are not yet usable. Leveraged margin is
-unstarted.
+Both markets carry a 50% `vaultBufferMantissa`. **Both are open at an 80%
+collateral factor with borrowing enabled**, and all three legs of the loss
+waterfall have executed on mainnet.
+
+Leveraged margin is built but undeployed. The isolated margin stack is
+chain-agnostic and needs two chain-specific seams, both now written and scanned
+clean:
+
+- `contracts/margin/RobinhoodV4RouterAdapter.sol` — the `IMarginRouterAdapter`
+  swap seam over the deployed Universal Router. Types are declared locally
+  because this repository carries no Uniswap v4 dependency. The encoding is
+  copied from the vault repository's proven adapter and pinned byte-for-byte by
+  `test/RobinhoodV4RouterAdapter.t.sol`, because Robinhood's router uses the
+  newer v4 ABI carrying `minHopPriceX36` that a stock v4-periphery release
+  predates — deriving the struct from the library makes every swap revert.
+- `contracts/margin/RobinhoodMarginPriceOracle.sol` — the `IMarginPriceOracle`
+  wrapper, which also fails closed on a pToken whose vault claim cannot be read.
+
+### Remaining work for margin
+
+1. Deploy both seams and register the NVDA/USDG pool (`fee 3000`,
+   `tickSpacing 60`).
+2. **A live-router integration test before any real position.** The unit tests
+   prove the encoding *shape*; they do not prove the deployed router accepts it.
+   Robinhood testnet (chain `46630`) carries Permit2, the Universal Router,
+   PoolManager and PositionManager at the **same addresses as mainnet**, so a
+   full swap can be exercised there against mock tokens. That is the cheapest
+   way to close the one real risk in this adapter.
+3. Deploy the margin stack via `DeployMarginStackWithProxies.s.sol`.
+4. Set `PairRiskConfig`, starting at `maxLeverageX100` of 200 with low position
+   and debt caps until the boosted exchange rate has been observed through an
+   earnings cycle.
+
+### Operational traps carried over from the markets rollout
+
+`RobinhoodBoostedDelegate` catches and emits rather than reverting, so an
+operator call can report success while doing nothing. Four instances so far:
+`_depositToVault` swallowing `AllocationPaused`; `_withdrawFromVault` swallowing
+an out-of-gas inner call, where `eth_estimateGas` itself returns a limit at which
+the work cannot complete; `rebalance` requiring a fresh checkpoint; and every
+oracle-reading path failing closed on a stale feed. Send operator actions with an
+explicit gas limit and verify state rather than receipts.
 
 ## Current live state
 
