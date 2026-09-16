@@ -1,6 +1,6 @@
 # Borrow-accounting remediation candidate
 
-Status: local implementation and tests only. **Not deployed, not an authorization to upgrade, and not yet externally security-scanned.** The deployed Fuji markets still use legacy accounting until a separately approved migration.
+Status: implementation committed and pushed as `944e670abea57a2454cd9a64511d826b41da03c7`; Almanax exact-diff scan `6636be8d-67e8-4f9d-bc8d-201e3e3caa88` completed with zero findings. **Not deployed and not an authorization to upgrade.** The deployed Fuji markets still use legacy accounting until a separately approved migration. The subsequently added [Fuji operator package](fuji-borrow-accounting-migration.md) requires its own review/scan and transaction approvals.
 
 ## Accounting changes
 
@@ -91,7 +91,7 @@ forge test --threads 1 --fuzz-runs 1024 \
   --skip P_OFTAdapterUpgradeable.t.sol
 ```
 
-External security review and a separately approved Fuji upgrade remain required. Previous clean Almanax scans do not cover this change. No mainnet deployment or live leverage increase is authorized.
+The accounting diff has now completed the Almanax scan recorded above; that is not a full audit or coverage of later operator changes. A separately approved Fuji upgrade remains required. No mainnet deployment or deployed-Fuji leverage increase is authorized.
 
 ### Pre-scan review
 
