@@ -38,6 +38,15 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 
+# Reviewed debt-accounting release builds must use this pinned, size-oriented profile.
+# Leave unrelated default builds unchanged; no deployment is authorized by this profile.
+[profile.debt_accounting]
+solc_version = "0.8.35"
+evm_version = "cancun"
+via_ir = true
+optimizer = true
+optimizer_runs = 1
+
 [profile.somnia]
 via_ir = false
 optimizer = true

@@ -8,6 +8,8 @@ import "./EIP20Interface.sol";
 import "./InterestRateModel.sol";
 import "./ExponentialNoError.sol";
 import "./PeridottrollerStorage.sol";
+import {BorrowAccounting} from "./BorrowAccounting.sol";
+import {BorrowAccountingModule} from "./BorrowAccountingModule.sol";
 
 /**
  * @title Peridot's PToken Contract
@@ -15,6 +17,17 @@ import "./PeridottrollerStorage.sol";
  * @author Peridot
  */
 abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorReporter, IERC3156FlashLender {
+    BorrowAccountingModule private immutable BORROW_ACCOUNTING_MODULE = new BorrowAccountingModule();
+    error BorrowAccountingAlreadyEnabled();
+    error BorrowAccountingSnapshotChanged();
+    error BorrowAccountingInvalidBorrowerList();
+    error BorrowAccountingAdjustmentExceeded();
+    error BorrowAccountingMissingBorrower(address borrower);
+    error BorrowAccountingIndexTooLarge();
+
+    event BorrowAccountingActivated(uint256 borrowers, uint256 previousTotal, uint256 newTotal);
+    event BorrowRoundingReconciled(uint256 previousClaim, uint256 newClaim, uint256 newReserves);
+
     /**
      * @notice Initialize the money market
      * @param peridottroller_ The address of the Peridottroller
@@ -46,6 +59,8 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
         // Initialize block number and borrow index (block number mocks depend on peridottroller being set)
         accrualBlockNumber = getBlockNumber();
         borrowIndex = mantissaOne;
+        // New markets start with unified debt accounting. Upgrades must explicitly migrate legacy debt.
+        BorrowAccounting.state().enabled = true;
 
         // Set the interest rate model (depends on block number / borrow index)
         err = _setInterestRateModelFresh(interestRateModel_);
@@ -254,6 +269,11 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
      * @return (error code, the calculated balance or 0 if error code is non-zero)
      */
     function borrowBalanceStoredInternal(address account) internal view returns (uint256) {
+        BorrowAccounting.State storage debt = BorrowAccounting.state();
+        if (debt.enabled) {
+            _requireMigratedBorrower(account);
+            return BORROW_ACCOUNTING_MODULE.balance(debt.shares[account], borrowIndex);
+        }
         /* Get borrowBalance and borrowIndex */
         BorrowSnapshot storage borrowSnapshot = accountBorrows[account];
 
@@ -269,6 +289,71 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
          */
         uint256 principalTimesIndex = borrowSnapshot.principal * borrowIndex;
         return principalTimesIndex / borrowSnapshot.interestIndex;
+    }
+
+    function borrowAccountingEnabled() external view returns (bool) {
+        return BorrowAccounting.state().enabled;
+    }
+
+    function borrowAccountingModule() external view returns (address) {
+        return address(BORROW_ACCOUNTING_MODULE);
+    }
+
+    function totalBorrowShares() external view returns (uint256) {
+        return BorrowAccounting.state().totalShares;
+    }
+
+    function borrowShares(address borrower) external view returns (uint256) {
+        return BorrowAccounting.state().shares[borrower];
+    }
+
+    /// @notice One-time, admin-reviewed migration at a fresh interest checkpoint.
+    /// @dev The admin MUST enumerate every active borrower from historical Borrow events. The mapping
+    ///      is not enumerable on-chain; the total adjustment limit is a guard, not proof of completeness.
+    ///      Omitted legacy borrowers fail closed, never appear debt-free. Review the list off-chain.
+    ///      The expected aggregate is AFTER accrual; a changed snapshot fails atomically.
+    function activateBorrowAccounting(
+        address[] memory borrowers,
+        uint256 expectedTotalBorrows,
+        uint256 maxRoundingAdjustment
+    ) public nonReentrant {
+        accrueInterest();
+        (totalBorrows, totalReserves) = abi.decode(
+            _delegateBorrowAccounting(
+                abi.encodeCall(
+                    BorrowAccountingModule.activate, (borrowers, expectedTotalBorrows, maxRoundingAdjustment)
+                )
+            ),
+            (uint256, uint256)
+        );
+    }
+
+    function _requireMigratedBorrower(address borrower) private view {
+        if (BorrowAccounting.state().shares[borrower] == 0 && accountBorrows[borrower].principal != 0) {
+            revert BorrowAccountingMissingBorrower(borrower);
+        }
+    }
+
+    function _setBorrowShares(address borrower, uint256 balance, uint256 previousClaim, uint256 repaidCash)
+        private
+        returns (uint256)
+    {
+        uint256 updatedTotal;
+        (updatedTotal, totalReserves) = abi.decode(
+            _delegateBorrowAccounting(
+                abi.encodeCall(BorrowAccountingModule.setShares, (borrower, balance, previousClaim, repaidCash))
+            ),
+            (uint256, uint256)
+        );
+        return updatedTotal;
+    }
+
+    function _delegateBorrowAccounting(bytes memory data) private returns (bytes memory result) {
+        bool success;
+        (success, result) = address(BORROW_ACCOUNTING_MODULE).delegatecall(data);
+        if (!success) {
+            assembly ("memory-safe") { revert(add(result, 32), mload(result)) }
+        }
     }
 
     /**
@@ -366,6 +451,12 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
         uint256 totalReservesNew =
             mul_ScalarTruncateAddUInt(Exp({mantissa: reserveFactorMantissa}), interestAccumulated, reservesPrior);
         uint256 borrowIndexNew = mul_ScalarTruncateAddUInt(simpleInterestFactor, borrowIndexPrior, borrowIndexPrior);
+        if (BorrowAccounting.state().enabled) {
+            (totalBorrowsNew, totalReservesNew) = BORROW_ACCOUNTING_MODULE.accrued(
+                BorrowAccounting.state().totalShares, borrowIndexNew, borrowsPrior, reservesPrior, reserveFactorMantissa
+            );
+            interestAccumulated = totalBorrowsNew - borrowsPrior;
+        }
 
         /////////////////////////
         // EFFECTS & INTERACTIONS
@@ -591,6 +682,9 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
         uint256 accountBorrowsPrev = borrowBalanceStoredInternal(borrower);
         uint256 accountBorrowsNew = accountBorrowsPrev + borrowAmount;
         uint256 totalBorrowsNew = totalBorrows + borrowAmount;
+        if (BorrowAccounting.state().enabled) {
+            totalBorrowsNew = _setBorrowShares(borrower, accountBorrowsNew, totalBorrowsNew, 0);
+        }
 
         /////////////////////////
         // EFFECTS & INTERACTIONS
@@ -681,7 +775,14 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
          *  totalBorrowsNew = totalBorrows - actualRepayAmount
          */
         uint256 accountBorrowsNew = accountBorrowsPrev - actualRepayAmount;
-        uint256 totalBorrowsNew = totalBorrows - actualRepayAmount;
+        uint256 totalBorrowsNew;
+        if (BorrowAccounting.state().enabled) {
+            // Compare assets including repaid cash; no aggregate subtraction or debt forgiveness.
+            totalBorrowsNew = _setBorrowShares(borrower, accountBorrowsNew, totalBorrows, actualRepayAmount);
+        } else {
+            // Legacy markets keep their accounting until the explicit borrower migration.
+            totalBorrowsNew = totalBorrows - actualRepayAmount;
+        }
 
         /* We write the previously calculated values into storage */
         accountBorrows[borrower].principal = accountBorrowsNew;

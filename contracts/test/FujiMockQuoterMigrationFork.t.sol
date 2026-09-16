@@ -425,7 +425,7 @@ contract FujiMockQuoterMigrationForkTest is FujiMockMigrationForkFixture {
 /// @notice Reuses the exact 24 cost/boundary/lifecycle scenarios but installs via the real migration.
 /// @dev The inherited code-substitution hook is fully overridden; no etch/store occurs in these tests.
 contract FujiMockMigratedSizingForkTest is FujiMockSizingFixForkTest {
-    function _installOpeningCode() internal override {
+    function _installOpeningCode() internal virtual override {
         IsolatedMarginQuoter replacement = new IsolatedMarginQuoter(address(CONFIG), address(RISK.oracle()));
         Migration implementation = new Migration(address(replacement));
         vm.startPrank(OWNER);

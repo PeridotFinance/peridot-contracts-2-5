@@ -19,15 +19,19 @@ contract PErc20Delegate is PErc20, CDelegateInterface {
      * @param data The encoded bytes data for any initialization
      */
     function _becomeImplementation(bytes memory data) public virtual override {
-        // Shh -- currently unused
-        data;
-
         // Shh -- we don't ever want this hook to be marked pure
         if (false) {
             implementation = address(0);
         }
 
         require(msg.sender == admin, "only the admin may call _becomeImplementation");
+        // Plain lending markets can upgrade and migrate atomically. Empty data preserves the
+        // historical upgrade hook; boosted delegates retain their own separately reviewed hooks.
+        if (data.length != 0) {
+            (address[] memory borrowers, uint256 expectedTotal, uint256 maxAdjustment) =
+                abi.decode(data, (address[], uint256, uint256));
+            activateBorrowAccounting(borrowers, expectedTotal, maxAdjustment);
+        }
     }
 
     /**
