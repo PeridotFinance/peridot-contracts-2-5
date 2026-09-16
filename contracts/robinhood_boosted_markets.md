@@ -20,6 +20,25 @@ Vault repository: `../../RobinhoodVaults` (`LP_VaultsUniswap`, branch
 `robinhood-vault-canary`). Its `deployments/README.md` is the authoritative
 record of what is live.
 
+## Status: deployed
+
+Everything in this plan below the margin section is **built and live on mainnet
+as of 2026-09-16**. The lending base, both boosted markets, the production pair
+registration and the first LP position are recorded in the vault repository at
+`deployments/robinhood-mainnet.production-pair.json`.
+
+| | Address |
+| --- | --- |
+| Peridottroller (Unitroller) | `0x6148183676e304dbe63a85c350c208da3ceac39c` |
+| `StockSimplePriceOracle` | `0x266f014d1325774f1190f963df4369e07dda1d33` |
+| Interest rate model | `0x0987154fb5676a8ea545aaf41f8ef2492f785d22` |
+| `bpNVDA` | `0xa155cccb986774ae818b3f10f07d01d1b7a47b26` |
+| `bpUSDG` | `0x55aed0569c8f0d166d71face57b57c2f2624a563` |
+
+Both markets carry a 50% `vaultBufferMantissa`. Collateral factors are zero and
+borrowing is paused, so the markets are not yet usable. Leveraged margin is
+unstarted.
+
 ## Current live state
 
 The vault system is deployed, upgraded and verified on Robinhood Chain mainnet.
