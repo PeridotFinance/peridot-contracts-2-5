@@ -3,7 +3,9 @@
 Status (22 September 2026): fresh collateral-preserving executor and risk engine
 integrated locally with opening quotes, partial/full closing, partial/full
 liquidation and explicit cash-insurance settlement. Local scoped verification
-passes (see final evidence below). Not deployed or externally scanned. The old Fuji deployment and
+passes (see final evidence below). Not deployed. Almanax reviewed the initial
+integration and reported one medium finding; local remediation is described below.
+The old Fuji deployment and
 its tests do not validate this new stack.
 
 ## Confirmed requirements
@@ -256,7 +258,7 @@ conversion tests (126 scoped cases total, zero failures/skips). The 41 new
 settlement/swap tests include three 1,024-run fuzz properties; accounting adds
 two and the adapter adds one. Formatting and diff checks passed. Deployed runtime
 sizes under `debt_accounting`: settlement 9,717 bytes; new swap module 2,861 bytes.
-None of these new modules has external Almanax/Ozone scan coverage yet.
+This stage had no external scan coverage; see the subsequent Almanax review below.
 
 ## Integrated liquidation-price checks
 
@@ -309,5 +311,34 @@ FOUNDRY_PROFILE=debt_accounting forge test \
 ```
 
 No mainnet/Fuji transaction, wallet access or existing deployment modification
-was performed. External review must cover the new complete diff, not reuse the
-clean Almanax result for the older `160f3585` commit.
+was performed. The older clean Almanax result for `160f3585` does not cover this stack.
+
+## Almanax review and collateral-first insurance remediation
+
+Scan `03c557c7-710c-48b7-af85-28003929fdb0` completed for the exact
+`160f35859d81aa4799086b86328f3a2945cdbe7a..84ddc337d887c41d15f16bf0a28abade11b904eb`
+diff, with one medium finding (`d1c93e9a-1574-4de4-860b-c15d9e957beb`). An
+under-delivering collateral sale could draw insurance despite retaining additional
+sellable collateral, because insurance availability removed the deficit minimum.
+
+The regression fault-injects an optimistic collateral-sizing quote while keeping
+real redemption, swaps and output checks. It failed against the reviewed code:
+settlement succeeded where an atomic revert was expected. The local fix requires
+the sale to cover the deficit whenever its collateral budget is not exhausted;
+only an exhausted budget can permit a sub-deficit output with insurance. The
+liquidation executor already overrides keeper budgets with all remaining user
+collateral. Explicit output minimums and protocol swap bounds remain enforced.
+
+This fail-closed fix does not retry with a larger sale if the original sizing
+quote under-delivers. It prevents insurance subsidy but does not solve liquidation
+liveness under unexpected redemption losses. Regression coverage also checks
+all-collateral exhaustion, unused insurance refunds and strict caller output
+minimums for both collateral types and both debt assets.
+
+Post-fix verification: 125 supporting/legacy tests, 26 additional lifecycle tests
+and four pinned actual-vault conversion fork tests passed: **155 scoped tests**,
+zero failures/skips. Seven fuzz properties ran 1,024 cases each. Scoped formatting,
+diff checks, targeted high-severity lint and lifecycle code-size assertions passed.
+Existing compiler/configuration/dependency warnings remain. The follow-up external
+scan is pending; the finding remains open. This is not a full audit or mainnet
+release clearance.

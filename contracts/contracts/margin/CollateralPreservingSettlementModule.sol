@@ -241,11 +241,16 @@ contract CollateralPreservingSettlementModule is ReentrancyGuard {
         if (IERC20(p.collateralPToken).balanceOf(address(this)) != collateralBefore - sold) revert UnexpectedBalance();
         uint256 redeemed = IERC20(c.shareAsset).balanceOf(address(this)) - sharesBefore;
         if (redeemed == 0) revert InsufficientProceeds();
+        // Insurance may cover a shortfall only after exhausting the sale budget.
+        // An optimistic quote must not preserve sellable collateral at its expense.
+        // The executor grants the entire remaining collateral budget on liquidation.
         proceeds = _swap(
             c.shareAsset,
             c.debtAsset,
             redeemed,
-            p.insuranceDebtAmount == 0 ? Math.max(deficit, p.minCollateralDebtOut) : p.minCollateralDebtOut,
+            p.insuranceDebtAmount == 0 || sold < available
+                ? Math.max(deficit, p.minCollateralDebtOut)
+                : p.minCollateralDebtOut,
             c.risk,
             p.collateralData
         );

@@ -258,6 +258,66 @@ contract CollateralPreservingSettlementTest is Test {
         assertEq(usd.balanceOf(address(settlement)), 1000e6);
     }
 
+    function testInsuranceCannotCoverUnderquotedSaleWithCollateralRemaining() public {
+        for (uint256 i; i < 4; ++i) {
+            bool short = i % 2 != 0;
+            Settlement.CloseParams memory p = _params(i >= 2, short, 490);
+            p.insuranceDebtAmount = short ? 10e18 : 100e6;
+            address debtAsset = short ? address(avax) : address(usd);
+            uint256 quoted =
+                settlement.quoteCollateralForDeficit(p.collateralPToken, debtAsset, short ? 1e18 : 10e6, 100);
+            assertLt(quoted, p.maxCollateralSharesToSell);
+            // Fault injection: realized redemption value is lower than the sizing
+            // quote assumes. Keep real redemption, swap and oracle output checks.
+            vm.mockCall(address(quoter), abi.encodeWithSelector(quoter.feePToken.selector), abi.encode(quoted / 2));
+            _expectUnchangedRevert(p, _collateralMinimumError(i >= 2, short));
+            vm.clearMockedCalls();
+            _clean(p.collateralPToken);
+        }
+    }
+
+    function testInsuranceCoversDeficitOnlyAfterAllAvailableCollateralSold() public {
+        for (uint256 i; i < 4; ++i) {
+            bool short = i % 2 != 0;
+            Settlement.CloseParams memory p = _params(i >= 2, short, 300);
+            p.insuranceDebtAmount = short ? 30e18 : 300e6;
+            uint256 uBefore = usd.balanceOf(address(this));
+            uint256 aBefore = avax.balanceOf(address(this));
+            Settlement.Settlement memory s = _settle(p);
+            assertEq(s.collateralSold, p.collateralShares - p.feeShares);
+            assertEq(s.collateralReturned, 0);
+            assertGt(s.insuranceDebtUsed, 0);
+            assertLt(s.insuranceDebtUsed, p.insuranceDebtAmount);
+            assertEq(s.surplusUsdc, 0);
+            assertEq(s.surplusWavaxDust, 0);
+            assertEq(
+                usd.balanceOf(address(this)),
+                short ? uBefore - p.tradeUnderlying : uBefore + p.repaymentAmount - s.insuranceDebtUsed
+            );
+            assertEq(
+                avax.balanceOf(address(this)),
+                short ? aBefore + p.repaymentAmount - s.insuranceDebtUsed : aBefore - p.tradeUnderlying
+            );
+            _clean(p.collateralPToken);
+        }
+    }
+
+    function testInsuranceNeverRelaxesCollateralOutputMinimum() public {
+        for (uint256 i; i < 4; ++i) {
+            bool short = i % 2 != 0;
+            Settlement.CloseParams memory p = _params(i >= 2, short, 300);
+            p.insuranceDebtAmount = short ? 30e18 : 300e6;
+            p.minCollateralDebtOut = short ? 10e18 : 100e6;
+            _expectUnchangedRevert(p, _collateralMinimumError(i >= 2, short));
+        }
+    }
+
+    function _collateralMinimumError(bool avaxCollateral, bool short) internal pure returns (bytes memory) {
+        return avaxCollateral == short
+            ? abi.encodeWithSelector(PharaohMarginRouterAdapter.InsufficientOutput.selector)
+            : abi.encodeWithSignature("Error(string)", "router slippage");
+    }
+
     function testFeeBudgetCannotBeUsedToRepayDebt() public {
         Settlement.CloseParams memory p = _params(false, false, 490);
         p.feeShares = p.collateralShares;
@@ -588,6 +648,8 @@ contract CollateralPreservingSettlementTest is Test {
         IERC20(p.collateralPToken).approve(address(settlement), p.collateralShares);
         IERC20(p.debtPToken == address(pUsd) ? address(avax) : address(usd))
             .approve(address(settlement), p.tradeUnderlying);
+        IERC20(p.debtPToken == address(pUsd) ? address(usd) : address(avax))
+            .approve(address(settlement), p.insuranceDebtAmount);
     }
 
     function _expectUnchangedRevert(Settlement.CloseParams memory p, bytes memory reason) internal {
