@@ -103,6 +103,7 @@ contract CollateralPreservingExecutor is ReentrancyGuard, IERC3156FlashBorrower 
         uint256 indexed id, address indexed owner, address indexed account, uint256 debt, uint256 collateralShares
     );
     event Closed(uint256 indexed id, bool full, uint256 repaid, uint256 collateralConsumed, uint256 surplusUsdc);
+    event EmergencyExited(uint256 indexed id, uint256 repaid, uint256 collateralShares);
     event Liquidated(
         uint256 indexed id,
         address indexed keeper,
@@ -182,6 +183,29 @@ contract CollateralPreservingExecutor is ReentrancyGuard, IERC3156FlashBorrower 
             _flash(quoter.assetForMarket(pos.debt), work.repay, data);
         }
         risk.finish(pos.account, p.fractionBps == 10_000, work.previousHealth);
+    }
+
+    /// @notice Paused-only, fee-free recovery funded entirely by the position owner.
+    /// @dev Accrues only debt: no prices, strategy redemption, swaps or flash liquidity.
+    /// Collateral returns to the margin vault; trading/debt pTokens go to the wallet.
+    /// maxDebtRepayment bounds the wallet debit, including all accrued interest.
+    function emergencyExitToPTokens(uint256 id, uint256 maxDebtRepayment) external nonReentrant {
+        Position memory p = positions[id];
+        if (msg.sender != p.owner) revert Unauthorized();
+        uint256 debt = risk.beginEmergencyClose(p.account);
+        if (debt > maxDebtRepayment) revert InvalidOperation();
+        IsolatedMarginAccount account = IsolatedMarginAccount(p.account);
+        if (debt != 0) {
+            IERC20(PErc20(p.debt).underlying()).safeTransferFrom(msg.sender, p.account, debt);
+            if (account.repayBorrow(debt) != debt) revert UnexpectedBalance();
+        }
+        // Raw-zero-debt check BEFORE any pTokens move; no oracle on a full finish.
+        risk.finish(p.account, true, 0);
+        uint256 collateral = IERC20(p.collateral).balanceOf(p.account);
+        _releaseCollateral(id, p, collateral);
+        account.transferToken(p.position, p.owner, IERC20(p.position).balanceOf(p.account));
+        account.transferToken(p.debt, p.owner, IERC20(p.debt).balanceOf(p.account));
+        emit EmergencyExited(id, debt, collateral);
     }
 
     function addCollateral(uint256 id, uint256 shares) external nonReentrant {
@@ -350,10 +374,7 @@ contract CollateralPreservingExecutor is ReentrancyGuard, IERC3156FlashBorrower 
         }
         uint256 consumed = result.collateralSold + work.feeShares + work.bonusShares;
         if (p.fractionBps == 10_000) {
-            account.approveToken(pos.collateral, address(vault), result.collateralReturned);
-            vault.releaseFromPosition(p.id, pos.locked, result.collateralReturned);
-            account.approveToken(pos.collateral, address(vault), 0);
-            positions[p.id].locked = 0;
+            _releaseCollateral(p.id, pos, result.collateralReturned);
         } else {
             if (consumed >= pos.locked) revert InvalidOperation();
             if (consumed != 0) vault.releaseFromPosition(p.id, consumed, 0);
@@ -367,6 +388,14 @@ contract CollateralPreservingExecutor is ReentrancyGuard, IERC3156FlashBorrower 
                 p.id, work.keeper, p.fractionBps == 10_000, work.repay, work.bonusShares, result.insuranceDebtUsed
             );
         }
+    }
+
+    function _releaseCollateral(uint256 id, Position memory p, uint256 returned) private {
+        IsolatedMarginAccount account = IsolatedMarginAccount(p.account);
+        account.approveToken(p.collateral, address(vault), returned);
+        vault.releaseFromPosition(id, p.locked, returned);
+        account.approveToken(p.collateral, address(vault), 0);
+        positions[id].locked = 0;
     }
 
     function _checkWiring() private view {

@@ -337,6 +337,51 @@ contract PharaohCollateralMarginForkTest is Test {
         assertEq(PErc20(debt).borrowBalanceStored(account), borrowed);
     }
 
+    function testRealPharaohEmergencyRecoveryWithStaleFeedsBothCollateralsAndSides() public {
+        for (uint256 c; c < 2; ++c) {
+            for (uint256 side; side < 2; ++side) {
+                uint256 checkpoint = vm.snapshotState();
+                uint256 id = _open(c == 1, side == 1, 500);
+                (, address account, address collateral, address position, address debt,) = executor.positions(id);
+                uint256 shares = IERC20(collateral).balanceOf(account);
+                uint256 trade = IERC20(position).balanceOf(account);
+                uint256 beforeTrade = IERC20(position).balanceOf(address(this));
+                config.pauseOpens();
+                lender.setPaused(true);
+                vm.warp(vm.getBlockTimestamp() + 1201);
+                vm.roll(block.number + 100);
+                Executor.CloseParams memory p = _closeParams(id, 10_000);
+                vm.expectRevert();
+                executor.closePosition(p);
+                uint256 owed = PErc20(debt).borrowBalanceCurrent(account);
+                address asset = PErc20(debt).underlying();
+                // Wallet-funded repayment in the local fork only; no live token minting.
+                deal(asset, address(this), owed);
+                IERC20(asset).approve(address(executor), owed);
+                uint256 free = vault.freeBalance(address(this), collateral);
+                uint256 reward = fees.pendingRewards(address(this), collateral);
+                uint256 reserve = IERC20(collateral).balanceOf(address(fees));
+                vm.mockCallRevert(ROUTER, bytes(""), bytes("venue offline"));
+                vm.mockCallRevert(UV, abi.encodeWithSignature("redeem(uint256,address,address)"), bytes("exit closed"));
+                vm.mockCallRevert(AV, abi.encodeWithSignature("redeem(uint256,address,address)"), bytes("exit closed"));
+                executor.emergencyExitToPTokens(id, owed);
+                _assertClosed(id);
+                assertEq(IERC20(asset).balanceOf(address(this)), 0);
+                assertEq(IERC20(asset).allowance(address(this), address(executor)), 0);
+                assertEq(IERC20(position).balanceOf(address(this)), beforeTrade + trade);
+                assertEq(vault.freeBalance(address(this), collateral), free + reward + shares);
+                assertEq(IERC20(collateral).balanceOf(address(fees)), reserve - reward);
+                (,,, Types.Status status,) = risk.accounts(account);
+                assertEq(uint256(status), uint256(Types.Status.CLOSED));
+                uint256 wallet = IERC20(collateral).balanceOf(address(this));
+                vault.withdraw(collateral, free + reward + shares);
+                assertEq(IERC20(collateral).balanceOf(address(this)), wallet + free + reward + shares);
+                assertTrue(vm.revertToStateAndDelete(checkpoint));
+                vm.clearMockedCalls();
+            }
+        }
+    }
+
     /// @dev Synthetic stress on real pool/strategy execution, NOT historical price
     /// evidence. Move actual CL price via a locally funded swap, and mock only the
     /// Chainlink AVAX answer to reflect the same move. Restore fork per scenario.

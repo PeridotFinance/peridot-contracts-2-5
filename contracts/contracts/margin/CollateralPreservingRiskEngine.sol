@@ -135,6 +135,20 @@ contract CollateralPreservingRiskEngine is Ownable, IIsolatedMarginRiskHook {
         emit StatusChanged(account, accounts[account].status);
     }
 
+    /// @notice Oracle-independent preparation for an owner-funded emergency exit.
+    /// @dev Accrue only debt. Executor MUST call finish(full=true) after repayment,
+    /// before releasing shares; that independently requires raw zero debt.
+    function beginEmergencyClose(address account) external onlyExecutor returns (uint256 debt) {
+        Account memory a = accounts[account];
+        if (!config.opensPaused() || a.status != Types.Status.ACTIVE) revert InvalidState();
+        if (PErc20(a.debt).accrueInterest() != 0 || !PErc20(a.debt).borrowAccountingEnabled()) {
+            revert InvalidConfiguration();
+        }
+        debt = PErc20(a.debt).borrowBalanceStored(account);
+        accounts[account].status = Types.Status.CLOSING;
+        emit StatusChanged(account, Types.Status.CLOSING);
+    }
+
     function finish(address account, bool full, uint256 previousHealth) external onlyExecutor {
         Account memory a = accounts[account];
         bool liquidation = a.status == Types.Status.LIQUIDATING;

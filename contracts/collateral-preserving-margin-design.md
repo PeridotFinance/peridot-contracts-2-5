@@ -1,12 +1,12 @@
 # Collateral-preserving AVAX/USDC margin
 
-Status (22 September 2026): fresh collateral-preserving executor and risk engine
+Status (26 September 2026): fresh collateral-preserving executor and risk engine
 integrated locally with opening quotes, partial/full closing, partial/full
-liquidation and explicit cash-insurance settlement. Local scoped verification
-passes (see final evidence below). Not deployed. Almanax reviewed the initial
-integration and reported one medium finding; local remediation is described below.
-The old Fuji deployment and
-its tests do not validate this new stack.
+liquidation, cash-insurance settlement and paused-only emergency pToken recovery.
+Not deployed. Earlier Almanax findings were remediated; the published Pharaoh
+adapter diff received zero findings. The new recovery addition is not yet scanned.
+Verification and limits are recorded below. The old Fuji deployment and its tests
+do not validate this new stack.
 
 ## Confirmed requirements
 
@@ -111,12 +111,88 @@ that immediately loses $5 no longer satisfies a 20% initial-margin requirement.
    lifecycle tests do not establish production capacity.
 4. Approve production weights, fees, caps, flash/debt liquidity, funded cash
    insurance, vault capacity, governance, keeper operation and monitoring.
-5. Resolve operational exit recovery: stale prices currently block normal closes;
-   there is no special stale-oracle debt-free in-kind recovery entry point yet.
+5. Validate the new paused-only, wallet-funded in-kind recovery path described
+   below on the fresh Fuji stack. Stale prices still block normal closes.
    Failed Pharaoh redemption is not bypassed merely because cash insurance exists.
    Insufficient insurance reverts insolvency liquidation; no bad-debt writeoff or
    socialization mechanism is implemented. These are launch risks, not passing-test
    guarantees of solvency or universal exit liveness.
+
+## Paused-only emergency pToken recovery
+
+The user approved a closing-fee waiver for this emergency path on 26 September
+2026. `CollateralPreservingExecutor.emergencyExitToPTokens(id, maxDebtRepayment)`
+is available only to the position owner, only for an ACTIVE position, and only
+while new margin opens are paused. Normal closing fees and their original
+collateral-pToken distribution policy are unchanged. Governance must treat the
+pause as enabling this explicit fee exception, not only disabling new trades.
+
+The transaction accrues the debt market and reads the full account debt including
+interest. It reverts if the debt exceeds the caller's `maxDebtRepayment`. For
+nonzero debt, the owner must hold and approve that debt underlying to the executor:
+USDC for a long, WAVAX for a short. The exact debt amount moves directly from the
+owner's wallet to the isolated account and is repaid. A separate risk-engine check
+requires raw zero debt before any pTokens are released. Debt already repaid via
+the lending market's `repayBorrowBehalf` is supported with a zero repayment cap.
+
+Remaining original collateral pTokens return to the owner's free margin-vault
+balance, where they remain eligible for the same pool's rewards and can be
+withdrawn as pTokens. Trading pTokens and any donated debt-market pTokens return
+directly to the owner's wallet. The position becomes CLOSED, its entire remaining
+lock is released, and account repayment/vault approvals clear. An
+`EmergencyExited(id, repaid, collateralShares)` event distinguishes this path from
+normal swap-based settlement. No recovery fee is collected, though existing
+earned rewards may be settled by the vault during the return.
+
+This path does not consult prices, accrue collateral/position NAV, redeem shares,
+swap, use a flash loan, or draw insurance. It does not forgive debt: the owner
+needs enough external underlying to repay the **whole debt**, not merely the loss.
+All steps are atomic, including repayment; a later transfer failure rolls the
+wallet debit back. The standard token/controller transfer gates remain enforced.
+Global transfer pauses, failing debt accrual, unlisted markets, token restrictions,
+or broken vault/reward accounting can therefore still prevent recovery. It is
+not a permissionless insolvent-liquidation solution or a guarantee of exit during
+every possible dependency failure. Recovery returns claims as pTokens, not a
+promise those claims can immediately be redeemed for underlying.
+
+Implementation is fresh-stack-only. No legacy proxy or deployed account has been
+changed. This addition requires its own external review and fresh Fuji validation;
+the prior clean Almanax scan of `2f142bee` does not cover it.
+
+Recovery verification completed on 26 September:
+
+- 246 scoped offline test executions passed, zero failures/skips. This includes
+  13 new recovery test functions, 70 inherited settlement/lifecycle tests in the
+  recovery fixture, 71 CL-composed tests and 92 supporting tests. Inherited tests
+  repeat under different fixtures; these are not 246 novel economic scenarios.
+  Every selected fuzz property ran 1,024 cases, including the new recovery
+  property across both collateral types, both directions, 2x–5x requested leverage
+  and accrued interest.
+- Recovery's fixed leverage matrix covers 16 combinations (both collateral types,
+  both sides, 2x/3x/4x/5x). Other cases cover repayment caps, permissions, zero-debt
+  prepayment, failed accrual/accounting, insufficient funds/allowance, partial-close
+  losses followed by collateral top-up, donations, repeat calls, raw-debt rejection,
+  transfer-pause rollback, unchanged normal fees, and isolation from another
+  position's debt and collateral. Reward assertions include earned opening fees.
+- 13 pinned Avalanche fork test functions passed, zero failures/skips, at block
+  `96140026` using the public RPC with an existing local cache. These comprise the
+  12 earlier route/lifecycle/stress tests plus emergency recovery for both
+  collateral types and both directions at requested 5x. Actual stale feeds block
+  normal closes; emergency recovery repays, returns trading pTokens and permits
+  original-pToken withdrawal despite deliberately blocked router/redemption calls.
+  Repayment funds and new contracts are local-fork-only. Existing small-seed and
+  synthetic-stress limitations above still apply.
+- Scoped formatting, whitespace and targeted high-severity production lint passed.
+  Runtime sizes under the pinned `debt_accounting` profile are executor 24,119,
+  risk engine 16,879, settlement 10,425 and swap module 2,861 bytes. The executor
+  has only 457 bytes of EIP-170 headroom; keep the size regression enforced.
+
+Runs use one Forge thread, solc 0.8.35, Cancun, via-IR, optimizer runs 1, and skip
+the existing missing-dependency LayerZero files `P_OFTAdapter.sol`,
+`P_OFTAdapterUpgradeable.sol`, and `P_OFTAdapterUpgradeable.t.sol`. This is scoped
+verification, not a claim that every repository test passed. Existing compiler,
+configuration and dependency/Natspec warnings remain. No transactions were sent
+to Fuji or mainnet.
 
 ## Confirmed market inventory and deployment inputs
 
@@ -439,10 +515,10 @@ three inherited settlement properties additionally reran under the CL compositio
 Scoped formatting, diff checks and targeted high-severity lint passed;
 adapter runtime is 3,820 bytes under the
 `debt_accounting` profile. Existing compiler/configuration warnings remain.
-External review and separately approved publication/deployment remain pending for
-this venue package. Production-sized capacity checks, exit recovery and the
-fresh paused Fuji package are still required. On 26 September the local CLI
-listed Almanax and Ozone as enabled, but their tools were not exposed to this
-session and the shell's Almanax credential environment was absent (presence-only
-check). No new external coverage is claimed. The private RPC credential is not
-stored in this package.
+After the initial tool/authentication blocker, Almanax was restored on 26 September.
+The separately approved published diff `7d0b3065..2f142bee` completed scan
+`cc49d485-daca-4933-a18a-d95b8e3ad6bf` with zero findings explicitly fetched.
+That is a commit-diff scan, not a full audit or mainnet clearance, and does not
+cover the subsequent emergency recovery work. Ozone/Cecuro review is still
+unavailable. Production-sized capacity checks and the fresh paused Fuji package
+remain required. No private RPC credential is stored in this package.
