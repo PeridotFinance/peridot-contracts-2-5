@@ -105,10 +105,10 @@ that immediately loses $5 no longer satisfies a 20% initial-margin requirement.
 1. Review this complete new execution/risk/rounding/insurance path independently.
 2. Add a fresh paused deployment/configuration package; never upgrade a legacy
    proxy blindly or point old accounts at these incompatible risk semantics.
-3. Test the whole intended integration on actual Avalanche asset/venue/strategy
-   forks, then deploy a separately approved fresh Fuji stack and verify receipts
-   and full lifecycle, including keepers. Current real-vault forks only validate
-   small conversions, not this whole lifecycle or production liquidity.
+3. Extend the actual Avalanche asset/venue/strategy fork evidence below to
+   production-sized liquidity, then deploy a separately approved fresh Fuji
+   stack and verify receipts and full lifecycle, including keepers. Small-seed
+   lifecycle tests do not establish production capacity.
 4. Approve production weights, fees, caps, flash/debt liquidity, funded cash
    insurance, vault capacity, governance, keeper operation and monitoring.
 5. Resolve operational exit recovery: stale prices currently block normal closes;
@@ -163,8 +163,10 @@ not approval to change caps or proof of multi-party governance.
   approved funds; share redemption, base-asset swap and share deposit; explicit
   capacity and output checks; measured balance changes and cleared allowances.
   It does not redeem Peridot pTokens or implement custody/position settlement.
-  A restricted LFJ adapter must separately authorize this wrapper through its
-  own governance. Protocol oracle/slippage enforcement remains required upstream.
+  For the user-selected Pharaoh-only venue, the wrapper composes with the new
+  `PharaohCLRouterAdapter`. Existing LFJ adapters remain separate and are not the
+  intended trading route for this stack. Protocol oracle/slippage enforcement
+  remains required upstream.
 - `PharaohMarginOracle`: immutable market/share bindings, actual underlying
   verification, share USD-WAD prices from `PharaohVaultShareOracle`, base-asset
   prices from the base margin oracle. Stale/unavailable share prices do not fall
@@ -340,5 +342,107 @@ and four pinned actual-vault conversion fork tests passed: **155 scoped tests**,
 zero failures/skips. Seven fuzz properties ran 1,024 cases each. Scoped formatting,
 diff checks, targeted high-severity lint and lifecycle code-size assertions passed.
 Existing compiler/configuration/dependency warnings remain. The follow-up external
-scan is pending; the finding remains open. This is not a full audit or mainnet
-release clearance.
+scan subsequently completed on 23 September: scan
+`438f1630-c729-4a5c-9ad2-44b864bc3508` returned zero findings for
+`84ddc337..7d0b3065`; the original finding was marked resolved. This is not a full
+audit or mainnet release clearance, and does not cover the newer Pharaoh CL work.
+
+## Pharaoh-only trading venue (25 September 2026)
+
+The user explicitly selected Pharaoh for both boosted collateral and AVAX/USDC
+trade execution. No LFJ fallback or external aggregator is enabled by this work.
+The new base adapter pins one direct Pharaoh concentrated-liquidity pool and
+rejects arbitrary routing calldata. Replacing it requires a new adapter and the
+existing execution-endpoint timelock; the existing live deployments are unchanged.
+
+Sources: [Pharaoh's official addresses](https://docs.phar.gg/pages/contract-addresses)
+and [pinned router interface](https://github.com/PharaohExchange/pharaoh-contracts/blob/f59c300b622b6e761433ee939a0f80ec128b1920/contracts/CL/periphery/interfaces/ISwapRouter.sol).
+This ABI identifies a pool by signed `int24 tickSpacing`, **not a fee tier**.
+The router exposes `deployer()` rather than `factory()`.
+
+Read-only Avalanche snapshot 96,140,026, hash
+`0x0379aba40afa4bbfde946c158d9734eafe63a4c9bbe72309a7fcef4a12e69151`,
+timestamp 1790358575:
+
+| Binding | Address/value |
+| --- | --- |
+| SwapRouter | `0xc8B8fCbDb5C019D7802fFb0b39603395D7d3915c` |
+| Factory | `0xAE6E5c62328ade73ceefD42228528b70c8157D0d` |
+| Pool deployer | `0x6a4113ed0915bCf5E48e758e8f4cEBFFC07C66f9` |
+| Direct WAVAX/native-USDC pool | `0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534` |
+| Tick spacing / reported fee | `10` / `800` millionths (0.08%) |
+| QuoterV2 | `0xB7297301b7CC659BB96D51754643A0Df6eEA2138` |
+
+Read-only quotes returned approximately 9.600231189 WAVAX for 100 USDC,
+48.000716158 WAVAX for 500 USDC, and 479.957691082 WAVAX for 5,000 USDC.
+The opposite direction returned 103.997076 USDC for 10 WAVAX and 519.980421 USDC
+for 50 WAVAX. These are historical quotes, not executed trades, capacity promises
+or usable transaction minimums. The fee can change and is not assumed immutable.
+
+The adapter only spends its caller's approved input, fixes the recipient to that
+caller, verifies router/factory/pool identity, clears router approvals and rejects
+partial consumption or incorrect reported output. It relies on the upstream
+margin swap module for independent oracle bounds. It does not itself select a
+fair price, approve production sizes, or eliminate Pharaoh upgrade/governance risk.
+
+The initial network approval-service usage block was resolved by a normal approved
+retry on 25 September. Three real-route fork tests passed for 100/500/5,000-USDC
+round trips with real Chainlink minimums. Returned amounts were 99.840064,
+499.200324 and 4,992.003657 USDC respectively at the pinned snapshot. These tests
+execute real Pharaoh pool code on a local fork, not on the live network.
+The whole real-vault/Pharaoh-margin fork has passed all 16 round-trip combinations:
+both collateral markets, both trade directions, and requested 2x/3x/4x/5x leverage.
+These use $1 collateral drawn from existing small Safe seed holdings on the local
+fork, real strategies/router/pool/tokens/feeds, and fresh local Peridot lending,
+flash and margin contracts. Opening preserves the original collateral pTokens;
+full closing clears account debt, debt shares, collateral locks and temporary
+adapter balances/approvals. The fixture charges 5 bps flash fees and 10 bps
+opening/closing fees, with test-only risk and interest parameters. A stale-feed
+case also passed: closing reverts without moving collateral or changing debt.
+Partial closes followed by full closes and direct withdrawal of the remaining
+original pTokens also passed for all four collateral/direction combinations.
+The 25 September combined non-liquidation fork run passed 10 test functions with
+zero failures/skips: three real-route tests and seven full-margin fixture tests.
+On 26 September a private RPC resolved the historical-storage failures. Both
+synthetic liquidation tests then passed across both collateral markets and both
+directions: partial liquidation improves health and pays the keeper; full
+insolvent liquidation exhausts position collateral, uses funded debt-asset cash
+insurance, refunds unused coverage and clears debt/locks. The full-liquidation
+assertion explicitly accounts for previously earned opening-fee rewards settled
+into free balance; those rewards are not returned liquidated collateral. The
+first run identified that missing test accounting, not a production-contract fix.
+The final combined fork rerun passed **12 tests, zero failures/skips** (three
+real-route tests plus nine full-margin fixture tests), and the offline 207-test
+execution set below was rerun successfully on the same day.
+
+Stress moves the actual local-fork CL pool price through a locally funded swap
+and mocks only the AVAX Chainlink answer to reflect that move. Partial shocks
+are -13%/+13% with USD collateral and -12%/+16% with AVAX collateral; insolvent
+shocks are -50%/+100%. These are synthetic stresses on real contract execution,
+not historical market outcomes or production risk approval. Position debt is
+below the $10 dust threshold, so these small-seed fork tests do not establish
+full-liquidation cap gating at production sizes; separate larger mock lifecycle
+tests cover that logic. Local adapter/composed lifecycle mocks remain separate
+evidence, not real-pool liquidity validation.
+
+Initial broad runs encountered historical RPC storage timeouts, not contract
+assertion failures; the leverage matrix passed when split by collateral/side.
+Another public RPC returned the correct block header but could not serve its
+historical state. Neither a cancelled run nor an RPC failure counts as a pass.
+
+Offline verification completed: the final combined run passed 207 test executions
+with zero failures/skips. This comprises 136 supporting/legacy/CL-unit tests plus
+71 tests in the CL-composed fixture (44 inherited settlement tests, 26 inherited
+lifecycle scenarios and one new custody/approval-cleanup test). These are not 207
+novel economic scenarios. Eight distinct fuzz properties ran 1,024 cases each;
+three inherited settlement properties additionally reran under the CL composition.
+Scoped formatting, diff checks and targeted high-severity lint passed;
+adapter runtime is 3,820 bytes under the
+`debt_accounting` profile. Existing compiler/configuration warnings remain.
+External review and separately approved publication/deployment remain pending for
+this venue package. Production-sized capacity checks, exit recovery and the
+fresh paused Fuji package are still required. On 26 September the local CLI
+listed Almanax and Ozone as enabled, but their tools were not exposed to this
+session and the shell's Almanax credential environment was absent (presence-only
+check). No new external coverage is claimed. The private RPC credential is not
+stored in this package.
