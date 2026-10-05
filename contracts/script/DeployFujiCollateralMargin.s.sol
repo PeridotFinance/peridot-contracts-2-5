@@ -252,7 +252,7 @@ contract DeployFujiCollateralMargin is Script {
                 owner,
                 abi.encodeCall(
                     Config.initialize,
-                    (owner, 1 days, address(d.adapter), address(d.lender), address(d.insurance), owner)
+                    (owner, 1 hours, address(d.adapter), address(d.lender), address(d.insurance), owner)
                 )
             )
         );

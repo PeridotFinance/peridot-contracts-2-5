@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeployFujiCollateralMargin as Deploy} from "../script/DeployFujiCollateralMargin.s.sol";
 import {ConfigureFujiCollateralMargin as Configure} from "../script/ConfigureFujiCollateralMargin.s.sol";
+import {ReduceFujiCollateralMarginDelay as ReduceDelay} from "../script/ReduceFujiCollateralMarginDelay.s.sol";
 import {CollateralPreservingExecutor as Executor} from "../contracts/margin/CollateralPreservingExecutor.sol";
 import {CollateralPreservingRiskEngine as Risk} from "../contracts/margin/CollateralPreservingRiskEngine.sol";
 import {IsolatedMarginTypes as Types} from "../contracts/margin/IsolatedMarginTypes.sol";
@@ -43,13 +44,13 @@ contract FujiCollateralMarginDeploymentTest is Test {
     function _configured() private {
         _deploy();
         configure.run();
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(block.timestamp + 1 hours);
         configure.execute();
     }
 
     function testDeploymentSeedsFreshPausedMarketsAndClearsApprovals() public {
         _deploy();
-        assertEq(d.config.actionDelay(), 1 days);
+        assertEq(d.config.actionDelay(), 1 hours);
         assertEq(d.executor.nextPositionId(), 1);
         assertEq(d.controller.admin(), OWNER);
         assertEq(d.unitroller.pendingAdmin(), address(0));
@@ -123,11 +124,11 @@ contract FujiCollateralMarginDeploymentTest is Test {
         }
         configure.run();
         for (uint256 i; i < 5; ++i) {
-            assertEq(d.config.queuedActions(ids[i]), block.timestamp + 1 days);
+            assertEq(d.config.queuedActions(ids[i]), block.timestamp + 1 hours);
         }
         vm.expectRevert("CollateralFuji: queue state/time");
         configure.execute();
-        vm.warp(block.timestamp + 1 days - 1);
+        vm.warp(block.timestamp + 1 hours - 1);
         vm.expectRevert("CollateralFuji: queue state/time");
         configure.execute();
         vm.warp(block.timestamp + 1);
@@ -171,7 +172,7 @@ contract FujiCollateralMarginDeploymentTest is Test {
         configure.run();
         vm.prank(OWNER);
         d.config.cancelAction(ids[4]);
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(block.timestamp + 1 hours);
         vm.expectRevert("CollateralFuji: queue state/time");
         configure.execute();
         assertEq(d.config.openFeeBps(), 0);
@@ -201,6 +202,159 @@ contract FujiCollateralMarginDeploymentTest is Test {
         deal(address(d.usd), address(d.insurance), 0);
         vm.expectRevert("CollateralFuji: cash insurance");
         configure.run();
+    }
+
+    function _legacyDelay() private returns (ReduceDelay migration) {
+        _deploy();
+        // Reproduce the already-deployed 24h policy through its normal governance path.
+        vm.prank(OWNER);
+        d.config.queueActionDelay(1 days);
+        vm.warp(block.timestamp + 1 hours);
+        vm.prank(OWNER);
+        d.config.setActionDelay(1 days);
+        configure.verify(address(d.executor), OWNER);
+        migration = new ReduceDelay();
+    }
+
+    function testDelayReductionHonorsOldDeadlineAndPreservesExistingQueues() public {
+        ReduceDelay migration = _legacyDelay();
+        // Read through Vm so the optimizer cannot treat time as constant across warps.
+        uint256 start = vm.getBlockTimestamp();
+        migration.run();
+        assertEq(d.config.actionDelay(), 1 days);
+        assertEq(d.config.queuedActions(migration.actionId()), start + 1 days);
+
+        vm.warp(start + 30 minutes);
+        configure.run();
+        bytes32[5] memory ids = configure.actionIds(address(d.executor));
+        vm.prank(OWNER);
+        d.config.queueUnpauseOpens();
+        uint256 originalEta = start + 30 minutes + 1 days;
+        vm.expectRevert("CollateralFuji: pause policy");
+        configure.verify(address(d.executor), OWNER); // Ordinary configuration still rejects unpause queues.
+        configure.verifyDelayTransition(address(d.executor), OWNER);
+
+        vm.warp(start + 1 days - 1);
+        vm.expectRevert("CollateralFuji: queue state/time");
+        migration.execute();
+        vm.warp(start + 1 days);
+        migration.execute();
+        assertEq(d.config.actionDelay(), 1 hours);
+        assertEq(d.config.queuedActions(migration.actionId()), 0);
+        assertEq(d.config.queuedActions(keccak256("unpauseOpens")), originalEta);
+        for (uint256 i; i < ids.length; ++i) {
+            assertEq(d.config.queuedActions(ids[i]), originalEta);
+        }
+        vm.prank(OWNER);
+        vm.expectRevert("MarginConfig: not ready");
+        d.config.unpauseOpens();
+        vm.prank(OWNER);
+        bytes32 next = d.config.queueFeeDistribution(0, 7 days);
+        assertEq(d.config.queuedActions(next), block.timestamp + 1 hours);
+        vm.warp(block.timestamp + 1 hours - 1);
+        vm.prank(OWNER);
+        vm.expectRevert("MarginConfig: not ready");
+        d.config.setFeeDistribution(0, 7 days);
+        vm.warp(block.timestamp + 1);
+        vm.prank(OWNER);
+        d.config.setFeeDistribution(0, 7 days);
+        _assertPausedGates();
+        assertEq(d.config.queuedActions(keccak256("unpauseOpens")), originalEta);
+        vm.expectRevert("CollateralFuji: expected legacy delay");
+        migration.execute();
+    }
+
+    function testLegacyConfigurationStillUsesStored24HourDeadline() public {
+        _legacyDelay();
+        configure.run();
+        uint256 queuedAt = vm.getBlockTimestamp();
+        vm.warp(queuedAt + 1 hours);
+        vm.expectRevert("CollateralFuji: queue state/time");
+        configure.execute();
+        vm.warp(queuedAt + 1 days);
+        configure.execute();
+        assertEq(d.config.openFeeBps(), 10);
+        _assertPaused();
+    }
+
+    function testDelayReductionRejectsDuplicateMissingAndCanceledQueue() public {
+        ReduceDelay migration = _legacyDelay();
+        vm.expectRevert("CollateralFuji: queue state/time");
+        migration.execute();
+        migration.run();
+        vm.expectRevert("CollateralFuji: queue state/time");
+        migration.run();
+        bytes32 id = migration.actionId();
+        vm.prank(OWNER);
+        d.config.cancelAction(id);
+        vm.warp(block.timestamp + 1 days);
+        vm.expectRevert("CollateralFuji: queue state/time");
+        migration.execute();
+        assertEq(d.config.actionDelay(), 1 days);
+        _assertPaused();
+    }
+
+    function testDelayReductionRejectsMainnetOtherChainsAndMissingConfirmation() public {
+        ReduceDelay migration = new ReduceDelay();
+        vm.chainId(43_114);
+        vm.expectRevert("CollateralFuji: Fuji only");
+        migration.run();
+        vm.expectRevert("CollateralFuji: Fuji only");
+        migration.execute();
+        vm.chainId(1);
+        vm.expectRevert("CollateralFuji: Fuji only");
+        migration.run();
+        vm.chainId(43_113);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "false");
+        vm.expectRevert("CollateralFuji: confirmation required");
+        migration.run();
+        vm.expectRevert("CollateralFuji: confirmation required");
+        migration.execute();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
+    }
+
+    function testDelayReductionRejectsWrongOwnerAndUnpausedMarket() public {
+        ReduceDelay migration = _legacyDelay();
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(address(0xBAD)));
+        vm.expectRevert();
+        migration.run();
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(OWNER));
+        vm.prank(OWNER);
+        d.controller._setBorrowPaused(PToken(address(d.pUsd)), false);
+        vm.expectRevert("CollateralFuji: market state");
+        migration.run();
+        assertEq(d.config.queuedActions(migration.actionId()), 0);
+    }
+
+    function testDelayReductionRequiresPausedStateAgainAtExecution() public {
+        ReduceDelay migration = _legacyDelay();
+        migration.run();
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(OWNER);
+        d.venue.setPaused(false);
+        vm.expectRevert("CollateralFuji: venue gates");
+        migration.execute();
+        assertEq(d.config.actionDelay(), 1 days);
+        assertGt(d.config.queuedActions(migration.actionId()), 0);
+    }
+
+    function testDelayVerifierRejectsUnsupportedDelayAndMigrationRejectsNewDefault() public {
+        _deploy();
+        ReduceDelay migration = new ReduceDelay();
+        vm.expectRevert("CollateralFuji: expected legacy delay");
+        migration.run();
+        vm.prank(OWNER);
+        vm.expectRevert("MarginConfig: delay too short");
+        d.config.queueActionDelay(1 hours - 1);
+        vm.prank(OWNER);
+        d.config.queueActionDelay(2 hours);
+        vm.warp(block.timestamp + 1 hours);
+        vm.prank(OWNER);
+        d.config.setActionDelay(2 hours);
+        vm.expectRevert("CollateralFuji: pause policy");
+        configure.verify(address(d.executor), OWNER);
+        vm.expectRevert("CollateralFuji: pause policy");
+        migration.run();
     }
 
     function testConfigurationRejectsChangedOracleAndEmergencyPrices() public {
@@ -282,7 +436,7 @@ contract FujiCollateralMarginDeploymentTest is Test {
     function _activateLocally() private {
         vm.prank(OWNER);
         d.config.queueUnpauseOpens();
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(block.timestamp + 1 hours);
         vm.startPrank(OWNER);
         d.usdFeed.setAnswer(1e8);
         d.avaxFeed.setAnswer(10e8);
@@ -426,8 +580,12 @@ contract FujiCollateralMarginDeploymentTest is Test {
     }
 
     function _assertPaused() private view {
-        assertTrue(d.config.opensPaused() && d.venue.paused() && d.lender.paused());
+        _assertPausedGates();
         assertEq(d.config.queuedActions(keccak256("unpauseOpens")), 0);
+    }
+
+    function _assertPausedGates() private view {
+        assertTrue(d.config.opensPaused() && d.venue.paused() && d.lender.paused());
         assertTrue(d.controller.borrowGuardianPaused(address(d.pUsd)));
         assertTrue(d.controller.borrowGuardianPaused(address(d.pAvax)));
         assertTrue(d.controller.borrowGuardianPaused(address(d.pUsdVault)));

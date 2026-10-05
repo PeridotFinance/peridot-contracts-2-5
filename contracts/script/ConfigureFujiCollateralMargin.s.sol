@@ -24,7 +24,7 @@ import {PharaohVaultShareOracle} from "../contracts/PharaohVaultShareOracle.sol"
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 /// @notice Configure only the NEW mock collateral stack; neither entry point unpauses anything.
-/// @dev run() queues exactly five actions; execute() consumes them after 24h while
+/// @dev run() queues exactly five actions; execute() consumes them after their stored deadlines while
 /// all trading gates stay paused. No feed refresh, deposits, approvals or smoke trades.
 contract ConfigureFujiCollateralMargin is Script {
     function run() external {
@@ -94,6 +94,16 @@ contract ConfigureFujiCollateralMargin is Script {
     /// @notice Read-only readiness checks; deliberately does not require fresh prices
     /// while all trading is paused. Activation must separately revalidate prices/capacity.
     function verify(address executor, address owner) public view {
+        _verify(executor, owner, false);
+    }
+
+    /// @notice Delay migration may coexist with an already queued unpause, but never activates it.
+    /// All other readiness checks, including every pause gate, remain required.
+    function verifyDelayTransition(address executor, address owner) external view {
+        _verify(executor, owner, true);
+    }
+
+    function _verify(address executor, address owner, bool allowQueuedUnpause) private view {
         require(block.chainid == 43_113 && owner != address(0), "CollateralFuji: identity");
         Executor e = Executor(executor);
         Risk r = e.risk();
@@ -120,7 +130,8 @@ contract ConfigureFujiCollateralMargin is Script {
             "CollateralFuji: controller hook"
         );
         require(
-            c.actionDelay() == 1 days && c.opensPaused() && c.queuedActions(keccak256("unpauseOpens")) == 0,
+            (c.actionDelay() == 1 hours || c.actionDelay() == 1 days) && c.opensPaused()
+                && (allowQueuedUnpause || c.queuedActions(keccak256("unpauseOpens")) == 0),
             "CollateralFuji: pause policy"
         );
         require(
