@@ -1,7 +1,8 @@
 # Fresh collateral-preserving margin on Fuji
 
-This package is **mock-only**. The original 24-hour version was deployed on Fuji;
-the one-hour policy revision below is not yet applied to that deployment. It never upgrades or consumes
+This package is **mock-only**. The original version was deployed on Fuji and its
+one-hour delay was applied on 6 October 2026; activation remains separately gated.
+It never upgrades or consumes
 addresses from the old Fuji margin system. Mainnet chain43114 and every chain
 other than Fuji43113 are rejected. Building or simulating it does not authorize
 broadcasting it, activating trading, or using these fixture parameters on mainnet.
@@ -13,13 +14,16 @@ broadcasting it, activating trading, or using these fixture parameters on mainne
 | `script/DeployFujiCollateralMargin.s.sol` | Create, seed and wire an entirely fresh paused environment. |
 | `script/ConfigureFujiCollateralMargin.s.sol` | `run()` queues five actions; `execute()` applies them after their stored deadlines. Accepts the new 1h or legacy 24h policy. Neither activates trading. |
 | `script/ReduceFujiCollateralMarginDelay.s.sol` | Fuji-only 24h-to-1h transition: `run()` queues one action; `execute()` applies it after the old 24h deadline. Preserves existing queues and all pause gates. |
+| `script/ActivateFujiCollateralMargin.s.sol` | First activation only: seven calls, fresh mock feeds, venue/lender and plain borrowing enabled, opens last. `verify(address,address)` checks the unused, freshly activated stack. |
 | `contracts/margin/testing/FujiMockPharaoh.sol` | Fuji-only ERC4626 vaults, immutable factory/pool bindings and CL-ABI bridge. |
 | `test/FujiCollateralMarginDeployment.t.sol` | Deployment, policy, timelock, adapter composition and lifecycle tests. |
 | `fuji-collateral-margin.env.example` | Public inputs; confirmation defaults false and executor is unset. |
 
-The new script reads only `CP_FUJI_DEPLOYER` and
-`CONFIRM_FUJI_COLLATERAL_MOCK_ONLY`; configuration and delay transition additionally read
-`CP_FUJI_EXECUTOR`. It does not read legacy `MOCK_*`, `MARGIN_*`,
+Deployment reads only `CP_FUJI_DEPLOYER` and
+`CONFIRM_FUJI_COLLATERAL_MOCK_ONLY`; configuration, delay transition and activation
+additionally read `CP_FUJI_EXECUTOR`. Activation also requires
+`CONFIRM_FUJI_COLLATERAL_ACTIVATION=true`.
+It does not read legacy `MOCK_*`, `MARGIN_*`,
 `PERIDOTTROLLER`, private-key variables or a keystore. It does not rewrite any
 environment variables or files. The sample deployer is the previously verified
 public robinhood-deployer address; recheck the local account address before any
@@ -121,8 +125,10 @@ The transition-specific read-only verifier permits an existing unpause queue but
 checks its deadline is preserved across the operation. The ordinary configuration
 verifier still rejects an unpause queue. Both accept only 1h or legacy 24h delays.
 
-The existing unpause action matures on **6 October 2026 at 09:29:35 UTC**. This
-transition cannot accelerate it. Since the transition script requires every gate
+The existing unpause action matured on **6 October 2026 at 09:29:35 UTC**. The delay
+transition completed at 14:07:03 UTC that day, with all gates still paused; do not
+repeat the queue or execution. The transition did not accelerate existing deadlines.
+Since the transition script requires every gate
 paused, finish the delay change before separately activating the stack; if the
 stack has already been activated, stop and plan a separately approved pause first.
 The transition does not cancel queues, unpause, refresh feeds, deposit or trade.
@@ -133,6 +139,60 @@ and set `CP_FUJI_EXECUTOR` to the independently verified fresh executor
 `0xA1398d06Cf8d0bE8673A46C67e462718FD99Bf9C`. After the actual transition deadline,
 add `--sig 'execute()'` to simulate execution. Neither simulation authorizes broadcast.
 Never use the legacy margin executor or blindly rerun a partially completed phase.
+
+## First activation — separate approval required
+
+The existing unpause action is mature: no new queue or waiting period is needed.
+`ActivateFujiCollateralMargin.run()` requires Fuji43113, both explicit confirmations,
+the verified fresh executor and owner, a one-hour policy, and every gate initially
+paused. It checks unused accounts/empty margin vaults, dependency and ownership
+bindings, unchanged mock feed answers, insurance/venue/lender funding, exact fees
+and all four pair presets, consumption of the five preset configuration queues, seed lending cash,
+five-times-seed caps and 10% reserve factors. Altered settings or a partial previous
+activation fail closed; this is not a generic pause/reopen operator.
+
+The exact batch is:
+
+1. Refresh mockUSD at its unchanged $1 value.
+2. Refresh mockAVAX at its unchanged $10 value.
+3. Unpause the funded mock swap venue.
+4. Unpause the separate funded flash lender.
+5. Enable plain pMockUSD borrowing.
+6. Enable plain pMockAVAX borrowing.
+7. Unpause margin opens **last**, consuming the existing mature action.
+
+Both boosted collateral markets' borrowing and every native pToken flash-loan gate
+remain paused. No deposit, approval, position, withdrawal, new deployment, or mainnet
+call is included. The temporary verification helper executes only in the local
+script EVM and must not appear as a deployment in the unsigned transaction batch.
+
+Before broadcast, inspect all seven targets/calldata/zero native values and obtain
+separate approval after review. **The batch is not atomic.** Stop and reconcile any
+partial execution rather than blindly rerunning or using `--resume`. Opens last
+limits intermediate exposure but does not make earlier changes atomic. Verify all
+receipts and current state after signing. Feeds have a 1,200-second freshness limit;
+delay during signing can invalidate verification and later smoke tests. Refreshes
+after that window require their own reviewed transaction scope.
+
+Unsigned simulation from `contracts/`, with no keystore or `--broadcast`:
+
+```sh
+export CP_FUJI_DEPLOYER=0x94696d767e65a75581145646960FA0eC886cE5d2
+export CP_FUJI_EXECUTOR=0xA1398d06Cf8d0bE8673A46C67e462718FD99Bf9C
+export CONFIRM_FUJI_COLLATERAL_MOCK_ONLY=true
+export CONFIRM_FUJI_COLLATERAL_ACTIVATION=true
+export CP_FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+FOUNDRY_PROFILE=debt_accounting forge script script/ActivateFujiCollateralMargin.s.sol:ActivateFujiCollateralMargin \
+  --rpc-url "$CP_FUJI_RPC_URL" --sender "$CP_FUJI_DEPLOYER" \
+  --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+```
+
+After actual activation, the same unsigned command with
+`--sig 'verify(address,address)' "$CP_FUJI_EXECUTOR" "$CP_FUJI_DEPLOYER"`
+checks the initial activated state, including fresh prices and consumed unpause.
+It is not a live-position monitor: it deliberately rejects an already-used stack.
+Only after receipt/state verification should separately approved small smoke trades
+begin, covering both collateral pools and directions before larger test cases.
 
 ## Simulation only
 
@@ -172,7 +232,8 @@ transaction batch and approval. No broadcast command is supplied in this package
 - Lifecycle coverage includes all16 combinations of two collateral pools,
   long/short and2x/3x/4x/5x, accrued interest and pToken withdrawal, stale-oracle
   paused recovery, and partial then insured full liquidation in all four
-  collateral/direction combinations. Activation exists only in test code.
+  collateral/direction combinations. At this historical checkpoint activation
+  existed only in test code; the operator above was added subsequently.
 - The final broader scoped run passed268 test executions; a separate existing
   bootstrap/rate-model/chain-gate run passed12, totaling280 with zero failures or
   skips. The15 new tests are included, not additional. Selected fuzz properties
@@ -213,16 +274,45 @@ transaction batch and approval. No broadcast command is supplied in this package
   queueing, the old waiting period, and execution. External review of this revision
   remains pending; earlier clean scans do not cover it.
 
+## Activation verification — 8 October 2026
+
+- 258 scoped test executions passed across six suites, zero failures or skips,
+  with 1,024 cases per selected fuzz property. This includes all32 Fuji package
+  tests and ten new activation regressions. It is not every repository test;
+  inherited fixtures repeat scenarios.
+- The actual activation operator now drives local deployment lifecycle tests:
+  both collateral pools, both directions, requested2x/3x/4x/5x, partial and insured
+  full liquidation, and paused oracle-free recovery.
+- Regressions cover chain/confirmation/owner checks, missing/immature/canceled
+  unpause, partial activation, altered fees/pairs/caps/liquidity/insurance/prices,
+  legacy delay rejection, exact post-activation gates, replay and stale feeds.
+- Scoped formatting, whitespace and high-severity lint checks passed; existing
+  metadata/NatSpec warnings and three unrelated LayerZero exclusions remain.
+  No production contract logic changed.
+
+Activation simulation checkpoint — 8 October 2026: the unsigned public-Fuji run
+passed all preflight and post-state checks. Independently encoded calldata matched
+exactly the seven calls above, sender nonces331–337, zero native values, no helper
+deployment. Estimated gas347,195 at2.759139749gwei was approximately0.00095796
+test AVAX; estimates and nonces must be refreshed before signing. The ignored
+public record is `broadcast/ActivateFujiCollateralMargin.s.sol/43113/dry-run/run-latest.json`.
+Subsequent live snapshot59184881 (8 October14:39:04UTC) confirmed all gates still
+paused, actionDelay3600, unchanged mature unpauseETA1791278975 and latest/pending
+nonce331. Simulation did not activate the live deployment.
+
 ## Remaining release gates
 
-The original package at4de8c953 received a clean Almanax diff review, and its Fuji
-deployment and five configuration executions were verified. That historical review
-does not cover this new one-hour policy revision; review it separately before live use.
+The original package at4de8c953 and subsequent one-hour policy range through
+5d3789ae received clean Almanax diff reviews (the latter scan
+`0f6e8e37-7add-403a-b921-fd051dad0971`, complete with zero findings).
+Deployment, configuration and the one-hour transition were verified on Fuji.
+Those reviews do **not** cover this new activation operator; publish its exact
+review commit with approval and scan it before separately approving live activation.
 For future deployments, independently verify receipts/code/pointers/owners/balances
 and pause gates, approve queueing, wait for the stored deadlines, approve execution,
-and verify configuration while still paused. The existing deployment instead needs
-only the separately approved delay transition above, not redeployment. Then prepare
-a separate activation and small live smoke plan with fresh mock feeds. Rehearse
+and verify configuration while still paused. The existing deployment needs neither
+redeployment nor another delay transition. Complete activation review, separately
+approve activation, then prepare a small live smoke plan with fresh mock feeds. Rehearse
 2x–5x long/short, both collateral pools, partial/full close, repayment/recovery,
 liquidation/insurance, fee streaming and pToken withdrawal on that fresh Fuji stack.
 The old live Fuji smoke results cannot substitute for these new receipts.

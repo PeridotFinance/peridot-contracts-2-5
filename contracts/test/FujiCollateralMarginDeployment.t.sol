@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeployFujiCollateralMargin as Deploy} from "../script/DeployFujiCollateralMargin.s.sol";
 import {ConfigureFujiCollateralMargin as Configure} from "../script/ConfigureFujiCollateralMargin.s.sol";
 import {ReduceFujiCollateralMarginDelay as ReduceDelay} from "../script/ReduceFujiCollateralMarginDelay.s.sol";
+import {ActivateFujiCollateralMargin as Activate} from "../script/ActivateFujiCollateralMargin.s.sol";
 import {CollateralPreservingExecutor as Executor} from "../contracts/margin/CollateralPreservingExecutor.sol";
 import {CollateralPreservingRiskEngine as Risk} from "../contracts/margin/CollateralPreservingRiskEngine.sol";
 import {IsolatedMarginTypes as Types} from "../contracts/margin/IsolatedMarginTypes.sol";
@@ -28,6 +29,7 @@ contract FujiCollateralMarginDeploymentTest is Test {
         vm.warp(1_800_000_000);
         vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(OWNER));
         vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "false");
         deployer = new Deploy();
         configure = new Configure();
     }
@@ -432,20 +434,196 @@ contract FujiCollateralMarginDeploymentTest is Test {
         }
     }
 
-    // Only TEST code activates the freshly simulated stack. No script exposes this.
+    // Exercise the real seven-call operator locally; this test never broadcasts to a network.
     function _activateLocally() private {
         vm.prank(OWNER);
         d.config.queueUnpauseOpens();
         vm.warp(block.timestamp + 1 hours);
-        vm.startPrank(OWNER);
-        d.usdFeed.setAnswer(1e8);
-        d.avaxFeed.setAnswer(10e8);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "true");
+        new Activate().run();
+    }
+
+    function _readyActivation() private returns (Activate activation) {
+        _configured();
+        vm.prank(OWNER);
+        d.config.queueUnpauseOpens();
+        vm.warp(block.timestamp + 1 hours);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "true");
+        activation = new Activate();
+    }
+
+    function testActivationRefreshesStaleFeedsAndEnablesOnlyPlainBorrowing() public {
+        Activate activation = _readyActivation();
+        uint80 usdRound = d.usdFeed.roundId();
+        uint80 avaxRound = d.avaxFeed.roundId();
+        uint256 unpauseEta = d.config.queuedActions(keccak256("unpauseOpens"));
+        vm.warp(block.timestamp + 3 days);
+        assertEq(d.oracle.getPrice(address(d.usd)), 0);
+        activation.run();
+        activation.verify(address(d.executor), OWNER);
+        assertEq(d.usdFeed.roundId(), usdRound + 1);
+        assertEq(d.avaxFeed.roundId(), avaxRound + 1);
+        assertEq(d.usdFeed.answer(), 1e8);
+        assertEq(d.avaxFeed.answer(), 10e8);
+        assertEq(d.config.queuedActions(keccak256("unpauseOpens")), 0);
+        assertLt(unpauseEta, block.timestamp);
+        assertFalse(d.config.opensPaused() || d.venue.paused() || d.lender.paused());
+        assertFalse(d.controller.borrowGuardianPaused(address(d.pUsd)));
+        assertFalse(d.controller.borrowGuardianPaused(address(d.pAvax)));
+        assertTrue(d.controller.borrowGuardianPaused(address(d.pUsdVault)));
+        assertTrue(d.controller.borrowGuardianPaused(address(d.pAvaxVault)));
+        assertTrue(d.pUsd.flashLoansPaused() && d.pAvax.flashLoansPaused());
+        assertTrue(d.pUsdVault.flashLoansPaused() && d.pAvaxVault.flashLoansPaused());
+        assertEq(d.executor.nextPositionId(), 1);
+        assertEq(d.vault.totalFreeBalance(address(d.pUsdVault)), 0);
+        assertEq(d.vault.totalFreeBalance(address(d.pAvaxVault)), 0);
+        vm.expectRevert("CollateralFuji: pause policy");
+        activation.run();
+        vm.warp(block.timestamp + 1201);
+        vm.expectRevert("CollateralFuji: fresh mock feeds required");
+        activation.verify(address(d.executor), OWNER);
+    }
+
+    function testActivationRejectsMainnetOtherChainsAndBothMissingConfirmations() public {
+        Activate activation = new Activate();
+        vm.chainId(43_114);
+        vm.expectRevert("CollateralFuji: Fuji only");
+        activation.run();
+        vm.chainId(1);
+        vm.expectRevert("CollateralFuji: Fuji only");
+        activation.run();
+        vm.chainId(43_113);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "false");
+        vm.expectRevert("CollateralFuji: confirmation required");
+        activation.run();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "false");
+        vm.expectRevert("CollateralFuji: activation confirmation");
+        activation.run();
+    }
+
+    function testActivationRejectsMissingImmatureAndCanceledUnpauseBeforeFeedWrites() public {
+        _configured();
+        Activate activation = new Activate();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "true");
+        uint80 round = d.usdFeed.roundId();
+        vm.expectRevert("CollateralFuji: unpause not ready");
+        activation.run();
+        vm.prank(OWNER);
+        d.config.queueUnpauseOpens();
+        vm.warp(block.timestamp + 1 hours - 1);
+        vm.expectRevert("CollateralFuji: unpause not ready");
+        activation.run();
+        vm.prank(OWNER);
+        d.config.cancelAction(keccak256("unpauseOpens"));
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert("CollateralFuji: unpause not ready");
+        activation.run();
+        assertEq(d.usdFeed.roundId(), round);
+        _assertPaused();
+    }
+
+    function testActivationRejectsPartialActivationBeforeMoreTransactions() public {
+        Activate activation = _readyActivation();
+        uint80 round = d.usdFeed.roundId();
+        vm.prank(OWNER);
         d.venue.setPaused(false);
-        d.lender.setPaused(false);
+        vm.expectRevert("CollateralFuji: venue gates");
+        activation.run();
+        vm.prank(OWNER);
+        d.venue.setPaused(true);
+        vm.prank(OWNER);
         d.controller._setBorrowPaused(PToken(address(d.pUsd)), false);
-        d.controller._setBorrowPaused(PToken(address(d.pAvax)), false);
-        d.config.unpauseOpens();
+        vm.expectRevert("CollateralFuji: market state");
+        activation.run();
+        assertEq(d.usdFeed.roundId(), round);
+        assertTrue(d.config.opensPaused());
+    }
+
+    function testActivationRejectsAlteredFeesAndPendingConfiguration() public {
+        Activate activation = _readyActivation();
+        vm.prank(OWNER);
+        d.config.queueFees(10, 10, 5000, 5000, 0);
+        vm.expectRevert("CollateralFuji: pending configuration");
+        activation.run();
+        vm.startPrank(OWNER);
+        d.config.queueFees(0, 0, 5000, 5000, 0);
+        vm.warp(block.timestamp + 1 hours);
+        d.config.setFees(0, 0, 5000, 5000, 0);
         vm.stopPrank();
+        vm.expectRevert("CollateralFuji: activation fees");
+        activation.run();
+        _assertPausedGates();
+    }
+
+    function testActivationRejectsChangedPairPreset() public {
+        Activate activation = _readyActivation();
+        Types.PairRiskConfig memory risk = configure.pair();
+        risk.maxDebtValueUsd = 4000e18;
+        vm.startPrank(OWNER);
+        d.config.queuePairRisk(address(d.pUsdVault), address(d.pAvax), address(d.pUsd), risk);
+        vm.warp(block.timestamp + 1 hours);
+        d.config.setPairRisk(address(d.pUsdVault), address(d.pAvax), address(d.pUsd), risk);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: activation pairs");
+        activation.run();
+        _assertPausedGates();
+    }
+
+    function testActivationRejectsAlteredCapsAndReducedLendingCash() public {
+        Activate activation = _readyActivation();
+        PToken[] memory markets = new PToken[](1);
+        markets[0] = PToken(address(d.pUsd));
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = 1;
+        vm.prank(OWNER);
+        d.controller._setMarketBorrowCaps(markets, caps);
+        vm.expectRevert("CollateralFuji: activation liquidity policy");
+        activation.run();
+        caps[0] = 500_000e6;
+        vm.prank(OWNER);
+        d.controller._setMarketBorrowCaps(markets, caps);
+        deal(address(d.usd), address(d.pUsd), 99_999e6);
+        vm.expectRevert("CollateralFuji: activation liquidity policy");
+        activation.run();
+        _assertPausedGates();
+    }
+
+    function testActivationRejectsForeignExecutorOwnerAndMissingInsurance() public {
+        Activate activation = _readyActivation();
+        vm.setEnv("CP_FUJI_EXECUTOR", vm.toString(address(d.controller)));
+        vm.expectRevert();
+        activation.run();
+        vm.setEnv("CP_FUJI_EXECUTOR", vm.toString(address(d.executor)));
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(address(0xBAD)));
+        vm.expectRevert();
+        activation.run();
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(OWNER));
+        deal(address(d.usd), address(d.insurance), 0);
+        vm.expectRevert("CollateralFuji: cash insurance");
+        activation.run();
+    }
+
+    function testActivationRejectsLegacyDelayUntilTransitionCompletes() public {
+        Activate activation = _readyActivation();
+        vm.startPrank(OWNER);
+        d.config.queueActionDelay(1 days);
+        vm.warp(block.timestamp + 1 hours);
+        d.config.setActionDelay(1 days);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: one-hour policy required");
+        activation.run();
+        _assertPausedGates();
+    }
+
+    function testActivationRejectsAlteredMockPriceWithoutSilentlyResettingIt() public {
+        Activate activation = _readyActivation();
+        vm.prank(OWNER);
+        d.avaxFeed.setAnswer(9e8);
+        vm.expectRevert("CollateralFuji: mock prices");
+        activation.run();
+        assertEq(d.avaxFeed.answer(), 9e8);
+        _assertPausedGates();
     }
 
     function testScriptDeployedStackTwoThroughFiveXBothCollateralsAndSides() public {

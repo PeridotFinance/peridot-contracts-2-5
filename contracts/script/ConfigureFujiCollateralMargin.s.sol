@@ -94,16 +94,21 @@ contract ConfigureFujiCollateralMargin is Script {
     /// @notice Read-only readiness checks; deliberately does not require fresh prices
     /// while all trading is paused. Activation must separately revalidate prices/capacity.
     function verify(address executor, address owner) public view {
-        _verify(executor, owner, false);
+        _verify(executor, owner, false, false);
     }
 
     /// @notice Delay migration may coexist with an already queued unpause, but never activates it.
     /// All other readiness checks, including every pause gate, remain required.
     function verifyDelayTransition(address executor, address owner) external view {
-        _verify(executor, owner, true);
+        _verify(executor, owner, true, false);
     }
 
-    function _verify(address executor, address owner, bool allowQueuedUnpause) private view {
+    /// @notice Read-only initial activation checkpoint, before any positions or margin deposits.
+    function verifyActivated(address executor, address owner) external view {
+        _verify(executor, owner, false, true);
+    }
+
+    function _verify(address executor, address owner, bool allowQueuedUnpause, bool active) private view {
         require(block.chainid == 43_113 && owner != address(0), "CollateralFuji: identity");
         Executor e = Executor(executor);
         Risk r = e.risk();
@@ -130,7 +135,7 @@ contract ConfigureFujiCollateralMargin is Script {
             "CollateralFuji: controller hook"
         );
         require(
-            (c.actionDelay() == 1 hours || c.actionDelay() == 1 days) && c.opensPaused()
+            (c.actionDelay() == 1 hours || c.actionDelay() == 1 days) && c.opensPaused() == !active
                 && (allowQueuedUnpause || c.queuedActions(keccak256("unpauseOpens")) == 0),
             "CollateralFuji: pause policy"
         );
@@ -158,7 +163,7 @@ contract ConfigureFujiCollateralMargin is Script {
                 && IERC20(s.wavax()).balanceOf(address(insurance)) >= 1000e18,
             "CollateralFuji: cash insurance"
         );
-        _venue(e, owner);
+        _venue(e, owner, active);
         _oracles(e, owner);
         address[4] memory markets = [s.pUsd(), s.pWavax(), s.pUsdVault(), s.pAvaxVault()];
         for (uint256 i; i < 4; ++i) {
@@ -169,8 +174,8 @@ contract ConfigureFujiCollateralMargin is Script {
                 "CollateralFuji: market identity"
             );
             require(
-                controller.borrowGuardianPaused(markets[i]) && p.flashLoansPaused() && p.totalBorrows() == 0
-                    && p.totalSupply() > 0 && p.getCash() > 0,
+                controller.borrowGuardianPaused(markets[i]) == (!active || i >= 2) && p.flashLoansPaused()
+                    && p.totalBorrows() == 0 && p.totalSupply() > 0 && p.getCash() > 0,
                 "CollateralFuji: market state"
             );
             require(controller.borrowCaps(markets[i]) > 0, "CollateralFuji: borrow cap");
@@ -183,7 +188,7 @@ contract ConfigureFujiCollateralMargin is Script {
         }
     }
 
-    function _venue(Executor e, address owner) private view {
+    function _venue(Executor e, address owner, bool active) private view {
         Settlement s = e.settlement();
         PharaohMarginRouterAdapter a = PharaohMarginRouterAdapter(e.config().routerAdapter());
         PharaohCLRouterAdapter cl = PharaohCLRouterAdapter(address(a.baseRouter()));
@@ -206,8 +211,8 @@ contract ConfigureFujiCollateralMargin is Script {
             "CollateralFuji: mock router"
         );
         require(
-            venue.owner() == owner && venue.paused() && venue.executionBps() == 10_000 && lender.owner() == owner
-                && lender.paused() && lender.feeBps() == 5,
+            venue.owner() == owner && venue.paused() == !active && venue.executionBps() == 10_000
+                && lender.owner() == owner && lender.paused() == !active && lender.feeBps() == 5,
             "CollateralFuji: venue gates"
         );
         require(
