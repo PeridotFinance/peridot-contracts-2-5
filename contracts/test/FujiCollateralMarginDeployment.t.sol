@@ -2,11 +2,13 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeployFujiCollateralMargin as Deploy} from "../script/DeployFujiCollateralMargin.s.sol";
 import {ConfigureFujiCollateralMargin as Configure} from "../script/ConfigureFujiCollateralMargin.s.sol";
 import {ReduceFujiCollateralMarginDelay as ReduceDelay} from "../script/ReduceFujiCollateralMarginDelay.s.sol";
 import {ActivateFujiCollateralMargin as Activate} from "../script/ActivateFujiCollateralMargin.s.sol";
+import {SmokeFujiCollateralMargin as Smoke} from "../script/SmokeFujiCollateralMargin.s.sol";
 import {CollateralPreservingExecutor as Executor} from "../contracts/margin/CollateralPreservingExecutor.sol";
 import {CollateralPreservingRiskEngine as Risk} from "../contracts/margin/CollateralPreservingRiskEngine.sol";
 import {IsolatedMarginTypes as Types} from "../contracts/margin/IsolatedMarginTypes.sol";
@@ -30,6 +32,8 @@ contract FujiCollateralMarginDeploymentTest is Test {
         vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(OWNER));
         vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
         vm.setEnv("CONFIRM_FUJI_COLLATERAL_ACTIVATION", "false");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "false");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "false");
         deployer = new Deploy();
         configure = new Configure();
     }
@@ -647,6 +651,183 @@ contract FujiCollateralMarginDeploymentTest is Test {
             d.vault.withdraw(collateral, free);
             assertEq(IERC20(collateral).balanceOf(OWNER), wallet + free);
         }
+    }
+
+    function _readySmoke() private returns (Smoke smoke) {
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "false");
+        _configured();
+        _activateLocally();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "true");
+        return new Smoke();
+    }
+
+    function testSmokeFourRoundTripsPreserveOriginalCollateralAndDistributeFees() public {
+        Smoke smoke = _readySmoke();
+        uint256 usdWallet = d.pUsdVault.balanceOf(OWNER);
+        uint256 avaxWallet = d.pAvaxVault.balanceOf(OWNER);
+        vm.recordLogs();
+        smoke.run();
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        uint256 feeEvents;
+        uint256 retainedEvents;
+        uint256[2] memory treasuryDust;
+        for (uint256 i; i < logs.length; ++i) {
+            if (
+                logs[i].emitter == address(d.fees)
+                    && logs[i].topics[0] == keccak256("FeeCollected(address,uint256,uint256,uint256,uint256)")
+            ) {
+                address collateral = address(uint160(uint256(logs[i].topics[1])));
+                (uint256 amount, uint256 depositor, uint256 insurance, uint256 treasury) =
+                    abi.decode(logs[i].data, (uint256, uint256, uint256, uint256));
+                assertTrue(collateral == address(d.pUsdVault) || collateral == address(d.pAvaxVault));
+                assertGt(amount, 0);
+                assertEq(depositor, amount / 2);
+                assertEq(insurance, amount / 2);
+                assertLe(treasury, 1); // Integer split dust only, not an extra fee.
+                treasuryDust[collateral == address(d.pUsdVault) ? 0 : 1] += treasury;
+                ++feeEvents;
+            }
+            if (
+                logs[i].emitter == address(d.executor)
+                    && logs[i].topics[0] == keccak256("Opened(uint256,address,address,uint256,uint256)")
+            ) {
+                (, uint256 collateralShares) = abi.decode(logs[i].data, (uint256, uint256));
+                uint256 id = uint256(logs[i].topics[1]);
+                assertEq(
+                    collateralShares, (id <= 2 ? smoke.USD_DEPOSIT_SHARES() : smoke.AVAX_DEPOSIT_SHARES()) * 5 / 12
+                );
+                ++retainedEvents;
+            }
+        }
+        assertEq(feeEvents, 8);
+        assertEq(retainedEvents, 4);
+        assertEq(d.pUsdVault.balanceOf(OWNER), usdWallet - smoke.USD_DEPOSIT_SHARES() + treasuryDust[0]);
+        assertEq(d.pAvaxVault.balanceOf(OWNER), avaxWallet - smoke.AVAX_DEPOSIT_SHARES() + treasuryDust[1]);
+        smoke.verify(address(d.executor), OWNER);
+        assertFalse(d.config.opensPaused());
+        assertTrue(d.controller.borrowGuardianPaused(address(d.pUsdVault)));
+        assertTrue(d.controller.borrowGuardianPaused(address(d.pAvaxVault)));
+        assertTrue(d.pUsd.flashLoansPaused() && d.pAvax.flashLoansPaused());
+    }
+
+    function testSmokeWithdrawReturnsPTokensWithoutFreshPricesOrRedemption() public {
+        Smoke smoke = _readySmoke();
+        smoke.run();
+        vm.warp(block.timestamp + 8 days);
+        vm.startPrank(OWNER);
+        d.usdVault.setLimits(true, true);
+        d.avaxVault.setLimits(true, true);
+        vm.stopPrank();
+        uint256 usdFree = d.vault.freeBalance(OWNER, address(d.pUsdVault));
+        uint256 avaxFree = d.vault.freeBalance(OWNER, address(d.pAvaxVault));
+        uint256 usdWallet = d.pUsdVault.balanceOf(OWNER);
+        uint256 avaxWallet = d.pAvaxVault.balanceOf(OWNER);
+        uint256 usdSupply = d.pUsdVault.totalSupply();
+        uint256 avaxSupply = d.pAvaxVault.totalSupply();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "true");
+        smoke.withdraw();
+        assertEq(d.pUsdVault.balanceOf(OWNER), usdWallet + usdFree);
+        assertEq(d.pAvaxVault.balanceOf(OWNER), avaxWallet + avaxFree);
+        assertEq(d.pUsdVault.totalSupply(), usdSupply);
+        assertEq(d.pAvaxVault.totalSupply(), avaxSupply);
+        assertGt(d.vault.freeBalance(OWNER, address(d.pUsdVault)), 0); // Settled streaming rewards are retained, not redeemed.
+        vm.expectRevert("CollateralSmoke: withdrawal budget");
+        smoke.withdraw();
+    }
+
+    function testSmokeRefreshesStaleFeedsButDoesNotChangePrices() public {
+        Smoke smoke = _readySmoke();
+        vm.warp(block.timestamp + 2 days);
+        assertEq(d.oracle.getPrice(address(d.usd)), 0);
+        smoke.run();
+        assertEq(d.usdFeed.answer(), 1e8);
+        assertEq(d.avaxFeed.answer(), 10e8);
+        assertEq(d.usdFeed.updatedAt(), block.timestamp);
+        assertEq(d.avaxFeed.updatedAt(), block.timestamp);
+    }
+
+    function testSmokeRejectsMainnetOtherChainsAndMissingConfirmations() public {
+        Smoke smoke = _readySmoke();
+        vm.chainId(43_114);
+        vm.expectRevert("CollateralSmoke: Fuji only");
+        smoke.run();
+        vm.expectRevert("CollateralSmoke: Fuji only");
+        smoke.withdraw();
+        vm.chainId(1);
+        vm.expectRevert("CollateralSmoke: Fuji only");
+        smoke.run();
+        vm.chainId(43_113);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "false");
+        vm.expectRevert("CollateralSmoke: mock confirmation");
+        smoke.run();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "false");
+        vm.expectRevert("CollateralSmoke: confirmation");
+        smoke.run();
+        vm.expectRevert("CollateralSmoke: withdrawal confirmation");
+        smoke.withdraw();
+    }
+
+    function testSmokeRejectsWalletApprovalAndInsufficientBudgetBeforeFeedWrite() public {
+        Smoke smoke = _readySmoke();
+        uint80 round = d.usdFeed.roundId();
+        vm.prank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 1);
+        vm.expectRevert("CollateralSmoke: wallet budget/approval");
+        smoke.run();
+        vm.prank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 0);
+        uint256 moved = d.pAvaxVault.balanceOf(OWNER) - 1;
+        vm.prank(OWNER);
+        d.pAvaxVault.transfer(address(0xBAD), moved);
+        vm.expectRevert("CollateralSmoke: wallet budget/approval");
+        smoke.run();
+        assertEq(d.usdFeed.roundId(), round);
+    }
+
+    function testSmokeRejectsExistingDepositAndChangedPrice() public {
+        Smoke smoke = _readySmoke();
+        uint256 checkpoint = vm.snapshotState();
+        vm.startPrank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 1);
+        d.vault.deposit(address(d.pUsdVault), 1);
+        d.pUsdVault.approve(address(d.vault), 0);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: nonempty vault");
+        smoke.run();
+        assertTrue(vm.revertToStateAndDelete(checkpoint));
+        vm.prank(OWNER);
+        d.avaxFeed.setAnswer(9e8);
+        vm.expectRevert("CollateralFuji: mock prices");
+        smoke.run();
+        assertEq(d.avaxFeed.answer(), 9e8);
+    }
+
+    function testSmokeRejectsForeignOwnerReplayAndPrematureWithdrawal() public {
+        Smoke smoke = _readySmoke();
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(address(0xBAD)));
+        vm.expectRevert("CollateralSmoke: identity");
+        smoke.run();
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(OWNER));
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "true");
+        vm.expectRevert("CollateralSmoke: unexpected history");
+        smoke.withdraw();
+        smoke.run();
+        vm.expectRevert("CollateralFuji: accounts/wiring");
+        smoke.run();
+    }
+
+    function testSmokeRejectsChangedFeePolicyBeforeFeedRefresh() public {
+        Smoke smoke = _readySmoke();
+        uint80 round = d.usdFeed.roundId();
+        vm.startPrank(OWNER);
+        d.config.queueFees(0, 0, 5000, 5000, 0);
+        vm.warp(block.timestamp + 1 hours);
+        d.config.setFees(0, 0, 5000, 5000, 0);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: activation fees");
+        smoke.run();
+        assertEq(d.usdFeed.roundId(), round);
     }
 
     function _open(address collateral, bool short, uint16 leverage) private returns (uint256 id) {

@@ -60,11 +60,15 @@ contract ActivateFujiCollateralMargin is Script {
 
     /// @notice Read-only initial post-activation verification; not a general live-position monitor.
     function verify(address executor, address owner) external {
+        verifyPolicy(executor, owner);
+        _prices(Executor(executor), _venue(Executor(executor)));
+    }
+
+    /// @notice Initial activated policy without timestamp freshness, for a separately approved feed refresh.
+    function verifyPolicy(address executor, address owner) public {
         Configure verifier = new Configure();
         verifier.verifyActivated(executor, owner);
-        Executor e = Executor(executor);
-        _policy(e, verifier);
-        _prices(e, _venue(e));
+        _policy(Executor(executor), verifier);
     }
 
     function _policy(Executor e, Configure verifier) private view {

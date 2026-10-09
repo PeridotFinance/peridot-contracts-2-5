@@ -1,7 +1,8 @@
 # Fresh collateral-preserving margin on Fuji
 
 This package is **mock-only**. The original version was deployed on Fuji and its
-one-hour delay was applied on 6 October 2026; activation remains separately gated.
+one-hour delay was applied on 6 October 2026. The seven-call activation was verified
+on 9 October 2026; deposits, smoke trades and withdrawals require separate approval.
 It never upgrades or consumes
 addresses from the old Fuji margin system. Mainnet chain43114 and every chain
 other than Fuji43113 are rejected. Building or simulating it does not authorize
@@ -15,6 +16,7 @@ broadcasting it, activating trading, or using these fixture parameters on mainne
 | `script/ConfigureFujiCollateralMargin.s.sol` | `run()` queues five actions; `execute()` applies them after their stored deadlines. Accepts the new 1h or legacy 24h policy. Neither activates trading. |
 | `script/ReduceFujiCollateralMarginDelay.s.sol` | Fuji-only 24h-to-1h transition: `run()` queues one action; `execute()` applies it after the old 24h deadline. Preserves existing queues and all pause gates. |
 | `script/ActivateFujiCollateralMargin.s.sol` | First activation only: seven calls, fresh mock feeds, venue/lender and plain borrowing enabled, opens last. `verify(address,address)` checks the unused, freshly activated stack. |
+| `script/SmokeFujiCollateralMargin.s.sol` | First four 2x round trips, two collateral pools × long/short. Separate `withdraw()` returns free pTokens after receipt review. Never use the legacy smoke script. |
 | `contracts/margin/testing/FujiMockPharaoh.sol` | Fuji-only ERC4626 vaults, immutable factory/pool bindings and CL-ABI bridge. |
 | `test/FujiCollateralMarginDeployment.t.sol` | Deployment, policy, timelock, adapter composition and lifecycle tests. |
 | `fuji-collateral-margin.env.example` | Public inputs; confirmation defaults false and executor is unset. |
@@ -22,7 +24,9 @@ broadcasting it, activating trading, or using these fixture parameters on mainne
 Deployment reads only `CP_FUJI_DEPLOYER` and
 `CONFIRM_FUJI_COLLATERAL_MOCK_ONLY`; configuration, delay transition and activation
 additionally read `CP_FUJI_EXECUTOR`. Activation also requires
-`CONFIRM_FUJI_COLLATERAL_ACTIVATION=true`.
+`CONFIRM_FUJI_COLLATERAL_ACTIVATION=true`. Smoke phases also read the same owner and
+executor, requiring respectively `CONFIRM_FUJI_COLLATERAL_SMOKE=true` or
+`CONFIRM_FUJI_COLLATERAL_WITHDRAW=true` in addition to the mock-only confirmation.
 It does not read legacy `MOCK_*`, `MARGIN_*`,
 `PERIDOTTROLLER`, private-key variables or a keystore. It does not rewrite any
 environment variables or files. The sample deployer is the previously verified
@@ -196,6 +200,71 @@ begin, covering both collateral pools and directions before larger test cases.
 
 ## Simulation only
 
+### First fresh-stack 2x smoke batch
+
+Activation is complete on the existing fresh stack. Do not rerun activation or use
+the legacy `SmokeFujiMockMargin` operator. This new script is first-use-only:
+positions1–4 must be unused, the margin vault empty, all reviewed risk/fee/funding
+settings unchanged, and the owner must already hold both collateral pTokens with
+zero deposit allowances. It does not mint or buy anything.
+
+The proposed `SmokeFujiCollateralMargin.run()` batch contains exactly20 transactions:
+
+- Two unchanged $1/$10 mock feed refreshes.
+- Four explicit market-interest accruals (plainUSD, plainAVAX, boostedUSD, boostedAVAX).
+- For each collateral pool: approve a fixed pToken budget, deposit it, clear approval,
+  open/fully close one2x long, then open/fully close one2x short (seven calls per pool).
+
+Each pool receives $60-equivalent collateral:300,000,000,000 raw USD-vault pToken
+shares or30,000,000,000 raw AVAX-vault pToken shares at the verified mock seed rates.
+Each position locks $25-equivalent original collateral, with requested trade
+leverage2x (actual leverage is conservatively quoted, not promised exactly2x).
+The script rejects changed mock NAV rather than resizing these fixed budgets.
+Maximum opening and closing fees are each $0.10-equivalent pTokens; maximum
+collateral sold for a close deficit is $1-equivalent. The existing1% swap/oracle
+bounds remain enforced, with explicit opening and trade-close output minimums.
+Every open/close has a15-minute deadline from simulation; do not delay signing.
+No risk settings, pause gates, insurance withdrawals or mock prices are changed.
+
+Local assertions check original collateral retention at entry, entry leverage
+between1.8x and2x and health factor at least4, closed accounts/zero account and
+aggregate debt, unlocked collateral, cleared deposit approvals, same-pool insurance
+fees and depositor reward eligibility. The fixture fee split is50/50; integer
+rounding can send at most one raw pToken unit per fee to the configured treasury.
+The operator is also the treasury in this mock setup. Profit settlement, if any,
+is separate mockUSD; it is not a redemption of unused original collateral.
+
+Unsigned simulation (from `contracts/`, using the public owner/executor/RPC exports
+above or below, **no wallet or broadcast**):
+
+```sh
+export CP_FUJI_EXECUTOR=0xA1398d06Cf8d0bE8673A46C67e462718FD99Bf9C
+export CONFIRM_FUJI_COLLATERAL_SMOKE=true
+FOUNDRY_PROFILE=debt_accounting forge script script/SmokeFujiCollateralMargin.s.sol:SmokeFujiCollateralMargin \
+  --rpc-url "$CP_FUJI_RPC_URL" --sender "$CP_FUJI_DEPLOYER" \
+  --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+```
+
+After separately approved live execution, verify all20 receipts, exact IDs/assets,
+eight fee events and four retained-collateral opening events, then run the unsigned
+`--sig 'verify(address,address)' "$CP_FUJI_EXECUTOR" "$CP_FUJI_DEPLOYER"` checkpoint.
+That checkpoint validates closed positions/debt/locks/allowances; it is not a
+general policy or fresh-price monitor. Stop and reconcile partial failures: neither
+this script nor a later `--resume` makes the batch atomic. In particular a successful
+open followed by a failed close requires a separately reviewed close/recovery plan.
+
+Only after that review, simulate `--sig 'withdraw()'` with
+`CONFIRM_FUJI_COLLATERAL_WITHDRAW=true` and separately approve its **two** exact
+`withdraw(pToken,amount)` calls. These snapshot current free balances and return
+pTokens to the wallet without strategy redemption, price updates, swaps or trades.
+Withdrawal itself settles streamed rewards, so a small newly credited free balance
+may remain; never claim the entire reward stream was withdrawn. Both amounts must
+be between95% and101% of the original respective deposits. No automatic rerun,
+reward sweep, or reuse after later positions is supported. Stale prices or closed
+strategy redemptions do not prevent this pToken-native withdrawal.
+
+### Historical deployment simulation
+
 From `contracts/`, export public inputs explicitly; do not source or replace the old
 deployment's `.env`. The pinned `debt_accounting` build profile is required. The
 LayerZero exclusions address the existing unrelated missing dependencies.
@@ -300,19 +369,53 @@ Subsequent live snapshot59184881 (8 October14:39:04UTC) confirmed all gates stil
 paused, actionDelay3600, unchanged mature unpauseETA1791278975 and latest/pending
 nonce331. Simulation did not activate the live deployment.
 
+## Smoke verification — 9 October 2026
+
+- 266 scoped test executions passed across six suites, zero failures/skips, with
+  1,024 cases per selected fuzz property. This includes40 Fuji package tests and
+  eight new smoke regressions; it is not every repository test. Existing local
+  2x–5x/lifecycle/liquidation/recovery coverage remains included.
+- Four round trips exercise the actual script. Eight fee events are checked for
+  the same original collateral token and50/50 distribution including rounding dust.
+  Separate withdrawal passes with stale prices and strategy redemptions closed,
+  preserving total pToken supply and returning the exact requested pTokens.
+- Guards cover chain/confirmations/owner, pre-existing balances/allowances, missing
+  wallet budget, changed fees/prices, replay and premature/repeated withdrawal.
+  Formatting, whitespace and scoped high-severity lint passed. Existing build
+  warnings and three LayerZero exclusions remain; no production contract changed.
+- Unsigned public-Fuji simulation passed. Independently decoded/re-encoded all20
+  calls with exact targets, nonces338–357, zero native values, bounded parameter
+  values, empty route data and no helper deployment or withdrawal. Actual simulated
+  entry leverage was1.99x long/1.97x short for each pool, with health factors5.0489
+  and5.0989. Remaining free raw shares were298,567,399,498 USD-vault and29,858,253,070
+  AVAX-vault. These are simulation outputs, not guaranteed live withdrawal amounts.
+- Gas estimate64,004,697 at2.492583818gwei was approximately0.15953707testAVAX;
+  the largest proposed transaction gas limit15,824,663 was below the observed Fuji
+  block limit32,000,000. High opening gas is an operational concern to review for
+  production; this smoke package does not optimize the risk engine. Refresh gas,
+  fee, nonce, deadline and liquidity checks before separately approved signing.
+- Live snapshot59232325/hash0x8248cbf7b8f0da9c20ab8445ad99d57ef1249bfe9f2fd73eb5a2a4873bc32f6a,
+  9October12:49:55UTC, confirmed nonce338/latest+pending,1.42964518testAVAX,
+  nextPositionId1, opens enabled, zero margin balances and zero deposit allowances.
+  No live smoke transaction was sent. The ignored public simulation record is
+  `broadcast/SmokeFujiCollateralMargin.s.sol/43113/dry-run/run-latest.json`.
+
 ## Remaining release gates
 
-The original package at4de8c953 and subsequent one-hour policy range through
-5d3789ae received clean Almanax diff reviews (the latter scan
-`0f6e8e37-7add-403a-b921-fd051dad0971`, complete with zero findings).
-Deployment, configuration and the one-hour transition were verified on Fuji.
-Those reviews do **not** cover this new activation operator; publish its exact
-review commit with approval and scan it before separately approving live activation.
+The original package, one-hour policy and activation diff through b2ad2e0f received
+clean Almanax diff reviews. Activation scan
+`74cbddbf-eaf1-4197-a1f6-789d70848ef7` completed with zero findings; all seven actual
+activation receipts were independently verified on9October at blocks59231469–59231482,
+followed by a passing read-only full activation checkpoint. These are diff reviews,
+not full audits or mainnet clearance. They do **not** cover this new smoke operator
+or policy-verifier refactor: publish the exact new commit with approval and scan
+it before separately approving live smoke transactions.
 For future deployments, independently verify receipts/code/pointers/owners/balances
 and pause gates, approve queueing, wait for the stored deadlines, approve execution,
 and verify configuration while still paused. The existing deployment needs neither
-redeployment nor another delay transition. Complete activation review, separately
-approve activation, then prepare a small live smoke plan with fresh mock feeds. Rehearse
+redeployment, another delay transition nor another activation. Review this smoke
+package, separately approve its exact20-call batch, then verify receipts before
+approving the two-call withdrawal phase. Rehearse
 2x–5x long/short, both collateral pools, partial/full close, repayment/recovery,
 liquidation/insurance, fee streaming and pToken withdrawal on that fresh Fuji stack.
 The old live Fuji smoke results cannot substitute for these new receipts.
