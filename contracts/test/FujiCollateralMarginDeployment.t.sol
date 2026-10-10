@@ -655,6 +655,7 @@ contract FujiCollateralMarginDeploymentTest is Test {
 
     function _readySmoke() private returns (Smoke smoke) {
         vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "false");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_CONTINUATION", "false");
         _configured();
         _activateLocally();
         vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "true");
@@ -827,6 +828,187 @@ contract FujiCollateralMarginDeploymentTest is Test {
         vm.stopPrank();
         vm.expectRevert("CollateralFuji: activation fees");
         smoke.run();
+        assertEq(d.usdFeed.roundId(), round);
+    }
+
+    function _readyContinuation() private returns (Smoke smoke) {
+        smoke = _readySmoke();
+        vm.startPrank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 3000e8);
+        d.vault.deposit(address(d.pUsdVault), 3000e8);
+        d.pUsdVault.approve(address(d.vault), 0);
+        vm.stopPrank();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_CONTINUATION", "true");
+    }
+
+    function testContinuationReusesUsdDepositWithoutWalletBudgetOrSecondDeposit() public {
+        Smoke smoke = _readyContinuation();
+        uint256 spareUsd = d.pUsdVault.balanceOf(OWNER);
+        vm.prank(OWNER);
+        d.pUsdVault.transfer(address(0xBAD), spareUsd);
+        uint256 avaxBefore = d.pAvaxVault.balanceOf(OWNER);
+        vm.recordLogs();
+        smoke.continueFromUsdDeposit();
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        uint256 deposits;
+        uint256 fees;
+        for (uint256 i; i < logs.length; ++i) {
+            if (
+                logs[i].emitter == address(d.vault)
+                    && logs[i].topics[0] == keccak256("Deposited(address,address,uint256)")
+            ) {
+                assertEq(address(uint160(uint256(logs[i].topics[2]))), address(d.pAvaxVault));
+                assertEq(abi.decode(logs[i].data, (uint256)), 300e8);
+                ++deposits;
+            }
+            if (
+                logs[i].emitter == address(d.fees)
+                    && logs[i].topics[0] == keccak256("FeeCollected(address,uint256,uint256,uint256,uint256)")
+            ) ++fees;
+        }
+        assertEq(deposits, 1);
+        assertEq(fees, 8);
+        assertLe(d.pUsdVault.balanceOf(OWNER), 4); // Only possible treasury rounding dust, no deposit/withdrawal.
+        assertGe(d.pAvaxVault.balanceOf(OWNER), avaxBefore - 300e8);
+        assertLe(d.pAvaxVault.balanceOf(OWNER), avaxBefore - 300e8 + 4);
+        smoke.verify(address(d.executor), OWNER);
+        vm.expectRevert("CollateralFuji: accounts/wiring");
+        smoke.continueFromUsdDeposit();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_WITHDRAW", "true");
+        smoke.withdraw();
+    }
+
+    function testContinuationAfterExpiredFirstOpenRefreshesDeadlineWithoutChangingLimits() public {
+        Smoke smoke = _readyContinuation();
+        Executor.OpenParams memory p;
+        p.collateral = address(d.pUsdVault);
+        p.collateralShares = 1250e8;
+        p.leverageX100 = 200;
+        p.maxFeeShares = 5e8;
+        (, p.minPositionOut) = d.risk.quoteOpen(p.collateral, false, p.collateralShares, 200);
+        p.deadline = vm.getBlockTimestamp() + 15 minutes;
+        vm.warp(p.deadline + 1);
+        vm.roll(block.number + 20);
+        vm.expectRevert(Executor.InvalidOperation.selector);
+        vm.prank(OWNER);
+        d.executor.openPosition(p);
+        assertEq(d.executor.nextPositionId(), 1);
+        assertEq(d.vault.freeBalance(OWNER, p.collateral), 3000e8);
+        assertEq(d.vault.lockedBalance(OWNER, p.collateral), 0);
+        assertEq(d.pUsd.totalBorrows(), 0);
+        // Even the original script must keep rejecting the existing deposit.
+        vm.expectRevert("CollateralFuji: nonempty vault");
+        smoke.run();
+        vm.warp(block.timestamp + 2 days);
+        smoke.continueFromUsdDeposit();
+        smoke.verify(address(d.executor), OWNER);
+    }
+
+    function testContinuationRequiresExactOwnerBalanceAndCustody() public {
+        Smoke smoke = _readyContinuation();
+        uint80 round = d.usdFeed.roundId();
+        uint256 checkpoint = vm.snapshotState();
+        vm.prank(OWNER);
+        d.vault.withdraw(address(d.pUsdVault), 1);
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+        assertTrue(vm.revertToStateAndDelete(checkpoint));
+        checkpoint = vm.snapshotState();
+        vm.prank(OWNER);
+        d.pUsdVault.transfer(address(d.vault), 1); // Unaccounted custody donation is also unexpected.
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+        assertTrue(vm.revertToStateAndDelete(checkpoint));
+        vm.startPrank(OWNER);
+        d.vault.withdraw(address(d.pUsdVault), 3000e8);
+        d.pUsdVault.transfer(address(0xBAD), 3000e8);
+        vm.stopPrank();
+        vm.startPrank(address(0xBAD));
+        d.pUsdVault.approve(address(d.vault), 3000e8);
+        d.vault.deposit(address(d.pUsdVault), 3000e8);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+        assertEq(d.usdFeed.roundId(), round);
+    }
+
+    function testContinuationRejectsWrongStageAndOutstandingApprovals() public {
+        Smoke smoke = _readySmoke();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_CONTINUATION", "true");
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+        vm.startPrank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 3000e8 + 1);
+        d.vault.deposit(address(d.pUsdVault), 3000e8);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+        vm.startPrank(OWNER);
+        d.pUsdVault.approve(address(d.vault), 0);
+        d.pAvaxVault.approve(address(d.vault), 1);
+        d.vault.deposit(address(d.pAvaxVault), 1);
+        vm.stopPrank();
+        vm.expectRevert("CollateralFuji: continuation checkpoint");
+        smoke.continueFromUsdDeposit();
+    }
+
+    function testContinuationRejectsActivePositionBeforeRefresh() public {
+        Smoke smoke = _readyContinuation();
+        Executor.OpenParams memory p;
+        p.collateral = address(d.pUsdVault);
+        p.collateralShares = 1250e8;
+        p.leverageX100 = 200;
+        p.maxFeeShares = 5e8;
+        p.deadline = block.timestamp;
+        vm.prank(OWNER);
+        d.executor.openPosition(p);
+        uint80 round = d.usdFeed.roundId();
+        vm.expectRevert("CollateralFuji: accounts/wiring");
+        smoke.continueFromUsdDeposit();
+        assertEq(d.usdFeed.roundId(), round);
+    }
+
+    function testContinuationRequiresAllConfirmationsAndFujiOwner() public {
+        Smoke smoke = _readyContinuation();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_CONTINUATION", "false");
+        vm.expectRevert("CollateralSmoke: continuation confirmation");
+        smoke.continueFromUsdDeposit();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_CONTINUATION", "true");
+        vm.chainId(43_114);
+        vm.expectRevert("CollateralSmoke: Fuji only");
+        smoke.continueFromUsdDeposit();
+        vm.chainId(1);
+        vm.expectRevert("CollateralSmoke: Fuji only");
+        smoke.continueFromUsdDeposit();
+        vm.chainId(43_113);
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "false");
+        vm.expectRevert("CollateralSmoke: mock confirmation");
+        smoke.continueFromUsdDeposit();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_MOCK_ONLY", "true");
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "false");
+        vm.expectRevert("CollateralSmoke: confirmation");
+        smoke.continueFromUsdDeposit();
+        vm.setEnv("CONFIRM_FUJI_COLLATERAL_SMOKE", "true");
+        vm.setEnv("CP_FUJI_DEPLOYER", vm.toString(address(0xBAD)));
+        vm.expectRevert("CollateralSmoke: identity");
+        smoke.continueFromUsdDeposit();
+    }
+
+    function testContinuationRetainsPolicyChecksAndOptionalFreshness() public {
+        Smoke smoke = _readyContinuation();
+        Activate verifier = new Activate();
+        vm.warp(block.timestamp + 2 days);
+        verifier.verifySmokeContinuation(address(d.executor), OWNER, false);
+        vm.expectRevert("CollateralFuji: fresh mock feeds required");
+        verifier.verifySmokeContinuation(address(d.executor), OWNER, true);
+        vm.startPrank(OWNER);
+        d.config.queueFees(0, 0, 5000, 5000, 0);
+        vm.warp(block.timestamp + 1 hours);
+        d.config.setFees(0, 0, 5000, 5000, 0);
+        vm.stopPrank();
+        uint80 round = d.usdFeed.roundId();
+        vm.expectRevert("CollateralFuji: activation fees");
+        smoke.continueFromUsdDeposit();
         assertEq(d.usdFeed.roundId(), round);
     }
 

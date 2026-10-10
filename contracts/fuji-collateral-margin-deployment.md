@@ -202,6 +202,9 @@ begin, covering both collateral pools and directions before larger test cases.
 
 ### First fresh-stack 2x smoke batch
 
+**Existing deployment: this first-use batch partially executed on9October. Do not
+run it again or use `--resume`; use the reviewed continuation checkpoint below.**
+
 Activation is complete on the existing fresh stack. Do not rerun activation or use
 the legacy `SmokeFujiMockMargin` operator. This new script is first-use-only:
 positions1–4 must be unused, the margin vault empty, all reviewed risk/fee/funding
@@ -262,6 +265,65 @@ may remain; never claim the entire reward stream was withdrawn. Both amounts mus
 be between95% and101% of the original respective deposits. No automatic rerun,
 reward sweep, or reuse after later positions is supported. Stale prices or closed
 strategy redemptions do not prevent this pToken-native withdrawal.
+
+### Exact USD-deposit continuation (new review and approval required)
+
+The first nine calls succeeded, including the USD-pToken deposit and approval
+clearance. First open `0x8aad2fe35dd6c866368b965f8b268ba244759e3d91dcc7a4466024502d9935af`
+reverted at block59237427: deadline15:31:18UTC, inclusion15:37:06UTC on9October.
+Historical read-only replay with only the deadline refreshed succeeded. This was
+an expired transaction, not a demonstrated leverage-math defect. The on-chain
+state after failure has the full300,000,000,000 raw USD collateral shares free,
+zero locked collateral and debt, nextPositionId1, no AVAX deposit, and no allowances.
+
+`continueFromUsdDeposit()` accepts only that exact financial checkpoint. It checks
+the owner's and global free balances, locked balances, physical pToken custody,
+zero deposit approvals, unused position IDs and the full existing ownership,
+wiring, gates, risk, fees, oracle bindings, market caps and funding policy. The
+owner need not still hold a second USD deposit in their wallet. Other users' funds,
+an under/over-sized USD deposit, custody donations, an AVAX deposit or an existing
+position cause rejection before any feed transaction. It is not a general resume
+mechanism or permission to recover arbitrary partial batches.
+
+Exactly17 new calls are generated:
+
+1. Refresh mockUSD and mockAVAX at unchanged $1/$10 (two calls).
+2. Accrue all four markets (four calls).
+3. Reuse deposited USD-pTokens for the long/open-close and short/open-close (four calls).
+4. Approve/deposit/clear the original $60 AVAX-pToken budget (three calls).
+5. Open/close the AVAX-collateral long and short (four calls).
+
+There is **no second USD deposit, withdrawal, new deployment, pause change or risk
+change**. All four positions still request2x with $25 margin, $0.10 fee caps per
+open/close, $1 collateral-sale caps per close, and the original output protections.
+Postconditions and the later separately approved two-call withdrawal are unchanged.
+Fresh simulation regenerates quotes and15-minute deadlines; it does not remove
+expiry or refresh already signed calldata. A long password/signing delay can still
+expire a transaction. Have the keystore ready, sign promptly, and if anything
+fails, stop and reconcile receipts instead of rerunning or using `--resume`.
+
+Unsigned simulation only, from `contracts/`:
+
+```sh
+export CP_FUJI_DEPLOYER=0x94696d767e65a75581145646960FA0eC886cE5d2
+export CP_FUJI_EXECUTOR=0xA1398d06Cf8d0bE8673A46C67e462718FD99Bf9C
+export CP_FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+export CONFIRM_FUJI_COLLATERAL_MOCK_ONLY=true
+export CONFIRM_FUJI_COLLATERAL_SMOKE=true
+export CONFIRM_FUJI_COLLATERAL_CONTINUATION=true
+export CONFIRM_FUJI_COLLATERAL_WITHDRAW=false
+FOUNDRY_PROFILE=debt_accounting forge script script/SmokeFujiCollateralMargin.s.sol:SmokeFujiCollateralMargin \
+  --sig 'continueFromUsdDeposit()' \
+  --rpc-url "$CP_FUJI_RPC_URL" --sender "$CP_FUJI_DEPLOYER" \
+  --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+```
+
+Inspect all17 target/calldata/value envelopes and current nonce before asking for
+separate live approval. No signing command is authorized by this simulation.
+Neither the original20-call approval nor its clean scan covers this changed operator.
+Verify all actual continuation receipts and four closed positions before quoting
+or approving withdrawals. Do not run the old `withdraw()` against the current
+failed-first-open state: its four-closed-position guard correctly rejects it.
 
 ### Historical deployment simulation
 
@@ -400,6 +462,34 @@ nonce331. Simulation did not activate the live deployment.
   No live smoke transaction was sent. The ignored public simulation record is
   `broadcast/SmokeFujiCollateralMargin.s.sol/43113/dry-run/run-latest.json`.
 
+## Continuation verification — 10 October 2026
+
+- 273 scoped test executions passed across six suites, zero failures/skips, with
+  1,024 cases per selected fuzz property. This includes47 Fuji package tests and
+  seven continuation regressions; it is not every repository test.
+- Regressions cover the expired first open with its intact USD deposit, continuation
+  without spare USD wallet shares, exactly one new deposit (AVAX), fee accounting,
+  fresh deadlines, stale feeds, replay, active positions, altered balances/custody,
+  wrong depositor, outstanding approvals, policy and identity/confirmation guards.
+  The original first-use operator still rejects the partial checkpoint.
+- Unsigned public-Fuji continuation simulation passed. Independent ABI decoding and
+  re-encoding verified exactly17 calls, owner nonces348–364, zero native values,
+  unchanged bounds, no USD deposit/approval, no withdrawal and no helper deployment.
+  Simulated entry leverage was1.99x long/1.97x short in each pool, health factors
+  5.0489/5.0989, and final free raw shares298,567,399,498 USD/29,858,253,070 AVAX.
+- Estimated gas63,469,420 at0.250000139gwei was0.01586736testAVAX. The largest
+  transaction gas limit15,824,663 was below the observed32,000,000 block limit.
+  Gas, nonces, prices and deadlines must be refreshed before separately approved
+  signing; these simulations are not live trades or guaranteed final balances.
+- Live snapshot59266779/hash0x73830c5764428eadc74b21a443499ce85c5a841dbc743ef167c8c437256cefd0,
+  10October11:24:28UTC, confirmed nextPositionId1, latest/pending nonce348,
+  USD free/custody300,000,000,000raw, AVAX free/custody0, and zero locks/approvals.
+  Simulation did not change this checkpoint. The ignored public record is
+  `broadcast/SmokeFujiCollateralMargin.s.sol/43113/dry-run/continueFromUsdDeposit-latest.json`.
+- Scoped formatting, whitespace and high-severity lint passed. Existing metadata/
+  NatSpec warnings and three LayerZero exclusions remain. No production contract
+  logic changed; no signing or broadcast was performed for this continuation.
+
 ## Remaining release gates
 
 The original package, one-hour policy and activation diff through b2ad2e0f received
@@ -407,14 +497,16 @@ clean Almanax diff reviews. Activation scan
 `74cbddbf-eaf1-4197-a1f6-789d70848ef7` completed with zero findings; all seven actual
 activation receipts were independently verified on9October at blocks59231469–59231482,
 followed by a passing read-only full activation checkpoint. These are diff reviews,
-not full audits or mainnet clearance. They do **not** cover this new smoke operator
-or policy-verifier refactor: publish the exact new commit with approval and scan
-it before separately approving live smoke transactions.
+not full audits or mainnet clearance. The original smoke diff through40f5e743 also
+received a clean Almanax review (`c3ab6e9d-2ecc-4293-85db-b930db5f3fb2`, zero findings).
+Those reviews do **not** cover this new continuation and checkpoint-verifier change:
+publish the exact new commit with approval and scan it before separately approving
+the17-call continuation.
 For future deployments, independently verify receipts/code/pointers/owners/balances
 and pause gates, approve queueing, wait for the stored deadlines, approve execution,
 and verify configuration while still paused. The existing deployment needs neither
 redeployment, another delay transition nor another activation. Review this smoke
-package, separately approve its exact20-call batch, then verify receipts before
+continuation, separately approve its exact17-call batch, then verify receipts before
 approving the two-call withdrawal phase. Rehearse
 2x–5x long/short, both collateral pools, partial/full close, repayment/recovery,
 liquidation/insurance, fee streaming and pToken withdrawal on that fresh Fuji stack.

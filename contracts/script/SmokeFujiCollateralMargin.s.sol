@@ -19,21 +19,35 @@ import {FujiMockSwapAdapter} from "../contracts/margin/testing/FujiMockSwapAdapt
 
 /// @notice Fresh Fuji mock stack's FIRST four 2x round trips. Never use the legacy executor.
 /// @dev run(): exactly 20 transactions, no withdrawal. withdraw(): separately approved two calls.
+/// continueFromUsdDeposit(): exactly 17 freshly simulated calls, skips only the USD approve/deposit/clear.
 /// Batches are NOT atomic: stop/reconcile partial execution, never blindly rerun or resume.
 contract SmokeFujiCollateralMargin is Script {
     uint256 public constant USD_DEPOSIT_SHARES = 3000e8; // $60 at the verified mock seed rate.
     uint256 public constant AVAX_DEPOSIT_SHARES = 300e8; // 6 mockAVAX, also $60.
 
     function run() external {
+        _run(false);
+    }
+
+    /// @notice Only for a reverted first open after the full USD deposit and approval clearance.
+    /// Not a generic resume: existing positions, other deposits or missing collateral fail closed.
+    function continueFromUsdDeposit() external {
+        require(vm.envOr("CONFIRM_FUJI_COLLATERAL_CONTINUATION", false), "CollateralSmoke: continuation confirmation");
+        _run(true);
+    }
+
+    function _run(bool reuseUsdDeposit) private {
         (Executor e, address owner) = _identity();
         require(vm.envOr("CONFIRM_FUJI_COLLATERAL_SMOKE", false), "CollateralSmoke: confirmation");
         Activate verifier = new Activate();
-        verifier.verifyPolicy(address(e), owner); // Full unused-stack policy, stale timestamps allowed.
+        // Both paths check full policy before any broadcast. Only the exact USD deposit is exempted.
+        if (reuseUsdDeposit) verifier.verifySmokeContinuation(address(e), owner, false);
+        else verifier.verifyPolicy(address(e), owner);
         Settlement s = e.settlement();
         address[2] memory collateral = [s.pUsdVault(), s.pAvaxVault()];
         for (uint256 i; i < 2; ++i) {
             require(
-                IERC20(collateral[i]).balanceOf(owner) >= _deposit(i)
+                (reuseUsdDeposit && i == 0 || IERC20(collateral[i]).balanceOf(owner) >= _deposit(i))
                     && IERC20(collateral[i]).allowance(owner, address(e.vault())) == 0,
                 "CollateralSmoke: wallet budget/approval"
             );
@@ -43,7 +57,9 @@ contract SmokeFujiCollateralMargin is Script {
         venue.usdFeed().setAnswer(1e8);
         venue.avaxFeed().setAnswer(10e8);
         vm.stopBroadcast();
-        verifier.verify(address(e), owner); // Local verifier is never a broadcast target.
+        // Local verifier is never a broadcast target.
+        if (reuseUsdDeposit) verifier.verifySmokeContinuation(address(e), owner, true);
+        else verifier.verify(address(e), owner);
 
         vm.startBroadcast(owner);
         PErc20(s.pUsd()).exchangeRateCurrent();
@@ -53,9 +69,11 @@ contract SmokeFujiCollateralMargin is Script {
         for (uint256 i; i < 2; ++i) {
             // Fixed raw pToken budgets; fail rather than silently resize for changed mock NAV.
             require(e.risk().pTokenValue(collateral[i], _deposit(i)) == 60e18, "CollateralSmoke: changed NAV");
-            require(IERC20(collateral[i]).approve(address(e.vault()), _deposit(i)), "CollateralSmoke: approve");
-            e.vault().deposit(collateral[i], _deposit(i));
-            require(IERC20(collateral[i]).approve(address(e.vault()), 0), "CollateralSmoke: clear approval");
+            if (!reuseUsdDeposit || i != 0) {
+                require(IERC20(collateral[i]).approve(address(e.vault()), _deposit(i)), "CollateralSmoke: approve");
+                e.vault().deposit(collateral[i], _deposit(i));
+                require(IERC20(collateral[i]).approve(address(e.vault()), 0), "CollateralSmoke: clear approval");
+            }
             _roundTrip(e, owner, i, false);
             _roundTrip(e, owner, i, true);
             require(

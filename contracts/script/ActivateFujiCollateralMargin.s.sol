@@ -71,6 +71,15 @@ contract ActivateFujiCollateralMargin is Script {
         _policy(Executor(executor), verifier);
     }
 
+    /// @notice Read-only exact USD-deposit continuation checkpoint, optionally requiring fresh prices.
+    function verifySmokeContinuation(address executor, address owner, bool requireFreshPrices) external {
+        Configure verifier = new Configure();
+        verifier.verifySmokeContinuation(executor, owner);
+        Executor e = Executor(executor);
+        _policy(e, verifier);
+        if (requireFreshPrices) _prices(e, _venue(e));
+    }
+
     function _policy(Executor e, Configure verifier) private view {
         Config c = Config(address(e.config()));
         Settlement s = e.settlement();

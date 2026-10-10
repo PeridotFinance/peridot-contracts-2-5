@@ -94,21 +94,30 @@ contract ConfigureFujiCollateralMargin is Script {
     /// @notice Read-only readiness checks; deliberately does not require fresh prices
     /// while all trading is paused. Activation must separately revalidate prices/capacity.
     function verify(address executor, address owner) public view {
-        _verify(executor, owner, false, false);
+        _verify(executor, owner, false, false, false);
     }
 
     /// @notice Delay migration may coexist with an already queued unpause, but never activates it.
     /// All other readiness checks, including every pause gate, remain required.
     function verifyDelayTransition(address executor, address owner) external view {
-        _verify(executor, owner, true, false);
+        _verify(executor, owner, true, false, false);
     }
 
     /// @notice Read-only initial activation checkpoint, before any positions or margin deposits.
     function verifyActivated(address executor, address owner) external view {
-        _verify(executor, owner, false, true);
+        _verify(executor, owner, false, true, false);
     }
 
-    function _verify(address executor, address owner, bool allowQueuedUnpause, bool active) private view {
+    /// @notice Exact first-smoke checkpoint: only the owner's full $60 mock USD pToken deposit exists.
+    /// All identity/policy/funding checks remain; this never accepts an existing position or debt.
+    function verifySmokeContinuation(address executor, address owner) external view {
+        _verify(executor, owner, false, true, true);
+    }
+
+    function _verify(address executor, address owner, bool allowQueuedUnpause, bool active, bool usdDeposited)
+        private
+        view
+    {
         require(block.chainid == 43_113 && owner != address(0), "CollateralFuji: identity");
         Executor e = Executor(executor);
         Risk r = e.risk();
@@ -179,10 +188,22 @@ contract ConfigureFujiCollateralMargin is Script {
                 "CollateralFuji: market state"
             );
             require(controller.borrowCaps(markets[i]) > 0, "CollateralFuji: borrow cap");
-            require(
-                e.vault().totalLockedBalance(markets[i]) == 0 && e.vault().totalFreeBalance(markets[i]) == 0,
-                "CollateralFuji: nonempty vault"
-            );
+            if (usdDeposited) {
+                uint256 expectedFree = i == 2 ? 3000e8 : 0;
+                require(
+                    e.vault().totalLockedBalance(markets[i]) == 0 && e.vault().lockedBalance(owner, markets[i]) == 0
+                        && e.vault().totalFreeBalance(markets[i]) == expectedFree
+                        && e.vault().freeBalance(owner, markets[i]) == expectedFree
+                        && IERC20(markets[i]).balanceOf(address(e.vault())) == expectedFree
+                        && IERC20(markets[i]).allowance(owner, address(e.vault())) == 0,
+                    "CollateralFuji: continuation checkpoint"
+                );
+            } else {
+                require(
+                    e.vault().totalLockedBalance(markets[i]) == 0 && e.vault().totalFreeBalance(markets[i]) == 0,
+                    "CollateralFuji: nonempty vault"
+                );
+            }
             require(e.vault().allowedPTokens(markets[i]) == (i >= 2), "CollateralFuji: collateral policy");
             if (i < 2) require(p.borrowAccountingEnabled(), "CollateralFuji: debt accounting");
         }
