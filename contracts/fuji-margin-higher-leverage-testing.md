@@ -1,8 +1,9 @@
 # Fuji margin: higher-leverage rehearsal and disposable test wallet
 
-This package is **local-fork testing and wallet preparation**, not a live trading
-runner or mainnet approval. It does not change deployed contracts, transfer admin
-ownership, loosen slippage, change risk parameters, or broadcast transactions.
+This package contains local-fork tests and a **fixed-scope Fuji mock runner**.
+It is not mainnet approval. The new runner has not been authorized or executed on
+public Fuji. It does not change deployed contracts, transfer admin ownership,
+loosen configured slippage, or change risk parameters.
 
 ## Rehearsal on the deployed stack
 
@@ -87,8 +88,8 @@ The key is **unencrypted local test material**, as explicitly approved. Filesyst
 permissions do not protect it from other processes running as the same OS user.
 EVM keys are not intrinsically chain-restricted: never send mainnet assets to this
 address or grant it ownership/admin roles. The metadata chain ID is not itself a
-signing restriction. A future runner must enforce chain43113 and its own limits.
-No signing or broadcast command exists in this wallet utility yet.
+signing restriction. The separate runner enforces chain43113 and its own limits.
+No signing or broadcast command exists in the wallet-creation utility itself.
 
 ```sh
 node tools/fuji-test-wallet.cjs address
@@ -101,17 +102,17 @@ this wallet is disposable. Do not rerun `create` to try to rotate it silently.
 
 ## Gas funding and next live-test gates
 
-Proposed initial gas allocation: **0.25 test AVAX**, not real AVAX. This is funding,
+Verified gas allocation: **0.25 test AVAX**, not real AVAX (block59337843,
+2026-10-12T11:59:55Z, latest/pending nonce0). This is funding,
 not authority for arbitrary transactions. The intended first live batch will be
 restricted to12 round trips (3x–5x, both pools/sides), $25 margin per position,
 $60 original pToken funding per pool, at most$0.25 fee per action and$2 voluntary
-close collateral sale. A prospective automated runner must reserve gas before
-each send against a cumulative **0.20 test AVAX** batch gas ceiling, restrict the
-chain and exact targets, stop on unexpected state or failure, record receipts,
-and never blindly resume. These runner controls are not implemented in this
-wallet-preparation package and no live batch has been executed.
+close collateral sale. `tools/fuji-margin-runner.cjs` reserves the entire batch's
+worst-case gas cost against a cumulative **0.20 test AVAX** ceiling before signing,
+restricts the chain and exact targets, stops on unexpected state or failure,
+records receipts, and refuses replay. No public-Fuji runner batch has been executed.
 
-To fund only gas from the existing user-controlled deployer:
+The following gas-only funding command was already completed; **do not repeat it**:
 
 ```sh
 cast send 0x7Eb84484a3e05F611De42c8954D786100917E726 \
@@ -135,9 +136,109 @@ Funding alone is insufficient for the live tests:
 3. Liquidation requires intentionally adverse mock-price updates and explicit
    loss/insurance budgets. Keep those tests local until a separate owner-signed
    lifecycle batch is reviewed, including restoration of the$10 price.
-4. Publish/review the new test package, implement and test the bounded live runner,
-   and approve its complete scope once. No need to seek approval per transaction
+4. Publish/review the runner changes and approve its complete scope once.
+   No need to seek approval per transaction
    within that exact scope; stop for new authority or a material change.
 
 Do not transfer feed ownership or any other admin role merely to enable automation.
 Do not rerun the first-use smoke scripts on the now-completed position history.
+
+## Fixed-scope runner and owner preparation
+
+`script/PrepareFujiMarginRunner.s.sol` prepares exactly four owner transactions:
+transfer300000000000raw existing USD-vault pTokens to the runner, transfer
+30000000000raw existing AVAX-vault pTokens, then refresh mockUSD/mockAVAX at the
+unchanged$1/$10 values. It refuses already-funded wallets and changed history or
+prices, and validates the resulting checkpoint. **Separate owner approval and
+local keystore signing are required.** No minting, redemption, admin grant or
+owner reward sweep is included. Do this only when the reviewed runner is ready,
+because the feeds expire after20minutes.
+
+`script/ExerciseFujiMarginRunner.s.sol` simulates **34 runner transactions**:
+
+- Four market accruals.
+- Exact approve/deposit/clear for$60-equivalent USD-vault pTokens.
+- Six round trips using$25 margin:3x long/short,4x long/short,5x long/short.
+- Exact approve/deposit/clear for$60-equivalent AVAX-vault pTokens.
+- The same six round trips for that pool.
+
+There are no withdrawals, feed updates, liquidations, governance actions, native
+transfers or direct insurance calls. Each position is fully closed before the
+next is opened. Position IDs must be5–16; runner nonces must be0–33. The final
+check requires zero account/aggregate debt, no locked shares or deposit approvals,
+and at least90% of each original share budget free in the margin vault. Mock-price
+stress and insurance-funded liquidation tests remain local-only.
+
+The Node runner first generates a fresh **unsigned** simulation and independently
+validates every call, target, sender, nonce, chain, value, amount, leverage, fee cap,
+sale cap and route bytes. It never forwards transaction fields from an arbitrary
+artifact directly to the signer. Immediately before a trade it refreshes only its
+price minimum: the protocol quote for opens,99% of current quoted trade output
+for closes. One-hour deadlines originate in that fresh simulation, are not
+extended during execution, and must have at least five minutes remaining.
+Feeds must remain at$1/$10 and less than15minutes old during the batch.
+
+The initial fee is125% of the RPC gas-price suggestion and stays fixed. Worst-case
+gas is reserved for all34 calls using16million gas per open,6million per close,
+600000 per deposit,100000 per approval and150000 per accrual. If the total exceeds
+0.20 test AVAX or the available balance, **nothing is signed**. No automatic gas
+top-up, fee bump or replacement is permitted. These limits may deliberately refuse
+a batch during expensive network conditions.
+
+Only `run` reads the existing signing credential, after read-only preflight. It
+creates a0600 exclusive journal in the ignored private-keys directory, records
+intent before signing and the deterministic transaction hash before submission,
+then checks receipt success, canonical block and position state. The journal is
+never automatically deleted, reset or reused. No raw signed transaction or key is
+logged. A signing/RPC exception is printed generically because provider errors can
+contain signed data. `check` does not load the credential or submit transactions:
+
+```sh
+node tools/fuji-margin-runner.cjs check
+```
+
+After **separate complete-batch approval** and verified owner preparation only:
+
+```sh
+CONFIRM_FUJI_RUNNER_BATCH_V1=true node tools/fuji-margin-runner.cjs run
+```
+
+These are sequential transactions, **not an atomic batch**. If a close, oracle
+check, gas estimate or RPC request fails after an open, a position can remain open.
+Stop and reconcile receipts and live state before requesting recovery authority;
+do not remove the journal or retry blindly. pTokens remain in margin after success;
+any later withdrawal must use fresh balances and separately agreed scope.
+
+## Runner verification
+
+`test/FujiMarginRunnerFork.t.sol` tests owner preparation plus all12 consecutive
+round trips on the actual pinned deployment and rejects wrong chain, missing
+confirmation, duplicate preparation, stale prices and missing funding. Tests
+require the same fork flags above, replacing the match contract with
+`FujiMarginRunnerForkTest`; use `--threads 1`.
+
+```sh
+node --test tools/fuji-margin-runner.test.cjs tools/fuji-test-wallet.test.cjs
+```
+
+The local integration test also validates Foundry's real generated calldata and
+the RPC guards, estimates, mined receipts and final state for all34 transactions.
+Start a **fresh disposable local** Anvil in one terminal:
+
+```sh
+anvil --fork-url https://api.avax-test.network/ext/bc/C/rpc \
+  --fork-block-number 59336291 --chain-id 43113 --port 18547 \
+  --auto-impersonate --silent
+```
+
+Then, from `contracts/`, run:
+
+```sh
+FUJI_RUNNER_LOCAL_TEST=true node --test tools/fuji-margin-runner.local.test.cjs
+```
+
+It pins127.0.0.1:18547, checks Anvil and the initial block, uses VM-only account
+impersonation and never reads the local signing key. Stop the disposable node
+afterward. Its Foundry files under ignored `broadcast/` are **local-fork artifacts,
+not public-Fuji receipt evidence**. Without opt-in this integration explicitly
+skips; that is not a pass.
