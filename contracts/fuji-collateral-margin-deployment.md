@@ -226,7 +226,11 @@ The script rejects changed mock NAV rather than resizing these fixed budgets.
 Maximum opening and closing fees are each $0.10-equivalent pTokens; maximum
 collateral sold for a close deficit is $1-equivalent. The existing1% swap/oracle
 bounds remain enforced, with explicit opening and trade-close output minimums.
-Every open/close has a15-minute deadline from simulation; do not delay signing.
+Every open/close has a one-hour deadline from the fresh simulation's chain timestamp,
+not from delivery of a chat message. This is a Fuji smoke-script setting only;
+production contracts, oracle freshness limits and price/fee protections are unchanged.
+The one-hour window is not a guarantee of execution: delays after the feed-refresh
+transactions can still make prices stale. Never reuse expired broadcast calldata.
 No risk settings, pause gates, insurance withdrawals or mock prices are changed.
 
 Local assertions check original collateral retention at entry, entry leverage
@@ -297,7 +301,7 @@ There is **no second USD deposit, withdrawal, new deployment, pause change or ri
 change**. All four positions still request2x with $25 margin, $0.10 fee caps per
 open/close, $1 collateral-sale caps per close, and the original output protections.
 Postconditions and the later separately approved two-call withdrawal are unchanged.
-Fresh simulation regenerates quotes and15-minute deadlines; it does not remove
+Fresh simulation regenerates quotes and one-hour deadlines; it does not remove
 expiry or refresh already signed calldata. A long password/signing delay can still
 expire a transaction. Have the keystore ready, sign promptly, and if anything
 fails, stop and reconcile receipts instead of rerunning or using `--resume`.
@@ -499,9 +503,11 @@ activation receipts were independently verified on9October at blocks59231469–5
 followed by a passing read-only full activation checkpoint. These are diff reviews,
 not full audits or mainnet clearance. The original smoke diff through40f5e743 also
 received a clean Almanax review (`c3ab6e9d-2ecc-4293-85db-b930db5f3fb2`, zero findings).
-Those reviews do **not** cover this new continuation and checkpoint-verifier change:
-publish the exact new commit with approval and scan it before separately approving
-the17-call continuation.
+The continuation/checkpoint-verifier diff throughfa662e81 received a clean Almanax
+review (`59c5deed-6b2d-4acf-a606-705006bf2b60`, zero findings). The17-call continuation
+was approved on12October. The subsequent requested one-hour trade-deadline change
+is not covered by those scans: publish its exact commit with approval and review
+the new diff before signing. This does not authorize additional transactions.
 For future deployments, independently verify receipts/code/pointers/owners/balances
 and pause gates, approve queueing, wait for the stored deadlines, approve execution,
 and verify configuration while still paused. The existing deployment needs neither

@@ -878,7 +878,54 @@ contract FujiCollateralMarginDeploymentTest is Test {
         smoke.withdraw();
     }
 
+    function testSmokeUsesOneHourForAllOpenAndCloseDeadlines() public {
+        Smoke smoke = _readySmoke();
+        _assertOneHourDeadlines(smoke, false);
+    }
+
+    function testContinuationUsesOneHourForAllOpenAndCloseDeadlines() public {
+        Smoke smoke = _readyContinuation();
+        _assertOneHourDeadlines(smoke, true);
+    }
+
+    function _assertOneHourDeadlines(Smoke smoke, bool continuation) private {
+        assertEq(smoke.TRADE_DEADLINE_WINDOW(), 1 hours);
+        uint256 expectedDeadline = vm.getBlockTimestamp() + 1 hours;
+        // Exact calldata expectations for the pinned $1/$10 mock fixture, including every deadline.
+        for (uint256 pool; pool < 2; ++pool) {
+            for (uint256 side; side < 2; ++side) {
+                Executor.OpenParams memory op;
+                op.collateral = pool == 0 ? address(d.pUsdVault) : address(d.pAvaxVault);
+                op.short = side == 1;
+                op.collateralShares = pool == 0 ? 1250e8 : 125e8;
+                op.leverageX100 = 200;
+                op.maxFeeShares = pool == 0 ? 5e8 : 5e7;
+                op.minPositionOut = side == 0 ? 4740367698000000000 : 46926100;
+                op.deadline = expectedDeadline;
+                vm.expectCall(address(d.executor), abi.encodeCall(Executor.openPosition, (op)), 1);
+                Executor.CloseParams memory cp;
+                cp.id = pool * 2 + side + 1;
+                cp.fractionBps = 10_000;
+                cp.maxFeeShares = op.maxFeeShares;
+                cp.maxCollateralSharesToSell = pool == 0 ? 50e8 : 5e8;
+                cp.minTradeDebtOut = side == 0 ? 47403676 : 4692610098000000000;
+                cp.deadline = expectedDeadline;
+                vm.expectCall(address(d.executor), abi.encodeCall(Executor.closePosition, (cp)), 1);
+            }
+        }
+        if (continuation) smoke.continueFromUsdDeposit();
+        else smoke.run();
+    }
+
     function testContinuationAfterExpiredFirstOpenRefreshesDeadlineWithoutChangingLimits() public {
+        _expiredFirstOpen(15 minutes); // Historical failed batch used the old window.
+    }
+
+    function testContinuationStillRejectsExpiredOneHourOpen() public {
+        _expiredFirstOpen(1 hours);
+    }
+
+    function _expiredFirstOpen(uint256 window) private {
         Smoke smoke = _readyContinuation();
         Executor.OpenParams memory p;
         p.collateral = address(d.pUsdVault);
@@ -886,7 +933,7 @@ contract FujiCollateralMarginDeploymentTest is Test {
         p.leverageX100 = 200;
         p.maxFeeShares = 5e8;
         (, p.minPositionOut) = d.risk.quoteOpen(p.collateral, false, p.collateralShares, 200);
-        p.deadline = vm.getBlockTimestamp() + 15 minutes;
+        p.deadline = vm.getBlockTimestamp() + window;
         vm.warp(p.deadline + 1);
         vm.roll(block.number + 20);
         vm.expectRevert(Executor.InvalidOperation.selector);

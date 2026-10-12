@@ -24,6 +24,7 @@ import {FujiMockSwapAdapter} from "../contracts/margin/testing/FujiMockSwapAdapt
 contract SmokeFujiCollateralMargin is Script {
     uint256 public constant USD_DEPOSIT_SHARES = 3000e8; // $60 at the verified mock seed rate.
     uint256 public constant AVAX_DEPOSIT_SHARES = 300e8; // 6 mockAVAX, also $60.
+    uint256 public constant TRADE_DEADLINE_WINDOW = 1 hours; // From fresh simulation, never chat delivery.
 
     function run() external {
         _run(false);
@@ -154,7 +155,7 @@ contract SmokeFujiCollateralMargin is Script {
         op.leverageX100 = 200;
         op.maxFeeShares = feeCap;
         op.minPositionOut = minimum;
-        op.deadline = block.timestamp + 15 minutes;
+        op.deadline = block.timestamp + TRADE_DEADLINE_WINDOW;
         uint256 id = e.openPosition(op);
         (, address account,, address position, address debt,) = e.positions(id);
         require(IERC20(collateral).balanceOf(account) == shares, "CollateralSmoke: collateral not retained");
@@ -176,7 +177,7 @@ contract SmokeFujiCollateralMargin is Script {
             Math.mulDiv(IERC20(position).balanceOf(account), PErc20(position).exchangeRateStored(), 1e18);
         cp.minTradeDebtOut = e.quoter()
                 .expectedOut(PErc20(position).underlying(), PErc20(debt).underlying(), tradeUnderlying) * 99 / 100;
-        cp.deadline = block.timestamp + 15 minutes;
+        cp.deadline = block.timestamp + TRADE_DEADLINE_WINDOW;
         e.closePosition(cp);
         _closed(e, owner, id, collateral);
         uint256 insuranceDelta = IERC20(collateral).balanceOf(insurance) - insuranceBefore;
