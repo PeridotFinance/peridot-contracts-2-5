@@ -1,6 +1,6 @@
 # Fuji collateral-preserving liquidation rehearsal
 
-Status: proposed operator and local-fork tests only. No new liquidation broadcast,
+Status: operator, bounded two-signer runner and local tests. No new liquidation broadcast,
 price stress, insurance spending, deposit or withdrawal is authorized by this file.
 The earlier34-transaction trading approval was consumed by the completed batch.
 
@@ -96,10 +96,9 @@ forge script script/LiquidateFujiMarginRunner.s.sol:LiquidateFujiMarginRunner \
 
 ## Before any live execution
 
-Publish/review the operator, complete its bounded two-signer execution mechanism,
-and obtain explicit approval for the exact scenario, collateral loss, keeper
-bonus, insurance and gas budgets. The existing round-trip Node runner must not be
-modified in place or replayed. No new signing mechanism is provided by this package.
+Publish/review the runner diff, scan it, and obtain explicit approval for the exact
+scenario, collateral loss, keeper bonus, insurance and gas budgets. The existing
+round-trip Node runner must not be modified in place or replayed.
 
 These are not atomic scenarios. If execution fails after a stress update, the
 price can remain stressed and a position can remain open. A live execution plan
@@ -107,6 +106,126 @@ must include separately authorized owner restoration/recovery, receipt-based
 stage tracking, and stop-on-failure behavior. Do not resume a partially mined
 scenario using this initial-checkpoint script. Never transfer feed ownership to
 the test runner to avoid coordinating signatures.
+
+## Bounded two-signer runner
+
+`tools/fuji-liquidation-runner.cjs` has only `check CASE`, `run CASE` and
+`recover CASE`, for cases 0–7. Its public execution endpoint and chain are fixed
+to Fuji. There are no arbitrary network, signer, recipient or calldata options.
+Each case generates a fresh **unsigned** Forge plan, independently decodes its
+exact 10/11 calls, and checks the starting checkpoint before accessing a signer.
+Both signers' pending nonces must match their mined nonces.
+
+Every case reserves at most **0.025 test AVAX combined across both signers**,
+including two optional recovery feed writes. Eight cases therefore reserve no
+more than 0.20 test AVAX. The fixed gas price is 125% of the initial RPC suggestion;
+there are no gas-price bumps or automatic retries. Insufficient balance or a high
+gas quote aborts before signing. Public RPC requests are serialized with at least
+200ms between starts, and Forge's read-only fork uses a conservative request-rate
+limit. Rate limiting still causes a stop, never a blind transaction retry.
+Forge uses a fixed legacy fee solely to generate
+the unsigned plan; the actual bounded gas reservation is calculated separately.
+
+The owner signs only through `cast wallet sign --no-hash --account
+robinhood-deployer`, with a local keystore password prompt for each owner call.
+Only the transaction digest is passed to Cast. The resulting signature must
+recover the pinned owner and is attached to the exact chain-43113 transaction.
+The runner credential is read internally from the existing ignored, owner-only
+file; no private key or password is exported, printed or passed as an argument.
+Repeated owner password prompts are intentional: this tool does not cache or
+export the administrative key. Signature prompts are not new scope approvals.
+
+All intents and signed hashes are fsynced before submission into separate
+`private-keys/fuji-liquidation-v1-case-N.jsonl` journals. The journal contains
+public intent fields/hashes, not raw signatures or keys. A suite-wide exclusive
+`fuji-liquidation-v1.active` file prevents concurrent run/recovery processes.
+Successful exit removes only that active lock, never a case journal. A hard crash
+can leave the lock: verify the recorded process has stopped and reconcile the
+journal before authorizing its removal. Never delete a journal to enable reruns.
+
+Each transaction checks chain, nonce, policy, feed state, deadlines and gas before
+signing and again before broadcast. Only the swap minimum is refreshed from the
+current quote; if it changes while signing, execution stops without sending.
+Canonical receipts and their actual calldata, sender, nonce, gas and value are
+verified. Entry health, healthy-liquidation rejection (read-only call), partial
+health improvement/no insurance, full insurance use, debt cleanup and restored
+prices are checked separately. No case can be replayed or skipped by the CLI.
+
+Read-only preflight from `contracts/` (no approval flag, signer or public writes):
+
+```sh
+node tools/fuji-liquidation-runner.cjs check 0
+```
+
+Only **after separate explicit live-case approval**, execute the reviewed case
+locally, with the terminal available for owner keystore prompts:
+
+```sh
+CONFIRM_FUJI_LIQUIDATION_CASE=0 node tools/fuji-liquidation-runner.cjs run 0
+```
+
+Deadlines are generated one hour from the fresh simulation, not from a timestamp
+copied from chat. Complete prompts promptly: the stricter 15-minute runtime feed
+freshness checks still apply. No mainnet assets, ownership changes or new deposits
+are part of this command.
+
+### Interrupted-case recovery
+
+Recovery is a **separately approved, one-attempt, two-transaction price restoration**,
+not a resumed scenario. It first reconciles every recorded signed attempt against
+canonical receipts and exact transaction envelopes. A reverted but mined call is
+known; an absent receipt, unsigned intent, unexpected nonce, replacement transaction,
+reorg or externally changed price is not. Uncertainty blocks automated recovery
+and requires manual review. Do not guess whether a transaction was sent.
+
+Once explicitly approved for the affected case:
+
+```sh
+CONFIRM_FUJI_LIQUIDATION_RECOVERY=0 node tools/fuji-liquidation-runner.cjs recover 0
+```
+
+It refreshes mockUSD to $1 and restores mockAVAX to $10 using the owner, with the
+original reserved gas price/cap. It does **not** borrow, liquidate, spend insurance,
+close, deposit or withdraw. Restoration remains available when new opens are
+paused. After restoration, a position may still be open; reconcile its debt and
+request a separately reviewed close plan. Recovered cases cannot continue into
+later scenarios through this CLI. A second recovery attempt is blocked even if
+the first attempt stopped; reconcile before preparing any additional action.
+
+Unit tests: `node --test tools/fuji-liquidation-runner.test.cjs`.
+Integration tests use an isolated localhost Anvil fork at block 59499119, port
+18548, chain 43113, with `--hardfork cancun --auto-impersonate` and preferably
+`--compute-units-per-second 40`. An explicitly recorded newer fixture can be
+selected with `FUJI_LIQUIDATION_FORK_BLOCK`; all starting-state guards still apply.
+With that disposable fork running:
+
+```sh
+FUJI_LIQUIDATION_LOCAL_TEST=true node --test tools/fuji-liquidation-runner.local.test.cjs
+```
+
+The local test uses impersonation, not either real key. It exercises all eight
+cases and recovery after opening, stressing, liquidating and restoring. The
+raw-signing transport is tested separately with ephemeral synthetic keys. These
+tests are not evidence of live Fuji liquidation or mainnet readiness.
+
+Verification checkpoint (2026-10-19): **14 new runner unit tests, 12 existing Node
+tests, 9 Solidity liquidation fork tests, 50 existing Fuji operator tests, and the
+complete localhost integration test pass with no skips**. The integration mined
+84 normal scenario transactions plus 42 calls across all four interrupted-case
+recovery checks: 126 calls, 132220770 gas in total, on the isolated fork only.
+Every normal case restored baseline prices and cleared debt/locks. Recovery
+restored both feeds while deliberately retaining the open position; the harness
+requires the specific remaining-debt assertion, not merely any RPC exception.
+
+A temporary user-provided RPC resolved the public endpoint's HTTP 429/historical
+state access failures. Chain 43113, the canonical block 59499119 hash and historical
+executor code were verified before use. Its URL was kept in memory behind a
+read-only local proxy, not placed in tracked files. The harness also now creates
+a fresh ethers client after each VM snapshot rewind, clearing monotonic block and
+receipt caches that could otherwise stall receipt waiting; waits are bounded.
+A separate read-only current-Fuji checkpoint passed at block59687674, with owner
+nonce380 and runner nonce34. No real signer was loaded or public transaction sent.
+Publication/security review and explicit live-case approval remain required.
 
 ## Mainnet liquidity and keeper boundary
 
