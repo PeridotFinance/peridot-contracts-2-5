@@ -26,6 +26,7 @@ tools/check-risk-engine-storage-layout.sh > "$OUT/storage-layout.txt" 2>&1 && ec
 run_suite section5 '^AvalanchePharaohSection5ForkTest$'
 run_suite funded-fallback '^AvalancheFundedFallbackForkTest$'
 run_suite funded-sizing '^AvalancheFundedSizingForkTest$'
+run_suite cash-only-lending '^AvalancheCashOnlyLendingForkTest$'
 echo "[$(stamp)] START capacity matrix (per-test progress below; detailed logs in $OUT/matrix/)"
 tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" 2>&1 | tee "$OUT/matrix.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "FAILED: capacity matrix (see $OUT/matrix.txt)"; FAILED=1; }
