@@ -94,6 +94,8 @@ contract AvalancheCapacityMatrixForkTest is AvalancheSection5Base {
         uint256 insurance;
         uint256 reward;
         int256 poolE8;
+        uint256 insU; // insurance fund pTokens valued in USDC base units (before)
+        uint256 insW; // insurance fund pTokens valued in WAVAX base units (before)
     }
 
     struct Row {
@@ -281,7 +283,7 @@ contract AvalancheCapacityMatrixForkTest is AvalancheSection5Base {
                 IsolatedMarginTypes.Position memory p = _position(ids[i]);
                 bool liqable = riskEngine.isLiquidatable(p.account);
                 if (!liqable) {
-                    if (i == 0) _logMx(s, Row(st, target, poolBps, oracleAnswer, false, false, "-", 0, 0, 0), Pre(0, 0, 0, 0, 0, 0));
+                    if (i == 0) _logMx(s, Row(st, target, poolBps, oracleAnswer, false, false, "-", 0, 0, 0), Pre(0, 0, 0, 0, 0, 0, 0, 0));
                     continue;
                 }
                 _attempt(s, st, target, ids[i], poolBps, oracleAnswer);
@@ -290,6 +292,7 @@ contract AvalancheCapacityMatrixForkTest is AvalancheSection5Base {
             if (s.path != 0 && !reached && poolBps == lastPool) break; // pool cannot move further (floor/wall)
             lastPool = poolBps;
         }
+        _logEnd(s, ids);
     }
 
     function _attempt(Scn memory s, uint256 step, uint256 target, uint256 id, int256 poolBps, int256 oracleAnswer) internal {
@@ -305,6 +308,7 @@ contract AvalancheCapacityMatrixForkTest is AvalancheSection5Base {
         pre.insurance = _insuranceCents();
         pre.reward = IERC20(debtAsset).balanceOf(KEEPER_RECIPIENT);
         pre.poolE8 = _poolAnswer8();
+        (pre.insU, pre.insW) = _insTok();
         vm.recordLogs();
         uint256 g = gasleft();
         (bool ok, bytes memory ret) = address(liquidator)
@@ -312,6 +316,72 @@ contract AvalancheCapacityMatrixForkTest is AvalancheSection5Base {
         uint256 gasUsed = g - gasleft();
         (uint256 worstCost, uint256 execE8) = _swapCost(oracleAnswer);
         _logMx(s, Row(step, target, poolBps, oracleAnswer, true, ok, ok ? "-" : _revName(ret), worstCost, execE8, gasUsed), pre);
+        _logTok(s, id, step, ok, pre);
+    }
+
+    function _insTok() internal view returns (uint256 u, uint256 w) {
+        u = Math.mulDiv(pUsdc.balanceOf(address(insuranceFund)), pUsdc.exchangeRateStored(), 1e18);
+        w = Math.mulDiv(pWavax.balanceOf(address(insuranceFund)), pWavax.exchangeRateStored(), 1e18);
+    }
+
+    /// @dev Token-unit accounting for one attempt: what moved, in base units of each asset, and what funding is left.
+    function _logTok(Scn memory s, uint256 id, uint256 step, bool ok, Pre memory pre) internal {
+        IsolatedMarginTypes.Position memory p = _position(id);
+        PErc20Delegator debtM = PErc20Delegator(payable(p.debtPToken));
+        PErc20Delegator posM = PErc20Delegator(payable(p.positionPToken));
+        address debtAsset = s.short ? WAVAX : USDC;
+        uint256 debtAfter = debtM.borrowBalanceStored(p.account);
+        uint256 posAfter = posM.balanceOf(p.account);
+        uint256 seizedTok = Math.mulDiv(pre.positionTokens > posAfter ? pre.positionTokens - posAfter : 0, posM.exchangeRateStored(), 1e18);
+        uint256 freeAfter = mVault.freeBalance(p.owner, address(pUsdc));
+        uint256 surplusTok = Math.mulDiv(freeAfter > pre.marginFree ? freeAfter - pre.marginFree : 0, pUsdc.exchangeRateStored(), 1e18);
+        (uint256 iu, uint256 iw) = _insTok();
+        string memory a = string.concat(
+            "MXT|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(id), "|", _u(step), "|", ok ? "1" : "0"
+        );
+        a = string.concat(a, "|", _u(pre.debt > debtAfter ? pre.debt - debtAfter : 0), "|", _u(seizedTok), "|", _u(IERC20(debtAsset).balanceOf(KEEPER_RECIPIENT) - pre.reward), "|", _u(surplusTok));
+        a = string.concat(a, "|", _u(pre.insU > iu ? pre.insU - iu : 0), "|", _u(pre.insW > iw ? pre.insW - iw : 0), "|", _u(debtAfter), "|", _u(uint8(p.status)));
+        a = string.concat(a, "|", _u(IERC20(USDC).balanceOf(address(lender))), "|", _u(IERC20(WAVAX).balanceOf(address(lender))), "|", _u(pUsdc.getCash()), "|", _u(pWavax.getCash()), "|END");
+        emit log_string(a);
+    }
+
+    /// @dev End-of-scenario snapshot of EVERY opened position (outstanding debt, remaining collateral, bad debt).
+    function _logEnd(Scn memory s, uint256[] memory ids) internal {
+        for (uint256 i; i < s.k; ++i) {
+            IsolatedMarginTypes.Position memory p = _position(ids[i]);
+            PErc20Delegator debtM = PErc20Delegator(payable(p.debtPToken));
+            address debtAsset = s.short ? WAVAX : USDC;
+            uint256 debtTok = debtM.borrowBalanceStored(p.account);
+            uint256 collC = _accountCollC(p);
+            uint256 debtC = _cents(debtAsset, debtTok);
+            bool liqable;
+            try riskEngine.isLiquidatable(p.account) returns (bool l) {
+                liqable = l;
+            } catch {}
+            emit log_string(
+                string.concat(
+                    "MXEND|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(ids[i]), "|", _u(uint8(p.status)),
+                    "|", liqable ? "1" : "0", "|", _u(debtTok), "|", _u(debtC), "|", _u(collC), "|", _u(debtC > collC ? debtC - collC : 0), "|END"
+                )
+            );
+        }
+        (uint256 iu, uint256 iw) = _insTok();
+        emit log_string(
+            string.concat(
+                "MXSUM|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(IERC20(USDC).balanceOf(address(lender))),
+                "|", _u(IERC20(WAVAX).balanceOf(address(lender))), "|", _u(pUsdc.getCash()), "|", _u(pWavax.getCash()), "|", _u(iu), "|", _u(iw), "|", _u(_insuranceCents()), "|END"
+            )
+        );
+    }
+
+    function _accountCollC(IsolatedMarginTypes.Position memory p) internal view returns (uint256 c) {
+        PErc20Delegator posM = PErc20Delegator(payable(p.positionPToken));
+        address posAsset = p.positionPToken == address(pUsdc) ? USDC : WAVAX;
+        c = _cents(posAsset, Math.mulDiv(posM.balanceOf(p.account), posM.exchangeRateStored(), 1e18));
+        if (p.marginPToken != p.positionPToken) {
+            PErc20Delegator mM = PErc20Delegator(payable(p.marginPToken));
+            c += _cents(USDC, Math.mulDiv(mM.balanceOf(p.account), mM.exchangeRateStored(), 1e18));
+        }
     }
 
     /// @dev Execution cost of every pool swap in the recorded logs versus the oracle price at execution (bps,

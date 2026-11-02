@@ -78,7 +78,7 @@ Measured with the real module at the pin, USD 5k notional (fee 490 ppm; actual e
 | buy WAVAX | -50 | 851,244,462 | 855,522,072 | 587,125,875,480,879,193,079 | 581,254,616,726,070,401,148 | 584,107,176,537,765,873,510 | 856,007,287 | pass |
 | buy WAVAX | +300 | 881,187,734 | 855,522,072 | 567,174,996,559,813,666,221 | 561,503,246,594,215,529,558 | 584,107,176,537,765,873,510 | 856,007,287 | pass (favourable) |
 
-The generated full table (13 deltas x 2 directions, plus the altered-guard diagnostic) is in `avalanche-capacity-matrix.md`. Trigger points: selling fails once the oracle is more than about +0.9% above the pool; buying fails once the oracle is more than about -0.7 to -0.99% below it (between the -50 and -99 rows).
+The generated full table (13 deltas x 2 directions, plus the altered-guard diagnostic) is in `avalanche-capacity-matrix.md`. Measured boundaries at USD 5k (they depend on the leg direction, the fee, the price impact of the size and the configured bound; they are not universal): selling fails somewhere between +50 and +99 bps of oracle-above-pool; buying fails somewhere between -50 and -99 bps of oracle-below-pool; the opposite directions always pass.
 
 Altered-guard diagnostic (slippage 300, deviation 50; **not a candidate configuration**): selling with the oracle +250 and +100 bps above the pool reverts `SwapError(8)` (the deviation check, after the router minimum passed); +40 passes.
 
