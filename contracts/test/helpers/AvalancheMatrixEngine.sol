@@ -198,6 +198,13 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
         return answer8 * 10_000 / realAvaxAnswer;
     }
 
+    /// @dev '|' is the log field separator: never let a revert string shift fields.
+    function _clean(string memory x) internal pure returns (string memory) {
+        bytes memory b = bytes(x);
+        for (uint256 i; i < b.length; ++i) if (b[i] == "|" || b[i] == "\n") b[i] = "/";
+        return string(b);
+    }
+
     function _revName(bytes memory ret) internal pure returns (string memory) {
         if (ret.length < 4) return "empty";
         bytes4 sel = _selectorOf(ret);
@@ -231,10 +238,13 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
     function _run(Scn memory s, uint256[] memory steps) internal {
         vm.revertToState(snapPre);
         snapPre = vm.snapshotState();
-        _setPrices(avaxAnswer, usdcAnswer); // vm.mockCall state survives revertToState: re-serve the pinned answers
+        // The test contract's own storage is restored by revertToState; vm.mockCall state is NOT. Assert every scenario starts
+        // from the pinned prices before re-serving them.
+        require(avaxAnswer == realAvaxAnswer && block.number == 99_200_000, "scenario does not start at the pin");
+        _setPrices(avaxAnswer, usdcAnswer);
         _scaleVenues();
         _activateCfg(s.cfg);
-        if (usdcPeg8 != 0) _setPrices(avaxAnswer, int256(usdcPeg8));
+        // (a USDC depeg, if any, is applied AFTER the positions are opened, at the first stress step)
         if (fbMode != 0) _setupFunder();
         if (drainMode) {
             PToken[] memory dps = new PToken[](2);
@@ -258,7 +268,7 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
             if (!okOpen) {
                 emit log_string(
                     string.concat(
-                        "MXOPEN|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(opened), "|", _revName(retOpen), "|END"
+                        "MXOPEN|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(opened), "|", _clean(_revName(retOpen)), "|END"
                     )
                 );
                 break;
@@ -296,6 +306,7 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
                 // path 3: oracle sits a FIXED gap behind the pool (above it when the pool falls, below when it rises)
                 if (s.path == 3) oracleAnswer = poolAns * (s.short ? int256(10_000) - int256(uint256(s.lagBps)) : int256(10_000) + int256(uint256(s.lagBps))) / 10_000;
             }
+            if (usdcPeg8 != 0) usdcAnswer = int256(usdcPeg8); // depeg shock lands after opening
             _setPrices(oracleAnswer, usdcAnswer);
             bool reached = s.short ? poolBps >= int256(target) - 50 : poolBps <= int256(target) + 50;
             for (uint256 i; i < s.k; ++i) {
@@ -385,7 +396,7 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
         uint256 seizedValC = _cents(USDC, invUa > invUb ? invUa - invUb : 0) + _cents(WAVAX, invWa > invWb ? invWa - invWb : 0);
         string memory a = string.concat(
             "MXF|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(id), "|", _u(step), "|", ok ? "1" : "0",
-            "|", ok ? "-" : _revName(ret), "|", _i(poolBps)
+            "|", ok ? "-" : _clean(_revName(ret)), "|", _i(poolBps)
         );
         a = string.concat(a, "|", _u(debtBefore), "|", _u(repaidTok), "|", _u(_cents(debtAsset, repaidTok)), "|", _u(seizedValC), "|", _u(uint8(_position(id).status)), "|END");
         emit log_string(a);
@@ -441,6 +452,9 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
             uint256 debtTok = debtM.borrowBalanceStored(p.account);
             uint256 collC = _accountCollC(p);
             uint256 debtC = _cents(debtAsset, debtTok);
+            uint256 pool8 = _poolAnswer8() > 0 ? uint256(_poolAnswer8()) : 0;
+            uint256 collP = _accountCollAt(p, pool8);
+            uint256 debtP = _centsAt(debtAsset, debtTok, pool8);
             bool liqable;
             try riskEngine.isLiquidatable(p.account) returns (bool l) {
                 liqable = l;
@@ -448,7 +462,7 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
             emit log_string(
                 string.concat(
                     "MXEND|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(ids[i]), "|", _u(uint8(p.status)),
-                    "|", liqable ? "1" : "0", "|", _u(debtTok), "|", _u(debtC), "|", _u(collC), "|", _u(debtC > collC ? debtC - collC : 0), "|END"
+                    "|", liqable ? "1" : "0", "|", _u(debtTok), "|", _u(debtC), "|", _u(collC), "|", _u(debtC > collC ? debtC - collC : 0), "|", _u(debtP > collP ? debtP - collP : 0), "|END"
                 )
             );
         }
@@ -459,6 +473,22 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
                 "|", _u(IERC20(WAVAX).balanceOf(address(lender))), "|", _u(pUsdc.getCash()), "|", _u(pWavax.getCash()), "|", _u(iu), "|", _u(iw), "|", _u(_insuranceCents()), "|END"
             )
         );
+    }
+
+    /// @dev Same as `_cents` but with an explicit AVAX price (8 decimals): used to value end states at the REAL pool price.
+    function _centsAt(address asset, uint256 amt, uint256 avax8) internal view returns (uint256) {
+        if (asset == USDC) return Math.mulDiv(amt, uint256(usdcAnswer), 1e8 * 1e4);
+        return Math.mulDiv(amt, avax8, 1e8 * 1e16);
+    }
+
+    function _accountCollAt(IsolatedMarginTypes.Position memory p, uint256 avax8) internal view returns (uint256 c) {
+        PErc20Delegator posM = PErc20Delegator(payable(p.positionPToken));
+        address posAsset = p.positionPToken == address(pUsdc) ? USDC : WAVAX;
+        c = _centsAt(posAsset, Math.mulDiv(posM.balanceOf(p.account), posM.exchangeRateStored(), 1e18), avax8);
+        if (p.marginPToken != p.positionPToken) {
+            PErc20Delegator mM = PErc20Delegator(payable(p.marginPToken));
+            c += _centsAt(USDC, Math.mulDiv(mM.balanceOf(p.account), mM.exchangeRateStored(), 1e18), avax8);
+        }
     }
 
     function _accountCollC(IsolatedMarginTypes.Position memory p) internal view returns (uint256 c) {
@@ -513,7 +543,7 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
             "MX|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k)
         );
         head = string.concat(head, "|", _u(s.path), "|", _u(s.lagBps), "|", _u(s.removalBps), "|", _u(r.step), "|", _u(r.target));
-        head = string.concat(head, "|", _i(r.poolBps), "|", _i(_bps(r.oracleAnswer)), "|", r.liqable ? "1" : "0", "|", r.ok ? "1" : "0", "|", r.rev);
+        head = string.concat(head, "|", _i(r.poolBps), "|", _i(_bps(r.oracleAnswer)), "|", r.liqable ? "1" : "0", "|", r.ok ? "1" : "0", "|", _clean(r.rev));
         head = string.concat(head, "|", _u(d[0]), "|", _u(d[1]), "|", _u(d[2]), "|", _u(d[3]), "|", _u(d[4]), "|", _u(d[5]));
         head = string.concat(head, "|", _u(r.worstCost), "|", _u(r.execE8), "|", _u(r.gasUsed), "|END");
         emit log_string(head);

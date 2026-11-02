@@ -64,12 +64,12 @@ contract AvalancheCapacityMatrixForkTest is AvalancheMatrixEngine {
 
     // D. EMULATED removal of 50% of third-party liquidity (shim), pool follows.
     function testMatrix_D_removal50_poolFollows() public {
-        _slice("removal50", 1, 0, 5_000, 0, 0, 2, _sizes2(5_000, 25_000), 1);
+        _slice("removal50", 1, 0, 5_000, 0, 0, 2, _sizes1(1_000, 5_000, 25_000), 1);
     }
 
     // E. 90 days of accrued debt and a 9 bps flash fee.
     function testMatrix_E_accrual90d_flashFee9() public {
-        _slice("accrual90d-fee9", 1, 0, 0, 90, 9, 2, _sizes2(5_000, 25_000), 1);
+        _slice("accrual90d-fee9", 1, 0, 0, 90, 9, 2, _sizes1(1_000, 5_000, 25_000), 1);
     }
 
     // F. Correlated sequential liquidations: k positions of the same size, largest first, pool/cash/funding updated.
@@ -85,6 +85,25 @@ contract AvalancheCapacityMatrixForkTest is AvalancheMatrixEngine {
         _slice("agg-k4", 1, 0, 0, 0, 0, 2, _sizes(25_000), 4);
     }
 
+
+
+    // F4-F7. The handoff 00 section 4 aggregate: correlated sequential positions UNDER the stress (50% of third-party
+    // liquidity removed, emulated) and with the oracle 100 bps behind the pool.
+    function testMatrix_F4_aggregate_k5_removal50() public {
+        _slice("agg-k5-removal50", 1, 0, 5_000, 0, 0, 2, _sizes(1_000), 5);
+    }
+
+    function testMatrix_F5_aggregate_k10_removal50() public {
+        _slice("agg-k10-removal50", 1, 0, 5_000, 0, 0, 2, _sizes(5_000), 10);
+    }
+
+    function testMatrix_F6_aggregate_k5_fixedLag100() public {
+        _slice("agg-k5-fixedlag100", 3, 100, 0, 0, 0, 2, _sizes(1_000), 5);
+    }
+
+    function testMatrix_F7_aggregate_k10_fixedLag100() public {
+        _slice("agg-k10-fixedlag100", 3, 100, 0, 0, 0, 2, _sizes(5_000), 10);
+    }
 
     // ------------------------------------------------------------------ G. ordinary lending liquidations
     function testMatrix_G_ordinaryLending() public {

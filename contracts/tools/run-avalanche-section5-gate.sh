@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 OUT="${1:-/tmp/avalanche-section5-gate}"
 mkdir -p "$OUT"; rm -f "$OUT"/*.txt
 FAILED=0
+python3 tools/avalanche-capacity-report.test.py > "$OUT/generator-fixtures.txt" 2>&1 && echo "ok: generator fixtures" || { echo "FAILED: generator fixtures"; FAILED=1; }
 run_suite() {  # name, regex
   FOUNDRY_PROFILE=debt_accounting forge test --threads 1 --gas-limit 9000000000000000000 --match-contract "$2" -vv \
     --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol ${EXTRA_FORGE_ARGS:-} > "$OUT/$1.txt" 2>&1

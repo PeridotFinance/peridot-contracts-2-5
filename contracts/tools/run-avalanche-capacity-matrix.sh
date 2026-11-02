@@ -29,7 +29,7 @@ for t in "${TESTS[@]}"; do
     echo "ok: $t" | tee -a "$OUT/status.txt"
   fi
 done
-python3 tools/avalanche-capacity-report.py --strict "$OUT"/test*.txt > "$OUT/report.md" || FAILED=1
+python3 tools/avalanche-capacity-report.py --strict --status "$OUT/status.txt" "$OUT"/test*.txt > "$OUT/report.md" || FAILED=1
 echo "report: $OUT/report.md"
 if [ "$FAILED" -ne 0 ]; then echo "MATRIX INCOMPLETE OR FAILED" >&2; exit 1; fi
 echo "matrix complete"

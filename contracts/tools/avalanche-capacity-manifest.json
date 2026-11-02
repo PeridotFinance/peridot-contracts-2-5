@@ -33,7 +33,11 @@
     "testFallback_F1_aggregate_k5",
     "testFallback_F2_aggregate_k10",
     "testFallback_F3_aggregate_k4",
-    "testFallback_H_zeroCash"
+    "testFallback_H_zeroCash",
+    "testMatrix_F4_aggregate_k5_removal50",
+    "testMatrix_F5_aggregate_k10_removal50",
+    "testMatrix_F6_aggregate_k5_fixedLag100",
+    "testMatrix_F7_aggregate_k10_fixedLag100"
   ],
   "slices": [
     {
@@ -146,6 +150,7 @@
         "ALT-2x40"
       ],
       "margins": [
+        1000,
         5000,
         25000
       ],
@@ -159,6 +164,7 @@
         "ALT-2x40"
       ],
       "margins": [
+        1000,
         5000,
         25000
       ],
@@ -174,7 +180,8 @@
       "margins": [
         1000
       ],
-      "k": 5
+      "k": 5,
+      "variantOf": "agg-k5"
     },
     {
       "slice": "agg-k10",
@@ -186,7 +193,8 @@
       "margins": [
         5000
       ],
-      "k": 10
+      "k": 10,
+      "variantOf": "agg-k10"
     },
     {
       "slice": "agg-k4",
@@ -198,7 +206,60 @@
       "margins": [
         25000
       ],
-      "k": 4
+      "k": 4,
+      "variantOf": "agg-k4"
+    },
+    {
+      "slice": "agg-k5-removal50",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000
+      ],
+      "k": 5,
+      "variantOf": "agg-k5"
+    },
+    {
+      "slice": "agg-k10-removal50",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        5000
+      ],
+      "k": 10,
+      "variantOf": "agg-k10"
+    },
+    {
+      "slice": "agg-k5-fixedlag100",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000
+      ],
+      "k": 5,
+      "variantOf": "agg-k5"
+    },
+    {
+      "slice": "agg-k10-fixedlag100",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        5000
+      ],
+      "k": 10,
+      "variantOf": "agg-k10"
     }
   ],
   "fallbackSlices": [

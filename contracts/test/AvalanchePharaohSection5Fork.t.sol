@@ -933,6 +933,30 @@ contract AvalanchePharaohSection5ForkTest is AvalancheSection5Base {
         assertEq(_liqCode(ret), 8, "position not ACTIVE");
     }
 
+    /// @dev FINDING (independent review, corrected by test): the controller's transfer guardian pause blocks pToken
+    ///      transfers, which BOTH liquidation routes rely on (the funded route transfers the seized pTokens; the flash
+    ///      route returns the borrower's margin pTokens to the vault). A transfer pause therefore stops all margin
+    ///      liquidations, not only the fallback. Asserts current behaviour.
+    function testFinding_transferPauseStopsAllMarginLiquidations() public {
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        IsolatedMarginTypes.Position memory p = _position(r.id);
+        _thresholdBps(p.account, false);
+        _fundFunder(USDC, 10_000e6);
+        controller._setTransferPaused(true);
+        (bool ok, bytes memory ret) = _funded(r.id, 10_000e6, 0, FUNDER);
+        assertFalse(ok, "transfer pause blocks the funded route");
+        assertTrue(_reasonContains(ret, "transfer is paused"));
+        (ok, ret) = address(liquidator)
+            .call(abi.encodeWithSelector(IsolatedMarginLiquidatorUpgradeable.liquidate.selector, _liqParams(r.id)));
+        assertFalse(ok, "transfer pause also blocks the flash route");
+        controller._setTransferPaused(false);
+        // and both work again once unpaused
+        (ok,) = _funded(r.id, 10_000e6, 0, FUNDER);
+        assertTrue(ok);
+    }
+
     // ================================================================= 5. funding and capacity measurements
     function testFundingAtCapsFlashVaultAndOpenCosts() public {
         _activate();
