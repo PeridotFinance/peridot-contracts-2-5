@@ -1,0 +1,686 @@
+VAULT CLEAN REPRODUCTION vault=wavax suite=AvalancheTrackAWavaxVaultForkTest
+UTC start: 2026-11-02T19:15:01Z
+git HEAD: 3b4359e27f76793e3906c21b6e6cc94dd9ce005e
+git status --short (contracts/):
+   M contracts/PeridottrollerRobinhood.sol
+   M contracts/margin/RobinhoodV4RouterAdapter.sol
+   M foundry.toml
+   M fuji-margin-liquidation-testing.md
+   M robinhood_boosted_markets.md
+   M test/RobinhoodV4RouterAdapter.t.sol
+   M tools/fuji-liquidation-runner.cjs
+   M tools/fuji-liquidation-runner.local.test.cjs
+   M tools/fuji-liquidation-runner.test.cjs
+  ?? cache_fallback/
+  ?? cache_tracka/
+  ?? cache_tracka_assert/
+  ?? cache_tracka_repro/
+  ?? cache_vault_repro/
+  ?? out_fallback/
+  ?? out_tracka/
+  ?? out_tracka_assert/
+  ?? out_tracka_repro/
+  ?? out_vault_repro/
+  ?? tools/fuji-simulation-proxy.cjs
+  ?? tools/fuji-simulation-proxy.test.cjs
+RPC host: https://api.avax.network  (direct, no proxy)
+env: HOME=/tmp/avalanche-vault-clean-home.lElKyo (isolated, empty .foundry/cache/rpc; svm symlinked for solc only) FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_vault_repro FOUNDRY_CACHE_PATH=cache_vault_repro TRACKA_PIN_BLOCK=99216312
+forge: forge Version: 1.7.1-Homebrew
+command: HOME=/tmp/avalanche-vault-clean-home.lElKyo forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!A]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!T]* --match-contract AvalancheTrackAWavaxVaultForkTest -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+[2m2026-11-02T19:15:29.574502Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54577de08c7e51d-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m37244556749095539566977222030242063970329396291997698942055596282958149850867
+[2m2026-11-02T19:15:36.205369Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578077bdee51d-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m37244556749095539566977222030242063970329396291997698942055596282958149850867
+[2m2026-11-02T19:15:42.745195Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 56273322732742212305120079709973600024794223739839368144666191219353479014075: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578306d72e51d-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 [3mindex[0m[2m=[0m56273322732742212305120079709973600024794223739839368144666191219353479014075
+[2m2026-11-02T19:15:49.320208Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578597d1be51d-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m37244556749095539566977222030242063970329396291997698942055596282958149850867
+[2m2026-11-02T19:15:55.969454Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a545788309b0e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m37244556749095539566977222030242063970329396291997698942055596282958149850867
+[2m2026-11-02T19:16:02.551439Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ac39a0e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m37244556749095539566977222030242063970329396291997698942055596282958149850867
+[2m2026-11-02T19:16:09.206181Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578d5cdc9e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m106727621722293212362728798092422283610780626211649643334122756720159772215357
+[2m2026-11-02T19:16:15.868042Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ff6c7ee522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m106727621722293212362728798092422283610780626211649643334122756720159772215357
+[2m2026-11-02T19:16:22.488206Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457928c8a2e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m106727621722293212362728798092422283610780626211649643334122756720159772215357
+[2m2026-11-02T19:16:39.868716Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579956fa2e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m112144056461080686926910550068477222795410710384670127816070544524876485569012
+[2m2026-11-02T19:16:46.516097Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579befaf1e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m112144056461080686926910550068477222795410710384670127816070544524876485569012
+[2m2026-11-02T19:16:53.206423Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579e8c890e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m112144056461080686926910550068477222795410710384670127816070544524876485569012
+[2m2026-11-02T19:16:59.878181Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a127cc0e522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m112144056461080686926910550068477222795410710384670127816070544524876485569012
+[2m2026-11-02T19:17:06.592743Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `basic` [3merr[0m[2m=[0mfailed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a3c7c6fe522-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2e234DAe75C793f67A35089C9d99245E1C58470b
+
+Ran 40 tests for test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAWavaxVaultForkTest
+[PASS] testFinding_03_rewardSnipingAtEntry() (gas: 4932221)
+Logs:
+   PHAR earned by position at pin 821631199989894334
+   PHAR in vault after Bob's deposit (auto-claimed by increaseLiquidity) 821631199989894334
+   Bob's shares of supply (bps) 9984
+   donation D 11693597145624743337
+   Bob captured from D, bps (fair = 0) 9984
+   CONTROL (harvest+donate before Bob): Bob value / deposit 1152280325846476156111 1169359714562474333723
+
+[PASS] testFinding_04_rewardForfeitAtExit() (gas: 2981581)
+Logs:
+   Bob's share of supply, bps 9984
+   PHAR earned by position at Bob's join / after 1 day 0 177181083534743929
+   Bob redeemed asset 1152572434919302337290
+   Bob PHAR received 0
+   PHAR left in vault for the Safe/remaining holders 998812283524638263
+   Bob's approximate pro-rata entitlement forfeited (PHAR wei) 176897593801088338
+
+[PASS] test_00_addressMapAndConfig() (gas: 773333)
+Logs:
+  sAVAX/WAVAX vault (asset WAVAX)
+   vault         0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8
+   impl (ERC1967) 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
+   proxyAdmin     0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC
+   proxyAdmin.owner 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   vault.owner    0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   rebalancer     0x94696d767e65a75581145646960FA0eC886cE5d2
+   asset          0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+   paired         0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE
+   pool           0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD
+   gauge          0xCB348abA8D8CE40a45353955ad63ca72095E152d
+   oracle         0x2002aFd6C713a6075d66DaE758Dc466787faCeEF
+   positionMgr    0x0B4478e810D48B5882D4019D435A2f864Bab4F39
+   tokenId        485416
+   ticks lower/upper 1854 3054
+   spot tick      2554
+   pool fee(ppm)  100
+   pool liquidity 2240558373841569919951735
+   paused         false
+   depositCap     1
+   totalAssets    1736602432054834143
+   totalSupply    1723597814184121992
+   maxDeposit(alice) 0
+   twap/maxTwapTicks/maxOracleBps 1800 100 100
+   slippage/haircut bps 300 300
+   PHAR earned (gauge, tokenId) 821631199989894334
+   PHAR held by vault 0
+
+[PASS] test_01_accessMatrix() (gas: 2514650)
+Logs:
+   rebalancer.deployIdle: ok
+   owner.deployIdle: ok
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54577de08c7e51d-TXL
+server: cloudflare] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578077bdee51d-TXL
+server: cloudflare] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 56273322732742212305120079709973600024794223739839368144666191219353479014075: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578306d72e51d-TXL
+server: cloudflare] test_05_donationInflationAndRounding() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578597d1be51d-TXL
+server: cloudflare] test_06_ladder_100k() (gas: 0)
+[PASS] test_06_ladder_10k() (gas: 6831402)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 10000
+  DIAG| pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+  DIAG| single-tx deposit of USD 10000 OK; tick move 5
+  DIAG|   built in 1 chunk(s), last chunk USD x100 999999; first deposit failure: none
+  DIAG|   entry: NAV value of shares / deposit, loss bps 1152451843406985690172 144
+  DIAG|   maxWithdraw / deposit 1152451843406985690172 1169359714562474333723
+  DIAG|   position range 1854 3054 tick 2554; pool liquidity now 2255409791716148669255369
+  DIAG|   FULL REDEEM ok, got / deposited, round-trip loss bps 1152452159646549872218 144
+  DIAG|   exit-only loss vs NAV bps 0
+  DIAG|   PPS change for remaining holders (1e18 units) 9563733704859753006
+  DIAG|   largest single redeem that succeeds: 8/8 of the position = USD x100 999999; vs NAV-part loss bps 0; vs deposit-part loss bps 144
+  GATE|LADDER USD 10000|prorata asset got/exp/|diff|/tol 580495109251902738315 580495109251902737599 716 580495111259
+  GATE|LADDER USD 10000|prorata paired got/exp/|diff|/tol 455966651816475079177 455966651816475078543 634 455966653824
+  GATE|LADDER USD 10000|reference holder in-kind legs before/after: asset 875053746260334563 875053746260334564 paired 687336241912498560 687336241912498561
+  GATE|LADDER USD 10000|inKind OK legs asset/paired 580495109251902738315 455966651816475079177 valueInAsset 1170141552957724525844 depositPart 1169359714562474333723
+  GATE|LADDER USD 10000|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -668; thresholds loss/gain ppm 300 1100
+  GATE|LADDER USD 10000|gated views frozen before/after the call: false false; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[PASS] test_06_ladder_1k() (gas: 6817352)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 1000
+  DIAG| pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+  DIAG| single-tx deposit of USD 1000 OK; tick move 1
+  DIAG|   built in 1 chunk(s), last chunk USD x100 99999; first deposit failure: none
+  DIAG|   entry: NAV value of shares / deposit, loss bps 115267054905103934440 142
+  DIAG|   maxWithdraw / deposit 115267054905103934440 116935971456247433372
+  DIAG|   position range 1854 3054 tick 2554; pool liquidity now 2242052580967902803194037
+  DIAG|   FULL REDEEM ok, got / deposited, round-trip loss bps 115267061161729505739 142
+  DIAG|   exit-only loss vs NAV bps 0
+  DIAG|   PPS change for remaining holders (1e18 units) 956199407650867095
+  DIAG|   largest single redeem that succeeds: 8/8 of the position = USD x100 99999; vs NAV-part loss bps 0; vs deposit-part loss bps 142
+  GATE|LADDER USD 1000|prorata asset got/exp/|diff|/tol 58523432736867668613 58523432736867668547 66 58523432953
+  GATE|LADDER USD 1000|prorata paired got/exp/|diff|/tol 45236267735400852412 45236267735400852388 24 45236267952
+  GATE|LADDER USD 1000|reference holder in-kind legs before/after: asset 882030382904653032 882030382904653033 paired 681774131931560344 681774131931560345
+  GATE|LADDER USD 1000|inKind OK legs asset/paired 58523432736867668613 45236267735400852412 valueInAsset 117022018741879871836 depositPart 116935971456247433372
+  GATE|LADDER USD 1000|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -735; thresholds loss/gain ppm 300 1100
+  GATE|LADDER USD 1000|gated views frozen before/after the call: false false; shares burned 114362115748931840051 of supply 116085713563115962043
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a545788309b0e522-TXL
+server: cloudflare] test_06_ladder_250k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ac39a0e522-TXL
+server: cloudflare] test_06_ladder_50k() (gas: 0)
+[PASS] test_07_stress_large_k0() (gas: 6450518)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift -150 achieved -150 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 2614217318368243283459
+  DIAG|   FULL REDEEM FAILS: Vault__PriceDeviation
+  DIAG|   new deposit (USD 100): Vault__PriceDeviation
+  DIAG|   10% REDEEM: Vault__PriceDeviation
+  GATE|STRESS USD 100000 shift -150|prorata asset got/exp/|diff|/tol 5088800894541358689539 5088800894541358689158 381 5088800914492
+  GATE|STRESS USD 100000 shift -150|prorata paired got/exp/|diff|/tol 5122095115451962378330 5122095115451962371311 7019 5122095135402
+  GATE|STRESS USD 100000 shift -150|reference holder in-kind legs before/after: asset 765843445681113191 765843445681113192 paired 770854087950649850 770854087950649851
+  GATE|STRESS USD 100000 shift -150|inKind OK legs asset/paired 5088800894541358689539 5122095115451962378330 valueInAsset 11712586114616707406273 depositPart 11693597145624743337236
+  GATE|STRESS USD 100000 shift -150|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -1623; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 100000 shift -150|gated views frozen before/after the call: true true; shares burned 11452792536272269662864 of supply 11454516134086453784856
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578d5cdc9e522-TXL
+server: cloudflare] test_07_stress_large_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ff6c7ee522-TXL
+server: cloudflare] test_07_stress_large_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457928c8a2e522-TXL
+server: cloudflare] test_07_stress_large_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579956fa2e522-TXL
+server: cloudflare] test_07_stress_large_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579befaf1e522-TXL
+server: cloudflare] test_07_stress_large_k5() (gas: 0)
+[PASS] test_07_stress_large_k6() (gas: 7755856)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 90 achieved 90 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 3088161584939712290009
+  DIAG|   FULL REDEEM ok, loss bps vs deposit 128
+  DIAG|   new deposit (USD 100): Vault__PriceDeviation
+  DIAG|   10% REDEEM: ok, loss bps vs NAV-part 128
+  GATE|STRESS USD 100000 shift 90|prorata asset got/exp/|diff|/tol 7353662568142018073497 7353662568142018062026 11471 7353662588093
+  GATE|STRESS USD 100000 shift 90|prorata paired got/exp/|diff|/tol 3362392095699041852592 3362392095699041849390 3202 3362392115650
+  GATE|STRESS USD 100000 shift 90|reference holder in-kind legs before/after: asset 1106695741545549961 1106695741545549962 paired 506026076017890255 506026076017890256
+  GATE|STRESS USD 100000 shift 90|inKind OK legs asset/paired 7353662568142018073497 3362392095699041852592 valueInAsset 11701837009573545386902 depositPart 11693597145624743337236
+  GATE|STRESS USD 100000 shift 90|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -704; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 100000 shift 90|gated views frozen before/after the call: false false; shares burned 11452792536272269662864 of supply 11454516134086453784856
+
+[PASS] test_07_stress_large_k7() (gas: 6553423)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 150 achieved 150 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 3658762968581959158224
+  DIAG|   FULL REDEEM FAILS: Vault__PriceDeviation
+  DIAG|   new deposit (USD 100): Vault__PriceDeviation
+  DIAG|   10% REDEEM: Vault__PriceDeviation
+  GATE|STRESS USD 100000 shift 150|prorata asset got/exp/|diff|/tol 7924163827073719271227 7924163827073719263121 8106 7924163847024
+  GATE|STRESS USD 100000 shift 150|prorata paired got/exp/|diff|/tol 2925776248437631465600 2925776248437631458874 6726 2925776268388
+  GATE|STRESS USD 100000 shift 150|reference holder in-kind legs before/after: asset 1192553816750326677 1192553816750326678 paired 440317200423182208 440317200423182209
+  GATE|STRESS USD 100000 shift 150|inKind OK legs asset/paired 7924163827073719271227 2925776248437631465600 valueInAsset 11707715876543745892668 depositPart 11693597145624743337236
+  GATE|STRESS USD 100000 shift 150|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -1207; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 100000 shift 150|gated views frozen before/after the call: true true; shares burned 11452792536272269662864 of supply 11454516134086453784856
+
+[PASS] test_07_stress_small_k0() (gas: 4773744)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -150 achieved -150 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 1610284114535093337764
+  DIAG|   FULL REDEEM FAILS: Vault__PriceDeviation
+  DIAG|   new deposit (USD 100): Vault__PriceDeviation
+  DIAG|   10% REDEEM: Vault__PriceDeviation
+  GATE|STRESS USD 10000 shift -150|prorata asset got/exp/|diff|/tol 454387327221093051707 454387327221093050778 929 454387329229
+  GATE|STRESS USD 10000 shift -150|prorata paired got/exp/|diff|/tol 554394556998128862689 554394556998128861693 996 554394559006
+  GATE|STRESS USD 10000 shift -150|reference holder in-kind legs before/after: asset 684955526068860984 684955526068860985 paired 835709080534275156 835709080534275157
+  GATE|STRESS USD 10000 shift -150|inKind OK legs asset/paired 454387327221093051707 554394556998128862689 valueInAsset 1171318659022494099478 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift -150|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -1675; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift -150|gated views frozen before/after the call: true true; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579e8c890e522-TXL
+server: cloudflare] test_07_stress_small_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a127cc0e522-TXL
+server: cloudflare] test_07_stress_small_k2() (gas: 0)
+[PASS] test_07_stress_small_k3() (gas: 5261826)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -10 achieved -10 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 957879846361383094213
+  DIAG|   FULL REDEEM ok, loss bps vs deposit 144
+  DIAG|   new deposit (USD 100): ok
+  DIAG|   10% REDEEM: ok, loss bps vs NAV-part 144
+  GATE|STRESS USD 10000 shift -10|prorata asset got/exp/|diff|/tol 572058468239759976125 572058468239759975562 563 572058470247
+  GATE|STRESS USD 10000 shift -10|prorata paired got/exp/|diff|/tol 462505571683527836009 462505571683527835526 483 462505573691
+  GATE|STRESS USD 10000 shift -10|reference holder in-kind legs before/after: asset 862336129512377601 862336129512377602 paired 697193183400833569 697193183400833570
+  GATE|STRESS USD 10000 shift -10|inKind OK legs asset/paired 572058468239759976125 462505571683527836009 valueInAsset 1170160905009822103156 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift -10|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -685; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift -10|gated views frozen before/after the call: false false; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[PASS] test_07_stress_small_k4() (gas: 5436770)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 10 achieved 10 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 1272666851222847899049
+  DIAG|   FULL REDEEM ok, loss bps vs deposit 144
+  DIAG|   new deposit (USD 100): ok
+  DIAG|   10% REDEEM: ok, loss bps vs NAV-part 144
+  GATE|STRESS USD 10000 shift 10|prorata asset got/exp/|diff|/tol 588936602556126056127 588936602556126055632 495 588936604564
+  GATE|STRESS USD 10000 shift 10|prorata paired got/exp/|diff|/tol 449431490614855417443 449431490614855416488 955 449431492622
+  GATE|STRESS USD 10000 shift 10|reference holder in-kind legs before/after: asset 887778677482255848 887778677482255849 paired 677484966336271592 677484966336271593
+  GATE|STRESS USD 10000 shift 10|inKind OK legs asset/paired 588936602556126056127 449431490614855417443 valueInAsset 1170131913824459209174 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift 10|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -660; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift 10|gated views frozen before/after the call: false false; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[PASS] test_07_stress_small_k5() (gas: 5858087)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 30 achieved 30 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 2260838548060758731661
+  DIAG|   FULL REDEEM ok, loss bps vs deposit 144
+  DIAG|   new deposit (USD 100): ok
+  DIAG|   10% REDEEM: ok, loss bps vs NAV-part 144
+  GATE|STRESS USD 10000 shift 30|prorata asset got/exp/|diff|/tol 605832256048447919698 605832256048447919203 495 605832258056
+  GATE|STRESS USD 10000 shift 30|prorata paired got/exp/|diff|/tol 436370966380471635569 436370966380471634469 1100 436370968388
+  GATE|STRESS USD 10000 shift 30|reference holder in-kind legs before/after: asset 913247634323297986 913247634323297987 paired 657797185203800396 657797185203800397
+  GATE|STRESS USD 10000 shift 30|inKind OK legs asset/paired 605832256048447919698 436370966380471635569 valueInAsset 1170137973226821706028 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift 30|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -665; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift 30|gated views frozen before/after the call: false false; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[PASS] test_07_stress_small_k6() (gas: 5873120)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 90 achieved 90 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 2311704828857513102288
+  DIAG|   FULL REDEEM ok, loss bps vs deposit 144
+  DIAG|   new deposit (USD 100): ok
+  DIAG|   10% REDEEM: ok, loss bps vs NAV-part 144
+  GATE|STRESS USD 10000 shift 90|prorata asset got/exp/|diff|/tol 656620703737185586763 656620703737185585769 994 656620705745
+  GATE|STRESS USD 10000 shift 90|prorata paired got/exp/|diff|/tol 397267661568600504036 397267661568600503002 1034 397267663576
+  GATE|STRESS USD 10000 shift 90|reference holder in-kind legs before/after: asset 989807489365059050 989807489365059051 paired 598851824904581918 598851824904581919
+  GATE|STRESS USD 10000 shift 90|inKind OK legs asset/paired 656620703737185586763 397267661568600504036 valueInAsset 1170358853029597023645 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift 90|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -854; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift 90|gated views frozen before/after the call: false false; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[PASS] test_07_stress_small_k7() (gas: 4939097)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 150 achieved 150 (TWAP gate 100 ticks)
+  DIAG|   pool trade used (tokenIn raw units) 2362723929971635773503
+  DIAG|   FULL REDEEM FAILS: Vault__PriceDeviation
+  DIAG|   new deposit (USD 100): Vault__PriceDeviation
+  DIAG|   10% REDEEM: Vault__PriceDeviation
+  GATE|STRESS USD 10000 shift 150|prorata asset got/exp/|diff|/tol 707561737905077268603 707561737905077267934 669 707561739913
+  GATE|STRESS USD 10000 shift 150|prorata paired got/exp/|diff|/tol 358281485034590100584 358281485034590099841 743 358281487042
+  GATE|STRESS USD 10000 shift 150|reference holder in-kind legs before/after: asset 1066597357318357763 1066597357318357764 paired 540083026882463651 540083026882463652
+  GATE|STRESS USD 10000 shift 150|inKind OK legs asset/paired 707561737905077268603 358281485034590100584 valueInAsset 1170883787126601928211 depositPart 1169359714562474333723
+  GATE|STRESS USD 10000 shift 150|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -1303; thresholds loss/gain ppm 300 2000
+  GATE|STRESS USD 10000 shift 150|gated views frozen before/after the call: true true; shares burned 1143404168860600506584 of supply 1145127766674784628576
+
+[FAIL: EVM error; database error: failed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a3c7c6fe522-TXL
+server: cloudflare] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 0)
+[PASS] test_08b_gate_outOfRange_oracleFollows_redeemInKind() (gas: 7009542)
+Logs:
+  OUT-OF-RANGE (oracle follows pool), IN-KIND GATE sAVAX/WAVAX vault (asset WAVAX)
+  GATE|OOR|haircut NAV / deposit, Alice 5384698714330046573727 5846798572812371668618 Bob 1082980390113441104201 1169359714562474333723
+  GATE|OOR Alice|prorata asset got/exp/|diff|/tol 699039584682641 699039584682640 1 699070
+  GATE|OOR Alice|prorata paired got/exp/|diff|/tol 4614358074745116985925 4614358074745116985920 5 4614358074776
+  GATE|OOR Alice|reference holder in-kind legs before/after: asset 140592111515850 140592111515850 paired 928048080872491825332 928048080872491825333
+  GATE|OOR Alice|inKind OK legs asset/paired 699039584682641 4614358074745116985925 valueInAsset 5551474923416915905897 depositPart 5846798572812371668618
+  GATE|OOR Alice|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) 50510; thresholds loss/gain ppm 79600 1100
+  GATE|OOR Alice|gated views frozen before/after the call: false false; shares burned 5722044250948976387691 of supply 6874595786201457177001
+  GATE|OOR Bob|prorata asset got/exp/|diff|/tol 140592111515850 140592111515323 527 142612
+  GATE|OOR Bob|prorata paired got/exp/|diff|/tol 928048080872491825333 928048080872491824693 640 928048082892
+  GATE|OOR Bob|reference holder in-kind legs before/after: asset 210565148982 210565148983 paired 1389939878597498947 1389939878597498948
+  GATE|OOR Bob|inKind OK legs asset/paired 140592111515850 928048080872491825333 valueInAsset 1116522724338729393573 depositPart 1169359714562474333723
+  GATE|OOR Bob|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) 45184; thresholds loss/gain ppm 79600 1100
+  GATE|OOR Bob|gated views frozen before/after the call: false false; shares burned 1150827937438296667318 of supply 1152551535252480789310
+
+[PASS] test_09_dislocation_oracleDoesNotFollow_gatesAndOwnerPath() (gas: 5424536)
+Logs:
+  DISLOCATION (oracle does not follow) sAVAX/WAVAX vault (asset WAVAX)
+   oracle ratio (1e18) 1293178879106168358
+   spot moved (ticks) -705
+   immediately: redeem Vault__PriceDeviation
+   immediately: deposit Vault__PriceDeviation
+   immediately: rebalance Vault__PriceDeviation
+   immediately: totalAssets()/maxWithdraw view ok? false
+   after TWAP caught up: redeem Vault__OracleDeviation
+   after TWAP caught up: rebalance Vault__OracleDeviation
+   after TWAP caught up: totalAssets view ok? false
+   redeemInKind (permissionless): ok
+     legs asset / paired 1506697703930067 4613449496491262208086
+     oracle-valued (at pre-move ratio) loss bps vs deposit -203
+   after emergencyExit, redeem still gated: Vault__OracleDeviation
+
+[PASS] test_10_keeperRebalance_mid() (gas: 5762063)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 50000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 5769062889840199996284 5763787756169440043217
+     change bps 9
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 5763787756169440043217 5763791807515670244035
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 5763791807515670244035 5763791810908159080048
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) 9
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[PASS] test_10_keeperRebalance_small() (gas: 5159572)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 10000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 1154189079926096993560 1154319557603575648798
+     change bps -1
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 1154319557603575648798 1154319675798011867094
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 1154319675798011867094 1154319675905459409057
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) -1
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[PASS] test_11_emergencyExit_mid() (gas: 30034235)
+Logs:
+  EMERGENCY EXIT sAVAX/WAVAX vault (asset WAVAX)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 5767330312807651711133
+  DIAG| redeem: Error: Too little received
+   redeemInKind after emergencyExit: ok=true asset 3103175867492072966641 paired 2123875527916547929728
+
+[PASS] test_11_emergencyExit_small() (gas: 3079915)
+Logs:
+  EMERGENCY EXIT sAVAX/WAVAX vault (asset WAVAX)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 1152452159646549872218
+  DIAG| redeem: ok
+  DIAG|   got / deposited, loss bps 1152452159646549872218 144
+   redeemInKind after emergencyExit: ok=true asset 580495109251902738314 paired 455966651816475079177
+
+[PASS] test_12_capSemantics() (gas: 1049447)
+Logs:
+   cap / managed / maxDeposit 2338719429124948667447 1736602432054834143 2336982826692893833304
+   deposit above cap: Vault__DepositCapExceeded
+   deposit exactly maxDeposit ok? false
+
+[PASS] test_13_gate_inKind_baseCase_twoHolders() (gas: 6154245)
+Logs:
+  IN-KIND BASE CASE sAVAX/WAVAX vault (asset WAVAX)
+  GATE|BASE|stranger redeemInKind(Alice's shares) without allowance: sel:0xfb8f41b200000000000000000000000000000000000000000000000000000000
+  GATE|BASE Alice 1/3|prorata asset got/exp/|diff|/tol 208876089992835170155 208876089992835170155 0 208876090011
+  GATE|BASE Alice 1/3|prorata paired got/exp/|diff|/tol 139756437683412467162 139756437683412467162 0 139756437702
+  GATE|BASE Alice 1/3|reference holder in-kind legs before/after: asset 628006461209632146811 628006461209632146811 paired 420191443950501678609 420191443950501678610
+  GATE|BASE Alice 1/3|inKind OK legs asset/paired 208876089992835170155 139756437683412467162 valueInAsset 389606163424141572898 depositPart 389786571520824777907
+  GATE|BASE Alice 1/3|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) 462; thresholds loss/gain ppm 800 5500
+  GATE|BASE Alice 1/3|gated views frozen before/after the call: false false; shares burned 381134722953533502194 of supply 2291046711319777009508
+  GATE|BASE Alice rest|prorata asset got/exp/|diff|/tol 417752179985670340312 417752179985670340311 1 417752180004
+  GATE|BASE Alice rest|prorata paired got/exp/|diff|/tol 279512875366824934325 279512875366824934326 1 279512875385
+  GATE|BASE Alice rest|reference holder in-kind legs before/after: asset 628006461209632146811 628006461209632146811 paired 420191443950501678610 420191443950501678610
+  GATE|BASE Alice rest|inKind OK legs asset/paired 417752179985670340312 279512875366824934325 valueInAsset 779212326848283145800 depositPart 779573143041649555816
+  GATE|BASE Alice rest|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) 462; thresholds loss/gain ppm 800 5500
+  GATE|BASE Alice rest|gated views frozen before/after the call: false false; shares burned 762269445907067004390 of supply 1909911988366243507314
+  GATE|BASE Bob|prorata asset got/exp/|diff|/tol 628006461209632146811 628006461209632145799 1012 628006463220
+  GATE|BASE Bob|prorata paired got/exp/|diff|/tol 420191443950501678610 420191443950501678407 203 420191445961
+  GATE|BASE Bob|reference holder in-kind legs before/after: asset 944596098085948282 944596098085948283 paired 632017698735512049 632017698735512050
+  GATE|BASE Bob|inKind OK legs asset/paired 628006461209632146811 420191443950501678610 valueInAsset 1171389161707544274861 depositPart 1169359714562474333723
+  GATE|BASE Bob|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -1735; thresholds loss/gain ppm 800 5500
+  GATE|BASE Bob|gated views frozen before/after the call: false false; shares burned 1145918944644992380932 of supply 1147642542459176502924
+  GATE|BASE|last holder in-kind legs asset/paired 944596098085948283 632017698735512050
+  GATE|BASE|vault residual asset/paired after the last holder 0 0
+
+[PASS] test_14_gate_inKind_dislocation_viewsFrozen() (gas: 6979333)
+Logs:
+  IN-KIND DISLOCATION (oracle does not follow) sAVAX/WAVAX vault (asset WAVAX)
+  GATE|DISLOCATION Alice|prorata asset got/exp/|diff|/tol 699039584682641 699039584682640 1 699070
+  GATE|DISLOCATION Alice|prorata paired got/exp/|diff|/tol 4614358074745116985925 4614358074745116985920 5 4614358074776
+  GATE|DISLOCATION Alice|reference holder in-kind legs before/after: asset 140592111515850 140592111515850 paired 928048080872491825332 928048080872491825333
+  GATE|DISLOCATION Alice|inKind OK legs asset/paired 699039584682641 4614358074745116985925 valueInAsset 5967191101932972097243 depositPart 5846798572812371668618
+  GATE|DISLOCATION Alice|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -20591; thresholds loss/gain ppm 300 26700
+  GATE|DISLOCATION Alice|gated views frozen before/after the call: true true; shares burned 5722044250948976387691 of supply 6874595786201457177001
+  GATE|DISLOCATION Bob|prorata asset got/exp/|diff|/tol 140592111515850 140592111515323 527 142612
+  GATE|DISLOCATION Bob|prorata paired got/exp/|diff|/tol 928048080872491825333 928048080872491824693 640 928048082892
+  GATE|DISLOCATION Bob|reference holder in-kind legs before/after: asset 210565148982 210565148983 paired 1389939878597498947 1389939878597498948
+  GATE|DISLOCATION Bob|inKind OK legs asset/paired 140592111515850 928048080872491825333 valueInAsset 1200132317571431177362 depositPart 1169359714562474333723
+  GATE|DISLOCATION Bob|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -26315; thresholds loss/gain ppm 300 26700
+  GATE|DISLOCATION Bob|gated views frozen before/after the call: true true; shares burned 1150827937438296667318 of supply 1152551535252480789310
+  GATE|DISLOCATION|totalAssets() still reverts after both in-kind exits; the freeze is a property of the gates, in-kind neither needs nor changes it
+
+[PASS] test_16_gate_inKind_afterEmergencyExit() (gas: 4598326)
+Logs:
+  IN-KIND AFTER EMERGENCY EXIT sAVAX/WAVAX vault (asset WAVAX)
+  GATE|EMERGENCY Alice|prorata asset got/exp/|diff|/tol 3294113249261692398955 3294113249261692398952 3 3294113249292
+  GATE|EMERGENCY Alice|prorata paired got/exp/|diff|/tol 1971928537892695773224 1971928537892695773223 1 1971928537923
+  GATE|EMERGENCY Alice|reference holder in-kind legs before/after: asset 662518042517284817706 662518042517284817707 paired 396597850787750394382 396597850787750394382
+  GATE|EMERGENCY Alice|inKind OK legs asset/paired 3294113249261692398955 1971928537892695773224 valueInAsset 5844169585571234157010 depositPart 5846798572812371668618
+  GATE|EMERGENCY Alice|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) 449; thresholds loss/gain ppm 800 5500
+  GATE|EMERGENCY Alice|gated views frozen before/after the call: false false; shares burned 5722044250948976387691 of supply 6874595786201457177001
+  GATE|EMERGENCY Bob|prorata asset got/exp/|diff|/tol 662518042517284817707 662518042517284817344 363 662518044537
+  GATE|EMERGENCY Bob|prorata paired got/exp/|diff|/tol 396597850787750394382 396597850787750393864 518 396597852807
+  GATE|EMERGENCY Bob|reference holder in-kind legs before/after: asset 992254891276099859 992254891276099860 paired 593985570292551255 593985570292551256
+  GATE|EMERGENCY Bob|inKind OK legs asset/paired 662518042517284817707 396597850787750394382 valueInAsset 1175390006654903282408 depositPart 1169359714562474333723
+  GATE|EMERGENCY Bob|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) -5156; thresholds loss/gain ppm 800 5500
+  GATE|EMERGENCY Bob|gated views frozen before/after the call: false false; shares burned 1150827937438296667318 of supply 1152551535252480789310
+
+[PASS] test_17_diag_laterDepositEffectOnIncumbentInKindValue() (gas: 4636997)
+Logs:
+  DIAG|LATER-DEPOSIT incumbent deposit 1169359714562474333723 in-kind oracle value alone/withSecondHolder/withSecondHolder+tickRestored 1170141552957724525844 1168818490272424718702 1168824120938301180843
+  DIAG|LATER-DEPOSIT tick before/after the second deposit 2554 2557; change of incumbent value, ppm of deposit: -1131 (restored: -1126)
+
+Suite result: FAILED. 26 passed; 14 failed; 0 skipped; finished in 159.55s (158.96s CPU time)
+
+Ran 1 test suite in 159.65s (159.55s CPU time): 26 tests passed, 14 failed, 0 skipped (40 total tests)
+
+Failing tests:
+Encountered 14 failing tests in test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAWavaxVaultForkTest
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54577de08c7e51d-TXL
+server: cloudflare] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578077bdee51d-TXL
+server: cloudflare] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 56273322732742212305120079709973600024794223739839368144666191219353479014075: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578306d72e51d-TXL
+server: cloudflare] test_05_donationInflationAndRounding() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578597d1be51d-TXL
+server: cloudflare] test_06_ladder_100k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a545788309b0e522-TXL
+server: cloudflare] test_06_ladder_250k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 37244556749095539566977222030242063970329396291997698942055596282958149850867: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ac39a0e522-TXL
+server: cloudflare] test_06_ladder_50k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578d5cdc9e522-TXL
+server: cloudflare] test_07_stress_large_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54578ff6c7ee522-TXL
+server: cloudflare] test_07_stress_large_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 106727621722293212362728798092422283610780626211649643334122756720159772215357: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457928c8a2e522-TXL
+server: cloudflare] test_07_stress_large_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579956fa2e522-TXL
+server: cloudflare] test_07_stress_large_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579befaf1e522-TXL
+server: cloudflare] test_07_stress_large_k5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54579e8c890e522-TXL
+server: cloudflare] test_07_stress_small_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 112144056461080686926910550068477222795410710384670127816070544524876485569012: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a127cc0e522-TXL
+server: cloudflare] test_07_stress_small_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a5457a3c7c6fe522-TXL
+server: cloudflare] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 0)
+
+Encountered a total of 14 failing tests, 26 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 14 failed tests
+-----
+UTC end: 2026-11-02T19:17:45Z  forge exit: 1
