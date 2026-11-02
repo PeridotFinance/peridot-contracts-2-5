@@ -3,7 +3,7 @@
 Branch `avalanche-pharaoh-tracks-abcd`. Tests and fork only: nothing signed or broadcast, no keys. This closes the open requirement in `avalanche-section5-fork-results.md` ("Funded in-kind fallback: not implemented", shared risk model section 10, handoff 09 section 3b "Forced liquidation").
 
 Contract entry point: `IsolatedMarginLiquidatorUpgradeable.liquidateFunded(FundedLiquidationParams)`.
-Tests: `contracts/test/AvalancheFundedFallbackFork.t.sol` (40 tests, inherits `AvalancheSection5Base`; **40 pass**). The Section 5 suite (`AvalanchePharaohSection5Fork.t.sol`) is unchanged and still gives 28 pass, 1 fail (the deliberate `testRequirement_fundedInKindForcedFallback_UNMET`, which the lead can now replace by this suite). Existing non-fork margin suites re-run against the changed contracts: `IsolatedMarginFujiPolicy` 14, `IsolatedMarginV2` (two suites) 4 + 29, `FujiMockMargin` 7 + 14, `CollateralPreservingLifecycle` 70: all pass.
+Tests: `contracts/test/AvalancheFundedFallbackFork.t.sol` (40 tests, inherits `AvalancheSection5Base`; **40 pass**). **Status update (checkpoint `988b836c`):** the deliberate failure `testRequirement_fundedInKindForcedFallback_UNMET` is RETIRED. It was replaced (not removed) by the acceptance tests `testAcceptance_fallback_*` in `AvalanchePharaohSection5Fork.t.sol` (zero cash long and short, pool wall, atomic exhaustion, invalid price, authorization / repeat / ownership); that suite now has 35 tests (34 original plus `testFinding_transferPauseStopsAllMarginLiquidations`) and the gate no longer carries a deliberate failure. The numbers below that mention "28 pass, 1 fail" belong to the earlier state and are historical. Existing non-fork margin suites re-run against the changed contracts: `IsolatedMarginFujiPolicy` 14, `IsolatedMarginV2` (two suites) 4 + 29, `FujiMockMargin` 7 + 14, `CollateralPreservingLifecycle` 70: all pass.
 
 What this route is **not**: it does not solve missing valuation (every price failure still reverts it, tests d) and it does not guarantee recovery of an already insolvent position (section "Insolvent positions" has the measured bad debt). It only removes the dependency on a flash loan, a swap and market cash for a position that is still liquidatable at a trustworthy price.
 
@@ -87,7 +87,7 @@ Take-aways: the budget is about 100% of the debt for a full liquidation and 50% 
 
 4 longs of 10,000 USDC margin liquidated at AVAX 54% of pin: **39,207.92 USDC** budget, inventory 445,691 pWAVAX = 8,913.8 WAVAX. 3 shorts of 6,000 USDC margin liquidated at 180%: **2,083.75 WAVAX** budget, inventory 1,684,158 pUSDC = 33,683 USDC. (Two separate price directions, so two separate budgets.)
 
-Budget scales linearly with debt. At the proposed caps (debt cap USD 25k per position): about 23.5k USDC per long or 2,778 WAVAX per short. If margin debt used all the test borrow caps (USDC 500k, WAVAX 20k) the worst-case funder budget is about **500k USDC and 20,000 WAVAX** (about USD 171k at the pin, about USD 308k at +80%). For the Section 5 liquidation-capacity bound (about USD 15k aggregate long notional that the pool can absorb) the funded route needs only about USD 7.5k of USDC, since it is not limited by pool depth, only by the funder's capital. Aggregate caps should be set so that this worst-case budget is actually held by the allowlisted funders.
+Budget scales linearly with debt. At the proposed caps (debt cap USD 25k per position): about 23.5k USDC per long or 2,778 WAVAX per short. If margin debt used all the test borrow caps (USDC 500k, WAVAX 20k) the worst-case funder budget is about **500k USDC and 20,000 WAVAX** (about USD 171k at the pin, about USD 308k at +80%). The earlier remark that the pool could absorb about USD 15k of aggregate long notional (and therefore that the funded route "needs only about USD 7.5k of USDC") is **withdrawn**: it came from favourable-state depth arithmetic, not from executed stress scenarios (the strict matrix, `avalanche-capacity-matrix.md`, derives no cap). Aggregate caps should be set so that this worst-case budget is actually held by the allowlisted funders.
 
 ### Inventory and a delayed redemption (market cash zero)
 
@@ -113,7 +113,7 @@ Cap-sized (24,000 margin) bad debt by price (USD, share of debt): long at 49% of
 
 1. **Valuation**: any invalid price blocks the route (tests d). It does not provide a recovery valuation.
 2. **Insolvency**: not recovered unless a funder chooses to absorb the loss; no insurance draw. Residual bad debt is the table above. Deciding whether the insurance fund should ever top up a funded liquidation is a governance decision and a new surface.
-3. **Partial sizing needs the flash lender view** (`testFinding_PartialSizingNeedsFlashLenderView`): `beginLiquidation` for a partial liquidation reads `config.flashLoanProvider()` through `_liquidationQuote`. If governance disables the execution endpoints (lender = 0), a partial funded liquidation reverts; full liquidations (health under `fullLiquidationHealthBps`, or debt dust) still work (tested). Not fixed because the risk engine is an audited file outside this change. A one-line `try/catch` around the fee read in the risk engine would remove the dependency.
+3. **Partial sizing needs the flash lender view** (`testFinding_PartialSizingNeedsFlashLenderView`): `beginLiquidation` for a partial liquidation reads `config.flashLoanProvider()` through `_liquidationQuote`. If governance disables the execution endpoints (lender = 0), a partial funded liquidation reverts; full liquidations (health under `fullLiquidationHealthBps`, or debt dust) still work (tested). Not fixed because the risk engine is an audited file outside this change. A generic `try/catch` around the fee read is NOT sufficient (it would change the flash path, leave the swap-slippage gross-up in a route that never swaps, and not cover the code-length check); the minimal explicit design (a separate funded sizing path in the risk engine, new `beginFundedLiquidation`, flash path untouched) with its audited-file impact and tests is in `avalanche-funded-sizing-design.md`.
 4. **Approvals**: the funder approves the liquidator **proxy**. The proxy is upgradeable. Funders should approve only the amount of the call (or the exact budget) and revoke afterwards.
 5. **Funder risk is the operator's to size**: bonus 5% (placeholder) versus a -4.7% price move on a long inventory; redemption delay is unbounded. Aggregate caps must be set against the funded budgets above, not the pool depth.
 6. **Borrower surplus on a full long liquidation returns as pWAVAX to the owner's wallet, not as pUSDC in the vault** (see design). Locked margin is cleared to zero in both.
@@ -122,7 +122,22 @@ Cap-sized (24,000 margin) bad debt by price (USD, share of debt): long at 49% of
 9. Rounding: seized pTokens are floored and valued with floor/ceil on the safe side; the borrower can keep at most a few pToken units of dust; the bound tests measure seized value within about 3e-13 (relative) of the cap.
 10. Mocked feeds: all prices are mocked at the aggregator (as in the Section 5 suite); only deployments, the pool and token balances are real.
 
-## How the tests were run (and a note about the RPC)
+## Reproduction
+
+### Clean reproduction (authoritative)
+
+- Code commit: `988b836c64370a2ce73cff1cb68775b8a1efdaba` (working tree identical to the commit for every code and tool file; only documents changed afterwards).
+- Pinned state: Avalanche C-Chain 43114, block **99,200,000**, hash `0x221a26c046d7c21cd8dc88ea808ccf2b0e9811916e1f091cc4b3222c5e11fd97`, timestamp 1793604320.
+- Environment: an **isolated empty Foundry home** (empty RPC cache; only the solc toolchain is linked in), RPC `https://api.avax.network/ext/bc/C/rpc` only, **no proxy and no substituted values**, `FOUNDRY_PROFILE=debt_accounting`.
+- Command: `AVALANCHE_MAINNET_RPC_URL=<rpc> contracts/tools/run-avalanche-clean-repro.sh` (runs `tools/run-avalanche-section5-gate.sh` under the clean home and retries because a public RPC rate-limits a cold cache; every attempt fills the isolated cache).
+- Result: attempt 1 failed while the cache was cold (suites `section5` and `funded-fallback` failed and the matrix was incomplete; the cause is most likely public-RPC rate limits as in the earlier cold runs, but the log of that attempt was overwritten by attempt 2 and was not retained). **Attempt 2 passed**: generator fixtures pass; `AvalanchePharaohSection5ForkTest` 35 of 35; `AvalancheFundedFallbackForkTest` 40 of 40; capacity matrix 31 of 31 tests in 217 s, 168 manifest scenarios and 64 fallback scenarios all with rows, 0 NOT-RUN, 0 conflicting records; exit 0. The generated matrix report from this clean run is **byte-identical** (0 differing lines) to the report from the earlier warm-cache run at the same commit.
+
+### Earlier runs, and the count "74 of 74" versus 35 + 40 = 75
+
+- The builder's original 40/40 run used a **substituted** RPC path: a local pass-through proxy in front of `avalanche-c-chain-rpc.publicnode.com` that answered zero for two never-written allowance slots and the balance/nonce/code of two codeless addresses when the node timed out at the pinned block (details below). Its entries had entered the shared global Foundry RPC cache for block 99,200,000. That run is **superseded** by the clean reproduction above and is not evidence of the clean result.
+- The lead then moved that cache file aside (backup kept), re-ran the section 5 and fallback suites against `api.avax.network` only (attempts 1 and 2 hit rate limits; **attempt 3: all 74 tests passed**). At that moment the section 5 suite had **34** tests; **34 + 40 = 74**. The 75th test is `testFinding_transferPauseStopsAllMarginLiquidations`, added afterwards (the reviewer's transfer-pause finding), so the current counts are **35 + 40 = 75**, matching the clean reproduction.
+
+### Original builder run (superseded): how it was run and the RPC substitution
 
 ```
 AVALANCHE_MAINNET_RPC_URL=<fork rpc> FOUNDRY_OUT=out_fallback FOUNDRY_CACHE_PATH=cache_fallback FOUNDRY_PROFILE=debt_accounting \
