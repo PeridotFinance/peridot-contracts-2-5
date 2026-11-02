@@ -1,25 +1,336 @@
 {
   "_comment": "Required-scenario manifest for tools/avalanche-capacity-report.py. A scenario that is missing, failed to run, or was never triggered cannot establish capacity. class: stress = counts toward launch evidence for candidate configs; reference = favourable-state, never used for caps; alternative = other parameters, reported but no launch cap; diagnostic = loosened guards or other altered rules, NEVER emits a cap.",
-  "leverageX100": {"cand-2x25": 200, "ALT-2x40": 200, "ALT-1.5x25": 150, "ALT-guard300-2x25": 200},
+  "leverageX100": {
+    "cand-2x25": 200,
+    "ALT-2x40": 200,
+    "ALT-1.5x25": 150,
+    "ALT-guard300-2x25": 200
+  },
   "candidate": "cand-2x25",
   "safetyFactor": 2,
-  "tests": ["testMatrix_A_oracleOnly_singlePosition", "testMatrix_B_poolFollows_singlePosition", "testMatrix_C1_oracleLag50",
-            "testMatrix_C2_oracleLag90", "testMatrix_C3_fixedLag50", "testMatrix_C4_fixedLag100", "testMatrix_C5_fixedLag200",
-            "testMatrix_D_removal50_poolFollows", "testMatrix_E_accrual90d_flashFee9", "testMatrix_F1_aggregate_1k_x5",
-            "testMatrix_F2_aggregate_5k_x10", "testMatrix_F3_aggregate_25k_x4", "testMatrix_G_ordinaryLending",
-            "testMatrix_G2_ordinaryGap", "testSwapGuard_directionTable"],
+  "tests": [
+    "testMatrix_A_oracleOnly_singlePosition",
+    "testMatrix_B_poolFollows_singlePosition",
+    "testMatrix_C1_oracleLag50",
+    "testMatrix_C2_oracleLag90",
+    "testMatrix_C3_fixedLag50",
+    "testMatrix_C4_fixedLag100",
+    "testMatrix_C5_fixedLag200",
+    "testMatrix_D_removal50_poolFollows",
+    "testMatrix_E_accrual90d_flashFee9",
+    "testMatrix_F1_aggregate_1k_x5",
+    "testMatrix_F2_aggregate_5k_x10",
+    "testMatrix_F3_aggregate_25k_x4",
+    "testMatrix_G_ordinaryLending",
+    "testMatrix_G2_ordinaryGap",
+    "testSwapGuard_directionTable",
+    "testFallback_A_mockedOracle",
+    "testFallback_B_poolFollows",
+    "testFallback_C_fixedLag100",
+    "testFallback_D_usdcDepeg98_lag100",
+    "testFallback_E_accrual90d_fee9",
+    "testFallback_G_noFloor_funderAbsorbsLoss",
+    "testFallback_F1_aggregate_k5",
+    "testFallback_F2_aggregate_k10",
+    "testFallback_F3_aggregate_k4",
+    "testFallback_H_zeroCash"
+  ],
   "slices": [
-    {"slice": "oracle-only",     "class": "reference",   "cfgs": ["cand-2x25", "ALT-2x40", "ALT-1.5x25", "ALT-guard300-2x25"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "pool-follows",    "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40", "ALT-1.5x25", "ALT-guard300-2x25"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "lag50",           "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "lag90",           "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "fixedlag50",      "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "fixedlag100",     "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "fixedlag200",     "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000, 5000, 25000], "k": 1},
-    {"slice": "removal50",       "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [5000, 25000], "k": 1},
-    {"slice": "accrual90d-fee9", "class": "stress",      "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [5000, 25000], "k": 1},
-    {"slice": "agg-k5",          "class": "aggregate",   "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [1000], "k": 5},
-    {"slice": "agg-k10",         "class": "aggregate",   "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [5000], "k": 10},
-    {"slice": "agg-k4",          "class": "aggregate",   "cfgs": ["cand-2x25", "ALT-2x40"], "margins": [25000], "k": 4}
-  ]
+    {
+      "slice": "oracle-only",
+      "class": "reference",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40",
+        "ALT-1.5x25",
+        "ALT-guard300-2x25"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "pool-follows",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40",
+        "ALT-1.5x25",
+        "ALT-guard300-2x25"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "lag50",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "lag90",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fixedlag50",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fixedlag100",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fixedlag200",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "removal50",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "accrual90d-fee9",
+      "class": "stress",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "agg-k5",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000
+      ],
+      "k": 5
+    },
+    {
+      "slice": "agg-k10",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        5000
+      ],
+      "k": 10
+    },
+    {
+      "slice": "agg-k4",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        25000
+      ],
+      "k": 4
+    }
+  ],
+  "fallbackSlices": [
+    {
+      "slice": "fb-oracle-only",
+      "class": "fallback-reference",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-pool-follows",
+      "class": "fallback",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-fixedlag100",
+      "class": "fallback",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-depeg98-lag100",
+      "class": "fallback",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-accrual90d-fee9",
+      "class": "fallback",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-agg-k5",
+      "class": "fallback-aggregate",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        1000
+      ],
+      "k": 5
+    },
+    {
+      "slice": "fb-agg-k10",
+      "class": "fallback-aggregate",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        5000
+      ],
+      "k": 10
+    },
+    {
+      "slice": "fb-agg-k4",
+      "class": "fallback-aggregate",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        25000
+      ],
+      "k": 4
+    },
+    {
+      "slice": "fb-nofloor-pool-follows",
+      "class": "fallback-nofloor",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    },
+    {
+      "slice": "fb-zerocash-oracle-only",
+      "class": "fallback",
+      "cfgs": [
+        "cand-2x25"
+      ],
+      "margins": [
+        1000,
+        5000,
+        25000
+      ],
+      "k": 1
+    }
+  ],
+  "fallbackBudget": {
+    "USDC": 30000,
+    "WAVAX": 3500
+  }
 }

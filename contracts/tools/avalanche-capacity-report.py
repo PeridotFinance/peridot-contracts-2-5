@@ -34,7 +34,7 @@ def tok(v, side_asset):
     d = USDC_DEC if side_asset == "USDC" else WAVAX_DEC
     return f"{int(v)/10**d:,.4f} {side_asset}"
 
-MX, MXT, MXEND, MXSUM, MXOPEN, OX, SG = [], [], [], [], [], [], []
+MX, MXT, MXEND, MXSUM, MXOPEN, OX, SG, MXF, MXFSUM = [], [], [], [], [], [], [], [], []
 files_seen = []
 for f in args:
     files_seen.append(f)
@@ -60,6 +60,12 @@ for f in args:
         elif t == "MXSUM":
             MXSUM.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), flashU=int(p[6]), flashW=int(p[7]), cashU=int(p[8]),
                               cashW=int(p[9]), insU=int(p[10]), insW=int(p[11]), insC=int(p[12])))
+        elif t == "MXF":
+            MXF.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), step=int(p[7]), ok=p[8] == "1",
+                            rev=p[9], pool=int(p[10]), debtBefore=int(p[11]), repaidT=int(p[12]), repaidC=int(p[13]), seizedC=int(p[14]), status=int(p[15])))
+        elif t == "MXFSUM":
+            MXFSUM.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), budU=int(p[6]), budW=int(p[7]), leftU=int(p[8]),
+                               leftW=int(p[9]), invU=int(p[10]), invW=int(p[11]), invC=int(p[12]), redU=int(p[13]), redW=int(p[14])))
         elif t == "MXOPEN":
             MXOPEN.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), opened=int(p[6]), rev=p[7]))
         elif t == "OX":
@@ -238,6 +244,73 @@ for rr in rows_out:
     out.append(f"| {k[0]} | {k[1]} | {k[2]} | {k[3]:,} | {k[4]} | {tok(rr['repay'], rr['side_asset'])} | {tok(rr['reward'], rr['side_asset'])} | {tok(rr['surplus'],'USDC')} | "
                f"{sm['flashU']/1e6:,.0f} / {sm['flashW']/1e18:,.0f} | {sm['cashU']/1e6:,.0f} / {sm['cashW']/1e18:,.0f} |")
 
+
+# ---------------------------------------------------------------- funded fallback (finite funding)
+fbg = collections.defaultdict(list)
+for r in MXF: fbg[key(r)].append(r)
+fbsum = {key(r): r for r in MXFSUM}
+fb_required = []
+for sl in manifest.get("fallbackSlices", []):
+    for cfg in sl["cfgs"]:
+        for side in ("long", "short"):
+            for m in sl["margins"]:
+                fb_required.append((sl["class"], (sl["slice"], cfg, side, m, sl["k"])))
+
+def fb_verdict(k):
+    rows = grp.get(k, []); att = [r for r in rows if r["liq"]]
+    ends = endg.get(k, [])
+    if k in openg and openg[k]["opened"] < k[4]: return "FAIL-OPEN"
+    if not rows and not ends: return "NOT-RUN"
+    if not att: return "UNTRIGGERED"
+    if len(ends) < k[4]: return "NOT-RUN"
+    funded = fbg.get(k, [])
+    resolved = all((e["status"] == 6 and e["debtT"] == 0) or (e["status"] == 2 and not e["liqable"]) for e in ends)
+    normal_ok = all(r["ok"] for r in att)
+    ins = sum(r["ins"] for r in att)
+    bad = sum(e["badC"] for e in ends)
+    if resolved and normal_ok and not funded:
+        return "PASS-NORMAL" + ("-INSURANCE-ASSISTED" if ins else "")
+    if resolved and any(f["ok"] for f in funded):
+        v = "PASS-VIA-FALLBACK"
+        if ins: v += "-INSURANCE-ASSISTED"
+        return v
+    fails = [f for f in funded if not f["ok"]]
+    if fails:
+        r0 = fails[0]["rev"]
+        if "LiquidationError(28)" in r0 or "exceeds" in r0 or "ERC20" in r0: return "FAIL-FUNDING-EXHAUSTED"
+        if "LiquidationError(32)" in r0: return "FAIL-FLOOR-DECLINED"
+        return "FAIL-FALLBACK"
+    return "FAIL-UNRESOLVED"
+
+fbv = {k: fb_verdict(k) for _, k in fb_required}
+fb_notrun = [k for k, v in fbv.items() if v == "NOT-RUN"]
+if fb_required:
+    out.append("\n## Funded in-kind fallback with finite funding (class `fallback*`)\n")
+    out.append(f"One allowlisted funder, funded ONCE per scenario ({manifest['fallbackBudget']['USDC']:,} USDC and {manifest['fallbackBudget']['WAVAX']:,} WAVAX, approvals limited to the budget), no replenishment between attempts, "
+               "cumulative seized inventory. At each stressed step the NORMAL route is attempted first; positions it leaves liquidatable go to the funded route at the same state. "
+               "`fb-nofloor-*` runs the funder with no break-even floor (it absorbs any shortfall); all others use the floor (`minSeizeValueBps` = 10,000, the call reverts when seized value < repaid value). "
+               "`redeemable now` = min(inventory, market cash): pTokens are not cash. Funder P&L is seized value minus repaid value at the oracle price at each attempt (not realised). "
+               "The route draws no insurance; `insurance used` is the NORMAL route's draw.\n")
+    out.append("| class | slice | cfg | side | margin each | k | price regime | verdict | normal route ok/total | funded ok/total | first funded failure | funder repaid | budget left (USDC / WAVAX) | inventory (underlying USDC / WAVAX) | inventory USD | redeemable now (USDC / WAVAX) | funder P&L (USD) | normal-route insurance (USD) | outstanding debt | bad debt (USD) |")
+    out.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for cl, k in fb_required:
+        rows = grp.get(k, []); att = [r for r in rows if r["liq"]]; ok = [r for r in att if r["ok"]]
+        funded = fbg.get(k, []); fok = [f for f in funded if f["ok"]]
+        ends = endg.get(k, []); sm = fbsum.get(k)
+        asset = "WAVAX" if k[2] == "short" else "USDC"
+        syn = "synthetic" in regime(rows)
+        ff = next((f for f in funded if not f["ok"]), None)
+        pnl = sum(f["seizedC"] - f["repaidC"] for f in fok)
+        debtT = sum(e["debtT"] for e in ends); badC = sum(e["badC"] for e in ends)
+        out.append(f"| {cl} | {k[0]} | {k[1]} | {k[2]} | {k[3]:,} | {k[4]} | {regime(rows)} | **{fbv[k]}** | {len(ok)}/{len(att)} | {len(fok)}/{len(funded)} | "
+                   + (f"step {ff['step']} pool {ff['pool']} bps: {ff['rev']}" if ff else "-") + " | "
+                   + (tok(sum(f['repaidT'] for f in fok), asset) if fok else "-") + " | "
+                   + (f"{sm['leftU']/1e6:,.0f} / {sm['leftW']/1e18:,.1f}" if sm else "-") + " | "
+                   + (f"{sm['invU']/1e6:,.2f} / {sm['invW']/1e18:,.2f}" if sm else "-") + " | " + (usd(sm['invC']) if sm and not syn else ("n/m" if sm else "-")) + " | "
+                   + (f"{sm['redU']/1e6:,.2f} / {sm['redW']/1e18:,.2f}" if sm else "-") + " | " + ("n/m" if syn else usd(pnl)) + " | "
+                   + usd(sum(r['ins'] for r in att)) + " | " + (tok(debtT, asset) if ends else "-") + " | " + ("n/m" if syn else usd(badC)) + " |")
+    out.append("\nFunder budget requirements measured here are the tokens repaid by the funder in scenarios that completed; scenarios marked FAIL-FUNDING-EXHAUSTED show that the fixed budget was insufficient for the stress path (no replenishment).\n")
+
 out.append("\n## Open failures\n")
 out.append("| slice | cfg | side | margin each | requested k | opened | revert |")
 out.append("|---|---|---|---|---|---|---|")
@@ -269,6 +342,6 @@ if SG:
         out.append(f"| {p[1]} | {p[2]} | {p[3]} | {kv['oracleE8']} | {kv['poolE8']} | {kv['expectedOut']} | {kv['minOut']} | {kv['actualOut']} | {kv['execE8']} | {res} |")
 
 print("\n".join(out))
-if strict and (notrun or tests_missing):
-    sys.stderr.write(f"INCOMPLETE EVIDENCE: {len(notrun)} NOT-RUN scenarios, {len(tests_missing)} missing test outputs\n")
+if strict and (notrun or tests_missing or fb_notrun):
+    sys.stderr.write(f"INCOMPLETE EVIDENCE: {len(notrun)} NOT-RUN scenarios, {len(fb_notrun)} NOT-RUN fallback scenarios, {len(tests_missing)} missing test outputs\n")
     sys.exit(2)

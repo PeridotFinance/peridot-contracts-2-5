@@ -17,9 +17,10 @@ while IFS= read -r line; do TESTS+=("$line"); done < <(python3 -c "import json;p
 [ "${#TESTS[@]}" -gt 0 ] || { echo "manifest has no tests" >&2; exit 1; }
 FAILED=0
 for t in "${TESTS[@]}"; do
+  case "$t" in testFallback_*) CONTRACT=AvalancheFallbackMatrixForkTest ;; *) CONTRACT=AvalancheCapacityMatrixForkTest ;; esac
   # shellcheck disable=SC2086
   FOUNDRY_PROFILE=debt_accounting forge test --threads 1 --gas-limit 9000000000000000000 \
-    --match-contract AvalancheCapacityMatrixForkTest --match-test "$t" -vv \
+    --match-contract "$CONTRACT" --match-test "$t" -vv \
     --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol ${EXTRA_FORGE_ARGS:-} > "$OUT/$t.txt" 2>&1
   rc=$?
   if [ $rc -ne 0 ] || ! grep -q "^\[PASS\] $t" "$OUT/$t.txt"; then

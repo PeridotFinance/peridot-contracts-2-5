@@ -646,4 +646,20 @@ abstract contract AvalancheSection5Base is Test {
         }
         revert("no liquidation threshold found");
     }
+
+    /// @dev WHALE supplies a large collateral and borrows (almost) all cash of `drain` using `collateral` market.
+    function _drainCash(PErc20Delegator drain, PErc20Delegator collateral) internal {
+        uint256 cash = drain.getCash();
+        uint256 collateralNeeded = collateral == pWavax
+            ? Math.mulDiv(cash * 1e12, 1e8, uint256(avaxAnswer)) * 3 // generous: CF .6, USDC drained
+            : cash * 3;
+        _mintP(collateral, WHALE, collateralNeeded);
+        _enter(WHALE);
+        uint256 target = drain.getCash() - 1;
+        uint256 cap = controller.borrowCaps(address(drain));
+        uint256 borrowed = drain.totalBorrows();
+        if (cap != 0 && borrowed + target >= cap) target = cap - borrowed - 1;
+        (bool ok,) = _borrow(drain, WHALE, target);
+        require(ok, "drain borrow failed (raise whale collateral or caps)");
+    }
 }

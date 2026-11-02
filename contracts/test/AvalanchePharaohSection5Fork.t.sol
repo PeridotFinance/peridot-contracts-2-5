@@ -756,27 +756,181 @@ contract AvalanchePharaohSection5ForkTest is AvalancheSection5Base {
         emit log_named_uint("selector==RedeemTransferOutNotPossible (0/1)", _selector(ret) == bytes4(0x91240a1b) ? 1 : 0);
     }
 
-    /// @dev WHALE supplies a large collateral and borrows (almost) all cash of `drain` using `collateral` market.
-    function _drainCash(PErc20Delegator drain, PErc20Delegator collateral) internal {
-        uint256 cash = drain.getCash();
-        uint256 collateralNeeded = collateral == pWavax
-            ? Math.mulDiv(cash * 1e12, 1e8, uint256(avaxAnswer)) * 3 // generous: CF .6, USDC drained
-            : cash * 3;
-        _mintP(collateral, WHALE, collateralNeeded);
-        _enter(WHALE);
-        uint256 target = drain.getCash() - 1;
-        uint256 cap = controller.borrowCaps(address(drain));
-        uint256 borrowed = drain.totalBorrows();
-        if (cap != 0 && borrowed + target >= cap) target = cap - borrowed - 1;
-        (bool ok,) = _borrow(drain, WHALE, target);
-        require(ok, "drain borrow failed (raise whale collateral or caps)");
+    // ================================================================= funded in-kind fallback: ACCEPTANCE (replaces the UNMET placeholder)
+    // Mechanism depth (40 tests, mutation table, budgets) lives in AvalancheFundedFallbackFork.t.sol and
+    // docs/deployment-handoffs/avalanche-funded-fallback.md; finite-funding stress is in AvalancheFallbackMatrixFork.t.sol.
+    // These tests are the section 5 gate's acceptance checks for the route.
+    address internal constant FUNDER = address(0xF00D);
+
+    function _allowFunder(address who) internal {
+        mConfig.queueFundedLiquidator(who);
+        vm.warp(block.timestamp + mConfig.actionDelay());
+        _refreshFeeds();
+        mConfig.addFundedLiquidator(who);
     }
 
-    /// @dev MANDATORY, UNMET: the funded in-kind forced fallback (handoff 00 s10, 09 s3b table) does not exist yet.
-    ///      This test FAILS on purpose so the section 5 launch gate cannot read green while the requirement is
-    ///      open. Replace the body with the real fallback scenarios when the route is implemented.
-    function testRequirement_fundedInKindForcedFallback_UNMET() public pure {
-        revert("UNMET REQUIREMENT: funded in-kind forced liquidation fallback is not implemented");
+    function _fundFunder(address asset, uint256 amount) internal {
+        deal(asset, FUNDER, amount);
+        vm.prank(FUNDER);
+        IERC20(asset).approve(address(liquidator), amount);
+    }
+
+    function _funded(uint256 id, uint256 maxRepay, uint256 minValueBps, address caller)
+        internal
+        returns (bool ok, bytes memory ret)
+    {
+        vm.prank(caller);
+        (ok, ret) = address(liquidator)
+            .call(
+                abi.encodeWithSelector(
+                    IsolatedMarginLiquidatorUpgradeable.liquidateFunded.selector,
+                    IsolatedMarginLiquidatorUpgradeable.FundedLiquidationParams(id, FUNDER, maxRepay, 0, 0, minValueBps)
+                )
+            );
+    }
+
+    function _liqCode(bytes memory ret) internal pure returns (uint256 c) {
+        require(ret.length == 36 && _selectorOf(ret) == bytes4(keccak256("LiquidationError(uint8)")), "not a LiquidationError");
+        assembly { c := mload(add(ret, 36)) }
+    }
+
+    /// @dev Zero cash in the collateral market: the normal flash route cannot redeem, the funded route settles
+    ///      without redemption, a swap or a flash loan; market cash is untouched.
+    function testAcceptance_fallback_zeroCash_long() public {
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        address account = _position(r.id).account;
+        _drainCash(pWavax, pUsdc); // the long's collateral market (pWAVAX) has no cash to redeem
+        _thresholdBps(account, false); // oracle-only shock: the pool is unchanged
+        (bool ok, bytes memory ret) = address(liquidator)
+            .call(abi.encodeWithSelector(IsolatedMarginLiquidatorUpgradeable.liquidate.selector, _liqParams(r.id)));
+        assertFalse(ok, "flash route cannot redeem from an empty market");
+        assertEq(_selectorOf(ret), bytes4(0x91240a1b), "RedeemTransferOutNotPossible");
+        uint256 cashBefore = pWavax.getCash();
+        uint256 debtBefore = pUsdc.borrowBalanceCurrent(account);
+        uint256 insBefore = pUsdc.balanceOf(address(insuranceFund)) + pWavax.balanceOf(address(insuranceFund));
+        _fundFunder(USDC, 10_000e6);
+        (ok, ret) = _funded(r.id, 10_000e6, 10_000, FUNDER);
+        assertTrue(ok, "funded route settles with zero market cash");
+        assertLt(pUsdc.borrowBalanceStored(account), debtBefore, "debt repaid with the funder's USDC");
+        assertGt(pWavax.balanceOf(FUNDER), 0, "funder received position pTokens in kind");
+        assertEq(pWavax.getCash(), cashBefore, "no redemption happened");
+        assertEq(pUsdc.balanceOf(address(insuranceFund)) + pWavax.balanceOf(address(insuranceFund)), insBefore, "no insurance draw");
+        assertEq(IERC20(USDC).balanceOf(FUNDER), 10_000e6 - (debtBefore - pUsdc.borrowBalanceStored(account)), "funder paid exactly the repay");
+    }
+
+    function testAcceptance_fallback_zeroCash_short() public {
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(BOB, true, 5_000e6, MAX_LEV_X100);
+        address account = _position(r.id).account;
+        _drainCash(pUsdc, pWavax);
+        _thresholdBps(account, true);
+        (bool ok,) = address(liquidator)
+            .call(abi.encodeWithSelector(IsolatedMarginLiquidatorUpgradeable.liquidate.selector, _liqParams(r.id)));
+        assertFalse(ok, "flash route fails");
+        uint256 debtBefore = pWavax.borrowBalanceCurrent(account);
+        _fundFunder(WAVAX, 1_000e18);
+        bytes memory ret;
+        (ok, ret) = _funded(r.id, 1_000e18, 0, FUNDER);
+        assertTrue(ok, "funded route settles with zero market cash");
+        assertLt(pWavax.borrowBalanceStored(account), debtBefore);
+        assertGt(pUsdc.balanceOf(FUNDER), 0, "funder received pUSDC in kind");
+        ret;
+    }
+
+    /// @dev The sell-side wall: the flash route's swap fails at the router, the funded route does not swap.
+    function testAcceptance_fallback_poolWall_long() public {
+        maintenanceBps = 4000;
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        address account = _position(r.id).account;
+        _movePoolTo(8_250, 25e18, 0, 2_000);
+        _setPrices(_poolAnswer8(), usdcAnswer);
+        assertTrue(riskEngine.isLiquidatable(account));
+        (bool ok, bytes memory ret) = address(liquidator)
+            .call(abi.encodeWithSelector(IsolatedMarginLiquidatorUpgradeable.liquidate.selector, _liqParams(r.id)));
+        assertFalse(ok);
+        assertTrue(_reasonContains(ret, "Too little received"), "normal route fails at the router");
+        uint256 debtBefore = pUsdc.borrowBalanceCurrent(account);
+        _fundFunder(USDC, 10_000e6);
+        (ok, ret) = _funded(r.id, 10_000e6, 10_000, FUNDER); // break-even floor: position is solvent here
+        assertTrue(ok, "funded route does not need the pool");
+        assertLt(pUsdc.borrowBalanceStored(account), debtBefore);
+    }
+
+    /// @dev Exhausted funding reverts atomically: debt, position tokens, vault accounting and balances unchanged.
+    function testAcceptance_fallback_exhaustedFunding_revertsAtomically() public {
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        IsolatedMarginTypes.Position memory p = _position(r.id);
+        _thresholdBps(p.account, false);
+        _fundFunder(USDC, 100e6); // far below the required repay
+        uint256 debt = pUsdc.borrowBalanceCurrent(p.account);
+        uint256 posTok = pWavax.balanceOf(p.account);
+        uint256 locked = mVault.lockedBalance(ALICE, address(pUsdc));
+        (bool ok,) = _funded(r.id, 100e6, 0, FUNDER);
+        assertFalse(ok, "reverts when the budget cannot cover the repay");
+        assertEq(pUsdc.borrowBalanceStored(p.account), debt, "debt unchanged");
+        assertEq(pWavax.balanceOf(p.account), posTok, "position pTokens unchanged");
+        assertEq(mVault.lockedBalance(ALICE, address(pUsdc)), locked, "vault locked margin unchanged");
+        assertEq(IERC20(USDC).balanceOf(FUNDER), 100e6, "funder balance unchanged");
+        assertEq(uint8(_position(r.id).status), uint8(IsolatedMarginTypes.Status.ACTIVE));
+        // approval smaller than the balance also reverts atomically
+        deal(USDC, FUNDER, 10_000e6);
+        (ok,) = _funded(r.id, 10_000e6, 0, FUNDER);
+        assertFalse(ok, "allowance exhausted");
+        assertEq(pUsdc.borrowBalanceStored(p.account), debt);
+    }
+
+    /// @dev Invalid prices (stale AVAX with an emergency price set on the inner oracle) revert; no caller price exists.
+    function testAcceptance_fallback_invalidPrice_reverts() public {
+        _activate();
+        _allowFunder(FUNDER);
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        IsolatedMarginTypes.Position memory p = _position(r.id);
+        _thresholdBps(p.account, false);
+        _fundFunder(USDC, 10_000e6);
+        vm.warp(block.timestamp + AVAX_MAX_AGE + 1); // mocked answers are now stale
+        inner.setEmergencyPrice(WAVAX, uint192(2e18), uint64(block.timestamp + 30 minutes));
+        uint256 debt = pUsdc.borrowBalanceStored(p.account);
+        (bool ok, bytes memory ret) = _funded(r.id, 10_000e6, 0, FUNDER);
+        assertFalse(ok);
+        assertEq(_selectorOf(ret), IsolatedMarginRiskEngineUpgradeable.PriceUnavailable.selector, "PriceUnavailable");
+        assertEq(pUsdc.borrowBalanceStored(p.account), debt);
+    }
+
+    /// @dev Authorization, repeated calls and ownership after a full funded liquidation.
+    function testAcceptance_fallback_authorization_repeat_ownership() public {
+        _activate();
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        IsolatedMarginTypes.Position memory p = _position(r.id);
+        _setAvaxBps(5_500); // -45%: below the full-liquidation health, still solvent
+        assertTrue(riskEngine.isLiquidatable(p.account));
+        _fundFunder(USDC, 10_000e6);
+        (bool ok, bytes memory ret) = _funded(r.id, 10_000e6, 0, FUNDER); // not allowlisted yet
+        assertFalse(ok, "unauthorized caller");
+        assertEq(_liqCode(ret), 27);
+        _allowFunder(FUNDER);
+        _setAvaxBps(5_500);
+        uint256 debt = pUsdc.borrowBalanceCurrent(p.account);
+        (ok, ret) = _funded(r.id, 10_000e6, 10_000, FUNDER);
+        assertTrue(ok, "full funded liquidation");
+        assertEq(uint8(_position(r.id).status), uint8(IsolatedMarginTypes.Status.LIQUIDATED));
+        assertEq(pUsdc.borrowBalanceStored(p.account), 0, "debt fully repaid");
+        assertEq(mVault.lockedBalance(ALICE, address(pUsdc)), 0, "locked margin released");
+        // the funder paid exactly the debt and received at most debt x (1 + 5% bonus) of value; the borrower keeps the rest
+        assertEq(IERC20(USDC).balanceOf(FUNDER), 10_000e6 - debt);
+        uint256 seizedUsdc = _wavaxUsd(Math.mulDiv(pWavax.balanceOf(FUNDER), pWavax.exchangeRateStored(), 1e18));
+        assertLe(seizedUsdc, debt * 10_500 / 10_000 + 2, "seizure bounded by repay x (1 + bonus)");
+        assertGt(pWavax.balanceOf(ALICE), 0, "borrower surplus returned to the owner");
+        // repeated call on a closed position
+        (ok, ret) = _funded(r.id, 10_000e6, 0, FUNDER);
+        assertFalse(ok, "repeat call reverts");
+        assertEq(_liqCode(ret), 8, "position not ACTIVE");
     }
 
     // ================================================================= 5. funding and capacity measurements
