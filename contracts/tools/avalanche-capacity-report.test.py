@@ -32,14 +32,28 @@ def both(slice_, cfg, margin, k, **kw):
     """The manifest expands every slice to BOTH sides; fixtures must provide both or the run is (correctly) incomplete."""
     return scenario(slice_, cfg, "long", margin, k, **kw) + scenario(slice_, cfg, "short", margin, k, **kw)
 
-def run(manifest, lines, strict=False):
+AGG = [{"slice": "g", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "base"},
+       {"slice": "g-rem", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "removal50"},
+       {"slice": "g-lag", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "fixedlag100"}]
+def good(sl, **kw): return both(sl, "cand", 1000, 2, pool=7000, target=7000, **kw)
+def full_agg_lines(): return good("g") + good("g-rem") + good("g-lag")
+
+def stress_rows(out): return "\n".join(l for l in out.splitlines() if l.startswith("| stress |"))
+
+def run(manifest, lines, strict=False, agg=True):
+    """agg=True: if the manifest carries the complete aggregate set and the lines do not mention it, add complete PASSING aggregate evidence,
+    so tests about single-position behaviour are not (correctly) suppressed by missing aggregates."""
+    if agg and any(x["slice"] == "g" for x in manifest["slices"]) and not any(l.startswith("MXIDS|g|") for l in lines):
+        lines = lines + full_agg_lines()
+
     with tempfile.TemporaryDirectory() as d:
         mp = os.path.join(d, "m.json"); json.dump(manifest, open(mp, "w"))
         fp = os.path.join(d, "testX.txt"); open(fp, "w").write("\n".join("  " + l for l in lines) + "\n")
         r = subprocess.run([sys.executable, REPORT, "--manifest", mp] + (["--strict"] if strict else []) + [fp], capture_output=True, text=True)
         return r.returncode, r.stdout, r.stderr
 
-def manifest(slices, tests=("testX",)):
+def manifest(slices, tests=("testX",), agg=True):
+    slices = list(slices) + (AGG if agg else [])
     return {"leverageX100": {"cand": 200}, "candidate": "cand", "safetyFactor": 2, "tests": list(tests), "slices": slices, "fallbackBudget": {"USDC": 1, "WAVAX": 1}}
 
 fails = []
@@ -50,7 +64,7 @@ def check(name, cond):
 # 1. every opened position must have been attempted
 m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 5}])
 rc, out, _ = run(m, both("s", "cand", 1000, 5, ids_attempted=[1]))
-check("k=5 with one attempted id is INCOMPLETE-COVERAGE, not PASS", "INCOMPLETE-COVERAGE" in out and "**PASS**" not in out)
+check("k=5 with one attempted id is INCOMPLETE-COVERAGE, not PASS", "INCOMPLETE-COVERAGE" in out and "**PASS**" not in stress_rows(out))
 
 # 2. a PASS in a synthetic regime never counts toward a cap
 m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1}])
@@ -73,10 +87,7 @@ rc, out, _ = run(m, lines)
 check("size 1k not tested in slice b is NOT-TESTED and blocks the cap", "1k:NOT-TESTED" in out and "| long | **NONE (unsupported)**" in out)
 
 # 5. aggregate: ALL required variants (base, removal50, fixedlag100) must pass
-AGG = [{"slice": "g", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "base"},
-       {"slice": "g-rem", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "removal50"},
-       {"slice": "g-lag", "class": "aggregate", "cfgs": ["cand"], "margins": [1000], "k": 2, "variantOf": "g", "variantKind": "fixedlag100"}]
-m = manifest(AGG)
+m = manifest([], agg=True)
 good = lambda sl, **kw: both(sl, "cand", 1000, 2, pool=7000, target=7000, **kw)
 rc, out, _ = run(m, good("g") + good("g-rem", ok=False, status=2) + good("g-lag"))
 check("aggregate with a failing removal variant has no validated aggregate", "| long | **validated aggregate** | | **NONE (unsupported)**" in out)
@@ -84,31 +95,58 @@ rc, out, _ = run(m, good("g") + good("g-rem") + good("g-lag"))
 check("aggregate passing every required variant is validated and halved by the safety factor", "**2,000**" in out and "| long | after safety factor 2 | | 1,000 | 2,000 | 1,000 |" in out)
 
 # 5b. a BASE-ONLY aggregate (manifest omits the required variants) can never produce a validated cap
-m = manifest([AGG[0]])
+m = manifest([AGG[0]], agg=False)
 rc, out, _ = run(m, good("g"))
-check("base-only aggregate cannot produce a validated cap (missing variants named)", "MISSING-VARIANT: fixedlag100, removal50" in out and "| long | **validated aggregate** | | **NONE (unsupported)**" in out)
-m = manifest([AGG[0], AGG[1]])
+rc, out, err = run(m, good("g"), strict=True)
+check("base-only aggregate cannot produce a validated cap (missing variants named, strict exit 2)", rc == 2 and "g (2 x 1,000): fixedlag100, removal50" in out and "**validated aggregate**" not in out)
+m = manifest([AGG[0], AGG[1]], agg=False)
 rc, out, _ = run(m, good("g") + good("g-rem"))
-check("aggregate missing only the lag variant is still unsupported", "MISSING-VARIANT: fixedlag100" in out and "**NONE (unsupported)**" in out)
+rc, out, err = run(m, good("g") + good("g-rem"), strict=True)
+check("aggregate missing only the lag variant is still unsupported (strict exit 2)", rc == 2 and "g (2 x 1,000): fixedlag100" in out and "**validated aggregate**" not in out)
+
+# 5b2. GLOBAL completeness: passing single-position evidence + a base-only aggregate => nothing validated anywhere, strict exit non-zero
+S1 = {"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1}
+single = both("s", "cand", 1000, 1, pool=15000, target=15000)
+# control: the same single-position evidence WITH the complete aggregate set validates a margin and exits 0
+rc, out, err = run(manifest([S1]), single, strict=True)
+check("(control) single-position PASS + complete aggregate set validates a margin and exits 0", rc == 0 and "| long | 1,000 | 500 |" in out)
+m = manifest([S1, AGG[0]], agg=False)
+lines = single + good("g")
+rc, out, err = run(m, lines, strict=True)
+check("passing single-position evidence + base-only aggregate: strict exit is non-zero", rc == 2 and "aggregate groups missing a mandatory variant" in err)
+check("... and EVERY validated-cap output is suppressed (single margin, safety-adjusted, aggregate)",
+      "SUPPRESSED" in out and "| long | 1,000 | 500 |" not in out and "after safety factor" not in out and "**validated aggregate**" not in out)
+check("... and the missing variants are named in the report", "removal50" in out and "fixedlag100" in out)
+rc, out, err = run(m, lines)
+check("... non-strict mode still prints the SUPPRESSED report and exits 0", rc == 0 and "SUPPRESSED" in out)
+# no aggregate scenarios at all for the candidate
+m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1}], agg=False)
+rc, out, err = run(m, both("s", "cand", 1000, 1, pool=15000, target=15000), strict=True)
+check("a manifest without any aggregate scenario cannot validate caps (strict exit non-zero)", rc == 2 and "SUPPRESSED" in out and "no aggregate scenarios" in err and "| long | 1,000 | 500 |" not in out)
+# a manifest that lists the variants as a different margin/k than the base leaves the base group incomplete
+m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1}, AGG[0],
+              dict(AGG[1], margins=[2000]), dict(AGG[2], margins=[2000])], agg=False)
+rc, out, err = run(m, both("s", "cand", 1000, 1, pool=15000, target=15000) + good("g") + both("g-rem", "cand", 2000, 2, pool=7000, target=7000) + both("g-lag", "cand", 2000, 2, pool=7000, target=7000), strict=True)
+check("variants at other sizes do not complete the base group", rc == 2 and "SUPPRESSED" in out)
 
 # 5c. duplicate final snapshot hides a missing position => conflicting records, never PASS
 m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 2}])
 lines = [mxids("s", "cand", "long", 1000, 2, [1, 2]), mx("s", "cand", "long", 1000, 2, 3, 7000, 7000), mxt("s", "cand", "long", 1000, 2, 1, 3), mxt("s", "cand", "long", 1000, 2, 2, 3),
          mxend("s", "cand", "long", 1000, 2, 1), mxend("s", "cand", "long", 1000, 2, 1)]
 rc, out, _ = run(m, lines)
-check("duplicated final snapshot (id 1 twice, id 2 missing) is CONFLICTING-RECORDS, not PASS", "CONFLICTING-RECORDS" in out and "**PASS**" not in out)
+check("duplicated final snapshot (id 1 twice, id 2 missing) is CONFLICTING-RECORDS, not PASS", "CONFLICTING-RECORDS" in out and "**PASS**" not in stress_rows(out))
 lines = [mxids("s", "cand", "long", 1000, 2, [1, 2]), mx("s", "cand", "long", 1000, 2, 3, 7000, 7000), mxt("s", "cand", "long", 1000, 2, 1, 3), mxt("s", "cand", "long", 1000, 2, 2, 3),
          mxend("s", "cand", "long", 1000, 2, 1), mxend("s", "cand", "long", 1000, 2, 2), mxend("s", "cand", "long", 1000, 2, 3)]
 rc, out, _ = run(m, lines)
-check("a snapshot for an id that was never opened is CONFLICTING-RECORDS", "CONFLICTING-RECORDS" in out and "**PASS**" not in out)
+check("a snapshot for an id that was never opened is CONFLICTING-RECORDS", "CONFLICTING-RECORDS" in out and "**PASS**" not in stress_rows(out))
 lines = scenario("s", "cand", "long", 1000, 2, pool=7000, target=7000)[1:]  # drop the MXIDS line
 rc, out, _ = run(m, lines)
-check("missing record of the opened ids is NOT-RUN (no evidence)", "NOT-RUN" in out and "**PASS**" not in out)
+check("missing record of the opened ids is NOT-RUN (no evidence)", "NOT-RUN" in out and "**PASS**" not in stress_rows(out))
 # attempt coverage reconciled against the opened ids, not just a count
 lines = [mxids("s", "cand", "long", 1000, 2, [7, 9]), mx("s", "cand", "long", 1000, 2, 3, 7000, 7000), mxt("s", "cand", "long", 1000, 2, 7, 3), mxt("s", "cand", "long", 1000, 2, 7, 4),
          mxend("s", "cand", "long", 1000, 2, 7), mxend("s", "cand", "long", 1000, 2, 9)]
 rc, out, _ = run(m, lines)
-check("two attempts on one id do not cover two opened ids (INCOMPLETE-COVERAGE)", "INCOMPLETE-COVERAGE" in out and "**PASS**" not in out)
+check("two attempts on one id do not cover two opened ids (INCOMPLETE-COVERAGE)", "INCOMPLETE-COVERAGE" in out and "**PASS**" not in stress_rows(out))
 
 # 5d. incomplete evidence anywhere suppresses EVERY validated-cap output, including safety-adjusted figures
 m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1},
@@ -130,11 +168,11 @@ with tempfile.TemporaryDirectory() as d:
 # 6. insurance tokens drawn => never PASS
 m = manifest([{"slice": "s", "class": "stress", "cfgs": ["cand"], "margins": [1000], "k": 1}])
 rc, out, _ = run(m, both("s", "cand", 1000, 1, pool=7000, target=7000, ins=1))
-check("1 base unit of insurance makes it insurance-assisted, not PASS", "PASS-INSURANCE-ASSISTED" in out and "**PASS**" not in out)
+check("1 base unit of insurance makes it insurance-assisted, not PASS", "PASS-INSURANCE-ASSISTED" in out and "**PASS**" not in stress_rows(out))
 
 # 7. loosened-guard diagnostic and alternative configs never emit caps
-m = {"leverageX100": {"cand": 200, "ALT-guard300-2x25": 200}, "candidate": "cand", "safetyFactor": 2, "tests": ["testX"],
-     "slices": [{"slice": "s", "class": "stress", "cfgs": ["ALT-guard300-2x25"], "margins": [1000], "k": 1}], "fallbackBudget": {"USDC": 1, "WAVAX": 1}}
+m = manifest([{"slice": "s", "class": "stress", "cfgs": ["ALT-guard300-2x25"], "margins": [1000], "k": 1}])
+m["leverageX100"]["ALT-guard300-2x25"] = 200
 rc, out, _ = run(m, both("s", "ALT-guard300-2x25", 1000, 1, pool=7000, target=7000))
 check("diagnostic config PASS is labelled diagnostic and yields no cap", "| diagnostic |" in out and "| long | **NONE (unsupported)**" in out)
 

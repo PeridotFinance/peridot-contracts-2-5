@@ -339,20 +339,19 @@ contract AvalancheFundedFallbackForkTest is AvalancheSection5Base {
         assertTrue(o.full);
     }
 
-    /// @dev FINDING: with the flash lender endpoint disabled, a PARTIAL liquidation cannot be sized because
-    ///      `riskEngine.beginLiquidation` calls `_liquidationQuote`, which reads `config.flashLoanProvider()`.
-    ///      Asserts current behaviour (revert) so a risk-engine fix shows up as a failing test to re-evaluate.
-    function testFinding_PartialSizingNeedsFlashLenderView() public {
+    /// @dev Formerly `testFinding_PartialSizingNeedsFlashLenderView`, which asserted that a funded PARTIAL liquidation reverted
+    ///      ("RiskEngine: lender unavailable") when governance disabled the execution endpoints. The funded route now sizes
+    ///      through `riskEngine.beginFundedLiquidation` (no lender read), so the partial completes. The flash route still fails.
+    function testAcceptance_PartialSizingIndependentOfFlashLender() public {
         _boot();
         (uint256 id, address account) = _openSide(false, 5_000e6);
         _shockPartial(account, false);
         mConfig.disableExecutionEndpoints();
-        _fundFor(FUNDER, id, 15_000);
-        bytes32 h = _stateHash(id);
-        (bool ok, bytes memory ret) = _fundedOk(id);
-        assertFalse(ok, "FINDING: partial funded sizing reverts when the lender view is disabled");
-        _reasonContains(ret, "lender unavailable");
-        assertEq(_stateHash(id), h, "state unchanged");
+        (bool fok,) = _flash(id);
+        assertFalse(fok, "flash route has no lender");
+        Outcome memory o = _runFunded(id);
+        assertFalse(o.full, "funded PARTIAL liquidation completes with the lender view disabled");
+        assertGt(PErc20(_position(id).debtPToken).borrowBalanceStored(account), 0, "debt remains after a partial");
     }
 
     // ================================================================= (c) exhausted funding

@@ -276,7 +276,7 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
      * @notice Funded in-kind forced liquidation. The allowlisted caller supplies the ACTUAL debt asset; the margin
      *         account's debt is repaid and the permitted position pTokens are moved to `recipient` in ONE call.
      * @dev No flash loan, no swap, no redemption: works with zero collateral-market cash and a dead swap route.
-     *      The repay amount is exactly what `riskEngine.beginLiquidation` allows (partial or full), prices come
+     *      The repay amount is exactly what `riskEngine.beginFundedLiquidation` allows (partial or full; sized without the flash lender or swap slippage), prices come
      *      only from the risk engine's oracle (a zero sentinel reverts `PriceUnavailable`), seized value is
      *      capped at repaid value x (1 + pair liquidationBonusBps) with every rounding against the liquidator,
      *      and the state machine ends in `finishLiquidation` (health must improve, or debt must be zero).
@@ -299,7 +299,7 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
 
         FundedPlan memory plan;
         // First price-touching call: an unavailable price reverts here with PriceUnavailable.
-        (plan.repay, plan.previousHealthFactorBps) = riskEngine.beginLiquidation(position.account);
+        (plan.repay, plan.previousHealthFactorBps) = riskEngine.beginFundedLiquidation(position.account);
         if (plan.repay == 0 || plan.repay > currentDebt) revert LiquidationError(11);
         if (plan.repay > params.maxRepayUnderlying) revert LiquidationError(28);
         plan.full = plan.repay == currentDebt;

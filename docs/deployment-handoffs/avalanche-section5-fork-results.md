@@ -1,7 +1,7 @@
 # Avalanche handoff 09 section 5 fork checkpoint: results
 
 Branch `avalanche-pharaoh-tracks-abcd` (from `boosted-findings-remediation`). Tests only, nothing signed or broadcast, no keys.
-Test: `contracts/test/AvalanchePharaohSection5Fork.t.sol` (**34 pass, 0 fail**; the former deliberate failure `testRequirement_fundedInKindForcedFallback_UNMET` was replaced by `testAcceptance_fallback_*` tests now that the funded in-kind route exists; cold public-RPC runs may fail on rate limits until the local fork cache is warm). One independent review pass was done; its confirmed issues are fixed (vacuous liquidation blocks, weak assertions, oracle hardening). New code: `PeridottrollerAvalanche.sol`, `margin/GuardedAvalanchePriceOracle.sol`.
+Test: `contracts/test/AvalanchePharaohSection5Fork.t.sol` (**35 pass, 0 fail**; the former deliberate failure `testRequirement_fundedInKindForcedFallback_UNMET` was replaced by `testAcceptance_fallback_*` tests now that the funded in-kind route exists; cold public-RPC runs may fail on rate limits until the local fork cache is warm). One independent review pass was done; its confirmed issues are fixed (vacuous liquidation blocks, weak assertions, oracle hardening). New code: `PeridottrollerAvalanche.sol`, `margin/GuardedAvalanchePriceOracle.sol`.
 
 Run (pin block 99,200,000, chain time about 2026-11-02; the public RPC served it, a private archive RPC is better because the public one rate-limited cold runs and the cache has to be warmed):
 

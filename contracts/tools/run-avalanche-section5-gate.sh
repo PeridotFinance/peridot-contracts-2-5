@@ -22,8 +22,10 @@ run_suite() {  # name, regex
   local EL=$(( $(date +%s) - S0 ))
   if [ $rc -ne 0 ] || ! grep -q "^Suite result: ok" "$OUT/$1.txt" || grep -q "^Suite result: FAILED" "$OUT/$1.txt"; then echo "[$(stamp)] DONE  suite $1 FAILED (${EL}s)"; FAILED=1; else echo "[$(stamp)] DONE  suite $1 ok: $(grep -c '^\[PASS' "$OUT/$1.txt") tests (${EL}s)"; fi
 }
+tools/check-risk-engine-storage-layout.sh > "$OUT/storage-layout.txt" 2>&1 && echo "ok: risk engine storage layout" || { echo "FAILED: risk engine storage layout"; FAILED=1; }
 run_suite section5 '^AvalanchePharaohSection5ForkTest$'
 run_suite funded-fallback '^AvalancheFundedFallbackForkTest$'
+run_suite funded-sizing '^AvalancheFundedSizingForkTest$'
 echo "[$(stamp)] START capacity matrix (per-test progress below; detailed logs in $OUT/matrix/)"
 tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" 2>&1 | tee "$OUT/matrix.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "FAILED: capacity matrix (see $OUT/matrix.txt)"; FAILED=1; }
