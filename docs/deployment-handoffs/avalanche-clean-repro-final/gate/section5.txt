@@ -1,0 +1,233 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 35 tests for test/AvalanchePharaohSection5Fork.t.sol:AvalanchePharaohSection5ForkTest
+[PASS] testAcceptance_fallback_authorization_repeat_ownership() (gas: 3963369)
+[PASS] testAcceptance_fallback_exhaustedFunding_revertsAtomically() (gas: 5430459)
+[PASS] testAcceptance_fallback_invalidPrice_reverts() (gas: 5082529)
+[PASS] testAcceptance_fallback_poolWall_long() (gas: 76447624)
+[PASS] testAcceptance_fallback_zeroCash_long() (gas: 6845704)
+[PASS] testAcceptance_fallback_zeroCash_short() (gas: 7650522)
+[PASS] testBorrowIsRejectedWhilePausedAndAfterCap() (gas: 1443227)
+[PASS] testCapacityLadderAdapterBothDirections() (gas: 20392652)
+Logs:
+  == ladder notional USD (1e6): 1000000000
+     buy  WAVAX loss vs oracle (bps): 12
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 0
+  == ladder notional USD (1e6): 5000000000
+     buy  WAVAX loss vs oracle (bps): 12
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 0
+  == ladder notional USD (1e6): 25000000000
+     buy  WAVAX loss vs oracle (bps): 15
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 5
+  == ladder notional USD (1e6): 50000000000
+     buy  WAVAX loss vs oracle (bps): 23
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 17
+  == ladder notional USD (1e6): 100000000000
+     buy  WAVAX loss vs oracle (bps): 45
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 428
+  == ladder notional USD (1e6): 250000000000
+     buy  WAVAX loss vs oracle (bps): 138
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 6171
+  == ladder notional USD (1e6): 500000000000
+     buy  WAVAX loss vs oracle (bps): 201
+     round-trip loss (bps): 9
+     sell WAVAX loss vs oracle (bps): 8085
+
+[PASS] testDeploymentStateIsPausedAndWired() (gas: 101804)
+[PASS] testFinding_LongLiquidationFailsAtMinus17PercentEvenWithMaint4000() (gas: 75740921)
+Logs:
+  USD sold into the pool, valued at pin price (1e6): 104940325250
+  pool price (bps of pin): 8227
+  pool USDC left (1e6): 2829495824
+
+[PASS] testFinding_LongLiquidationFailsWhenPoolSellSideIsExhausted() (gas: 25250661)
+Logs:
+  USD of WAVAX sold into the pool (1e6): 108573697000
+  sell chunks (100 WAVAX each): 127
+  pool-implied USD/AVAX e8 after crash: 48095
+  pool USDC left (1e6): 119171062
+  long liquidation succeeded against exhausted pool (0/1): 0
+  revert: Error(string)
+
+[PASS] testFinding_ShortLiquidationFailsWhenPoolBuySideIsExhausted() (gas: 59505209)
+Logs:
+  USDC spent to pump the pool (1e6): 4925000000000
+  pump chunks (USD 25k each): 197
+  pool-implied USD/AVAX e8 after pump: 1841747329
+  pool WAVAX left (1e18): 2270742434626181702002
+  short liquidation succeeded against exhausted pool (0/1): 0
+  revert: Error(string)
+
+[PASS] testFinding_transferPauseStopsAllMarginLiquidations() (gas: 7309523)
+[PASS] testFlashFeeSensitivity() (gas: 3163472)
+Logs:
+  LONG leverageX100 with 9 bps flash fee: 198
+  LONG health bps with 9 bps flash fee: 20181
+
+[PASS] testFundingAtCapsFlashVaultAndOpenCosts() (gas: 8485225)
+Logs:
+  margin USDC per position (1e6): 24000000000
+  LONG flash need (USDC 1e6): 23524752475
+  SHORT flash need (WAVAX 1e18): 2778334160726873487415
+  LONG gross USD 1e18: 47418553865596427357334
+  SHORT gross USD 1e18: 47777692896498611200000
+  LONG health bps: 20164
+  SHORT health bps: 20114
+  LONG leverageX100: 198
+  SHORT leverageX100: 198
+  pUSDC cash after both opens (1e6): 429273240229
+  pWAVAX cash after both opens (1e18): 14918272897270629158776
+
+[PASS] testGapShocksAndInsuranceDraw() (gas: 4405414)
+Logs:
+  LONG equity USD (1e18) at -60% gap: -943882699141308112268
+  status (6=LIQUIDATED): 6
+  insurance pUSDC drawn: 0
+
+[PASS] testGuardedOracleFailsClosedOnBadRounds() (gas: 159994)
+[PASS] testLongCloseWorksWhenDebtMarketCashIsExhausted() (gas: 4800056)
+Logs:
+  pUSDC cash after drain (1e6): 1
+  LONG close with exhausted pUSDC cash succeeded (0/1): 1
+  revert selector: other
+
+[PASS] testMainnetControllerWrapper_chainIdTokenAndProxy() (gas: 570139)
+[PASS] testMarginAccountCannotBeLiquidatedThroughOrdinaryPath() (gas: 6130146)
+[PASS] testMarginLongOpenPartialCloseFullClose() (gas: 5342233)
+Logs:
+  LONG flash USDC (1e6): 4900990099
+  LONG open gas: 2630322
+  LONG gross USD (1e18): 9887564873409116469330
+  LONG debt USD (1e18): 4898908648504954700000
+  LONG leverageX100: 198
+  LONG healthBps: 20181
+  LONG margin shares locked: 25000000000000
+  LONG margin shares returned: 24951500715000
+  LONG round-trip cost bps of margin: 19
+
+[PASS] testMarginLongPartialAndFullLiquidation() (gas: 6926843)
+Logs:
+  LONG liquidatable once AVAX <= % of pin (bps): 6600
+  LONG liquidation gas: 1579504
+  LONG keeper reward USDC (1e6): 122524752
+  status after first liquidation (2=ACTIVE,6=LIQUIDATED): 2
+
+[PASS] testMarginShortOpenPartialCloseFullClose() (gas: 5896943)
+Logs:
+  SHORT flash WAVAX (1e18): 578819616866815960959
+  SHORT open gas: 2751073
+  SHORT gross USD (1e18): 9944900919054868900000
+  SHORT debt USD (1e18): 4948392574752264999994
+  SHORT leverageX100: 199
+  SHORT healthBps: 20096
+  SHORT margin shares locked: 25000000000000
+  SHORT margin shares returned: 24951260294953
+
+[PASS] testMovedPool_ShortLiquidation_Maint4000() (gas: 36946127)
+Logs:
+  USDC spent pumping the pool (1e6): 3525000000000
+  pool price (bps of pin): 12201
+  liquidation gas against moved pool: 1825361
+  status (2=ACTIVE,6=LIQUIDATED): 2
+
+[PASS] testObservation_ShortLiquidationRevertsWhenOracleLeadsPool() (gas: 4701139)
+Logs:
+  short liquidation succeeded with oracle +70% vs unchanged pool (0/1): 0
+
+[PASS] testOracleZeroSentinel_allConsumers() (gas: 4814606)
+[PASS] testOrdinaryLiquidationBothDirections() (gas: 2643707)
+[PASS] testPinnedPoolAndFeedFacts() (gas: 74419)
+Logs:
+  pin block: 99200000
+  pool fee ppm: 490
+  pool feeProtocol: 1000000
+  pool tick: -254858
+  pool active liquidity: 22224645411709421587
+  pool sqrtPriceX96: 231736900115651904465137
+  pool-implied USD/AVAX (e8): 855522072
+  Chainlink AVAX/USD (e8): 854911000
+  Chainlink USDC/USD (e8): 99957530
+  WAVAX in pool (1e18): 513042260061117930376958
+  USDC in pool (1e6): 95831302661
+  pool vs oracle deviation (bps): 7
+
+[PASS] testPoolDepthCurve() (gas: 403543080)
+Logs:
+  SELL WAVAX: price at (bps of pin): 9897
+     cumulative USD sold (1e6): 63049686250
+  SELL WAVAX: price at (bps of pin): 9797
+     cumulative USD sold (1e6): 70530157500
+  SELL WAVAX: price at (bps of pin): 9499
+     cumulative USD sold (1e6): 80361634000
+  SELL WAVAX: price at (bps of pin): 8999
+     cumulative USD sold (1e6): 89765655000
+  SELL WAVAX: price at (bps of pin): 7983
+     cumulative USD sold (1e6): 96604943000
+  SELL WAVAX: price at (bps of pin): 473
+     cumulative USD sold (1e6): 98528492750
+  SELL WAVAX: price at (bps of pin): 473
+     cumulative USD sold (1e6): 98528492750
+  pool USDC left after sells (1e6): 114811923
+  BUY WAVAX: price at (bps of pin): 10100
+     cumulative USD bought (1e6): 112500000000
+  BUY WAVAX: price at (bps of pin): 10201
+     cumulative USD bought (1e6): 155000000000
+  BUY WAVAX: price at (bps of pin): 10500
+     cumulative USD bought (1e6): 1992500000000
+  BUY WAVAX: price at (bps of pin): 11030
+     cumulative USD bought (1e6): 2650000000000
+  BUY WAVAX: price at (bps of pin): 12000
+     cumulative USD bought (1e6): 3327500000000
+  BUY WAVAX: price at (bps of pin): 15003
+     cumulative USD bought (1e6): 4900000000000
+  BUY WAVAX: price at (bps of pin): 21104
+     cumulative USD bought (1e6): 4917500000000
+
+[PASS] testShortCloseAgainstExhaustedCashAndVoluntaryEmergencyExit() (gas: 4942679)
+Logs:
+  pTokens released via debt-free exit (margin): 49745631565000
+
+[PASS] testShortLiquidationWithExhaustedCash() (gas: 6994153)
+Logs:
+  revert: RedeemTransferOutNotPossible (market cash)
+  selector==RedeemTransferOutNotPossible (0/1): 1
+
+[PASS] testStaleFeedWithEmergencyPriceStillBlocksRiskIncreaseAndLiquidation() (gas: 8606795)
+Logs:
+  margin open revert: Error(string)
+
+[PASS] testStaleFeed_accountClassMatrix() (gas: 2293272)
+[PASS] testSupplyAndBorrowBothDirectionsAndRepay() (gas: 1795416)
+Logs:
+  ALICE borrowed USDC (1e6) against 100 WAVAX: 461651940
+  BOB borrowed WAVAX (1e18) against 10k USDC: 789220547518981508016
+  over-borrow error code (0 = market reverted): 0
+
+[PASS] testUsdcDepeg_valuationFollowsFeed() (gas: 3292996)
+Logs:
+  USDC price e18 at feed 0.9996: 999575300000000000
+  debt USD e18 at 0.9996 / 0.98 / 0.90: 4898908648504954700000
+     0.98: 4802970297020000000000
+     0.90: 4410891089100000000000
+
+Suite result: ok. 35 passed; 0 failed; 0 skipped; finished in 1.32s (1.17s CPU time)
+
+Ran 1 test suite in 1.34s (1.32s CPU time): 35 tests passed, 0 failed, 0 skipped (35 total tests)
