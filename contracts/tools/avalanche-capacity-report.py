@@ -42,13 +42,13 @@ def tok(v, asset):
     d = USDC_DEC if asset == "USDC" else WAVAX_DEC
     return f"{int(v)/10**d:,.4f} {asset}"
 
-MX, MXT, MXEND, MXSUM, MXOPEN, OX, SG, MXF, MXFSUM = [], [], [], [], [], [], [], [], []
+MX, MXT, MXEND, MXSUM, MXOPEN, OX, SG, MXF, MXFSUM, MXIDS = [], [], [], [], [], [], [], [], [], []
 files_seen = []
 seen_paths = set()
 for f in args:
     rp = os.path.realpath(f)
     if rp in seen_paths: continue  # never count the same output twice
-    seen_paths.add(rp); files_seen.append(f)
+    seen_paths.add(rp); files_seen.append(f); cur = os.path.basename(f)
     pending = None
     for ln in open(f, errors="replace").read().splitlines():
         ln = ln.strip()
@@ -56,28 +56,31 @@ for f in args:
             continue
         p = ln.split("|"); t = p[0]
         if t == "MX":
-            MX.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), path=int(p[6]), lag=int(p[7]), rem=int(p[8]),
+            MX.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), path=int(p[6]), lag=int(p[7]), rem=int(p[8]),
                            step=int(p[9]), target=int(p[10]), pool=int(p[11]), oracle=int(p[12]), liq=p[13] == "1", ok=p[14] == "1",
                            rev=p[15], repay=int(p[16]), seized=int(p[17]), reward=int(p[18]), surplus=int(p[19]), ins=int(p[20]),
                            cost=int(p[22]), exec=int(p[23]), gas=int(p[24])))
         elif t == "MXT":
-            MXT.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), step=int(p[7]), ok=p[8] == "1",
+            MXT.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), step=int(p[7]), ok=p[8] == "1",
                             repayT=int(p[9]), seizedT=int(p[10]), rewardT=int(p[11]), surplusT=int(p[12]), insU=int(p[13]), insW=int(p[14]),
                             debtLeftT=int(p[15]), status=int(p[16]), flashU=int(p[17]), flashW=int(p[18]), cashU=int(p[19]), cashW=int(p[20])))
         elif t == "MXEND":
-            MXEND.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), status=int(p[7]), liqable=p[8] == "1",
+            MXEND.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), status=int(p[7]), liqable=p[8] == "1",
                               debtT=int(p[9]), debtC=int(p[10]), collC=int(p[11]), badC=int(p[12]), badPoolC=int(p[13])))
         elif t == "MXSUM":
-            MXSUM.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), flashU=int(p[6]), flashW=int(p[7]), cashU=int(p[8]),
+            MXSUM.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), flashU=int(p[6]), flashW=int(p[7]), cashU=int(p[8]),
                               cashW=int(p[9]), insU=int(p[10]), insW=int(p[11]), insC=int(p[12])))
         elif t == "MXF":
-            MXF.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), step=int(p[7]), ok=p[8] == "1",
+            MXF.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), id=int(p[6]), step=int(p[7]), ok=p[8] == "1",
                             rev=p[9], pool=int(p[10]), debtBefore=int(p[11]), repaidT=int(p[12]), repaidC=int(p[13]), seizedC=int(p[14]), status=int(p[15])))
         elif t == "MXFSUM":
-            MXFSUM.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), budU=int(p[6]), budW=int(p[7]), leftU=int(p[8]),
+            MXFSUM.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), budU=int(p[6]), budW=int(p[7]), leftU=int(p[8]),
                                leftW=int(p[9]), invU=int(p[10]), invW=int(p[11]), invC=int(p[12]), redU=int(p[13]), redW=int(p[14])))
+        elif t == "MXIDS":
+            MXIDS.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), opened=int(p[6]),
+                              ids=[int(x) for x in p[7].split(",") if x]))
         elif t == "MXOPEN":
-            MXOPEN.append(dict(slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), opened=int(p[6]), rev=p[7]))
+            MXOPEN.append(dict(src=cur, slice=p[1], cfg=p[2], side=p[3], margin=int(p[4]), k=int(p[5]), opened=int(p[6]), rev=p[7]))
         elif t == "OX":
             OX.append(dict(dir=p[1], util=int(p[2]), n=int(p[3]), step=int(p[4]), target=int(p[5]), short=int(p[6]), repay=int(p[7]),
                            seized=int(p[8]), proto=int(p[9]), resid=int(p[10]), bad=int(p[11])))
@@ -98,6 +101,8 @@ for r in MXF: fbg[key(r)].append(r)
 sumg = {key(r): r for r in MXSUM}
 fbsum = {key(r): r for r in MXFSUM}
 openg = {key(r): r for r in MXOPEN}
+idsg = collections.defaultdict(list)
+for r in MXIDS: idsg[key(r)].append(r)
 LEV = manifest["leverageX100"]
 
 def regime(rows):
@@ -114,15 +119,32 @@ def regime(rows):
 def resolved_end(e):
     return (e["status"] == 6 and e["debtT"] == 0) or (e["status"] == 2 and not e["liqable"])
 
+def record_state(k):
+    """Reconcile the records of one scenario against the ACTUAL opened position ids logged by the engine.
+    Returns (state, opened_ids): NOT-RUN (nothing / no snapshots), CONFLICT (duplicate, missing, extra or cross-file records), OK."""
+    rows = grp.get(k, []); ends = endg.get(k, []); ts = tokg.get(k, []); idl = idsg.get(k, [])
+    if not rows and not ends and not idl: return "NOT-RUN", None
+    if not idl: return "NOT-RUN", None                      # no record of which positions were opened
+    if len(idl) != 1: return "CONFLICT", None               # duplicate / conflicting open records
+    ids = idl[0]["ids"]; opened = set(ids)
+    if len(ids) != len(opened) or len(opened) != k[4] or idl[0]["opened"] != len(ids): return "CONFLICT", opened
+    if not ends: return "NOT-RUN", opened
+    end_ids = [e["id"] for e in ends]
+    if len(end_ids) != len(set(end_ids)) or set(end_ids) != opened: return "CONFLICT", opened   # exactly one final snapshot per opened id
+    if any(t["id"] not in opened for t in ts): return "CONFLICT", opened
+    if len({r["src"] for r in rows + ends + ts + idl}) > 1: return "CONFLICT", opened            # same scenario from two outputs
+    return "OK", opened
+
 def verdict(k):
-    rows = grp.get(k, []); ends = endg.get(k, [])
     if k in openg and openg[k]["opened"] < k[4]: return "FAIL-OPEN"
-    if not rows and not ends: return "NOT-RUN"
-    if len(ends) < k[4]: return "NOT-RUN"  # no end-of-path snapshot for every opened position: incomplete evidence
+    st, opened = record_state(k)
+    if st == "NOT-RUN": return "NOT-RUN"
+    if st == "CONFLICT": return "CONFLICTING-RECORDS"
+    rows = grp.get(k, []); ends = endg.get(k, [])
     att = [r for r in rows if r["liq"]]
     if not att: return "UNTRIGGERED"
     ts = tokg.get(k, [])
-    if len({t["id"] for t in ts}) < k[4]: return "INCOMPLETE-COVERAGE"
+    if {t["id"] for t in ts} != opened: return "INCOMPLETE-COVERAGE"   # attempts must cover exactly the opened positions
     if not att[0]["ok"]: return "FAIL-FIRST"
     if not all(r["ok"] for r in att) or not all(resolved_end(e) for e in ends): return "FAIL-PARTIAL"
     bad = sum(max(e["badC"], e["badPoolC"]) for e in ends)
@@ -151,9 +173,12 @@ out.append("Generated by `contracts/tools/avalanche-capacity-report.py` against 
            "Evidence classes: `oracle-only` = MOCKED oracle, pool untouched (reference, never used for caps); `pool-follows` / `lag*` / `fixedlag*` = pool moved by REAL swaps; "
            "`removal*` = EMULATED third-party liquidity removal; `agg-*` = correlated sequential positions; cfg `ALT-*` = alternatives (no launch cap), "
            "`ALT-guard300-2x25` = LOOSENED GUARDS, diagnostic only (never emits a cap).\n")
-status_line = f"Manifest scenarios: {len(required)}; NOT-RUN: {len(notrun)}; manifest test outputs missing: {len(tests_missing)}; tests reported FAILED by the runner: {len(failed_tests)}. "
-incomplete = bool(notrun or tests_missing or failed_tests)
-out.append(status_line + ("**EVIDENCE INCOMPLETE OR TESTS FAILED: this report cannot support any cap**\n" if incomplete else "All manifest scenarios produced rows.\n"))
+conflicts = [r for r in required if verd[r["key"]] == "CONFLICTING-RECORDS"]
+fb_pre = [(cl, k) for sl in manifest.get("fallbackSlices", []) for cl in [sl["class"]] for cfg in sl["cfgs"] for side in ("long","short") for m in sl["margins"] for k in [(sl["slice"], cfg, side, m, sl["k"])]]
+fb_incomplete = [k for _, k in fb_pre if verdict(k) in ("NOT-RUN", "CONFLICTING-RECORDS")]
+status_line = f"Manifest scenarios: {len(required)}; fallback scenarios: {len(fb_pre)}; NOT-RUN: {len(notrun)}; conflicting records: {len(conflicts)}; incomplete fallback scenarios: {len(fb_incomplete)}; manifest test outputs missing: {len(tests_missing)}; tests reported FAILED by the runner: {len(failed_tests)}. "
+incomplete = bool(notrun or tests_missing or failed_tests or conflicts or fb_incomplete)
+out.append(status_line + ("**EVIDENCE INCOMPLETE OR TESTS FAILED: every validated-cap output is SUPPRESSED below**\n" if incomplete else "All manifest scenarios produced rows.\n"))
 if tests_missing: out.append("Missing test outputs: " + ", ".join(tests_missing) + "\n")
 if failed_tests: out.append("Failed: " + "; ".join(failed_tests) + "\n")
 cnt = collections.Counter((cls_of(r["key"][1], r["cls"]), verd[r["key"]]) for r in required)
@@ -189,59 +214,69 @@ for r in required:
 
 # ---------------------------------------------------------------- derived limits (candidate, PASS + external only)
 cand = manifest["candidate"]; sf = manifest["safetyFactor"]; lev = LEV[cand]
+REQ_AGG_VARIANTS = {"base", "removal50", "fixedlag100"} | set(manifest.get("aggregateRequiredVariants", []))
 def counts(v, k): return v == "PASS" and reg.get(k) == "external"
 out.append("\n## Derived limits for the candidate configuration\n")
-out.append(f"`{cand}` only. Single position: the largest margin size M such that EVERY size <= M passes EVERY required `stress` slice (verdict PASS in an `external` price regime; a slice that did not run a size disqualifies it). "
-           f"Aggregate: the largest total T such that EVERY aggregate scenario with total <= T passes every variant of its group (base, 50% liquidity removal, 100 bps oracle lag). "
-           f"Safety factor {sf} is applied to the validated figure and shown beside it, in margin, gross notional and debt.\n")
-stress = [s for s in manifest["slices"] if s["class"] == "stress" and cand in s["cfgs"]]
-sizes = sorted({m for s in stress for m in s["margins"]})
-out.append("| side | validated single-position margin (USD) | after safety factor | disqualifying scenarios |")
-out.append("|---|---|---|---|")
-for side in ("long", "short"):
-    validated = None; bad = collections.defaultdict(list)
-    for m in sizes:
-        ok_all = True
-        for s in stress:
-            k = (s["slice"], cand, side, m, s["k"])
-            if m not in s["margins"]:
-                ok_all = False; bad[s["slice"]].append(f"{m//1000}k:NOT-TESTED"); continue
-            if not counts(verd.get(k), k):
-                ok_all = False; bad[s["slice"]].append(f"{m//1000}k:{verd.get(k)}/{reg.get(k)}")
-        if ok_all: validated = m
-        else: break  # monotone: a failing size blocks every larger size
-    out.append(f"| {side} | " + (f"{validated:,}" if validated else "**NONE (unsupported)**") + " | " + (f"{validated//sf:,}" if validated else "-") + " | "
-               + ("; ".join(f"{a}: {', '.join(b)}" for a, b in bad.items()) or "-") + " |")
+if incomplete:
+    out.append("**SUPPRESSED: the evidence is incomplete or a required test failed (see the header). No validated single-position or aggregate cap, and no safety-adjusted figure, is emitted.**\n")
+else:
+  if True:
+    out.append(f"`{cand}` only. Single position: the largest margin size M such that EVERY size <= M passes EVERY required `stress` slice (verdict PASS in an `external` price regime; a slice that did not run a size disqualifies it). "
+               f"Aggregate: the largest total T such that EVERY aggregate scenario with total <= T passes every variant of its group (base, 50% liquidity removal, 100 bps oracle lag). "
+               f"Safety factor {sf} is applied to the validated figure and shown beside it, in margin, gross notional and debt.\n")
+    stress = [s for s in manifest["slices"] if s["class"] == "stress" and cand in s["cfgs"]]
+    sizes = sorted({m for s in stress for m in s["margins"]})
+    out.append("| side | validated single-position margin (USD) | after safety factor | disqualifying scenarios |")
+    out.append("|---|---|---|---|")
+    for side in ("long", "short"):
+        validated = None; bad = collections.defaultdict(list)
+        for m in sizes:
+            ok_all = True
+            for s in stress:
+                k = (s["slice"], cand, side, m, s["k"])
+                if m not in s["margins"]:
+                    ok_all = False; bad[s["slice"]].append(f"{m//1000}k:NOT-TESTED"); continue
+                if not counts(verd.get(k), k):
+                    ok_all = False; bad[s["slice"]].append(f"{m//1000}k:{verd.get(k)}/{reg.get(k)}")
+            if ok_all: validated = m
+            else: break  # monotone: a failing size blocks every larger size
+        out.append(f"| {side} | " + (f"{validated:,}" if validated else "**NONE (unsupported)**") + " | " + (f"{validated//sf:,}" if validated else "-") + " | "
+                   + ("; ".join(f"{a}: {', '.join(b)}" for a, b in bad.items()) or "-") + " |")
 
-out.append("\n| side | aggregate group | variants (verdict/regime) | total margin (USD) | gross notional (USD) | debt (USD) | counts toward cap |")
-out.append("|---|---|---|---|---|---|---|")
-agg_slices = [s for s in manifest["slices"] if s["class"] == "aggregate" and cand in s["cfgs"]]
-groups = collections.OrderedDict()
-for s in agg_slices:
-    for m in s["margins"]:
-        groups.setdefault((s.get("variantOf", s["slice"]), m, s["k"]), []).append(s["slice"])
-agg_valid = {}
-for side in ("long", "short"):
-    glist = sorted(groups.items(), key=lambda kv: kv[0][1] * kv[0][2])
-    validated = None; blocked = False
-    for (vo, m, kk), variants in glist:
-        tm = m * kk; gross = tm * lev // 100; debt = gross - tm
-        vs = []; allpass = True
-        for v in variants:
-            key_ = (v, cand, side, m, kk)
-            vs.append(f"{v}: {verd.get(key_)}/{reg.get(key_)}")
-            if not counts(verd.get(key_), key_): allpass = False
-        good = allpass and not blocked
-        if good: validated = (tm, gross, debt)
-        else: blocked = True
-        out.append(f"| {side} | {vo} ({kk} x {m:,}) | {'; '.join(vs)} | {tm:,} | {gross:,} | {debt:,} | {'yes' if good else 'no'} |")
-    agg_valid[side] = validated
-    if validated:
-        tm, gross, debt = validated
-        out.append(f"| {side} | **validated aggregate** | | **{tm:,}** | **{gross:,}** | **{debt:,}** | |")
-        out.append(f"| {side} | after safety factor {sf} | | {tm//sf:,} | {gross//sf:,} | {debt//sf:,} | |")
-    else:
-        out.append(f"| {side} | **validated aggregate** | | **NONE (unsupported)** | | | |")
+    out.append("\n| side | aggregate group | variants (verdict/regime) | total margin (USD) | gross notional (USD) | debt (USD) | counts toward cap |")
+    out.append("|---|---|---|---|---|---|---|")
+    agg_slices = [s for s in manifest["slices"] if s["class"] == "aggregate" and cand in s["cfgs"]]
+    groups = collections.OrderedDict()
+    for s in agg_slices:
+        for m in s["margins"]:
+            groups.setdefault((s.get("variantOf", s["slice"]), m, s["k"]), []).append((s["slice"], s.get("variantKind", "base")))
+    agg_valid = {}
+    for side in ("long", "short"):
+        glist = sorted(groups.items(), key=lambda kv: kv[0][1] * kv[0][2])
+        validated = None; blocked = False
+        for (vo, m, kk), variants in glist:
+            tm = m * kk; gross = tm * lev // 100; debt = gross - tm
+            vs = []; allpass = True
+            # The section 4 aggregate needs EVERY required variant; a manifest that omits one cannot weaken this rule.
+            kinds = {kd for _, kd in variants}
+            missing = sorted(REQ_AGG_VARIANTS - kinds)
+            if missing:
+                allpass = False; vs.append("MISSING-VARIANT: " + ", ".join(missing))
+            for v, kd in variants:
+                key_ = (v, cand, side, m, kk)
+                vs.append(f"{v} [{kd}]: {verd.get(key_)}/{reg.get(key_)}")
+                if not counts(verd.get(key_), key_): allpass = False
+            good = allpass and not blocked
+            if good: validated = (tm, gross, debt)
+            else: blocked = True
+            out.append(f"| {side} | {vo} ({kk} x {m:,}) | {'; '.join(vs)} | {tm:,} | {gross:,} | {debt:,} | {'yes' if good else 'no'} |")
+        agg_valid[side] = validated
+        if validated:
+            tm, gross, debt = validated
+            out.append(f"| {side} | **validated aggregate** | | **{tm:,}** | **{gross:,}** | **{debt:,}** | |")
+            out.append(f"| {side} | after safety factor {sf} | | {tm//sf:,} | {gross//sf:,} | {debt//sf:,} | |")
+        else:
+            out.append(f"| {side} | **validated aggregate** | | **NONE (unsupported)** | | | |")
 
 out.append("\n## Funding and token-unit accounting (stress and aggregate scenarios, candidate config)\n")
 out.append("Repayment and keeper compensation in base units of the debt asset, borrower surplus in USDC base units; flash vault and market cash at the end of the path (start: flash vault 3,200,000 USDC and 105,000 WAVAX; supplier cash about 3.4M USDC and 112k WAVAX).\n")
@@ -263,12 +298,14 @@ for sl in manifest.get("fallbackSlices", []):
                 fb_required.append((sl["class"], (sl["slice"], cfg, side, m, sl["k"])))
 
 def fb_verdict(k):
-    rows = grp.get(k, []); att = [r for r in rows if r["liq"]]; ends = endg.get(k, [])
     if k in openg and openg[k]["opened"] < k[4]: return "FAIL-OPEN"
-    if not rows and not ends: return "NOT-RUN"
-    if len(ends) < k[4]: return "NOT-RUN"
+    st, opened = record_state(k)
+    if st == "NOT-RUN": return "NOT-RUN"
+    if st == "CONFLICT": return "CONFLICTING-RECORDS"
+    rows = grp.get(k, []); att = [r for r in rows if r["liq"]]; ends = endg.get(k, [])
     if not att: return "UNTRIGGERED"
     funded = fbg.get(k, []); ts = tokg.get(k, [])
+    if {t["id"] for t in ts} != opened: return "INCOMPLETE-COVERAGE"
     resolved = all(resolved_end(e) for e in ends)
     normal_ok = all(r["ok"] for r in att)
     ins = sum(t["insU"] + t["insW"] for t in ts) > 0
@@ -289,6 +326,7 @@ def fb_verdict(k):
 
 fbv = {k: fb_verdict(k) for _, k in fb_required}
 fb_notrun = [k for k, v in fbv.items() if v == "NOT-RUN"]
+fb_conflicts = [k for k, v in fbv.items() if v == "CONFLICTING-RECORDS"]
 if fb_required:
     out.append("\n## Funded in-kind fallback with finite funding (class `fallback*`)\n")
     out.append(f"One allowlisted funder, funded ONCE per scenario ({manifest['fallbackBudget']['USDC']:,} USDC and {manifest['fallbackBudget']['WAVAX']:,} WAVAX, approvals limited to the budget), no replenishment between attempts, "
@@ -345,6 +383,6 @@ if SG:
         out.append(f"| {p[1]} | {p[2]} | {p[3]} | {kv['oracleE8']} | {kv['poolE8']} | {kv['expectedOut']} | {kv['minOut']} | {kv['actualOut']} | {kv['execE8']} | {res} |")
 
 print("\n".join(out))
-if strict and (notrun or tests_missing or fb_notrun or failed_tests):
-    sys.stderr.write(f"INCOMPLETE EVIDENCE: {len(notrun)} NOT-RUN scenarios, {len(fb_notrun)} NOT-RUN fallback scenarios, {len(tests_missing)} missing test outputs, {len(failed_tests)} failed tests\n")
+if strict and incomplete:
+    sys.stderr.write(f"INCOMPLETE EVIDENCE: {len(notrun)} NOT-RUN, {len(conflicts)} conflicting-record scenarios, {len(fb_incomplete)} incomplete fallback scenarios, {len(tests_missing)} missing test outputs, {len(failed_tests)} failed tests\n")
     sys.exit(2)

@@ -13,15 +13,19 @@ OUT="${1:-/tmp/avalanche-section5-gate}"
 mkdir -p "$OUT"; rm -f "$OUT"/*.txt
 FAILED=0
 python3 tools/avalanche-capacity-report.test.py > "$OUT/generator-fixtures.txt" 2>&1 && echo "ok: generator fixtures" || { echo "FAILED: generator fixtures"; FAILED=1; }
+stamp() { date +%H:%M:%S; }
 run_suite() {  # name, regex
+  local S0; S0=$(date +%s); echo "[$(stamp)] START suite $1  (log: $OUT/$1.txt)"
   FOUNDRY_PROFILE=debt_accounting forge test --threads 1 --gas-limit 9000000000000000000 --match-contract "$2" -vv \
     --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol ${EXTRA_FORGE_ARGS:-} > "$OUT/$1.txt" 2>&1
   local rc=$?
-  if [ $rc -ne 0 ] || ! grep -q "^Suite result: ok" "$OUT/$1.txt"; then echo "FAILED: $1"; FAILED=1; else echo "ok: $1 ($(grep -c '^\[PASS' "$OUT/$1.txt") tests)"; fi
+  local EL=$(( $(date +%s) - S0 ))
+  if [ $rc -ne 0 ] || ! grep -q "^Suite result: ok" "$OUT/$1.txt" || grep -q "^Suite result: FAILED" "$OUT/$1.txt"; then echo "[$(stamp)] DONE  suite $1 FAILED (${EL}s)"; FAILED=1; else echo "[$(stamp)] DONE  suite $1 ok: $(grep -c '^\[PASS' "$OUT/$1.txt") tests (${EL}s)"; fi
 }
 run_suite section5 '^AvalanchePharaohSection5ForkTest$'
 run_suite funded-fallback '^AvalancheFundedFallbackForkTest$'
-tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" > "$OUT/matrix.txt" 2>&1 || { echo "FAILED: capacity matrix (see $OUT/matrix.txt)"; FAILED=1; }
-tail -2 "$OUT/matrix.txt"
+echo "[$(stamp)] START capacity matrix (per-test progress below; detailed logs in $OUT/matrix/)"
+tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" 2>&1 | tee "$OUT/matrix.txt"
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "FAILED: capacity matrix (see $OUT/matrix.txt)"; FAILED=1; }
 if [ "$FAILED" -ne 0 ]; then echo "GATE RUN FAILED OR INCOMPLETE" >&2; exit 1; fi
 echo "gate suites passed; read $OUT/matrix/report.md for the verdicts"

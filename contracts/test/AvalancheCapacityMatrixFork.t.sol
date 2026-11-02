@@ -105,6 +105,15 @@ contract AvalancheCapacityMatrixForkTest is AvalancheMatrixEngine {
         _slice("agg-k10-fixedlag100", 3, 100, 0, 0, 0, 2, _sizes(5_000), 10);
     }
 
+
+    function testMatrix_F8_aggregate_k4_removal50() public {
+        _slice("agg-k4-removal50", 1, 0, 5_000, 0, 0, 2, _sizes(25_000), 4);
+    }
+
+    function testMatrix_F9_aggregate_k4_fixedLag100() public {
+        _slice("agg-k4-fixedlag100", 3, 100, 0, 0, 0, 2, _sizes(25_000), 4);
+    }
+
     // ------------------------------------------------------------------ G. ordinary lending liquidations
     function testMatrix_G_ordinaryLending() public {
         snapPre = vm.snapshotState();

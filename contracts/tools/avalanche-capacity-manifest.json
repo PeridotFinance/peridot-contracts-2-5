@@ -37,7 +37,9 @@
     "testMatrix_F4_aggregate_k5_removal50",
     "testMatrix_F5_aggregate_k10_removal50",
     "testMatrix_F6_aggregate_k5_fixedLag100",
-    "testMatrix_F7_aggregate_k10_fixedLag100"
+    "testMatrix_F7_aggregate_k10_fixedLag100",
+    "testMatrix_F8_aggregate_k4_removal50",
+    "testMatrix_F9_aggregate_k4_fixedLag100"
   ],
   "slices": [
     {
@@ -181,7 +183,8 @@
         1000
       ],
       "k": 5,
-      "variantOf": "agg-k5"
+      "variantOf": "agg-k5",
+      "variantKind": "base"
     },
     {
       "slice": "agg-k10",
@@ -194,7 +197,8 @@
         5000
       ],
       "k": 10,
-      "variantOf": "agg-k10"
+      "variantOf": "agg-k10",
+      "variantKind": "base"
     },
     {
       "slice": "agg-k4",
@@ -207,7 +211,8 @@
         25000
       ],
       "k": 4,
-      "variantOf": "agg-k4"
+      "variantOf": "agg-k4",
+      "variantKind": "base"
     },
     {
       "slice": "agg-k5-removal50",
@@ -220,7 +225,8 @@
         1000
       ],
       "k": 5,
-      "variantOf": "agg-k5"
+      "variantOf": "agg-k5",
+      "variantKind": "removal50"
     },
     {
       "slice": "agg-k10-removal50",
@@ -233,7 +239,8 @@
         5000
       ],
       "k": 10,
-      "variantOf": "agg-k10"
+      "variantOf": "agg-k10",
+      "variantKind": "removal50"
     },
     {
       "slice": "agg-k5-fixedlag100",
@@ -246,7 +253,8 @@
         1000
       ],
       "k": 5,
-      "variantOf": "agg-k5"
+      "variantOf": "agg-k5",
+      "variantKind": "fixedlag100"
     },
     {
       "slice": "agg-k10-fixedlag100",
@@ -259,7 +267,36 @@
         5000
       ],
       "k": 10,
-      "variantOf": "agg-k10"
+      "variantOf": "agg-k10",
+      "variantKind": "fixedlag100"
+    },
+    {
+      "slice": "agg-k4-removal50",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        25000
+      ],
+      "k": 4,
+      "variantOf": "agg-k4",
+      "variantKind": "removal50"
+    },
+    {
+      "slice": "agg-k4-fixedlag100",
+      "class": "aggregate",
+      "cfgs": [
+        "cand-2x25",
+        "ALT-2x40"
+      ],
+      "margins": [
+        25000
+      ],
+      "k": 4,
+      "variantOf": "agg-k4",
+      "variantKind": "fixedlag100"
     }
   ],
   "fallbackSlices": [
@@ -393,5 +430,10 @@
   "fallbackBudget": {
     "USDC": 30000,
     "WAVAX": 3500
-  }
+  },
+  "aggregateRequiredVariants": [
+    "base",
+    "removal50",
+    "fixedlag100"
+  ]
 }

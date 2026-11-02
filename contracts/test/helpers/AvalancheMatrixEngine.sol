@@ -275,6 +275,16 @@ abstract contract AvalancheMatrixEngine is AvalancheSection5Base {
             }
             ids[opened++] = abi.decode(retOpen, (uint256));
         }
+        {
+            // the ACTUAL opened position ids (generator reconciles snapshots and attempts against exactly this set)
+            string memory idList;
+            for (uint256 j; j < opened; ++j) idList = string.concat(idList, j == 0 ? "" : ",", _u(ids[j]));
+            emit log_string(
+                string.concat(
+                    "MXIDS|", s.slice, "|", s.cfg.name, "|", s.short ? "short" : "long", "|", _u(s.marginUsd), "|", _u(s.k), "|", _u(opened), "|", idList, "|END"
+                )
+            );
+        }
         if (opened < s.k) {
             if (opened == 0) return;
             s.k = opened; // liquidate only what opened
