@@ -14,7 +14,7 @@ mkdir -p "$CLEAN_HOME/.foundry/cache/rpc"
 for d in "Library/Application Support/svm" ".svm"; do
   if [ -d "$REAL_HOME/$d" ]; then mkdir -p "$CLEAN_HOME/$(dirname "$d")"; ln -sfn "$REAL_HOME/$d" "$CLEAN_HOME/$d"; fi
 done
-CMD="forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!A]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!T]* --match-contract $SUITE -vv --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000"
+CMD="forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!A]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!T]* --match-contract $SUITE -vv --rpc-url $AVALANCHE_MAINNET_RPC_URL --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000"
 {
   echo "VAULT CLEAN REPRODUCTION vault=$V suite=$SUITE"
   echo "UTC start: $(date -u +%FT%TZ)"
