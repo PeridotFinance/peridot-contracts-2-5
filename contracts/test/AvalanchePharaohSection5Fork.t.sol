@@ -550,22 +550,152 @@ contract AvalanchePharaohSection5ForkTest is AvalancheSection5Base {
         );
     }
 
-    function testStaleFeedOrdinarySupplierRedeemBehaviour() public {
+    /// @dev Mainnet controller wrapper: chain-id gate, token-with-code requirement, delegatecall through Unitroller,
+    ///      and reward flywheel inert with zero speeds. NOT a deployment-script rehearsal (see the review doc).
+    function testMainnetControllerWrapper_chainIdTokenAndProxy() public {
+        vm.chainId(43_113);
+        vm.expectRevert("AvalancheController: Avalanche only");
+        new PeridottrollerAvalanche(address(peridot));
+        vm.chainId(43_114);
+        vm.expectRevert("AvalancheController: token not contract");
+        new PeridottrollerAvalanche(address(0xdead));
+        assertEq(controller.getPeridotAddress(), address(peridot), "token visible through the Unitroller proxy");
+        assertEq(unitroller.admin(), address(this));
+        // zero speeds: claiming is a no-op and moves nothing
+        uint256 before = peridot.balanceOf(ALICE);
+        _mintP(pWavax, ALICE, 1e18);
+        controller.claimPeridot(ALICE);
+        assertEq(peridot.balanceOf(ALICE), before, "no PERIDOT moves with zero speeds");
+    }
+
+    /// @dev Stale-feed behaviour by account class. The controller values every ENTERED market of an account when it
+    ///      redeems or borrows, so a missing AVAX price blocks entered accounts (with or without debt) and never lets an
+    ///      indebted account bypass its collateral check; accounts that never entered a market only hold plain supply.
+    function testStaleFeed_accountClassMatrix() public {
         _activate();
-        // A: supplier with no debt who did NOT enter markets; B: entered, has no debt. Report both under stale AVAX.
-        uint256 aShares = _mintP(pWavax, ALICE, 10e18);
-        uint256 bShares = _mintP(pUsdc, BOB, 1_000e6);
+        // N: supplier that never entered markets, no debt.
+        uint256 nShares = _mintP(pWavax, ALICE, 10e18);
+        // Z: entered both markets, zero debt.
+        uint256 zShares = _mintP(pUsdc, BOB, 1_000e6);
         _enter(BOB);
+        // D: entered, collateral in WAVAX AND USDC, debt in USDC only (debt in one market, collateral in both).
+        _mintP(pWavax, DAVE, 100e18);
+        uint256 dUsdcShares = _mintP(pUsdc, DAVE, 500e6);
+        _enter(DAVE);
+        (bool ok,) = _borrow(pUsdc, DAVE, 100e6);
+        assertTrue(ok);
+        // control while fresh: everything works
+        // (redeem of a tiny amount by D must be allowed before the feed goes stale)
+        vm.prank(DAVE);
+        assertEq(pUsdc.redeem(dUsdcShares / 100), 0, "control: D redeem works while fresh");
+
         vm.warp(block.timestamp + AVAX_MAX_AGE + 1);
         inner.setEmergencyPrice(WAVAX, uint192(30e18), uint64(block.timestamp + 30 minutes));
+        assertEq(oracle.getPrice(WAVAX), 0);
+
+        // N: plain supply can leave
         vm.prank(ALICE);
-        uint256 aCode = pWavax.redeem(aShares);
+        assertEq(pWavax.redeem(nShares), 0, "never-entered supplier can redeem");
+        // Z: entered, zero debt: still blocked because liquidity is computed over all entered markets
         vm.prank(BOB);
-        (bool bSuccess, bytes memory bRet) = address(pUsdc).call(abi.encodeWithSelector(PErc20.redeem.selector, bShares));
-        uint256 bCode = bSuccess && bRet.length == 32 ? abi.decode(bRet, (uint256)) : type(uint256).max;
-        emit log_named_uint("non-member supplier redeem code under stale AVAX", aCode);
-        emit log_named_string("entered-market supplier (no debt) redeem under stale AVAX", bSuccess ? (bCode == 0 ? "succeeded" : "returned error code") : "REVERTED");
-        assertEq(aCode, 0, "supplier outside the collateral set can always exit");
+        (bool zOk, bytes memory zRet) = address(pUsdc).call(abi.encodeWithSelector(PErc20.redeem.selector, zShares));
+        assertFalse(zOk, "entered zero-debt account is blocked");
+        _assertRejection(zRet, "RedeemPeridottrollerRejection(uint256)", PRICE_ERROR_CODE, "Z redeem");
+        // D: entered with debt: cannot redeem from either market, and cannot borrow
+        vm.prank(DAVE);
+        (bool dOk, bytes memory dRet) = address(pUsdc).call(abi.encodeWithSelector(PErc20.redeem.selector, dUsdcShares / 10));
+        assertFalse(dOk, "indebted account must not bypass the collateral check");
+        _assertRejection(dRet, "RedeemPeridottrollerRejection(uint256)", PRICE_ERROR_CODE, "D redeem USDC");
+        vm.prank(DAVE);
+        (dOk, dRet) = address(pWavax).call(abi.encodeWithSelector(PErc20.redeem.selector, uint256(1e8)));
+        assertFalse(dOk);
+        _assertRejection(dRet, "RedeemPeridottrollerRejection(uint256)", PRICE_ERROR_CODE, "D redeem WAVAX");
+        (ok,) = _borrow(pUsdc, DAVE, 1e6);
+        assertFalse(ok);
+        // pToken transfers by entered accounts are blocked too
+        vm.prank(DAVE);
+        (bool tOk, bytes memory tRet) =
+            address(pUsdc).call(abi.encodeWithSelector(PToken.transfer.selector, address(0xCAFE), uint256(1e6)));
+        assertFalse(tOk, "entered account cannot transfer pTokens without a price");
+        _assertRejection(tRet, "TransferPeridottrollerRejection(uint256)", PRICE_ERROR_CODE, "D transfer");
+        // repay always works
+        deal(USDC, DAVE, 200e6);
+        vm.startPrank(DAVE);
+        IERC20(USDC).approve(address(pUsdc), type(uint256).max);
+        assertEq(pUsdc.repayBorrow(type(uint256).max), 0, "repay works");
+        vm.stopPrank();
+        // after full repay D is the same as Z: still blocked while entered (exit_market needs the same valuation)
+        vm.prank(DAVE);
+        (dOk,) = address(pUsdc).call(abi.encodeWithSelector(PErc20.redeem.selector, dUsdcShares / 10));
+        assertFalse(dOk, "debt-free but entered: still blocked");
+    }
+
+    /// @dev Every consumer of the oracle must treat 0 as 'unavailable'. Covers AVAX and USDC feed failure, scaling,
+    ///      and USDC depegs. Reads each consumer (controller liquidity, borrow, liquidation maths, seize maths,
+    ///      quoter, risk engine metrics, swap module) with a dead feed and checks fail-closed behaviour.
+    function testOracleZeroSentinel_allConsumers() public {
+        _activate();
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        address account = _position(r.id).account;
+        _mintP(pWavax, DAVE, 100e18);
+        _enter(DAVE);
+        (bool ok,) = _borrow(pUsdc, DAVE, 100e6);
+        assertTrue(ok);
+        for (uint256 feed; feed < 2; ++feed) {
+            uint256 snap = vm.snapshotState();
+            // kill ONE feed: AVAX (feed 0) or USDC (feed 1)
+            vm.mockCallRevert(feed == 0 ? AVAX_FEED : USDC_FEED, abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector), "dead");
+            assertEq(oracle.getPrice(feed == 0 ? WAVAX : USDC), 0, "guarded oracle returns the sentinel");
+            // controller: liquidity query reports PRICE_ERROR instead of a number
+            (uint256 err,,) = controller.getAccountLiquidity(DAVE);
+            assertEq(err, PRICE_ERROR_CODE, "getAccountLiquidity price error");
+            // controller seize maths refuses a zero price
+            (uint256 serr,) = controller.liquidateCalculateSeizeTokens(address(pUsdc), address(pWavax), 10e6);
+            assertEq(serr, PRICE_ERROR_CODE, "liquidateCalculateSeizeTokens price error");
+            // borrow / liquidation / transfer blocked
+            (ok,) = _borrow(pUsdc, DAVE, 1e6);
+            assertFalse(ok, "borrow blocked");
+            (bool lok,,) = _liquidateOrdinary(pUsdc, pWavax, DAVE, 10e6);
+            assertFalse(lok, "ordinary liquidation blocked");
+            // margin: metrics, quoter, liquidation, swap module all reject
+            vm.expectRevert();
+            riskEngine.getMetrics(account);
+            vm.expectRevert();
+            quoter.expectedOut(USDC, WAVAX, 1e6);
+            (bool mok,) = address(liquidator)
+                .call(abi.encodeWithSelector(IsolatedMarginLiquidatorUpgradeable.liquidate.selector, _liqParams(r.id)));
+            assertFalse(mok, "margin liquidation blocked");
+            deal(USDC, address(this), 100e6);
+            IERC20(USDC).approve(address(swapModule), 100e6);
+            vm.expectRevert();
+            swapModule.executeSwap(USDC, WAVAX, 100e6, 0, 100, 100, "");
+            vm.revertToState(snap);
+            _refreshFeeds();
+        }
+    }
+
+    /// @dev USDC at 0.98 and 0.90: the stack must value USDC debt and collateral at the feed price, not at 1.
+    function testUsdcDepeg_valuationFollowsFeed() public {
+        _activate();
+        OpenReport memory r = _open(ALICE, false, 5_000e6, MAX_LEV_X100);
+        address account = _position(r.id).account;
+        IsolatedMarginTypes.AccountMetrics memory m1 = riskEngine.getMetrics(account);
+        uint256 price1 = oracle.getPrice(USDC);
+        _setPrices(avaxAnswer, 98_000_000);
+        IsolatedMarginTypes.AccountMetrics memory m2 = riskEngine.getMetrics(account);
+        assertEq(oracle.getPrice(USDC), 0.98e18, "scaled feed price");
+        // USDC debt shrinks in USD terms, so a long (USDC debt, WAVAX position) gets healthier, never reverts
+        assertLt(m2.debtValueUsd, m1.debtValueUsd);
+        _setPrices(avaxAnswer, 90_000_000);
+        IsolatedMarginTypes.AccountMetrics memory m3 = riskEngine.getMetrics(account);
+        assertLt(m3.debtValueUsd, m2.debtValueUsd);
+        emit log_named_uint("USDC price e18 at feed 0.9996", price1);
+        emit log_named_uint("debt USD e18 at 0.9996 / 0.98 / 0.90", m1.debtValueUsd);
+        emit log_named_uint("   0.98", m2.debtValueUsd);
+        emit log_named_uint("   0.90", m3.debtValueUsd);
+        // Decimals: controller price is 10^(36-dec): USDC (6) 1e30 scale, WAVAX (18) 1e18 scale.
+        assertApproxEqRel(oracle.getUnderlyingPrice(PToken(address(pUsdc))), 0.90e30, 0.001e18);
+        assertApproxEqRel(oracle.getUnderlyingPrice(PToken(address(pWavax))), uint256(avaxAnswer) * 1e10, 1e12);
     }
 
     function _paramsWithoutQuote(uint256 shares) internal view returns (IsolatedMarginExecutorUpgradeable.OpenParams memory) {
