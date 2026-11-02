@@ -377,6 +377,209 @@ abstract contract TrackAVaultsBase is Test {
     }
 
 
+    // ================================================================== IN-KIND RECOVERY GATE (asserted)
+    //
+    // REQUIRED OUTCOMES of `redeemInKind(shares, receiver, owner)` for BOTH vaults (the docs section "Required in-kind
+    // recovery outcomes" in avalanche-track-a-evidence/inkind/README.md has the same list with the numeric thresholds):
+    //   R1 liveness   : the call SUCCEEDS for any holder in the base case, in the thin-liquidity ladder, in every stress
+    //                   shift (including the shifts where the TWAP/oracle gates freeze redeem/deposit/rebalance and the
+    //                   ERC-4626 views), with the position OUT OF RANGE while the oracle follows the pool, in the
+    //                   dislocation (oracle does not follow) and after emergencyExit.
+    //   R2 value      : oracle-valued legs (asset + paired x oracle) versus the deposit that bought the shares stay inside
+    //                   [-maxLossPpm, +maxGainPpm] (named per-vault constants in the concrete suites; 1 bp = 100 ppm). Where
+    //                   the vault's own haircut NAV is readable the legs are also not worth less than that NAV.
+    //   R3 accounting : exactly `shares` are burned from the owner, totalSupply falls by exactly `shares`, other holders'
+    //                   share balances are unchanged, the receiver's token deltas equal the returned legs, tokenId is kept
+    //                   (or burned when the last share leaves), the position liquidity falls by floor(L * shares / supply).
+    //   R4 pro rata   : legs per share equal the legs per share a reference holder would receive from the same state
+    //                   (within a stated rounding tolerance); no value is created.
+    //   R5 other holder: the reference (second) holder's own in-kind entitlement is not reduced (and not increased) beyond
+    //                   rounding by the redemption, and (when the views work) neither is his haircut NAV.
+    //   R6 gates      : the call needs no oracle, no TWAP check and no ERC-4626 view; the gate state (views frozen or not)
+    //                   is the same before and after the call.
+    // A cash-exit measurement (redeem failing at some size) is a DIAGNOSTIC, not one of these outcomes.
+
+    uint256 internal constant KIND_TOL_WEI = 16; // absolute rounding slack (a few floors of mulDiv / one liquidity unit)
+    uint256 internal constant KIND_TOL_PPB = 1; // relative rounding slack, parts per 1e9 of the compared amount
+
+    struct KindCase {
+        string tag; // log label
+        address who; // owner of the shares under test (also the receiver)
+        uint256 shares; // shares to redeem in kind
+        uint256 depositPart; // asset units that bought `shares` (0 = skip the value bounds)
+        uint256 maxLossPpm; // R2: oracle value may fall short of depositPart by at most this (1 bp = 100 ppm)
+        uint256 maxGainPpm; // R2: ... and exceed it by at most this
+        uint256 minValue; // R2: oracle value of the legs must be >= this (0 = skip), e.g. the haircut NAV read before
+        address ref; // reference holder for R4/R5 (must hold shares, must not be `who`)
+        bool bothLegs; // R1/R4: require both the asset leg and the paired leg to be > 0
+    }
+
+    struct KindResult {
+        uint256 gotA;
+        uint256 gotP;
+        uint256 value; // gotA + oracle(gotP)
+        bool viewsFrozen; // totalAssets() reverted before the call
+    }
+
+    function _positionLiquidity() internal view returns (uint128 liq) {
+        uint256 tid = v.tokenId();
+        if (tid == 0) return 0;
+        (,,,,, liq,,,,) = ITAPositionManager(POSITION_MANAGER).positions(tid);
+    }
+
+    function _kindTol(uint256 x) internal pure returns (uint256) {
+        return KIND_TOL_WEI + x / 1e9 * KIND_TOL_PPB;
+    }
+
+    function _absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a - b : b - a;
+    }
+
+    /// @dev The legs `holder` would get from redeeming ALL his shares in kind from the CURRENT state. State is restored.
+    function _hypotheticalKind(address holder) internal returns (uint256 a, uint256 p) {
+        uint256 snap = vm.snapshotState();
+        (bool ok, uint256 ga, uint256 gp, bytes memory e) = _redeemKindAs(holder, v.balanceOf(holder));
+        vm.revertToState(snap);
+        require(ok, string.concat("reference in-kind redeem failed: ", _err(e)));
+        return (ga, gp);
+    }
+
+    struct KindPre {
+        uint256 supply;
+        uint256 whoShares;
+        uint256 refShares;
+        uint256 safeShares;
+        uint256 tid;
+        uint128 liq;
+        bool paused;
+        bool viewsOk;
+        uint256 refNav;
+        uint256 refA;
+        uint256 refP;
+        uint256 aBal;
+        uint256 pBal;
+    }
+
+    /// @notice Executes `redeemInKind` for `c.who` and asserts R1..R6. Does NOT call any gate-dependent view unless
+    ///         `totalAssets()` is readable (checked first). Any failed assertion fails the calling test.
+    function _gateInKind(KindCase memory c) internal returns (KindResult memory r) {
+        require(c.ref != c.who && v.balanceOf(c.ref) > 0, "kind gate: bad reference holder");
+        KindPre memory p;
+        p.supply = v.totalSupply();
+        p.whoShares = v.balanceOf(c.who);
+        p.refShares = v.balanceOf(c.ref);
+        p.safeShares = v.balanceOf(SAFE);
+        p.tid = v.tokenId();
+        p.liq = _positionLiquidity();
+        p.paused = v.paused();
+        assertGe(p.whoShares, c.shares, string.concat(c.tag, ": test setup: owner holds fewer shares than asked"));
+        (p.viewsOk, p.refNav) = _refNav(p.refShares);
+        r.viewsFrozen = !p.viewsOk;
+        (p.refA, p.refP) = _hypotheticalKind(c.ref);
+        p.aBal = asset.balanceOf(c.who);
+        p.pBal = paired.balanceOf(c.who);
+
+        // ---- R1: the call must succeed
+        {
+            (bool ok, uint256 ga, uint256 gp, bytes memory e) = _redeemKindAs(c.who, c.shares);
+            assertTrue(ok, string.concat("GATE FAIL ", c.tag, ": redeemInKind reverted: ", _err(e)));
+            r.gotA = ga;
+            r.gotP = gp;
+        }
+        assertTrue(r.gotA > 0 || r.gotP > 0, string.concat(c.tag, ": both legs zero"));
+        if (c.bothLegs) {
+            assertGt(r.gotA, 0, string.concat(c.tag, ": asset leg is zero"));
+            assertGt(r.gotP, 0, string.concat(c.tag, ": paired leg is zero"));
+        }
+        _kindCheckAccounting(c, p, r);
+        _kindCheckProRata(c, p, r);
+        _kindCheckReference(c, p);
+        _kindCheckValue(c, r);
+        {
+            (bool viewsOk1,) = _refNav(p.refShares);
+            console2.log(string.concat("GATE|", c.tag, "|gated views frozen before/after the call: ", _tb(!p.viewsOk), " ", _tb(!viewsOk1), "; shares burned ", _t(c.shares), " of supply ", _t(p.supply)));
+        }
+    }
+
+    /// @dev R3 accounting
+    function _kindCheckAccounting(KindCase memory c, KindPre memory p, KindResult memory r) internal view {
+        assertEq(asset.balanceOf(c.who) - p.aBal, r.gotA, string.concat(c.tag, ": asset delta != returned leg"));
+        assertEq(paired.balanceOf(c.who) - p.pBal, r.gotP, string.concat(c.tag, ": paired delta != returned leg"));
+        assertEq(v.balanceOf(c.who), p.whoShares - c.shares, string.concat(c.tag, ": owner shares not burned exactly"));
+        assertEq(v.totalSupply(), p.supply - c.shares, string.concat(c.tag, ": totalSupply not reduced by shares"));
+        assertEq(v.balanceOf(c.ref), p.refShares, string.concat(c.tag, ": reference holder shares changed"));
+        if (c.who != SAFE) assertEq(v.balanceOf(SAFE), p.safeShares, string.concat(c.tag, ": Safe shares changed"));
+        assertEq(v.paused(), p.paused, string.concat(c.tag, ": pause flag changed"));
+        if (c.shares == p.supply) {
+            assertEq(v.tokenId(), 0, string.concat(c.tag, ": last share out but NFT kept"));
+        } else {
+            assertEq(v.tokenId(), p.tid, string.concat(c.tag, ": tokenId changed by a partial in-kind exit"));
+            if (p.liq != 0) {
+                assertEq(
+                    uint256(_positionLiquidity()),
+                    uint256(p.liq) - Math.mulDiv(uint256(p.liq), c.shares, p.supply),
+                    string.concat(c.tag, ": liquidity removed != floor(L*shares/supply)")
+                );
+            }
+        }
+    }
+
+    /// @dev R4 pro rata: legs per share equal the reference holder's legs per share from the same pre-state
+    function _kindCheckProRata(KindCase memory c, KindPre memory p, KindResult memory r) internal view {
+        uint256 expA = Math.mulDiv(p.refA, c.shares, p.refShares);
+        uint256 expP = Math.mulDiv(p.refP, c.shares, p.refShares);
+        uint256 amp = c.shares / p.refShares + 1; // the reference's own floors are amplified by the share ratio
+        uint256 tolA = KIND_TOL_WEI + 3 * amp + expA / 1e9 * KIND_TOL_PPB;
+        uint256 tolP = KIND_TOL_WEI + 3 * amp + expP / 1e9 * KIND_TOL_PPB;
+        console2.log(string.concat("GATE|", c.tag, "|prorata asset got/exp/|diff|/tol ", _t(r.gotA), " ", _t(expA), " ", _t(_absDiff(r.gotA, expA)), " ", _t(tolA)));
+        console2.log(string.concat("GATE|", c.tag, "|prorata paired got/exp/|diff|/tol ", _t(r.gotP), " ", _t(expP), " ", _t(_absDiff(r.gotP, expP)), " ", _t(tolP)));
+        assertLe(_absDiff(r.gotA, expA), tolA, string.concat(c.tag, ": asset leg not pro rata"));
+        assertLe(_absDiff(r.gotP, expP), tolP, string.concat(c.tag, ": paired leg not pro rata"));
+        // CONTROL: the tolerance must be tight enough that a 1 bp error in a leg would be caught (else the check is vacuous)
+        if (expA > 1e7) assertGt(expA / 10_000, tolA, string.concat(c.tag, ": control: asset tolerance cannot detect a 1 bp error"));
+        if (expP > 1e7) assertGt(expP / 10_000, tolP, string.concat(c.tag, ": control: paired tolerance cannot detect a 1 bp error"));
+    }
+
+    /// @dev R5 the other holder is not harmed (nor enriched beyond rounding); R6 gate state untouched
+    function _kindCheckReference(KindCase memory c, KindPre memory p) internal {
+        (uint256 refA1, uint256 refP1) = _hypotheticalKind(c.ref);
+        console2.log(string.concat("GATE|", c.tag, "|reference holder in-kind legs before/after: asset ", _t(p.refA), " ", _t(refA1), " paired ", _t(p.refP), " ", _t(refP1)));
+        assertGe(refA1 + _kindTol(p.refA), p.refA, string.concat(c.tag, ": other holder lost asset entitlement"));
+        assertGe(refP1 + _kindTol(p.refP), p.refP, string.concat(c.tag, ": other holder lost paired entitlement"));
+        assertLe(refA1, p.refA + _kindTol(p.refA), string.concat(c.tag, ": other holder asset entitlement grew (value moved)"));
+        assertLe(refP1, p.refP + _kindTol(p.refP), string.concat(c.tag, ": other holder paired entitlement grew (value moved)"));
+        (bool viewsOk1, uint256 refNav1) = _refNav(p.refShares);
+        assertEq(viewsOk1, p.viewsOk, string.concat(c.tag, ": in-kind changed whether the gated views revert"));
+        if (p.viewsOk) {
+            assertGe(refNav1 + _kindTol(p.refNav), p.refNav, string.concat(c.tag, ": other holder NAV value fell"));
+        }
+    }
+
+    /// @dev R2 value (oracle-valued; the oracle is read only for valuation, the vault call never used it)
+    function _kindCheckValue(KindCase memory c, KindResult memory r) internal {
+        r.value = r.gotA + (r.gotP == 0 ? 0 : _pairedInAsset(r.gotP));
+        if (c.depositPart != 0) {
+            if (r.value < c.depositPart) {
+                assertLe((c.depositPart - r.value) * 1_000_000, c.maxLossPpm * c.depositPart, string.concat("GATE FAIL ", c.tag, ": oracle-valued shortfall above threshold"));
+            } else {
+                assertLe((r.value - c.depositPart) * 1_000_000, c.maxGainPpm * c.depositPart, string.concat("GATE FAIL ", c.tag, ": oracle-valued surplus above threshold"));
+            }
+        }
+        if (c.minValue != 0) assertGe(r.value, c.minValue, string.concat("GATE FAIL ", c.tag, ": legs worth less than the vault's own haircut NAV"));
+        console2.log(string.concat("GATE|", c.tag, "|inKind OK legs asset/paired ", _t(r.gotA), " ", _t(r.gotP), " valueInAsset ", _t(r.value), " depositPart ", _t(c.depositPart)));
+        if (c.depositPart != 0) {
+            console2.log(string.concat("GATE|", c.tag, "|oracle-valued shortfall vs deposit, ppm (negative = surplus; 100 ppm = 1 bp) ", _ti((int256(c.depositPart) - int256(r.value)) * 1_000_000 / int256(c.depositPart)), "; thresholds loss/gain ppm ", _t(c.maxLossPpm), " ", _t(c.maxGainPpm)));
+        }
+    }
+
+    function _refNav(uint256 refShares) internal view returns (bool ok, uint256 nav) {
+        try v.convertToAssets(refShares) returns (uint256 x) {
+            return (true, x);
+        } catch {
+            return (false, 0);
+        }
+    }
+
     // ------------------------------------------------------------------ log formatting (console2 lacks mixed overloads)
     function _t(uint256 x) internal pure returns (string memory) {
         return vm.toString(x);
