@@ -379,7 +379,7 @@ contract Peridottroller is
      * @param borrowAmount The amount of underlying the account would borrow
      * @return 0 if the borrow is allowed, otherwise a semi-opaque error code (See ErrorReporter.sol)
      */
-    function borrowAllowed(address pToken, address borrower, uint256 borrowAmount) external override returns (uint256) {
+    function borrowAllowed(address pToken, address borrower, uint256 borrowAmount) public virtual override returns (uint256) {
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!borrowGuardianPaused[pToken], "borrow is paused");
 

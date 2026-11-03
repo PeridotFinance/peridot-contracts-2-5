@@ -13,6 +13,7 @@ OUT="${1:-/tmp/avalanche-section5-gate}"
 mkdir -p "$OUT"; rm -f "$OUT"/*.txt
 FAILED=0
 python3 tools/avalanche-capacity-report.test.py > "$OUT/generator-fixtures.txt" 2>&1 && echo "ok: generator fixtures" || { echo "FAILED: generator fixtures"; FAILED=1; }
+tools/avalanche-repro-runner.test.sh > "$OUT/repro-runner-tests.txt" 2>&1 && echo "ok: reproduction runner tests" || { echo "FAILED: reproduction runner tests"; FAILED=1; }
 stamp() { date +%H:%M:%S; }
 run_suite() {  # name, regex
   local S0; S0=$(date +%s); echo "[$(stamp)] START suite $1  (log: $OUT/$1.txt)"
@@ -23,10 +24,13 @@ run_suite() {  # name, regex
   if [ $rc -ne 0 ] || ! grep -q "^Suite result: ok" "$OUT/$1.txt" || grep -q "^Suite result: FAILED" "$OUT/$1.txt"; then echo "[$(stamp)] DONE  suite $1 FAILED (${EL}s)"; FAILED=1; else echo "[$(stamp)] DONE  suite $1 ok: $(grep -c '^\[PASS' "$OUT/$1.txt") tests (${EL}s)"; fi
 }
 tools/check-risk-engine-storage-layout.sh > "$OUT/storage-layout.txt" 2>&1 && echo "ok: risk engine storage layout" || { echo "FAILED: risk engine storage layout"; FAILED=1; }
+tools/check-controller-storage-layout.sh > "$OUT/controller-storage-layout.txt" 2>&1 && echo "ok: controller storage layout" || { echo "FAILED: controller storage layout"; FAILED=1; }
 run_suite section5 '^AvalanchePharaohSection5ForkTest$'
 run_suite funded-fallback '^AvalancheFundedFallbackForkTest$'
 run_suite funded-sizing '^AvalancheFundedSizingForkTest$'
 run_suite cash-only-lending '^AvalancheCashOnlyLendingForkTest$'
+run_suite cash-only-borrow-floor '^AvalancheCashOnlyBorrowFloorForkTest$'
+run_suite borrow-floor-margin '^AvalancheBorrowFloorMarginForkTest$'
 echo "[$(stamp)] START capacity matrix (per-test progress below; detailed logs in $OUT/matrix/)"
 tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" 2>&1 | tee "$OUT/matrix.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "FAILED: capacity matrix (see $OUT/matrix.txt)"; FAILED=1; }

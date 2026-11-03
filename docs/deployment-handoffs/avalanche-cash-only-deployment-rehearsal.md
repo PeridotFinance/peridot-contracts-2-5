@@ -1,0 +1,30 @@
+# Cash-only lending: deployment script and local-fork rehearsal
+
+Status: DRAFT. A script and a rehearsal on a **local fork only**. Nothing was signed, broadcast or deployed to any network, no production value was chosen, the production PERIDOT token is **unresolved**, borrowing is paused in every configuration the script can produce, margin hooks stay unset. This is not a deployment authorization and implies no launch approval.
+
+## Files
+- `contracts/script/DeployAvalancheCashOnlyLending.s.sol`: `DeployAvalancheCashOnlyLending` (the script), `VerifyAvalancheCashOnlyLending` (read-only verifier) and the shared `CashOnlyLendingChecks`.
+- `contracts/contracts/deployment/AvalancheMarketBootstrapper.sol`: single-use, atomic list + seed + pause for the two markets (mainnet mirror of the Fuji bootstrapper, chain id 43114; the Fuji one is chain-gated and cannot be used). A second use reverts; the seeding is in the same transaction as the listing, so an empty-market donation cannot be staged in between.
+- `contracts/contracts/PeridottrollerAvalanche.sol`: the controller implementation with the optional borrow cash floor.
+- `contracts/test/AvalancheCashOnlyDeployRehearsalFork.t.sol`: the rehearsal (8 tests).
+
+## What the script deploys
+Source oracle (`AvalanchePriceOracle`, owner = deployer) + `GuardedAvalanchePriceOracle` (the controller uses the GUARDED one, never the source oracle), `Unitroller` + `PeridottrollerAvalanche(PERIDOT_TOKEN)`, a `ConfigurableJumpRateModelV2`, one plain `PErc20Delegate`, two `PErc20Delegator` markets (pWAVAX, pUSDC) administered by the bootstrapper during the atomic step, seeded, then handed back to the deployer. It sets close factor, liquidation incentive, pause guardian, reserve factor, borrow caps and (optionally non-zero) borrow cash floors from explicit inputs. It then runs the verifier checks and reverts on any deviation.
+
+It does **not**: set a collateral factor (they stay 0, so the deployment cannot lend), unpause borrowing, unpause pToken flash loans, deploy or reference any margin contract (both controller hooks stay `address(0)`), deploy or select a PERIDOT token, or hand administration to governance.
+
+## Inputs: every operator decision is explicit, none has a default
+`DEPLOYER` (broadcasting account; use `--account`/`--sender`, never a raw key), `PERIDOT_TOKEN` (must be an existing contract; the script never deploys or defaults one), `PAUSE_GUARDIAN`, `LENDING_WAVAX_SEED_AMOUNT`, `LENDING_USDC_SEED_AMOUNT`, `LENDING_WAVAX_BORROW_CAP`, `LENDING_USDC_BORROW_CAP`, `LENDING_RESERVE_FACTOR`, `LENDING_CLOSE_FACTOR`, `LENDING_LIQUIDATION_INCENTIVE`, `LENDING_BLOCKS_PER_YEAR`, `LENDING_BASE_RATE_PER_YEAR`, `LENDING_MULTIPLIER_PER_YEAR`, `LENDING_JUMP_MULTIPLIER_PER_YEAR`, `LENDING_KINK`, `AVAX_FEED_MAX_AGE`, `USDC_FEED_MAX_AGE`, `LENDING_WAVAX_BORROW_CASH_FLOOR`, `LENDING_USDC_BORROW_CASH_FLOOR` (0 = disabled). An empty or missing variable makes the script revert (tested for all 19). Fixed in the script because they are facts of the chain, each re-checked on chain: native WAVAX (18 decimals) and native USDC (6), the Chainlink AVAX/USD and USDC/USD feeds (8 decimals, descriptions "AVAX / USD" and "USDC / USD", fresh within the given max age).
+
+## Checks (run by the script at the end, by `VerifyAvalancheCashOnlyLending` any time, and by the tests)
+Chain id 43114; controller admin == expected admin, no pending admin, implementation recorded with no pending implementation; the implementation's PERIDOT token and `getPeridotAddress()` equal the input; pause guardian, close factor, incentive as given; **both margin hooks unset**; controller oracle is the guarded oracle over the recorded source oracle, whose owner is the expected admin and whose feed configuration (address, max age, enabled) matches; both prices available; market admin == expected admin, no pending admin; underlyings; one plain delegate; controller and rate-model links; rate-model owner; 8 decimals; reserve factor; seeded; no borrows; both markets listed; **collateral factors zero**; **borrowing paused on both markets**; pToken flash loans paused; borrow caps; borrow cash floors.
+
+## Rehearsal results (local fork, pinned block 99,200,000; 8 tests pass)
+Happy path with the verifier and independent assertions; post-deploy behaviour (supply works, redeem works, a borrow reverts "borrow is paused" even after SYNTHETIC collateral factors are applied by the admin, a stranger can neither unpause nor change a floor); refusal without a PERIDOT token (zero address, address without code); refusal on a wrong chain id, zero seed, cap not above seed, reserve factor too high, close factor and incentive out of range, insufficient seed balance, stale feeds; the one env-driven test proves `run()` reads all 19 inputs and each empty variable stops it; the verifier detects post-deploy tampering (borrowing unpaused, a collateral factor enabled, a margin hook installed, the controller pointed at the unguarded source oracle, a pending admin left behind, a changed floor, a changed borrow cap, a wrong expected admin); the single-use bootstrapper cannot be run twice. The rehearsal's PERIDOT stand-in (`TestOnlyPeridotTokenStandIn`) exists only inside the test file and is labelled; it is not a proposal. All rehearsal values are SYNTHETIC.
+
+## Not done / limits
+- The "market touched before bootstrap" refusal is inherited from the Fuji bootstrapper design and is NOT separately tested here.
+- No gas or transaction-count figures for a real broadcast; no dry run against a live node other than the pinned fork.
+- The administration handover to governance/timelock is a separate step that is neither scripted nor rehearsed; the verifier supports checking it (`EXPECTED_ADMIN`).
+- Collateral factors, unpausing borrowing and any parameter values remain operator decisions; the production PERIDOT-token decision remains open (candidates: an existing token, a purpose-built token, or a deliberately inert token; the script supports any contract and picks none).
+- Not audited.
