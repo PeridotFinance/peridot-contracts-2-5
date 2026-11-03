@@ -1,17 +1,24 @@
-# Pharaoh vaults: PHAR reward entitlement, remediation proposal (second draft)
+# Pharaoh vaults: PHAR reward entitlement, remediation proposal (third draft, EXPERIMENTAL)
 
-**VERDICT: NOT IMPLEMENTATION-READY.** The attribution mechanism in section 5 is specified and checked against a reference model (section 9), and every claim about the Pharaoh contracts below is read from source or from the chain. What blocks implementation is a short list, none of it code:
+**STATUS: EXPERIMENTAL. NOT IMPLEMENTATION-READY.** Nothing here has been implemented, deployed, signed or broadcast. The gates of the Pharaoh USDC vault and the Pharaoh WAVAX vault stay CLOSED; this document sets no cap and no date. The design is specified, checked against an exact-rational reference model (section 9) and against ten new fork probes (section 6.1), and it changes the second draft's recommendation. What still blocks implementation:
 
-1. **Window policy (product decision, section 6).** Pharaoh's gauge slashes every reward claim made within `timeThresholdForGauge` (111 s today) of the position's last liquidity change, and a slash forfeits *all unclaimed accrual*, not 111 s of it (probes P2, P8, P9). The vault can only avoid that by refusing liquidity-changing operations inside the window. That makes deposits, liquidity-removing exits, `redeemInKind` and `emergencyExit` revert for up to 111 s after each liquidity change, and a cheap dust operation can reopen the window. Operator must choose between W1 (revert, recommended default), W2 (proceed and accept forfeiture, rejected here) and W3 (idle-hold, scheduled deployment). Until chosen, the entry and exit flows cannot be written.
-2. **Pharaoh governance dependency (section 4, U1).** The validator, its blacklist, the 111 s threshold, `xRatio` and the gauge implementation are all changeable by Pharaoh governance at any time. Accept it as a stated residual risk, or negotiate; the vault cannot remove it. Consequence stated bluntly: under rule B as written (forced recovery never forfeits) `emergencyExit` has no override, so if Pharaoh sets the threshold to a year, `emergencyExit` cannot remove liquidity for a year, and the only principal-protection tool left is `pause`, which blocks deposits only. The operator must either accept that or relax B for `emergencyExit` specifically (for example: allow it inside the window and record the forfeiture as a stated external loss).
-3. **Operator confirmations (section 10):** release rule for the unattributed, waived and donated buckets (default: none exists); whether the waiver function exists at all and where waived amounts go; xPHAR disposition; claims only for *finalised* periods (a holder can wait up to one week plus the next successful harvest); behaviour when the pool's time source cannot be read; replacement vault versus upgrade; no lending-collateral listing.
-4. **Engineering not yet bounded:** the per-account settlement loop over weeks since last touch has no gas measurement (no Solidity exists); the unit mocks must reproduce the gauge's `S * T / (WEEK << 96)` formula (probe P7 gives the oracle).
+1. **Operator decisions (section 10).** The window policy is no longer "W1 by default": W1 is rejected as a production default (section 6.4) and a queued, rate-limited batching variant is recommended instead (section 6.5). The operator still has to choose it and its parameters, accept or negotiate the Pharaoh governance surface, and pick the reconciliation rule for unresolved intervals. This document accepts nothing on the operator's behalf.
+2. **A bound that no design can provide.** If Pharaoh governance raises the threshold, or blacklists the vault wallet or its position hash, a liquidity-changing principal exit cannot be both lossless and prompt: the best bound is `lastModified + threshold + margin`, which governance can make indefinite (probe Q6 sets it to `uint256.max`; every later claim is slashed, principal still exits but rewards are forfeited). Under hard constraint C (no automatic forfeiture, no forced waiver) the design therefore waits, and says so (section 6.5, table of bounds). Only exits paid from an idle buffer are unaffected.
+3. **Engineering not yet bounded.** No Solidity exists. Per-call gas of the paginated record, settle and harvest steps is estimated from probe unit costs, not measured (section 5A.7). The unit mocks must reproduce the gauge's `S * T / (WEEK << 96)` formula and the debt and cascade semantics the model mirrors (section 9.2).
 
-Gates stay CLOSED. This document opens no gate, proposes no cap and no launch date, and nothing in it was deployed, signed or broadcast. Branch `avalanche-pharaoh-tracks-abcd`. Product names throughout (track letters are unreconciled). Companion file with every address, proxy slot, code hash, compiler, file name, sha256 and the resolved/unresolved list: `docs/deployment-handoffs/avalanche-vault-source-references.md` ("the references file"). Earlier gate evidence: `docs/deployment-handoffs/avalanche-track-a-launch-gate.md` ("the gate note").
+Branch `avalanche-pharaoh-tracks-abcd`. Product names throughout (track letters are unreconciled). Companion: `docs/deployment-handoffs/avalanche-vault-source-references.md` ("the references file"). Earlier gate evidence: `docs/deployment-handoffs/avalanche-track-a-launch-gate.md` ("the gate note"). Evidence files: `docs/deployment-handoffs/avalanche-vault-phar-evidence/` (`probe/` P1 to P9, `probe2/` Q1 to Q10, `tools/refmodel.py`, `tools/refmodel2.py`, `tools/test_refmodel2.py`, `tools/variant_econ.py`).
 
-Basis tags: **[E]** repo evidence; **[S]** source I saved and read (file and line, references file section 3); **[C]** read-only chain read (block stated); **[P]** my local-fork probe P1 to P9 (references file section 6, 9 passed, scratch project outside the repo); **[M]** reference model result (section 9); **[R]** reasoning, not measured.
+Basis tags: **[E]** repo evidence; **[S]** source saved and read (references file section 3); **[C]** read-only chain read; **[P]** probe P1 to P9; **[Q]** probe Q1 to Q10 (this revision); **[M]** reference model; **[R]** reasoning, not measured.
 
-## 1. What changed from the first draft
+## 0. Changes in this revision (third draft)
+
+- **Operator direction applied.** W1 is no longer the default. Three alternatives are compared (section 6): W1 as drafted; an epoch or rate-limited queue with an idle buffer; per-NFT cohorts or a sleeve NFT. Recommended: the queue variant (6.5), with the bound for every variant stated for quiet markets, a dust attacker, a governance-raised threshold, a blacklisted vault and a failed exposure reading.
+- **New source and probe findings (section 6.1 to 6.3).** The position manager's `lastModified` is per NFT (Q1); `collect`, NFT transfer and a different owner do not touch it (Q2); the first liquidity change after a quiet span is always lossless and only a second change inside the window loses (Q3); `getPeriodReward` forfeits only the period it names and writes no debt, whereas `getReward` writes a debt that wipes every earlier period (Q4); a chain of slashed changes loses everything from the chain start (Q5); a gauge-side pool-read failure hides the backlog from `getReward` but it is recoverable per period (Q8, Q10, which corrects a premise that it is lost). No route avoids the auto-claim or the validator without circumventing it (6.3).
+- **Hard constraint C enforced in the design.** Removed: the second draft's "degraded wall-clock split" for burns, "proportional shortfall", and `emergencyExit` reverting inside the window as an unbounded wait. Replaced by unresolved intervals (5A.4), a classified loss ledger (5A.3), and stated bounds.
+- **Model extended (section 9.2).** Slashing and the debt cascade, zero-payment success, unavailable readings, retired and burned NFTs, governance changes, bounded processing with checkpoint compaction, an independent ground-truth oracle, and three explicit properties (ownership, liveness, no value from unresolved intervals). 47 tests pass; six mutations are caught.
+- Kept from the second draft: replacement-vault recommendation, comparison against NAV pricing and swap-on-touch, the ledger formula, the verified Pharaoh facts, the D1 to D6 named tests (their numbers still hold).
+
+## 1. What changed from the first draft (history, second draft)
 
 Operator corrections:
 
@@ -74,7 +81,7 @@ All numbers are for the Pharaoh USDC vault at block 99216397 unless stated. Deta
 | Claims are continuous across period boundaries | [P] P3 (to the wei) |
 | `earned` equals what `getReward` pays, except slashing and an un-advanced new period | [P] P1, [S] section (iii) of the references file |
 | Anti-sybil slash: the validator returns "slash" if `now - positionLastModified <= timeThresholdForGauge` (111 s [C]), or if the owner, receiver, `tx.origin` or position hash is blacklisted, or if the validator reverts (fail closed) | [S] RewardValidator 154 to 193, GaugeV3 535 to 551 |
-| A slashed claim returns normally, pays zero, records a forfeit, and forfeits **every earlier period's unpaid amount in full** plus the current period's unpaid amount; the forfeited tokens go to r33 on the next successful claim | [S] GaugeV3 459 to 463, 468 to 489, 553 to 583; [P] P2, P8, P9 |
+| A slashed `getReward` returns normally, pays zero, records a forfeit DEBT, and at the next clean claim forfeits **every earlier period's unpaid amount in full** plus the current period's unpaid amount up to the debt; the forfeited tokens go to r33. A slashed `getPeriodReward(period)` forfeits only that period, immediately, and writes no debt [Q4]. Each further slashed call overwrites the debt with the cumulative unpaid, so a chain of slashed changes loses everything from the chain start [Q5] | [S] GaugeV3 459 to 463, 468 to 489, 553 to 583; [P] P2, P8, P9 |
 | `increaseLiquidity` / `decreaseLiquidity` auto-claim `[PHAR, xPHAR]` with the old `lastModified` inside a swallowed try/catch, then set `lastModified = now` | [S] position manager 207 to 221, 254 and 291, 319 and 361 |
 | `burn(tokenId)` does not check rewards; afterwards no one can claim | [S] 468 to 473; [P] P5 |
 | xPHAR: `xRatio = 0`; the vault cannot transfer xPHAR; `exit` is instant at 50% | [C] and [P] P6 |
@@ -83,7 +90,7 @@ All numbers are for the Pharaoh USDC vault at block 99216397 unless stated. Deta
 
 ## 5. Mechanism: the period exposure ledger
 
-Specification only; no code exists.
+Specification only; no code exists. **Section 5A (third draft) amends this section and governs where they conflict.**
 
 ### 5.1 Principle
 
@@ -200,11 +207,11 @@ Shares have the asset's decimals (6 for the USDC vault, 18 for WAVAX [C]); PHAR 
 
 | Function | Behaviour |
 | --- | --- |
-| ERC-20 `transfer`, `transferFrom`, mint, burn | `_record`, `_settle` both sides, then move. No external claim. Always allowed, not pausable. Reverts only if the pool time source cannot be read (decision, section 10: default fail-closed for mint and transfer; for burns a degraded wall-clock split with an event) |
-| `deposit` | outside the window: `harvest`, then deploy as today. Inside the window: policy W1/W3 (section 6) |
-| `withdraw`, `redeem`, `redeemInKind` | pay from idle balance when it covers the amount (no liquidity change). When liquidity must be removed: outside the window `harvest` then remove. Inside the window: W1 reverts |
+| ERC-20 `transfer`, `transferFrom`, mint, burn | `_record`, `_settle` both sides, then move. No external claim. Always allowed, not pausable. Reverts only if the pool time source cannot be read: mint and transfer fail closed; burns proceed and the interval becomes UNRESOLVED (5A.4). [The second draft's degraded wall-clock split is removed.] |
+| `deposit` | [third draft: queued, minted at the next batch, section 6.5] second draft: outside the window `harvest`, then deploy; inside the window policy W1/W3 |
+| `withdraw`, `redeem`, `redeemInKind` | [third draft: idle buffer at once, else a locked request served by the next batch, section 6.5] pay from idle balance when it covers the amount (no liquidity change). When liquidity must be removed: outside the window `harvest` then remove. Inside the window: W1 reverts |
 | `deployIdle`, `rebalance` | rebalancer (or owner). Outside the window only. **`rebalance` never burns the old NFT**: it removes liquidity, keeps the NFT in `retiredIds`, mints a new one |
-| `emergencyExit` | owner. Pauses, removes all liquidity, **keeps the NFT**. Reverts inside the window. This is the only choice consistent with B: a decrease would auto-claim and be slashed. The owner retries after the window |
+| `emergencyExit` | owner. Pauses, removes all liquidity, **keeps the NFT**, under the same guard as a batch (6.5); it never waives or forfeits. When the guard cannot pass (raised threshold, blacklist) its bound is stated in section 6.5, not hidden |
 | Whole-vault exit (`shares == supply`) | removes all liquidity and **keeps the NFT** (`_freeLiquidity`'s burn is dropped). A later deposit re-uses it if it is in range, otherwise `rebalance` mints a new one |
 | `harvest` | permissionless, section 5.4 |
 | `claim`, `claimFor`, `exitXPhar` | section 5.8 and 5.11 |
@@ -224,17 +231,122 @@ Dormant today (`xRatio = 0` [C], all xPHAR period totals 0, vault holds 0). The 
 - **Out of range.** An out-of-range position has `dT = 0`; nothing accrues to anyone [E: 0 PHAR per hour measured].
 - **Other gauge reward tokens** (the gauge lists USDC, USDT, WAVAX, sAVAX and others as whitelisted and anyone may notify them [C][S]) are neither claimed nor attributed by this design. A USDC incentive claimed into the USDC vault would raise `totalAssets()` for current holders. Out of scope; flagged.
 
-## 6. The window policy (blocker 1)
+## 5A. Amendments to section 5 (third draft; where they conflict, this section governs)
 
-**Measured facts.** Window 111 s [C]; any liquidity change resets it for that NFT; a claim inside it pays zero and forfeits every unclaimed period [P2, P8]; a blacklisted `tx.origin` slashes regardless of time [P9]. The loss bound is therefore "accrual since the last successful harvest", which is small only if harvests are frequent (the USDC vault accrued 2.32e18 wei over 77 days, about 3.0e16 wei per day at this size [C]; no dollar value is claimed).
+Superseded: the section 5.3 loop (now deferred, 5A.1), the 5.4 shortfall branch (5A.3), the 5.10 rows for `emergencyExit`, whole-vault exit and the "degraded wall-clock split" for burns (5A.4, 6.5), and the section 6 W1 default (section 6).
 
-| Option | Deposits | Exits | `emergencyExit`, `rebalance` | Consequence |
+**5A.1 Bounded recording and settlement (checkpoint compaction).** `_update` does O(1) inline work: one pool read per NFT for the CURRENT period, and for every ended period since the NFT's cursor it pushes ONE deferred record segment `(nft, firstPeriod, lastPeriod, supplyThen)` onto a backlog. The supply in force over those periods is exactly the supply before this `_update`, so applying them later with that stored supply is exact (the period's pool reading is final once it ended). A permissionless `drain(maxSteps)` applies backlog steps FIFO, each step reading one `(nft, period)`. Account settlement is the same idea: `_update` closes the account's open segment in O(1); a segment inside one period folds directly into `W[h][p]`; a segment spanning several periods is pushed as one closed segment, so an account holds at most one deferred segment per period in which it was touched, however many dust transfers it receives [M: 500 dust transfers onto a victim leave at most one segment]. `settle(h, maxSteps)` and `claim(h, maxSteps)` advance by period steps. Every public call is bounded by its `maxSteps` argument, strictly progresses until done, and a partially processed state satisfies the invariant that every period below `settledThrough(h)` already equals the exact result and `sum W + Z + U == Tt` for each period that is fully settled for all accounts [M: tests `partial_processing_is_consistent_and_holder_always_progresses`, `conservation_for_fully_settled_periods_at_every_prefix`, `paginated_equals_unpaginated`]. A holder can always make progress alone: `progress(h, n)` drains the global backlog it depends on and then its own segments.
+
+**5A.2 Funding is per period.** `harvest()` (permissionless) calls `positionManager.getPeriodReward(period, tokenId, tokens, vault)` for each period that is sealed (read after it ended) or current, instead of one `getReward`. It pre-computes `owed = S[p] * Trec / WEEK - periodClaimedAmount` from its own exposure reading and the gauge's public mappings, so every paid unit is booked to its period from the balance delta of that single call. It never calls inside the window, for a blacklisted wallet or position hash, or when the validator reverts (the `willSlash` guard of 5.5, now with `margin` added to the threshold). After all periods read zero owed it may issue one `getReward` purely to advance the gauge's `lastClaimByToken`; that call must pay exactly zero.
+
+**5A.3 Classification and loss ledger (replaces the 5.4 shortfall branch).** After each per-period call the vault compares three things it can read: the balance delta (`paid`), the change of `periodClaimedAmount` (`paid + forfeited`) and its own `owed`.
+
+| Observation | Meaning | Ledger |
+| --- | --- | --- |
+| `owed == 0` | nothing owed | no call, no entry |
+| `claimedDelta > 0`, `forfeited == 0` | paid | `funded[p] += paid` |
+| `claimedDelta > 0`, `forfeited > 0` | the call was slashed or realised an earlier debt; forfeited tokens went to r33 | `funded[p] += paid`, `lost[p][SLASHED] += forfeited` |
+| `claimedDelta == 0` while `owed > 0` | zero-payment "success": the gauge's own pool read failed, or the gauge implementation returns without paying | NOTHING booked; period stays outstanding; retried (Q10: a per-period call pays it in full once the gauge's read works) |
+| call reverts | gauge or position manager reverted | NOTHING booked; retried |
+| guard says blocked | window, blacklist, validator revert | no call at all |
+
+A period is **final** only when it ended, every NFT's reading for it is sealed, the record backlog no longer covers it, and `outstanding(p) = sum_nft S[p] * Trec / WEEK - funded[p] - lost[p] == 0` exactly. Loss is therefore an explicit number, equal to what r33 received, and it is **borne pro rata by recorded exposure** (`entitlement = funded[p] * W / Tt`), by every holder of that period including holders who already left; it is never re-attributed to anyone else [M: `slash_is_booked_as_external_loss_borne_pro_rata`]. Zero payment that is "nothing owed" is distinguished from "slashed" and from "no effect" by the exposure reading, which is exactly why the reading is kept (the gauge's own `earned` also reports 0 when its pool read fails, so it cannot tell them apart [Q8]).
+
+**5A.4 Unavailable exposure reading: UNRESOLVED, never wall-clock.** If `positionPeriodSecondsInRange` cannot be read (or returns less than the recorded value), `_update` for mint and transfer reverts (fail closed). Burns proceed (principal exit stays available) and mark the PERIOD of the burn as having a supply event inside a failure span. When the reading returns: periods without a supply event in the span are exact (constant supply, applied from the backlog); periods WITH an event put the whole `dT` since the last good record into `U[p]` (unresolved). `U[p]` is attributed to nobody: it is in no account's `W`, the corresponding share of `funded[p]` is `reservedUnresolved(p)` and stays in the vault, and no elapsed-time rule exists in the contract. It is released only by `reconcile(p, split)` with an externally supplied split (holders plus a zero-supply share), whose rule is an operator decision (section 10, item 3); the only computable evidence is event timestamps, and using it is the operator's explicit choice, not an automatic default [M: properties (iii)]. A period does not become final while its reading is down.
+
+**5A.5 Liquidity changes always auto-claim; book it per period.** `increaseLiquidity` and `decreaseLiquidity` call `getRewardForOwner` unconditionally, swallowed by try/catch [S, Q3]. The vault harvests first, so the auto-claim pays about zero; whatever it still pays is booked PER PERIOD from the `periodClaimedAmount` deltas (no pool read needed), and only a remainder that cannot be explained goes to `donated`. A liquidity change is never made inside the window (guard), so the auto-claim is never slashed.
+
+**5A.6 NFT lifecycle.** The NFT is never burned by the vault except when `outstanding == 0` for every period and liquidity is zero (and the design does not need a burn at all; it only stops accruing). A retired NFT keeps its cursor, its `Trec` and its ownership intervals until drained [M: `retired_nft_keeps_intervals_and_burn_is_refused_with_outstanding`, `unguarded_burn_orphans_rewards`].
+
+**5A.7 Gas bounds (estimates, not measurements).** Unit costs from probes [Q]: `positionPeriodSecondsInRange` 47,910 gas cold, 18,806 for a second period; `gauge.periodEarned` 55,966; `getPeriodReward` for one period 178,344 (cold); `getReward` over 12 periods 1,053,520 (about 88,000 per period, two tokens); `positionLastModified` 926; `mint` 1,014,864; `increaseLiquidity` 279,436. The gauge's own `getReward` and the auto-claim loop from `lastClaim` to the current period, so a dormant NFT needs a claim before about (budget / 88,000) periods have passed: at a 15M budget about 170 periods (3.3 years), at a 30M budget about 340. A permissionless `harvest()` keeps `lastClaim` fresh; no trusted keeper is required [R]. The RPC reported a block gas limit of 80,000,000 when read; that is not a safe per-call budget and is not relied on. The vault's own per-step cost (one pool read plus about three storage writes) is estimated at 100,000 to 150,000 gas, so a default `maxSteps` of about 50 stays under about 7.5M gas [R]. These figures are to be replaced by measurements once Solidity exists.
+
+## 6. The liquidity-change policy: alternatives compared (blocker 1, revised)
+
+Operator direction: W1 (revert inside the window) is NOT approved as a production default, because repeated dust activity or a governance change of the threshold must not silently become indefinite withdrawal blocking. This section compares W1, a queue, and per-NFT routes, and states the bound of each. Nothing here accepts Pharaoh governance risk or changes the recovery policy.
+
+### 6.1 New probe results (second probe project, `probe2/`, fork of block 99216397, local VM only; 11 test functions, Q1 to Q10 with Q4b, all pass)
+
+| Probe | Result (USDC vault NFT 485334 unless stated) |
+| --- | --- |
+| Q1 per-NFT window and additivity | A second NFT minted by the vault (same pool and range) has its own `lastModified` and position hash. Minting it and dust-touching it five times leaves NFT A's `lastModified` unchanged; A's claim afterwards is lossless (pays the full `earned`, nothing to r33, no debt). A claim on the dust NFT inside its own window pays 0 and records a debt on that NFT only. Per-liquidity accrual of A and B over one hour: 65264146698854585720873 and 65264146698854690138914 (e18-scaled), equal to 1.6e-15 relative: the gauge's reward is additive in liquidity, so splitting a position over several NFTs dilutes nothing. Gas: `mint` 1,014,864; `increaseLiquidity` 279,436; `getReward` over 12 periods 1,053,520 |
+| Q2 | `collect`, ERC-721 transfer to another account, and a claim by the new owner do not change `lastModified`, do not auto-claim and do not write a debt. The reward goes to whoever owns the NFT at claim time |
+| Q3 | `getReward` outside the window pays everything; a `decreaseLiquidity` right after it auto-claims 0 and sets `lastModified`; a SECOND change 50 s later is slashed: debt recorded 3,458,434,936,670 wei, which is exactly the accrual of those 50 s and exactly what r33 later receives. The first change after any quiet span is lossless whatever the threshold; only the second inside the window loses |
+| Q4 | Inside the window, `getReward` records a debt against the current period (36,687,694,978,723) and the next clean claim sends the old period (6,847,701,174,606) AND the new period's debt to r33: 43,535,396,153,329. `getPeriodReward(old period)` forfeits only the old period, immediately to r33 (6,847,701,174,606), writes NO debt, and leaves the new period fully payable later. Neither is free; the second has a smaller blast radius |
+| Q4b | Outside the window `getPeriodReward(q)` pays exactly period q (cold gas 178,344), leaves the others untouched, and a later `getReward` pays only the rest |
+| Q5 | A chain of slashed changes overwrites the debt with the cumulative unpaid since the chain start: 6.92e12, 1.38e13, 2.08e13, 2.77e13 wei after 1 to 4 changes 100 s apart; the next clean claim sends the whole 2.77e13 to r33. Loss grows linearly with chain length |
+| Q6 (governance simulated locally) | With the threshold set to 7 days, the first change after a quiet span is lossless, a second one a day later is slashed, a harvest at day 2 is slashed and rewrites the debt (so even a failed harvest loses), and the first clean harvest after 7 days later sends 11,952,345,175,720,190 wei to r33 and pays the vault 3,013,538,858,302,927. With the threshold set to `uint256.max`, a full `decreaseLiquidity` still succeeds (principal is never blocked by the gauge) and no claim is ever clean again |
+| Q7 | `validateReward(owner = any non-position-manager address, receiver, hash, origin, ...)` is a pure wallet-blacklist read (no time check): true for a blacklisted origin, false for a clean one. With owner = the position manager the window check applies |
+| Q8 and Q10 | If the pool's period-seconds view reverts, the gauge's `earned` reports 0, `getReward` returns normally, pays 0, writes no debt and still advances `lastClaimByToken` (backlog 2,320,900,114,408,409,301 shown as 486,511,446,621,211,325 afterwards). The old periods are hidden, not gone: after the read works again `getPeriodReward(old period)` pays the full 26,207,949,171,163,724 wei (Q10). The second draft's reasoning "lost at the gauge" is therefore corrected |
+| Q9 | Gas: `positionPeriodSecondsInRange` 47,910 cold and 18,806 warm; `periodEarned` 55,966; `earned` over 12 periods 342,418 |
+
+### 6.2 What sets `lastModified` and what triggers the validator [S, Q]
+
+| Call | Sets `lastModified` | Triggers claim and validator |
+| --- | --- | --- |
+| `mint` | yes, for the NEW id | no |
+| `increaseLiquidity` / `decreaseLiquidity` | yes (after the claim) | yes: auto-claim `getRewardForOwner` with the OLD `lastModified`, swallowed, slashed if inside the window. No liquidity change exists without it |
+| `collect` | no | no |
+| ERC-721 transfer, approval | no | no |
+| `getReward` (also `Voter.claimClGaugeRewards`) | no | yes, all periods; slash writes a debt that wipes every earlier period at the next clean claim |
+| `getPeriodReward(period)` | no | yes, one period; slash forfeits that period only |
+| `burn` | deletes the position | no; succeeds with rewards outstanding and orphans them [P5] |
+
+Validator checks (RewardValidator 154 to 193): blacklisted owner, receiver or `tx.origin`, blacklisted position hash, anti-sybil switch, then `now - lastModified[id] <= timeThresholdForGauge`. Only the position manager can call the gauge's claim functions; there is no other caller path.
+
+### 6.3 Routes that avoid the gauge auto-claim or lastModified dependency
+
+| Route | Technically available | Effect | Evasion? | Verdict |
 | --- | --- | --- | --- | --- |
-| **W1 revert (recommended default)** | the deploy step reverts inside the window (`Vault__RewardWindow(retryAfter)`); the user retries after at most 111 s | pay from idle when idle covers the amount (a change from the live flow, which always removes liquidity pro rata; NAV-neutral [R]); if liquidity must be removed, revert inside the window. `redeemInKind` must hand over a pro-rata share of the position, so it reverts inside the window | revert inside the window | Never forfeits. **Weakens liveness**: `redeemInKind` is no longer unconditional, and a dust deposit outside the window reopens the window for 111 s, so an attacker can hold liquidity-changing exits closed for the price of gas plus the entry haircut on dust. Mitigations to specify with the operator: a minimum deploy size relative to NAV, a keeper-kept idle buffer so ordinary exits never need liquidity removal, and a stated maximum threshold the vault tolerates |
-| W2 proceed | deposits and exits go through | go through | go through | **Rejected as default**: a slashed auto-claim forfeits all unfunded accrual (P8, P9), recorded only as a shared external loss. Violates the spirit of B for exits, and a blacklisted origin can force it |
-| W3 idle-hold, scheduled deployment | deposits stay idle and are minted at NAV; only a rebalancer-or-permissionless `deployIdle` (rate-limited, minimum idle size) changes liquidity | pay from idle first | revert inside the window | Window opens only on the schedule, so griefing is expensive. **Changes the economics**: the entry haircut is no longer charged to the entrant at deposit; it is realised at deployment and shared by all holders, and idle shares earn exposure without liquidity for their idle period (the share-weighted approximation, 5.12). Needs a re-run of the entry-loss evidence |
+| Avoid the auto-claim altogether | NO: unconditional in `increaseLiquidity` and `decreaseLiquidity` | none | making the swallowed call fail on purpose (gas starvation, the gauge reentrancy lock) would rely on a failure mode to skip the validator | NOT recommended: unreliable and would amount to circumventing the protection |
+| Separate NFT per cohort or epoch, or a sleeve NFT for entries | YES (Q1): windows are per NFT, rewards are additive | dust or entry activity on the sleeve never opens a window on the main NFT. Costs: one more NFT per cohort (1.01M gas to mint against 0.28M for an increase); every NFT adds a pool read per period per touch (19k to 48k gas) and a claim loop (about 88k per period); NFTs cannot be burned until drained; unbounded NFT count if dust is allowed to mint cohorts, so entries must be batched or have a minimum size | none: no claim is made inside any NFT's own window | Legitimate, but it only protects ENTRIES. Exits still change liquidity of some NFT, and dust deposit plus withdraw can heat K cold NFTs in 2K transactions per window, so it does not bound exits by itself |
+| Claim with `getPeriodReward` per period | YES (Q4) | smaller slash scope, no debt, and exact per-period attribution (used in 5A.2) | none | Adopted for funding; still guarded, still not free inside the window |
+| Claim through a different caller, receiver, owner contract | YES (Q2: transfer then claim) | `lastModified` unchanged; the validator checks owner, receiver and origin | choosing a caller, receiver or `tx.origin` to avoid a blacklist entry would circumvent it | NOT recommended. A blacklist hit means the vault stops and the operator talks to Pharaoh. Plain key rotation of a keeper for security reasons is ordinary operations, but the design never selects an origin to dodge a check |
+| Replace the NFT to shed a position-hash blacklist | YES technically | new hash, new window | evasion if the hash was listed on purpose | NOT recommended |
+| Wait out the window | YES | lossless; the first change after a quiet span is free (Q3) | none | the basis of every variant below |
 
-A Pharaoh-blacklisted `tx.origin` cannot perform liquidity-removing exits under W1 (every such call is a slash); it can still transfer its shares to a clean address, which only records and never claims, and exit from there. If Pharaoh governance sets the threshold large (it is one governance call, U1), W1 and W3 freeze liquidity operations for that long. The vault should read the live threshold each time and the operator should decide a ceiling above which operations stay blocked and everything else (transfers, recording, claims of funded rewards) still works.
+I could not find Pharaoh's published rules for these controls (a web search returned only marketing and listing pages), and the validator's own comment says its logic is meant to be hidden. The "evasion" classification therefore rests on the code's evident purpose, not on a published policy. Recommended and listed as an operator decision: ask Pharaoh to confirm that batched or queued liquidity changes with a clean claim before each change are acceptable.
+
+### 6.4 The variants and their trade-offs
+
+Numbers: gas from probe Q; the dust-attack cost uses 279,436 measured plus an ASSUMED 150,000 vault overhead and the gas price read once from the RPC (2.5 gwei); the yield figures use an ASSUMED 20% per year of fees plus emissions, because no yield was measured. All from `tools/variant_econ.py`; none is a USD figure.
+
+| | (1) W1 as drafted | (2) Queue with idle buffer: deposits and withdrawals requested any time, executed as one net liquidity change per batch, at most once per `threshold + margin` | (3) Per-NFT cohorts or sleeve, synchronous |
+| --- | --- | --- | --- |
+| Fees and PHAR on deployed capital | full; deposits deployed at once | full once deployed. Queued deposits earn nothing: mean wait E/2 costs 0.0039 bps of the deposit at E = 122 s, 0.114 bps at 1 hour, 0.685 bps at 6 hours, 2.74 bps at 1 day (assumed 20% APR) | full |
+| PHAR rewards | none lost by construction (guard) | none lost by construction; queued deposits have no share-time and dilute nobody | none lost; additive across NFTs (Q1) |
+| Idle capital | none | buffer b of NAV: 20 bps per year of NAV per 1% of buffer (assumed APR); pending deposits only until the next batch | none, or a buffer |
+| Deposit availability | refused for up to 111 s after any liquidity change; an organic refusal rate of 0.64%, 2.5%, 12%, 47% of requests at 5, 20, 100, 500 liquidity-changing operations per day (Poisson) | always accepted into the queue; shares minted at the next batch | accepted into the sleeve NFT |
+| Principal exit, quiet market | instant if idle covers it or outside the window; else refused until the window passes | instant up to the buffer; else at the next batch, at most `max(E, threshold + margin)` = 121 s today | instant from a cold NFT or buffer |
+| Principal exit under a dust attacker (one operation per 112 s) | UNBOUNDED: every window is reopened by the attacker, cost about 771 transactions or 3.3e8 gas, about 0.83 AVAX per day at 2.5 gwei [model test `W1_dust_attacker_blocks_exits_unbounded`] | unchanged: dust is queue accounting and does not touch liquidity; an attacker-triggered batch is rate limited and also serves the victim's request [model tests `EPOCH_dust_attacker_cannot_extend_the_bound`, `EPOCH_empty_batches_do_not_reset_the_window`] | UNBOUNDED by itself: deposit plus withdraw dust heats the cold NFTs |
+| Principal exit, threshold raised to T' | liquidity part waits `lastModified + T' + margin - now`; buffer part instant | same for the liquidity part; buffer part instant | per NFT, same |
+| Principal exit, vault wallet or position hash blacklisted | UNBOUNDED for the liquidity part (every claim and every change slashes); the second draft's `emergencyExit` cannot override | UNBOUNDED for the liquidity part; buffer part instant | UNBOUNDED for blacklisted NFTs |
+| Exposure reading down | deposits and transfers fail closed, exits proceed, the interval is unresolved | exit-only batches proceed, deposits stay queued [model test `EPOCH_reading_outage_exits_still_served_deposits_stay_queued`] | as W1 |
+| Gas and complexity | simplest | queue and batch accounting O(1) per user; one batch is one liquidity change plus one harvest | more NFTs, more reads, higher mint cost |
+
+### 6.5 Recommended variant, and the stated bound of each variant
+
+Recommendation (EXPERIMENTAL): variant (2), with a single position NFT (never burned, retired ones kept until drained), asynchronous deposits and withdrawals, and a synchronous idle buffer.
+
+- **Deposits**: assets are escrowed in a queue; shares are minted at the batch, at NAV, so queued assets have no share-time and nobody is diluted; cancellable before the batch.
+- **Withdrawals**: paid at once from the idle buffer when it covers the amount (no liquidity change, no window); otherwise a request locks the shares (they keep their exposure and cannot move) and is served by the next batch.
+- **Batch**: permissionless, allowed only when `now - lastModified > liveThreshold + margin` and the validator pre-check (5.5) passes; it first completes the per-period harvest, then makes ONE net liquidity change, then mints and burns. A batch with an empty queue changes nothing. `emergencyExit` is the same batch for all liquidity, owner-triggered, under the same guard; it cannot waive anything.
+- **Parameters for the operator (section 10)**: `E` (a floor of `threshold + margin`, i.e. about 2 minutes today; 1 hour suggested for operating cost), `margin` (10 s modelled), buffer b (cost 20 bps per year per 1%), minimum request sizes.
+
+Bound on lossless principal exit, per variant and condition (the model tests named in section 9.2 assert these; `None` means the test asserts that no bound exists):
+
+| Condition | (1) W1 | (2) queue + buffer | (3) per-NFT, synchronous |
+| --- | --- | --- | --- |
+| Quiet | 0 s, or until the window ends (at most 111 s) | 0 s for amounts within the buffer; else at most `max(E, threshold + margin)` | 0 s from a cold NFT or buffer |
+| Dust attacker | NONE (unbounded) | same as quiet | NONE (unbounded) |
+| Governance raises the threshold to T' | `lastModified + T' + margin - now` (indefinite for a huge T', Q6) | same, for the liquidity part; buffer part 0 s | same per NFT |
+| Vault blacklisted (wallet or hash) or validator replaced to always slash | NONE for the liquidity part | NONE for the liquidity part; buffer part 0 s | NONE |
+| Exposure reading down | exits proceed (interval unresolved) | exits proceed, deposits wait | exits proceed |
+
+No variant can bound the liquidity part when Pharaoh governance or its blacklist makes every claim a slash: the only alternative is exiting with the forfeiture, which hard constraint C forbids as an automatic or forced action. A holder-initiated "exit now and accept the loss" path is a separate operator decision (section 10, item 4) and cannot isolate the loss to the exiting holder, because the forfeited backlog belongs to all holders of the position. The idle buffer is what keeps part of principal available in these states.
+
+### 6.6 Why not W1
+
+W1 is simple and loses nothing, but it makes every liquidity-changing exit depend on nobody else having made a liquidity change in the last `threshold` seconds. That is true of the vault's own organic traffic (2.5% of requests refused at 20 operations a day) and false against an attacker who spends about 0.83 AVAX a day; with the queue the attacker's operations stop being liquidity changes.
 
 ## 7. Waiver and forced paths (B)
 
@@ -300,6 +412,8 @@ Variants of the same file: mode `Zero` and mode `Slash` (the `Slash` run must ad
 
 ### 8.2 Tests for the new mechanisms
 
+(Third draft: the W-tests below are to be re-specified against the chosen variant of section 6; the model tests of section 9.2 are the executable form of the same properties and supersede the W1 specifics.)
+
 - **W-tests (window).** With the validator mock reporting slash: `harvest`, `deployIdle`, `rebalance`, `emergencyExit`, deposit deploy step and liquidity-removing exits revert `Vault__RewardWindow`; transfers, mint, burn, `claim`, `settle` still work; after the window, all succeed. With a blacklisted `tx.origin` (fork P9 setup): the same operations revert and the backlog is unchanged; the same call from a clean origin succeeds and funds the full backlog. Griefing test for the chosen option (W1 dust deposit reopens window; minimum deploy size; W3 rate limit).
 - **NFT retention.** Whole-vault exit, `rebalance` and `emergencyExit` leave the old NFT owned by the vault with zero liquidity; `harvest` after the window pays the pending amount (fork P5 setup: the amount is not lost); `drained` is set only after a post-period harvest finds `periodEarned == 0`; a new deposit after a whole-vault exit works (re-use or `rebalance`).
 - **B1 forced paths never reduce entitlements.** Invariant over all functions except `claim*` and `waiveRewards`: finalised entitlements are non-decreasing across the call, for fuzzed states including `emergencyExit`, `redeemInKind` and a failing or slashed harvest.
@@ -354,7 +468,9 @@ Pass criteria: all green on a fresh pin; at least one mutation per core test (re
 
 ## 9. Reference model
 
-`/private/tmp/claude-501/-Users-joshua-Peridot-peridot-contracts-2-5/248fd71c-044a-4eb7-9df4-18a648d75742/scratchpad/phar_tools/refmodel.py` (exact rational arithmetic, sha256 `e0720088649589184fe915a6b954be4a8dd77e75f85dee819ba95d830aae976f`, outside the repo). Output [M]:
+### 9.1 First reference model (second draft)
+
+`docs/deployment-handoffs/avalanche-vault-phar-evidence/tools/refmodel.py` (exact rational arithmetic, sha256 `e0720088649589184fe915a6b954be4a8dd77e75f85dee819ba95d830aae976f`). Output [M]:
 
 | Scenario | Result |
 | --- | --- |
@@ -371,28 +487,57 @@ Pass criteria: all green on a fresh pin; at least one mutation per core test (re
 
 The model implements this document's ledger, not the live contracts. It should be committed next to the tests when implementation starts.
 
-## 10. Open decisions for the operator
+### 9.2 Extended model (third draft)
 
-1. **Window policy** W1, W2 or W3 (section 6), the maximum threshold tolerated, minimum deploy size, idle buffer. Blocker.
-2. **Accept the Pharaoh governance surface** (U1), or negotiate an exemption/allow-list for the vault position. Blocker (acceptance).
-3. **Release rule for the buckets:** default none; if wanted, sink address, delay, and who may call (section 5.7). Blocker for the release path only.
-4. **Waiver:** does the function exist, and do waived amounts stay in `waivedBucket` or go pro rata to the other holders of the period (section 7).
-5. **Claim availability:** claims only for finalised periods (up to a week plus the funding delay). Alternative (pay open-period amounts as they accrue) is possible but makes early claimers' payment depend on a not-yet-final `funded[p]`; not recommended.
-6. **xPHAR:** the holder-triggered 50% exit (5.11), or hold only.
-7. **Pool time-source failure:** fail closed for mint and transfer; for burns, degraded wall-clock split with an event versus revert.
-8. **Replacement vault or upgrade in place** (section 2); governance and admin of the replacement (this document assumes it is not today's 1-of-1 upgrade key and does not choose).
-9. **Lending:** shares are not listed as collateral until a market-side reward ledger exists.
-10. Who writes the replacement code and who reviews it. None of that is done here.
+Files: `tools/refmodel2.py` (model), `tools/test_refmodel2.py` (47 tests, `python3 -I test_refmodel2.py` or `python3 -I -m unittest test_refmodel2` from the `tools/` directory, about 5 seconds), `tools/variant_econ.py` (section 6.4 numbers), logs `tools/test_refmodel2_run.txt`, `tools/variant_econ_run.txt`. `refmodel.py` is unchanged (its sha256 cited above still holds). Exact rational arithmetic. Result of the last run: **47 tests, 47 pass, 0 fail** (two of them property tests over 60 and 80 random histories, the first run for both policies).
+
+What it contains: a gauge mirror (per-NFT `lastModified`, mutable threshold, forfeit debt and the `_forfeitedShare` cascade, `periodClaimedAmount`, r33, `getReward` against `getPeriodReward`, the unconditional auto-claim, gauge-side pool-read failure, validator replaced, reverting or blacklisting, a second reward token appearing mid-period, burned NFTs); the ledger with deferred recording and account segments; per-period funding with the classification of 5A.3; the W1 and queue policies; and an INDEPENDENT oracle in the test harness that records each holder's true exposure from the true balances while time passes, without using any vault code path.
+
+Properties and the tests that carry them:
+
+| Property | Statement | Tests |
+| --- | --- | --- |
+| (i) Ownership correctness | after full settlement, `W[h][p]` equals the oracle's true exposure of `h` in `p` for every holder and period; independent of when the vault claimed and of who touched it (arbitrary permissionless `touch`, `harvest`, `progress`, `claim`, `drain` calls inserted between operations leave `W` and entitlements identical) | `ownership_equals_oracle_and_ignores_touchers` (60 histories, W1 and queue), `claim_timing_independence`, `late_notify_goes_by_recorded_weights`, `ten_then_ninety_...`, `paginated_equals_unpaginated` |
+| (ii) Recovery liveness | principal exit within the stated bound in each modelled state, or the test asserts the absence of a bound | `TestLiveness`: W1 quiet 0 s; W1 dust attacker NONE; W1 and queue under a raised threshold `lastModified + T' + margin`; queue under a dust attacker at most `threshold + margin + 1`; empty batches do not reset the window; idle-buffer exit survives blacklist and `threshold = 10^9`; blacklisted vault NONE for W1 and queue; reading outage still serves queued exits |
+| (iii) No value from an unresolved interval until reconciled | `sum W + Z + U == Tt`; `U` is in nobody's `W`; the funded share of `U` is reserved; permissionless calls cannot change it; `reconcile` with an externally supplied split restores exact ownership | `unresolved_interval_not_attributed_until_reconciled`, `failure_without_supply_event_is_exact_not_unresolved`, `failure_across_periods_only_event_period_is_unresolved`, `period_does_not_finalise_while_reading_is_down`, fuzz `unresolved_never_attributed_and_ownership_after_reconcile` (80 histories with outages, at every step) |
+| Conservation | `sum entitlements + buckets + reserved <= funded`, equality when settled | asserted in the ownership, slash, xPHAR and unresolved tests |
+| No wall clock in attribution | the attribution functions contain no time read | `attribution_functions_do_not_read_time` (source inspection) |
+
+Scenario coverage requested in the operator direction: **slashing** (a call slashed despite the guard is classified `SLASHED`, `lost[p] == r33 received`, funded is lower, the loss is borne by every holder of the period pro rata to recorded exposure, nobody is re-credited: `slash_is_booked_as_external_loss_borne_pro_rata`; gauge semantics for chains, debt and scope: `slash_chain_loss_grows_gauge_semantics`, `get_period_reward_scope_vs_get_reward_debt`); **zero-payment success** (nothing owed gives no call and no entry; owed but paid 0 is `NO_EFFECT_ZERO_PAYMENT` and books nothing; gauge-side read failure is recovered by the per-period call: `zero_payment_distinguishes_...`, `gauge_side_read_failure_is_recoverable_by_period_call`); **unavailable readings** (above); **retired and burned NFTs** (intervals preserved, burn refused with rewards outstanding, the unguarded burn leaves the period unable to finalise, visibly); **governance** (threshold changed mid-period is read live, a second reward token appearing mid-period is split by the same weights, validator replaced or reverting and a blacklisted vault block every claim without forfeiting, a replaced gauge whose claims revert recovers to the same entitlements as a control run); **bounded processing** (after 300 dormant periods a transfer does at most 6 inline steps and leaves one deferred segment; a tiny-call-at-a-time drive makes progress on every call, keeps every settled prefix equal to the oracle, and ends equal to the unpaginated run; 500 dust transfers onto a victim leave at most one segment; claims paginate to the same total).
+
+Mutation self-check: six deliberate breakages are each caught by at least one test (an unresolved interval treated as resolved; no settlement before a balance change; the backlog applied with the current supply; the window guard removed; burning with rewards outstanding; the first draft's wall-clock treatment of a failed reading).
+
+**What the model proves and does not.** It shows that the specified rules, with exact rational arithmetic, attribute every reward unit to the exposure that earned it, independent of claim timing and of who touches the vault, keep losses explicit, keep unresolved intervals out of everyone's entitlement, and keep partial processing consistent. It does NOT prove anything about Solidity: floor rounding (the second draft's dust bound in 5.9 is untouched), gas (steps are counted, gas is not measured), reentrancy, storage layout, upgrade safety, event ordering inside one transaction, or the behaviour of the pool beyond the monotone reading assumed. The gauge mirror follows the lines that were read and the behaviours probed, not the deployed bytecode; the Voter implementation and RewardValidator implementation are attested by Routescan alone (references file section 3). Oracle equality is only as good as the oracle's assumption that `positionPeriodSecondsInRange` is the exposure the gauge pays on (probe P7). Liveness is proved only for the adversaries written in the tests (dust at a fixed cadence, one threshold raise, one blacklist); an adversary that also controls Pharaoh governance is not bounded, as section 6.5 states. Concurrency between independent transactions in one block is not modelled. Governance changes are modelled as state changes of the mirror, not as the real access-hub flows.
+
+
+## 10. REMAINING OPERATOR DECISIONS (nothing below is decided or accepted by this document)
+
+1. **Liquidity-change policy** (section 6): confirm that W1 is rejected as a default, and choose between the queue with buffer (recommended), per-NFT routes, or something else. For the queue: batch floor `E` (at least `threshold + margin`, about 2 minutes; 1 hour suggested), `margin`, idle buffer b (cost about 20 bps per year per 1% at an assumed 20% yield; the real figure is not measured), minimum request sizes, cancellation rules, whether deposits are asynchronous (recommended) or accepted synchronously at a cost to ownership accuracy.
+2. **Pharaoh governance surface (U1).** Accept, negotiate an exemption or allow-list, or choose a monitored halt. The bound on a lossless liquidity exit is `lastModified + threshold + margin` and can be made indefinite by governance or by a blacklist of the vault wallet or position hash (Q6, Q7). Also decide whether to ask Pharaoh to confirm that queued or batched liquidity changes with a clean claim first are acceptable under their rules (I could not find published rules).
+3. **Reconciliation rule for UNRESOLVED intervals** (5A.4): who may call `reconcile`, on what evidence (event timestamps are the only computable evidence, and using them is a wall-clock rule that the design refuses to apply automatically), within what delay, and where `U` goes if it is never reconciled (default: stays reserved; no release function).
+4. **Forced exit versus forfeiture.** Whether any holder-initiated "exit now and accept the loss" path should exist at all. It is not designed here: constraint C forbids forced waivers, and the loss of a slashed position belongs to all holders, so it cannot be limited to the exiting holder.
+5. **Release rule for the buckets** (zero-supply, donated, waived, unreconciled): default none; if wanted, an immutable sink, a fixed delay of at least 180 days, a permissionless trigger (5.7).
+6. **Waiver function**: exists or not (default: not), and where waived amounts go (section 7).
+7. **Claim availability**: claims only for final periods (a period is final only after its exposure is sealed and `outstanding == 0`, so up to a week plus the funding delay, and longer after a reading outage or a blocked window).
+8. **xPHAR disposition** (5.11): holder-triggered 50% exit, or hold.
+9. **What the vault does on discovering a blacklist or a replaced validator**: halt batches (modelled), who escalates to Pharaoh, and the keeper policy: the design never selects a `tx.origin`, caller or receiver to avoid a check.
+10. **Pagination parameters**: `maxSteps` default, who runs `drain` and `harvest` (permissionless; a keeper is a convenience, not a dependency), and the maximum dormancy before a claim is needed (about 170 periods at a 15M gas budget, estimate).
+11. **Replacement vault or upgrade in place**; governance and admin of the replacement (this document assumes it is not today's 1-of-1 upgrade key); lending collateral stays off until a market-side reward ledger exists; who writes and who reviews the code. Unchanged from the second draft.
 
 ## 11. What this proposal does NOT do
 
 - Opens no gate, changes no cap, selects no launch date. No transaction was sent; no contract, test or file under `docs/handoffs/` was edited.
 - Does not fix the separate open findings of the gate note [E]: thin USDC/USDt exit liquidity; the stress gates freezing `redeem`, `deposit` and the views; the 1-of-1 Safe whose single signer is the rebalancer EOA and the immediate-upgrade proxy admin; donation griefing, entry haircut and out-of-range behaviour; the missing net-return figure and third-party audit.
-- Residual risks of the recommended design [R]: Pharaoh governance can change the integration under the vault (U1); the window policy trades liveness for no-forfeiture; attribution is share-weighted; every transfer makes external pool calls; xPHAR cannot be paid in kind; an upgrade key still dominates any invariant here.
+- Residual risks of the recommended design [R]: Pharaoh governance can change the integration under the vault (U1) and make the lossless liquidity exit bound indefinite; the queue trades synchronous deposits for an idle wait and a buffer drag; attribution is share-weighted; every transfer makes external pool calls; xPHAR cannot be paid in kind; an upgrade key still dominates any invariant here.
 
 ## 12. What I inspected and what I could not
+
+(Second-draft list first; third-draft additions at the end of this section.)
 
 - Read in full with the Read tool: the first-draft proposal; `AvalancheTrackAVaultsBase.sol`; the vault base (817 lines) and extension (100 lines); the OpenZeppelin `ERC20Upgradeable._update` region and all of `ERC4626Upgradeable`; the position manager (508 lines); `GaugeV3` (642); `ClGaugeFactory`; `RewardValidator` (242); the relevant parts of `Voter` (`_distribute`, `distribute`, `notifyRewardAmount`, claim functions, governance setters) and its claim and governance libraries; the pool's `_advancePeriod` and `positionPeriodSecondsInRange`; xPHAR (283) and PHAR (42). Sources fetched from Routescan, cross-checked against Sourcify for six contracts (identical).
 - Chain: read-only `cast` calls, `cast storage`, `cast code`, `cast block` with an explicit block pin against `https://api.avax.network/ext/bc/C/rpc` (blocks 99216397 and 99216312); `cast codehash` is unavailable on that node (no `eth_getProof`), so keccak of the code was used. Upgrade history and NotifyReward events came from the Routescan `getLogs` API.
 - Probes: a Foundry fork project in the scratchpad (not in the repo), local VM only (`vm.prank`, `vm.warp`, `deal`; Pharaoh governance blacklisting in P9 is a local simulation); 9 passed. Reference model in Python. Both listed with sha256 in the references file.
 - **Not done or not verified:** WAVAX position probes beyond `earned` and the threshold (U4); source-to-bytecode reproduction (U5, Voter implementation and RewardValidator implementation are on Routescan only); Minter, access hub, timelock and r33 contracts (U3); any Solidity for the replacement vault, hence no gas figure for the settlement loop and no confirmation that the pool call path is acceptable inside `_update`; the lending-market side; the effect of Pharaoh governance changing any of the parameters in U1; USD value of any reward amount (no PHAR price source on chain [E]); a run of the existing gate suites (none was run or edited).
+
+- Added in this revision: the third draft's probes were read-only forks on a local VM at the same pin (governance changes and blacklisting are local simulations by pranking the real governance addresses); no transaction was sent; no file under `contracts/contracts/`, `contracts/test/` or `docs/handoffs/` was edited and no existing probe file was changed.
+- **Not done or not verified (third draft):** Pharaoh's published rules for the anti-sybil controls (one web search found nothing); probes Q1 to Q10 were not repeated on the WAVAX vault; the C-Chain block gas limit was read once (80,000,000) and is not used as a budget; no yield, fee or PHAR price was measured, so every cost in basis points assumes a 20% yearly yield and is illustrative; the gas of the vault's own record, settle and harvest steps is estimated, not measured; the model's liveness covers only the adversaries written in its tests; whether a `getPeriodReward` per period is cheaper than `getReward` over a long history is only known per period (178,344 cold gas) and not as a total; `mint` of a sleeve NFT was exercised with test tokens dealt to the vault address in the local VM only.
