@@ -278,4 +278,90 @@ contract AvalancheCashOnlyLendingForkTest is AvalancheCashOnlyBase {
         assertFalse(ok, "seized pUSDC cannot be redeemed beyond market cash");
         drained;
     }
+
+    // ================================================================= optional in-kind emergency exit: the supplier's CLAIM (pTokens)
+    /// @dev For cash-only lending the "in-kind" exit is the supplier's pToken claim itself: it can be moved (transferred) to another
+    ///      account without market cash, subject to the controller's collateral check for accounts with debt. It is NOT converted into
+    ///      the originally deposited asset; that needs market cash (see the cash-exhaustion test) and nothing here promises it.
+    function _xfer(address from, address to, uint256 amount) internal returns (bool ok) {
+        vm.prank(from);
+        (bool success, bytes memory ret) = address(pWavax).call(abi.encodeWithSelector(pWavax.transfer.selector, to, amount));
+        lastRevert = success ? bytes("") : ret;
+        ok = success && ret.length == 32 && abi.decode(ret, (bool));
+    }
+
+    function testInKindClaim_TransferWithoutCash_AndWithDebtChecks() public {
+        _unpauseBorrows();
+        // (a) a supplier with no debt moves the claim while the market has no cash for a redemption
+        uint256 bobTokens = _mintP(pUsdc, BOB, 1_000e6);
+        _drainUsdcCash();
+        (bool ok,) = _redeemUnderlying(pUsdc, BOB, 500e6);
+        assertFalse(ok, "cash redemption impossible: no market cash");
+        vm.prank(BOB);
+        assertTrue(pUsdc.transfer(ALICE, bobTokens), "the claim itself can be transferred without market cash");
+        assertEq(pUsdc.balanceOf(BOB), 0);
+        assertEq(pUsdc.balanceOf(ALICE), bobTokens);
+        // the recipient gets cash only once the market has cash again (repayment adds it); nothing was converted
+        address whale = address(0xDEAD0001);
+        (ok,) = _repay(pUsdc, whale, 600e6);
+        assertTrue(ok);
+        (ok,) = _redeemUnderlying(pUsdc, ALICE, 500e6);
+        assertTrue(ok, "the claim redeems for cash when cash exists");
+
+        // (b) a supplier WITH debt: moving collateral claims is subject to the collateral check
+        uint256 pw = _mintP(pWavax, DAVE, 100e18);
+        _enter(DAVE);
+        (ok,) = _borrow(pUsdc, DAVE, 100e6); // small, cash is scarce after the drain; limit is about 513 USDC
+        assertTrue(ok, "DAVE borrows against WAVAX");
+        assertFalse(_xfer(DAVE, CAROL, pw), "moving ALL collateral claims while in debt is refused by the collateral check");
+        assertEq(pWavax.balanceOf(DAVE), pw, "nothing moved");
+        assertTrue(_xfer(DAVE, CAROL, pw / 10), "moving a small part that keeps the account solvent is allowed");
+        (, , uint256 shortfall) = controller.getAccountLiquidity(DAVE);
+        assertEq(shortfall, 0, "the account is still solvent after the allowed transfer");
+        // (c) with the feed stale, entered accounts cannot move claims either (documented availability cost)
+        vm.warp(block.timestamp + AVAX_MAX_AGE + 1);
+        assertFalse(_xfer(DAVE, CAROL, 1e8), "stale feed: claim transfer by an account that entered markets is blocked");
+    }
+
+    // ================================================================= gas per operation (input to the operating-cost estimate)
+    function _gas(string memory name) internal {
+        emit log_named_uint(string.concat("GAS|", name), vm.lastCallGas().gasTotalUsed);
+    }
+
+    /// @dev Measurement only (no thresholds): gas of the last top-level call, for the keeper / liquidator cost estimate.
+    function testGas_OrdinaryLendingOperations() public {
+        _unpauseBorrows();
+        uint256 pw = _mintP(pWavax, DAVE, 100e18);
+        _enter(DAVE);
+        deal(USDC, ALICE, 1_000e6);
+        vm.startPrank(ALICE);
+        IERC20(USDC).approve(address(pUsdc), type(uint256).max);
+        pUsdc.mint(100e6);
+        _gas("mint (supply) pUSDC");
+        vm.stopPrank();
+        vm.prank(DAVE);
+        pUsdc.borrow(480e6);
+        _gas("borrow pUSDC (account in two markets)");
+        _setAvaxBps(6_600);
+        deal(USDC, CAROL, 1_000e6);
+        vm.startPrank(CAROL);
+        IERC20(USDC).approve(address(pUsdc), type(uint256).max);
+        (bool lok,) = address(pUsdc).call(abi.encodeWithSelector(PErc20.liquidateBorrow.selector, DAVE, 200e6, address(pWavax)));
+        require(lok, "liquidation failed");
+        _gas("liquidateBorrow (ordinary liquidation, one call)");
+        vm.stopPrank();
+        deal(USDC, DAVE, 2_000e6);
+        vm.startPrank(DAVE);
+        IERC20(USDC).approve(address(pUsdc), type(uint256).max);
+        (bool rok, bytes memory rret) = address(pUsdc).call(abi.encodeWithSelector(PErc20.repayBorrow.selector, type(uint256).max));
+        require(rok && abi.decode(rret, (uint256)) == 0, "repay failed");
+        _gas("repayBorrow (full)");
+        vm.stopPrank();
+        uint256 aliceTokens = pUsdc.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (bool xok, bytes memory xret) = address(pUsdc).call(abi.encodeWithSelector(PErc20.redeem.selector, aliceTokens));
+        require(xok && abi.decode(xret, (uint256)) == 0, "redeem failed");
+        _gas("redeem pUSDC");
+        pw;
+    }
 }
