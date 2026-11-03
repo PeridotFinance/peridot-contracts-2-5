@@ -1,0 +1,45 @@
+REMEDY EVIDENCE RUN attempt01-fork-usdc-test01
+UTC start: 2026-11-03T10:47:48Z
+git HEAD: 4a432c7863eb497297b396a9379160b1b703adb8  branch: avalanche-pharaoh-tracks-abcd
+sha256 new files:
+  1a523ed8a437481f5e2b44693a71c2b811dc71df76fa9e242cc8834613831c2e  test/AvalancheVaultShareCheckFork.t.sol
+  82b29d00554fdf8c7048fca1749cc015c0ff808966de68759688f896b76ecf5f  test/AvalancheVaultSharePricingPrototype.t.sol
+  7df6400c5ab21daa32fb06fb710c07a8bde95a9b0371ccd29908e7d21ef83fb6  test/prototype/VaultShareModel.sol
+RPC host: https://api.avax.network (pin 99216397)
+forge: forge Version: 1.7.1-Homebrew
+env: FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_remedy FOUNDRY_CACHE_PATH=cache_remedy TRACKA_PIN_BLOCK=99216397
+command: forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!Ap]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!V]* --match-contract AvalancheVaultShareCheckUsdcFork --match-test 'test_01_' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheVaultShareCheckFork.t.sol:AvalancheVaultShareCheckUsdcFork
+[FAIL: asset ledger residual: 2000000000 != 0] test_01_deposit_pct100() (gas: 7780592)
+Logs:
+  VSC|Pharaoh USDC vault (pair USDC/USDt, deposited USDC)|SETUP incumbent Alice deposit 2000000000 shares 1988444134 ; Safe seed shares 29850429 ; total supply 2018294563 ; haircut bps 100
+  VSC|Pharaoh USDC vault (pair USDC/USDt, deposited USDC)|LEDGER residual asset 2000000000 paired 0 (asserted 0)
+
+Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 9.87s (8.91s CPU time)
+
+Ran 1 test suite in 10.30s (9.87s CPU time): 0 tests passed, 1 failed, 0 skipped (1 total tests)
+
+Failing tests:
+Encountered 1 failing test in test/AvalancheVaultShareCheckFork.t.sol:AvalancheVaultShareCheckUsdcFork
+[FAIL: asset ledger residual: 2000000000 != 0] test_01_deposit_pct100() (gas: 7780592)
+
+Encountered a total of 1 failing tests, 0 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 1 failed test
+-----
+UTC end: 2026-11-03T10:48:02Z  forge exit: 1

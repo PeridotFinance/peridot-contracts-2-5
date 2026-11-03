@@ -1,0 +1,304 @@
+REMEDY EVIDENCE RUN attempt07-fork-wavax-all
+UTC start: 2026-11-03T10:53:52Z
+git HEAD: 33e1f42a4cbecb1b6bde75817bafcc2bd8fb9dd4  branch: avalanche-pharaoh-tracks-abcd
+sha256 new files:
+  175dd649d9e954775513be8b22d0bd93c442100e0a1597fbf7fe3c772d995646  test/AvalancheVaultShareCheckFork.t.sol
+  82b29d00554fdf8c7048fca1749cc015c0ff808966de68759688f896b76ecf5f  test/AvalancheVaultSharePricingPrototype.t.sol
+  7df6400c5ab21daa32fb06fb710c07a8bde95a9b0371ccd29908e7d21ef83fb6  test/prototype/VaultShareModel.sol
+RPC host: https://api.avax.network (pin 99216312)
+forge: forge Version: 1.7.1-Homebrew
+env: FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_remedy FOUNDRY_CACHE_PATH=cache_remedy TRACKA_PIN_BLOCK=99216312
+command: forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!Ap]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!V]* --match-contract AvalancheVaultShareCheckWavaxFork --match-test 'test_' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 21 tests for test/AvalancheVaultShareCheckFork.t.sol:AvalancheVaultShareCheckWavaxFork
+[PASS] test_01_deposit_pct100() (gas: 5934417)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674210457332633108599 + protocol fees 12460962283822045 + other LPs (derived) 495136796267557403079
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -24276753776903493709 = vault position 358964245883425083521 + protocol fees 0 + other LPs (derived) -383240999660328577230
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% D 1169359714562474333723 S0 1145127766674784628576 minted 1145531419523657398661 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% incumbent Alice change ppm -1067 (-1249025105398449517 asset units); Safe seed ppm -1067 (-1882813619326871)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% contribution K (oracle) 1169809623700904266678 paired part 495599166368271158079 ; newcomer transfer T = entitlement - K = 1250907919017776387 = 1069 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% closed form T_cf 1363262649738358884 (|T_cf - haircut part| 1)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% DECOMP haircut 1363262649738358885 + TWAP-vs-spot valuation -112354730720582497 + mint floor -1 + redeem floors 0 = 1250907919017776387 (T = 1250907919017776387)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% paired share of value: holdings before 500204 ppm, K 423657 ppm (signed), holdings after 461965 ppm
+
+[PASS] test_01r_deposit_pct100_tickRestored() (gas: 6080801)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674209164288060532682 + protocol fees 12460958208982632 + other LPs (derived) 495138089316204818409
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -17934196571947587669 = vault position 365504590069139426741 + protocol fees 0 + other LPs (derived) -383438786641087014410
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] D 1169359714562474333723 S0 1145127766674784628576 minted 1145918944644992380932 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] incumbent Alice change ppm -1130 (-1323062685299807142 asset units); Safe seed ppm -1130 (-1994419833787875)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] contribution K (oracle) 1170064104602410679843 paired part 495854940314350147161 ; newcomer transfer T = entitlement - K = 1325057105133595017 = 1133 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] closed form T_cf 1427255029285938036 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] DECOMP haircut 1427255029285938036 + TWAP-vs-spot valuation -102197924152343019 + mint floor 0 + redeem floors 0 = 1325057105133595017 (T = 1325057105133595017)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] paired share of value: holdings before 503910 ppm, K 423784 ppm (signed), holdings after 463878 ppm
+
+[PASS] test_02_deposit_pct10() (gas: 5871689)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 116935971456247433372 = vault position 144489929865667735942 + protocol fees 0 + other LPs (derived) -27553958409420302570
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 100556698535813298802 = vault position 79221535214290287840 + protocol fees 536920696915269 + other LPs (derived) 21334626400826095693
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -116935971456247433372 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 116935971456247433372 paired 100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% D 116935971456247433372 S0 1145127766674784628576 minted 116779300664288535156 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% incumbent Alice change ppm -2020 (-2364577262480882561 asset units); Safe seed ppm -2020 (-3564426571177215)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% contribution K (oracle) 116899747275993572787 paired part -27590182589674163155 ; newcomer transfer T = entitlement - K = 2368141689052059775 = 20251 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% closed form T_cf 2378656115512261505 (|T_cf - haircut part| 1)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% DECOMP haircut 2378656115512261506 + TWAP-vs-spot valuation -10514426460201730 + mint floor 0 + redeem floors -1 = 2368141689052059775 (T = 2368141689052059775)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% paired share of value: holdings before 500204 ppm, K -236015 ppm (signed), holdings after 433425 ppm
+
+[PASS] test_02r_deposit_pct10_tickRestored() (gas: 6041413)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 116935971456247433372 = vault position 144475949111967199746 + protocol fees 0 + other LPs (derived) -27539977655719766374
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 101975798879475507645 = vault position 80640510348325484217 + protocol fees 536923847940606 + other LPs (derived) 21334751607302082822
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -116935971456247433372 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -101975798879475507645
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 116935971456247433372 paired 101975798879475507645
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] D 116935971456247433372 S0 1145127766674784628576 minted 116795543251364462067 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] incumbent Alice change ppm -2045 (-2393038270319221861 asset units); Safe seed ppm -2045 (-3607329450347685)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] contribution K (oracle) 116885604603847923309 paired part -27590344508119276437 ; newcomer transfer T = entitlement - K = 2396645599769569547 = 20495 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] closed form T_cf 2390709973733380627 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] DECOMP haircut 2390709973733380627 + TWAP-vs-spot valuation 5935626036188922 + mint floor 0 + redeem floors -2 = 2396645599769569547 (T = 2396645599769569547)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [tick restored] paired share of value: holdings before 503910 ppm, K -236045 ppm (signed), holdings after 436800 ppm
+
+[PASS] test_03_deposit_pct1() (gas: 5870653)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 11693597145624743337 = vault position 91451377235349317824 + protocol fees 0 + other LPs (derived) -79757780089724574487
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 112518004806142914048 = vault position 50759903619763489210 + protocol fees 1554204307201314 + other LPs (derived) 61756546982072223524
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -11693597145624743337 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -112518004806142914048
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 11693597145624743337 paired 112518004806142914048
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% D 11693597145624743337 S0 1145127766674784628576 minted 13871385141878745010 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% incumbent Alice change ppm -2199 (-2573468226699043263 asset units); Safe seed ppm -2199 (-3879314359008195)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% contribution K (oracle) 11587105167421846922 paired part -79864272067927470902 ; newcomer transfer T = entitlement - K = 2577347541058051457 = 220406 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% closed form T_cf 2577730203872146792 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% DECOMP haircut 2577730203872146792 + TWAP-vs-spot valuation -382662814095333 + mint floor 0 + redeem floors -2 = 2577347541058051457 (T = 2577347541058051457)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% paired share of value: holdings before 500204 ppm, K -6892512 ppm (signed), holdings after 427824 ppm
+
+[PASS] test_03r_deposit_pct1_tickRestored() (gas: 6039777)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 11693597145624743337 = vault position 91410602703915159718 + protocol fees 0 + other LPs (derived) -79717005558290416381
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 113403372244106097574 = vault position 51645145848099660268 + protocol fees 1554207458226651 + other LPs (derived) 61756672188548210655
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -11693597145624743337 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -113403372244106097574
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 11693597145624743337 paired 113403372244106097574
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] D 11693597145624743337 S0 1145127766674784628576 minted 13849820021140949139 haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] incumbent Alice change ppm -2215 (-2592209285325071312 asset units); Safe seed ppm -2215 (-3907565128563730)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] contribution K (oracle) 11546168717542575532 paired part -79864433986372584186 ; newcomer transfer T = entitlement - K = 2596116850453635043 = 222011 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] closed form T_cf 2578784652450205092 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] DECOMP haircut 2578784652450205092 + TWAP-vs-spot valuation 17332198003429952 + mint floor 0 + redeem floors -1 = 2596116850453635043 (T = 2596116850453635043)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=1% [tick restored] paired share of value: holdings before 503910 ppm, K -6916964 ppm (signed), holdings after 431509 ppm
+
+[PASS] test_04_roundTrip_pct10() (gas: 7190112)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 116935971456247433372 = vault position 144489929865667735942 + protocol fees 0 + other LPs (derived) -27553958409420302570
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 100556698535813298802 = vault position 79221535214290287840 + protocol fees 536920696915269 + other LPs (derived) 21334626400826095693
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -116935971456247433372 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 116935971456247433372 paired 100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=10% D 116935971456247433372: net P&L 2262457875110193638 = 19347 ppm of D = (entitlement - D) 2331917508798199190 [of which T 2368141689052059775, deployment cost K-D -36224180253860585] + (sale proceeds - oracle value of the paired leg) -69459633688005552
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=10% Alice in-kind value change -2364069608095061847 = -2020 ppm
+
+[PASS] test_04r_roundTrip_pct10_tickRestored() (gas: 7349910)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 116935971456247433372 = vault position 144475949111967199746 + protocol fees 0 + other LPs (derived) -27539977655719766374
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 101975798879475507645 = vault position 80640510348325484217 + protocol fees 536923847940606 + other LPs (derived) 21334751607302082822
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -116935971456247433372 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -101975798879475507645
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 116935971456247433372 paired 101975798879475507645
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=10% [tick restored] D 116935971456247433372: net P&L 2249555691832625764 = 19237 ppm of D = (entitlement - D) 2346278747370059484 [of which T 2396645599769569547, deployment cost K-D -50366852399510063] + (sale proceeds - oracle value of the paired leg) -96723055537433720
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=10% [tick restored] Alice in-kind value change -2392326635669339524 = -2044 ppm
+
+[PASS] test_05_roundTrip_pct100() (gas: 7297944)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674210457332633108599 + protocol fees 12460962283822045 + other LPs (derived) 495136796267557403079
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -24276753776903493709 = vault position 358964245883425083521 + protocol fees 0 + other LPs (derived) -383240999660328577230
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=100% D 1169359714562474333723: net P&L 1092717837812007652 = 934 ppm of D = (entitlement - D) 1700817057447709342 [of which T 1250907919017776387, deployment cost K-D 449909138429932955] + (sale proceeds - oracle value of the paired leg) -608099219635701690
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=100% Alice in-kind value change -1244837933317177870 = -1063 ppm
+
+[PASS] test_05r_roundTrip_pct100_tickRestored() (gas: 7395369)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674209164288060532682 + protocol fees 12460958208982632 + other LPs (derived) 495138089316204818409
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -17934196571947587669 = vault position 365504590069139426741 + protocol fees 0 + other LPs (derived) -383438786641087014410
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=100% [tick restored] D 1169359714562474333723: net P&L 1139653143346006016 = 974 ppm of D = (entitlement - D) 2029447145069941137 [of which T 1325057105133595017, deployment cost K-D 704390039936346120] + (sale proceeds - oracle value of the paired leg) -889794001723935121
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ROUNDTRIP deposit=100% [tick restored] Alice in-kind value change -1316871014608846050 = -1125 ppm
+
+[PASS] test_06_cycling_5x_pct10() (gas: 7705376)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 cycle 1 attacker cumulative 2262457875110193638 (19347 ppm of D) ; Alice cumulative -2364069608095061847 (-2020 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 cycle 2 attacker cumulative 2549896299391473582 (21805 ppm of D) ; Alice cumulative -2673165514160357284 (-2284 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 cycle 3 attacker cumulative 2578542895881204760 (22050 ppm of D) ; Alice cumulative -2713386723469951794 (-2318 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 cycle 4 attacker cumulative 2573497961493128418 (22007 ppm of D) ; Alice cumulative -2718596901186780144 (-2323 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 cycle 5 attacker cumulative 2564067552776998163 (21927 ppm of D) ; Alice cumulative -2719248966718641203 (-2323 ppm)
+
+[PASS] test_06r_cycling_5x_pct10_tickRestored() (gas: 7871899)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 [tick restored] cycle 1 attacker cumulative 2249555691832625764 (19237 ppm of D) ; Alice cumulative -2392326635669339524 (-2044 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 [tick restored] cycle 2 attacker cumulative 2522249249213480763 (21569 ppm of D) ; Alice cumulative -2691386430761430385 (-2300 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 [tick restored] cycle 3 attacker cumulative 2547234031992152570 (21783 ppm of D) ; Alice cumulative -2728537067065642278 (-2331 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 [tick restored] cycle 4 attacker cumulative 2541429486610198636 (21733 ppm of D) ; Alice cumulative -2733127170552256093 (-2335 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=10% x5 [tick restored] cycle 5 attacker cumulative 2531798681703387225 (21651 ppm of D) ; Alice cumulative -2733670006341956319 (-2336 ppm)
+
+[PASS] test_07_cycling_5x_pct100() (gas: 7778160)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=100% x5 cycle 1 attacker cumulative 1092717837812007652 (934 ppm of D) ; Alice cumulative -1244837933317177870 (-1063 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=100% x5 cycle 2 attacker cumulative 1075274175397373130 (919 ppm of D) ; Alice cumulative -1337684597556577981 (-1143 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=100% x5 cycle 3 attacker cumulative 974794326158603802 (833 ppm of D) ; Alice cumulative -1344302147670070505 (-1148 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=100% x5 cycle 4 attacker cumulative 868113953246803184 (742 ppm of D) ; Alice cumulative -1344470595045103494 (-1148 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING deposit=100% x5 cycle 5 attacker cumulative 760979361462107674 (650 ppm of D) ; Alice cumulative -1344156738964348358 (-1148 ppm)
+
+[PASS] test_08_mutation_haircutZero_pct100() (gas: 5949496)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|MUTATION valuationHaircutBps set to 0 in slot 11 (local VM only)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674210457332633108600 + protocol fees 12460962283822045 + other LPs (derived) 495136796267557403078
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -24276753776903493709 = vault position 358964245883425083522 + protocol fees 0 + other LPs (derived) -383240999660328577231
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -24276753776903493709
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] D 1169359714562474333723 S0 1145127766674784628576 minted 1143093891368370636928 haircut bps 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] incumbent Alice change ppm -3 (-3869411338713470 asset units); Safe seed ppm -3 (-5832853427699)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] contribution K (oracle) 1169809623700904266680 paired part 495599166368271158080 ; newcomer transfer T = entitlement - K = 3875244192141169 = 3 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] closed form T_cf 0 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] DECOMP haircut 0 + TWAP-vs-spot valuation 3875244192141168 + mint floor 0 + redeem floors 1 = 3875244192141169 (T = 3875244192141169)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [haircut mutated to 0] paired share of value: holdings before 500204 ppm, K 423657 ppm (signed), holdings after 461965 ppm
+
+[PASS] test_08r_mutation_haircutZero_pct100_tickRestored() (gas: 6095518)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|MUTATION valuationHaircutBps set to 0 in slot 11 (local VM only)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 1169359714562474333723 = vault position 674209164288060532683 + protocol fees 12460958208982632 + other LPs (derived) 495138089316204818408
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired -17934196571947587669 = vault position 365504590069139426740 + protocol fees 0 + other LPs (derived) -383438786641087014409
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -1169359714562474333723 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired 17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 1169359714562474333723 paired -17934196571947587669
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] D 1169359714562474333723 S0 1145127766674784628576 minted 1143338755380585638882 haircut bps 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] incumbent Alice change ppm -4 (-5248816678119428 asset units); Safe seed ppm -4 (-7912205674810)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] contribution K (oracle) 1170064104602410679843 paired part 495854940314350147160 ; newcomer transfer T = entitlement - K = 5256728883794237 = 4 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] closed form T_cf 0 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] DECOMP haircut 0 + TWAP-vs-spot valuation 5256728883794237 + mint floor 0 + redeem floors 0 = 5256728883794237 (T = 5256728883794237)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=100% [tick restored] [haircut mutated to 0] paired share of value: holdings before 503910 ppm, K 423784 ppm (signed), holdings after 463878 ppm
+
+[PASS] test_09_mutation_haircutZero_pct10() (gas: 5886661)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|MUTATION valuationHaircutBps set to 0 in slot 11 (local VM only)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|LEDGER residual asset 0 paired 0 (asserted 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta asset 116935971456247433372 = vault position 144489929865667735942 + protocol fees 0 + other LPs (derived) -27553958409420302570
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|POOL delta paired 100556698535813298802 = vault position 79221535214290287838 + protocol fees 536920696915269 + other LPs (derived) 21334626400826095695
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT Bob(newcomer) asset -116935971456247433372 paired 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT vault idle asset 0 paired -100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|ACCT pool(total) asset 116935971456247433372 paired 100556698535813298802
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] D 116935971456247433372 S0 1145127766674784628576 minted 114229900990409862781 haircut bps 0
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] incumbent Alice change ppm 0 (-583813568463791 asset units); Safe seed ppm 0 (-880056079818)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] contribution K (oracle) 116899747275993572785 paired part -27590182589674163157 ; newcomer transfer T = entitlement - K = 584693624543607 = 5 ppm of D
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] closed form T_cf 0 (|T_cf - haircut part| 0)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] DECOMP haircut 0 + TWAP-vs-spot valuation 584693624543610 + mint floor -1 + redeem floors -2 = 584693624543607 (T = 584693624543607)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|deposit=10% [haircut mutated to 0] paired share of value: holdings before 500204 ppm, K -236015 ppm (signed), holdings after 433425 ppm
+
+[PASS] test_10_mutation_haircutZero_cycling_5x_pct10() (gas: 7732913)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2559 (restore=no)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|MUTATION valuationHaircutBps set to 0 in slot 11 (local VM only)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 1 attacker cumulative -103700067313106880 (-886 ppm of D) ; Alice cumulative -85387691312684 (0 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 2 attacker cumulative -125712123854626864 (-1075 ppm of D) ; Alice cumulative -38617284496751 (0 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 3 attacker cumulative -137208446639170458 (-1173 ppm of D) ; Alice cumulative 14454414290586 (0 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 4 attacker cumulative -147300895644879068 (-1259 ppm of D) ; Alice cumulative 68093958897641 (0 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 5 attacker cumulative -157206038852823606 (-1344 ppm of D) ; Alice cumulative 121800449108131 (0 ppm)
+
+[PASS] test_10r_mutation_haircutZero_cycling_5x_pct10_tickRestored() (gas: 7899044)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP spot tick before Alice 2554 after her deposit 2559 after optional arbitrage 2554 (restore=yes)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SETUP incumbent Alice deposit 1169359714562474333723 shares 1143404168860600506584 ; Safe seed shares 1723597814184121992 ; total supply 1145127766674784628576 ; haircut bps 300
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|MUTATION valuationHaircutBps set to 0 in slot 11 (local VM only)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 1 attacker cumulative -145496903777281435 (-1244 ppm of D) ; Alice cumulative 1069496696502769 (0 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 2 attacker cumulative -172381271179428893 (-1474 ppm of D) ; Alice cumulative 1269568299698055 (1 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 3 attacker cumulative -184494529185525822 (-1577 ppm of D) ; Alice cumulative 1342611795108711 (1 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 4 attacker cumulative -194728022433481987 (-1665 ppm of D) ; Alice cumulative 1399223510103535 (1 ppm)
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|CYCLING [haircut=0] deposit=10% x5 cycle 5 attacker cumulative -204722283769519282 (-1750 ppm of D) ; Alice cumulative 1453742406929168 (1 ppm)
+
+[PASS] test_11_seedOnly_roundTrip_usd100() (gas: 2646330)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SEED-ONLY roundtrip USD 100 D 11693597145624743337: net -4576711694638081 = -391 ppm of D; (entitlement - D) 5495309082513202 ; sale delta -10072020777151283
+
+[PASS] test_11_seedOnly_roundTrip_usd1000() (gas: 2647507)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SEED-ONLY roundtrip USD 1000 D 116935971456247433372: net -15594703969111231 = -133 ppm of D; (entitlement - D) 85898875067968190 ; sale delta -101493579037079421
+
+[PASS] test_11_seedOnly_roundTrip_usd10000() (gas: 2655122)
+Logs:
+  VSC|Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX)|SEED-ONLY roundtrip USD 10000 D 1169359714562474333723: net -121021103460566491 = -103 ppm of D; (entitlement - D) 775183964990601097 ; sale delta -896205068451167588
+
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 1.53s (594.91ms CPU time)
+
+Ran 1 test suite in 1.93s (1.53s CPU time): 21 tests passed, 0 failed, 0 skipped (21 total tests)
+-----
+UTC end: 2026-11-03T10:53:57Z  forge exit: 0
