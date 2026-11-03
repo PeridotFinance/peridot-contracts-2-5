@@ -989,7 +989,7 @@ contract AvalancheCashOnlyLossHandlingForkTest is AvalancheCashOnlyBase {
         vm.expectRevert(bytes("collateral remains: liquidate first"));
         m.writeOffBadDebt(LEVERED, 1_000e6);
         // the defaulted accounts of the event are written off (exhausted collateral)
-        _setPrices(avaxAnswer, usdcAnswer);
+        _setPrices(avaxAnswer, usdcAnswer); // re-mock at the current stored price
         uint256 supplyBefore = pUsdc.totalSupply();
         m.writeOffBadDebt(b0, owed);
         assertEq(pUsdc.borrowBalanceStored(b0), 0, "debt gone");
@@ -1090,7 +1090,7 @@ contract AvalancheCashOnlyLossHandlingForkTest is AvalancheCashOnlyBase {
         emit log_string(string.concat("LOSS|THEFT|variant=percall-cap-only", _kv("stolen", 50_000e6), _kv("calls", calls), "|END"));
     }
 
-    function testTheft_OracleManipulationPassesThePrecondition_CapsBoundIt() public {
+    function testTheft_OracleManipulationPassesThePrecondition_StrictHasNoCap() public {
         if (!_live()) return;
         _unpauseBorrows();
         _supply();
