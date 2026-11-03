@@ -1,0 +1,2078 @@
+# UTC: 2026-11-03T11:09:00Z
+# git HEAD: 33e1f42a4cbecb1b6bde75817bafcc2bd8fb9dd4
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_loss FOUNDRY_CACHE_PATH=cache_loss forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyLossHandlingForkTest$' --match-test 'test' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: MUTATION M2_suppliers_first applied to the prototype (file restored afterwards)
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+Compiling 2 files with Solc 0.8.35
+Solc 0.8.35 finished in 27.90s
+Compiler run successful with warnings:
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+  --> contracts/ErrorReporter.sol:58:19:
+   |
+58 |     event Failure(uint256 error, uint256 info, uint256 detail);
+   |                   ^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> contracts/PToken.sol:811:9:
+    |
+811 |         uint256 error = pTokenCollateral.accrueInterest();
+    |         ^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1256:9:
+     |
+1256 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1270:9:
+     |
+1270 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1278:79:
+     |
+1278 |     function assertApproxEqAbs(uint256 left, uint256 right, uint256 maxDelta, string calldata error) external pure;
+     |                                                                               ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1285:77:
+     |
+1285 |     function assertApproxEqAbs(int256 left, int256 right, uint256 maxDelta, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1302:9:
+     |
+1302 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1320:9:
+     |
+1320 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1330:86:
+     |
+1330 |     function assertApproxEqRel(uint256 left, uint256 right, uint256 maxPercentDelta, string calldata error)
+     |                                                                                      ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1341:84:
+     |
+1341 |     function assertApproxEqRel(int256 left, int256 right, uint256 maxPercentDelta, string calldata error)
+     |                                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1350:77:
+     |
+1350 |     function assertEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1357:75:
+     |
+1357 |     function assertEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1363:46:
+     |
+1363 |     function assertEq(bool left, bool right, string calldata error) external pure;
+     |                                              ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1369:68:
+     |
+1369 |     function assertEq(string calldata left, string calldata right, string calldata error) external pure;
+     |                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1375:66:
+     |
+1375 |     function assertEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1381:68:
+     |
+1381 |     function assertEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+     |                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1387:74:
+     |
+1387 |     function assertEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1393:72:
+     |
+1393 |     function assertEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+     |                                                                        ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1402:74:
+     |
+1402 |     function assertEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1408:74:
+     |
+1408 |     function assertEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1414:72:
+     |
+1414 |     function assertEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+     |                                                                        ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1420:70:
+     |
+1420 |     function assertEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1423:52:
+     |
+1423 |     function assertEq(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1429:50:
+     |
+1429 |     function assertEq(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1435:52:
+     |
+1435 |     function assertEq(address left, address right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1441:52:
+     |
+1441 |     function assertEq(bytes32 left, bytes32 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1447:42:
+     |
+1447 |     function assertFalse(bool condition, string calldata error) external pure;
+     |                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1455:77:
+     |
+1455 |     function assertGeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1463:75:
+     |
+1463 |     function assertGeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1470:52:
+     |
+1470 |     function assertGe(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1477:50:
+     |
+1477 |     function assertGe(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1485:77:
+     |
+1485 |     function assertGtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1493:75:
+     |
+1493 |     function assertGtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1500:52:
+     |
+1500 |     function assertGt(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1507:50:
+     |
+1507 |     function assertGt(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1515:77:
+     |
+1515 |     function assertLeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1523:75:
+     |
+1523 |     function assertLeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1530:52:
+     |
+1530 |     function assertLe(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1537:50:
+     |
+1537 |     function assertLe(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1545:77:
+     |
+1545 |     function assertLtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1553:75:
+     |
+1553 |     function assertLtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1560:52:
+     |
+1560 |     function assertLt(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1567:50:
+     |
+1567 |     function assertLt(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1574:80:
+     |
+1574 |     function assertNotEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                                ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1581:78:
+     |
+1581 |     function assertNotEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                              ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1587:49:
+     |
+1587 |     function assertNotEq(bool left, bool right, string calldata error) external pure;
+     |                                                 ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1593:71:
+     |
+1593 |     function assertNotEq(string calldata left, string calldata right, string calldata error) external pure;
+     |                                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1599:69:
+     |
+1599 |     function assertNotEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+     |                                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1605:71:
+     |
+1605 |     function assertNotEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+     |                                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1611:77:
+     |
+1611 |     function assertNotEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1617:75:
+     |
+1617 |     function assertNotEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1626:77:
+     |
+1626 |     function assertNotEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1632:77:
+     |
+1632 |     function assertNotEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1638:75:
+     |
+1638 |     function assertNotEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1644:73:
+     |
+1644 |     function assertNotEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+     |                                                                         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1647:55:
+     |
+1647 |     function assertNotEq(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1653:53:
+     |
+1653 |     function assertNotEq(int256 left, int256 right, string calldata error) external pure;
+     |                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1659:55:
+     |
+1659 |     function assertNotEq(address left, address right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1665:55:
+     |
+1665 |     function assertNotEq(bytes32 left, bytes32 right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1671:41:
+     |
+1671 |     function assertTrue(bool condition, string calldata error) external pure;
+     |                                         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8760): This declaration has the same name as another declaration.
+  --> contracts/BorrowAccountingModule.sol:67:13:
+   |
+67 |             uint256 balance = market.borrowBalanceStored(borrower);
+   |             ^^^^^^^^^^^^^^^
+Note: The other declaration is here:
+  --> contracts/BorrowAccountingModule.sol:35:5:
+   |
+35 |     function balance(uint256 shares, uint256 index) external pure returns (uint256) {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (8760): This declaration has the same name as another declaration.
+  --> contracts/BorrowAccountingModule.sol:81:42:
+   |
+81 |     function setShares(address borrower, uint256 balance, uint256 previousClaim, uint256 repaidCash)
+   |                                          ^^^^^^^^^^^^^^^
+Note: The other declaration is here:
+  --> contracts/BorrowAccountingModule.sol:35:5:
+   |
+35 |     function balance(uint256 shares, uint256 index) external pure returns (uint256) {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdStorage.sol:297:13:
+    |
+297 |             assembly {
+    |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdStorage.sol:404:9:
+    |
+404 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdChains.sol:179:21:
+    |
+179 |                     assembly {
+    |                     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/console.sol:11:9:
+   |
+11 |         assembly {
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdCheats.sol:505:9:
+    |
+505 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdCheats.sol:515:9:
+    |
+515 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdCheats.sol:526:9:
+    |
+526 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdCheats.sol:536:9:
+    |
+536 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/StdUtils.sol:192:9:
+    |
+192 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:15:9:
+   |
+15 |         assembly {
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:23:9:
+   |
+23 |         assembly {
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:32:9:
+   |
+32 |         assembly {
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:40:9:
+   |
+40 |         assembly {
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:52:13:
+   |
+52 |             assembly {
+   |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:63:13:
+   |
+63 |             assembly {
+   |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:75:13:
+   |
+75 |             assembly {
+   |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:82:13:
+   |
+82 |             assembly {
+   |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+  --> lib/forge-std/src/safeconsole.sol:91:13:
+   |
+91 |             assembly {
+   |             ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:103:9:
+    |
+103 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:112:9:
+    |
+112 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:122:9:
+    |
+122 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:131:9:
+    |
+131 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:141:9:
+    |
+141 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:150:9:
+    |
+150 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:162:9:
+    |
+162 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:181:9:
+    |
+181 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:194:9:
+    |
+194 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:205:9:
+    |
+205 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:217:9:
+    |
+217 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:228:9:
+    |
+228 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:240:9:
+    |
+240 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:251:9:
+    |
+251 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:265:9:
+    |
+265 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:286:9:
+    |
+286 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:300:9:
+    |
+300 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:311:9:
+    |
+311 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:323:9:
+    |
+323 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:334:9:
+    |
+334 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:346:9:
+    |
+346 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:357:9:
+    |
+357 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:371:9:
+    |
+371 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:392:9:
+    |
+392 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:406:9:
+    |
+406 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:417:9:
+    |
+417 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:429:9:
+    |
+429 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:440:9:
+    |
+440 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:452:9:
+    |
+452 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:463:9:
+    |
+463 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:477:9:
+    |
+477 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:498:9:
+    |
+498 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:514:9:
+    |
+514 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:535:9:
+    |
+535 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:551:9:
+    |
+551 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:572:9:
+    |
+572 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:588:9:
+    |
+588 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:609:9:
+    |
+609 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:627:9:
+    |
+627 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:651:9:
+    |
+651 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:668:9:
+    |
+668 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:681:9:
+    |
+681 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:695:9:
+    |
+695 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:708:9:
+    |
+708 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:722:9:
+    |
+722 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:735:9:
+    |
+735 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:751:9:
+    |
+751 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:774:9:
+    |
+774 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:790:9:
+    |
+790 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:803:9:
+    |
+803 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:817:9:
+    |
+817 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:830:9:
+    |
+830 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:844:9:
+    |
+844 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:857:9:
+    |
+857 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:873:9:
+    |
+873 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:896:9:
+    |
+896 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:912:9:
+    |
+912 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:925:9:
+    |
+925 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:939:9:
+    |
+939 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:952:9:
+    |
+952 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:966:9:
+    |
+966 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:979:9:
+    |
+979 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+   --> lib/forge-std/src/safeconsole.sol:995:9:
+    |
+995 |         assembly {
+    |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1018:9:
+     |
+1018 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1036:9:
+     |
+1036 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1059:9:
+     |
+1059 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1077:9:
+     |
+1077 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1100:9:
+     |
+1100 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1118:9:
+     |
+1118 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1141:9:
+     |
+1141 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1161:9:
+     |
+1161 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1187:9:
+     |
+1187 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1205:9:
+     |
+1205 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1218:9:
+     |
+1218 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1232:9:
+     |
+1232 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1245:9:
+     |
+1245 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1259:9:
+     |
+1259 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1272:9:
+     |
+1272 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1288:9:
+     |
+1288 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1311:9:
+     |
+1311 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1327:9:
+     |
+1327 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1340:9:
+     |
+1340 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1354:9:
+     |
+1354 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1367:9:
+     |
+1367 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1381:9:
+     |
+1381 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1394:9:
+     |
+1394 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1410:9:
+     |
+1410 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1433:9:
+     |
+1433 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1449:9:
+     |
+1449 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1462:9:
+     |
+1462 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1476:9:
+     |
+1476 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1489:9:
+     |
+1489 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1503:9:
+     |
+1503 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1516:9:
+     |
+1516 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1532:9:
+     |
+1532 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1555:9:
+     |
+1555 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1573:9:
+     |
+1573 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1596:9:
+     |
+1596 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1614:9:
+     |
+1614 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1637:9:
+     |
+1637 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1655:9:
+     |
+1655 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1678:9:
+     |
+1678 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1698:9:
+     |
+1698 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1724:9:
+     |
+1724 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1742:9:
+     |
+1742 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1755:9:
+     |
+1755 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1769:9:
+     |
+1769 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1782:9:
+     |
+1782 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1796:9:
+     |
+1796 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1809:9:
+     |
+1809 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1825:9:
+     |
+1825 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1848:9:
+     |
+1848 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1864:9:
+     |
+1864 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1877:9:
+     |
+1877 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1891:9:
+     |
+1891 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1904:9:
+     |
+1904 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1918:9:
+     |
+1918 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1931:9:
+     |
+1931 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1947:9:
+     |
+1947 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1970:9:
+     |
+1970 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1986:9:
+     |
+1986 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:1999:9:
+     |
+1999 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2013:9:
+     |
+2013 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2026:9:
+     |
+2026 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2040:9:
+     |
+2040 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2053:9:
+     |
+2053 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2069:9:
+     |
+2069 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2092:9:
+     |
+2092 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2110:9:
+     |
+2110 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2133:9:
+     |
+2133 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2151:9:
+     |
+2151 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2174:9:
+     |
+2174 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2192:9:
+     |
+2192 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2215:9:
+     |
+2215 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2235:9:
+     |
+2235 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2261:9:
+     |
+2261 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2281:9:
+     |
+2281 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2304:9:
+     |
+2304 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2322:9:
+     |
+2322 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2345:9:
+     |
+2345 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2363:9:
+     |
+2363 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2386:9:
+     |
+2386 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2406:9:
+     |
+2406 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2432:9:
+     |
+2432 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2452:9:
+     |
+2452 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2475:9:
+     |
+2475 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2493:9:
+     |
+2493 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2516:9:
+     |
+2516 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2534:9:
+     |
+2534 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2557:9:
+     |
+2557 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2577:9:
+     |
+2577 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2603:9:
+     |
+2603 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2623:9:
+     |
+2623 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2646:9:
+     |
+2646 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2664:9:
+     |
+2664 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2687:9:
+     |
+2687 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2705:9:
+     |
+2705 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2728:9:
+     |
+2728 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2748:9:
+     |
+2748 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2774:9:
+     |
+2774 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2796:9:
+     |
+2796 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2822:9:
+     |
+2822 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2844:9:
+     |
+2844 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2870:9:
+     |
+2870 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2892:9:
+     |
+2892 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2918:9:
+     |
+2918 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2942:9:
+     |
+2942 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2971:9:
+     |
+2971 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:2992:9:
+     |
+2992 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3007:9:
+     |
+3007 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3023:9:
+     |
+3023 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3038:9:
+     |
+3038 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3054:9:
+     |
+3054 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3069:9:
+     |
+3069 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2424): Natspec memory-safe-assembly special comment for inline assembly is deprecated and scheduled for removal. Use the memory-safe block annotation instead.
+    --> lib/forge-std/src/safeconsole.sol:3087:9:
+     |
+3087 |         assembly {
+     |         ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (4591): There are more than 256 warnings. Ignoring the rest.
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 29 tests for test/AvalancheCashOnlyLossHandlingFork.t.sol:AvalancheCashOnlyLossHandlingForkTest
+[FAIL: assertion failed: 13062262873877 > 1332] testCross_SameEvent_ReservesCoverTheLoss() (gas: 20090550)
+Logs:
+  LOSS|ROW|t=X_R15000_S0|step=event|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=action|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_early|cash=520626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_small|cash=519626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_big|cash=119626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_late|cash=19626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S0|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=19626049968|END
+  LOSS|ROW|t=X_R15000_S1|step=event|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=action|cash=659878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_early|cash=559878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_small|cash=558878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_big|cash=158878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_late|cash=58878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=58878149904|END
+  LOSS|ROW|t=X_R15000_S2|step=event|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=action|cash=659878149904|borrows=39252099936|defDebt=39252099936|reserves=98130249840|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_early|cash=559878149904|borrows=39252099936|defDebt=39252099936|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_small|cash=558878149904|borrows=39252099936|defDebt=39252099936|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_big|cash=158878149904|borrows=39252099936|defDebt=39252099936|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_late|cash=58878149904|borrows=39252099936|defDebt=39252099936|reserves=98130249840|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=58878149904|END
+  LOSS|ROW|t=X_R15000_S3|step=event|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S3|step=action|cash=620626049968|borrows=0|defDebt=0|reserves=58878149904|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R15000_S3|step=exit_early|cash=527157181405|borrows=0|defDebt=0|reserves=58878149904|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R15000_S3|step=exit_small|cash=526222492720|borrows=0|defDebt=0|reserves=58878149904|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=X_R15000_S3|step=exit_big|cash=152347018468|borrows=0|defDebt=0|reserves=58878149904|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S3|step=exit_late|cash=58878149904|borrows=0|defDebt=0|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S3|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=X_R15000_S3|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=X_R15000_S3|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=X_R15000_S3|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=X_R15000_S3|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=58878149904|END
+
+[FAIL: S3 reserves: 11775629980 > 16] testCross_SameEvent_ReservesThirtyPercentOfLoss() (gas: 20094381)
+Logs:
+  LOSS|ROW|t=X_R3000_S0|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=action|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_early|cash=473523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_small|cash=472523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_big|cash=72523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=72523530044|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=0|c_late=27476469956|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S0|who=late|pos=4|claim=100000000000|got=72523530044|END
+  LOSS|EXIT|t=X_R3000_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R3000_S1|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=action|cash=612775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_early|cash=512775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_small|cash=511775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_big|cash=111775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_late|cash=11775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=11775629980|END
+  LOSS|ROW|t=X_R3000_S2|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=action|cash=612775629980|borrows=39252099936|defDebt=39252099936|reserves=51027729916|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_early|cash=512775629980|borrows=39252099936|defDebt=39252099936|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_small|cash=511775629980|borrows=39252099936|defDebt=39252099936|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_big|cash=111775629980|borrows=39252099936|defDebt=39252099936|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_late|cash=11775629980|borrows=39252099936|defDebt=39252099936|reserves=51027729916|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=11775629980|END
+  LOSS|ROW|t=X_R3000_S3|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S3|step=action|cash=573523530044|borrows=0|defDebt=0|reserves=11775629980|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R3000_S3|step=exit_early|cash=480054661481|borrows=0|defDebt=0|reserves=11775629980|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R3000_S3|step=exit_small|cash=479119972796|borrows=0|defDebt=0|reserves=11775629980|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=X_R3000_S3|step=exit_big|cash=105244498544|borrows=0|defDebt=0|reserves=11775629980|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S3|step=exit_late|cash=11775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S3|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=X_R3000_S3|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=X_R3000_S3|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=X_R3000_S3|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=X_R3000_S3|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=11775629980|END
+
+[PASS] testCross_SameEvent_ReservesZero() (gas: 15895127)
+Logs:
+  LOSS|ROW|t=X_R0_S0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=exit_early|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=exit_small|cash=460747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S0|step=exit_big|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=60747900064|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S0|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=39252099936|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S0|who=late|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=X_R0_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S1|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S1|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S1|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S2|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S2|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S3|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S3|step=action|cash=561747900064|borrows=0|defDebt=0|reserves=0|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R0_S3|step=exit_early|cash=468279031501|borrows=0|defDebt=0|reserves=0|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=X_R0_S3|step=exit_small|cash=467344342816|borrows=0|defDebt=0|reserves=0|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=X_R0_S3|step=exit_big|cash=93468868564|borrows=0|defDebt=0|reserves=0|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S3|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S3|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=X_R0_S3|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=X_R0_S3|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=X_R0_S3|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=X_R0_S3|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=0|END
+  LOSS|CROSS|reservesBp=0|loss=39252099936|reserves=0|S0_lost=39252099936|S1_treasury=39252099936|S2_treasury=39252099936|S3_recognised=39252099936|END
+
+[PASS] testDrift90Days_InterestOnBadDebt_S0AndS2VersusS1AndS3() (gas: 7336402)
+Logs:
+  LOSS|ROW|t=drift_S0|step=after_90d|cash=561747900064|borrows=39524687196|defDebt=39524687196|reserves=27258726|rate=200081640111148|c_early=100040820055|c_late=100040820055|c_big=400163280222|c_small=1000408200|w_early=100040820055|w_late=100040820055|w_big=400163280222|w_small=1000408200|END
+  LOSS|ROW|t=drift_S2|step=after_90d|cash=601000000000|borrows=39524687196|defDebt=39524687196|reserves=39279358662|rate=200081640111148|c_early=100040820055|c_late=100040820055|c_big=400163280222|c_small=1000408200|w_early=100040820055|w_late=100040820055|w_big=400163280222|w_small=1000408200|END
+  LOSS|ROW|t=drift_S1|step=after_90d|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=drift_S3|step=after_90d|cash=561747900064|borrows=0|defDebt=0|reserves=0|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+
+[PASS] testEvent_RealLiquidationShortfall_ClosedFormSeizeShareAndRates() (gas: 6161532)
+Logs:
+  LOSS|ROW|t=event|step=pre-loss|cash=422800000003|borrows=178199999997|defDebt=178199999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=event|step=post-liquidation|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|EVENT|d0=178199999997|loss=39252099936|repaid=138947900061|collAfterUsd6=149999999997|predLossUsd6=39235429571|lossUsd6=39235429569|pWavaxSeizeReserveWavax=982558418353200457815|pWavaxSeizeReserveUsd6=4199999999|pUsdcReserves=0|END
+
+[PASS] testHealthyBorrowerOutstanding_IlliquidityIsCashNotLoss_S0VersusS3() (gas: 7732156)
+Logs:
+  LOSS|ROW|t=HB_S0|step=with_healthy_borrow|cash=541747900064|borrows=59252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=HB_S3|step=after_writeoff|cash=541747900064|borrows=20000000000|defDebt=0|reserves=0|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+
+[PASS] testInstall_PlainDelegateHasNoWriteOff_UpgradePreservesEveryStorageSlot() (gas: 6539748)
+[PASS] testS0_DoNothing_FirstComeFirstServed_EarlyVersusLate() (gas: 7504828)
+Logs:
+  LOSS|ROW|t=S0_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=exit_early|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=exit_small|cash=460747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_fwd|step=exit_big|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=60747900064|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_fwd|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=39252099936|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_fwd|who=late|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=S0_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_fwd|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_rev|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_late|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=0|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_big|cash=61747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=1000000000|w_early=61747900064|w_late=0|w_big=0|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_small|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=0|w_early=60747900064|w_late=0|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_rev|step=exit_early|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=39252099936|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_rev|who=early|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=S0_rev|who=late|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_rev|who=big|pos=2|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_rev|who=small|pos=3|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_rev|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS0_ReserveExhaustionGrid() (gas: 40743457)
+Logs:
+  LOSS|ROW|t=S0_R0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R0|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R0|step=exit_early|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R0|step=exit_small|cash=460747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_R0|step=exit_big|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=60747900064|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_R0|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=39252099936|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_R0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R0|who=late|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=S0_R0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_R0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_R0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_R1|step=event|cash=581373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R1|step=action|cash=581373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R1|step=exit_early|cash=481373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R1|step=exit_small|cash=480373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_R1|step=exit_big|cash=80373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=80373950032|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_R1|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=19626049968|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_R1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R1|who=late|pos=4|claim=100000000000|got=80373950032|END
+  LOSS|EXIT|t=S0_R1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_R1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_R1|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_R2|step=event|cash=600999999999|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R2|step=action|cash=600999999999|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R2|step=exit_early|cash=500999999999|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R2|step=exit_small|cash=499999999999|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_R2|step=exit_big|cash=99999999999|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=99999999999|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_R2|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099935|rate=200000000000000|c_early=0|c_late=1|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_R2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R2|who=late|pos=4|claim=100000000000|got=99999999999|END
+  LOSS|EXIT|t=S0_R2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_R2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_R2|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_R3|step=event|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R3|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R3|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R3|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_R3|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_R3|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_R3|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R3|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R3|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_R3|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_R3|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_R4|step=event|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R4|step=action|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R4|step=exit_early|cash=520626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_R4|step=exit_small|cash=519626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_R4|step=exit_big|cash=119626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_R4|step=exit_late|cash=19626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_R4|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R4|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_R4|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_R4|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_R4|treasuryIn=0|removed=0|fromReserves=0|cashLeft=19626049968|END
+
+[PASS] testS1_TreasuryRepayment_AllSuppliersWhole_BothOrders() (gas: 8130188)
+Logs:
+  LOSS|ROW|t=S1_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_fwd|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_fwd|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_fwd|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_fwd|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_rev|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_late|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=0|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_big|cash=101000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=1000000000|w_early=100000000000|w_late=0|w_big=0|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_small|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=0|w_early=100000000000|w_late=0|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_rev|step=exit_early|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_rev|who=early|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_rev|who=late|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_rev|who=big|pos=2|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_rev|who=small|pos=3|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_rev|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS1_TreasurySizes_Partial_Exact_Surplus() (gas: 9187210)
+Logs:
+  LOSS|ROW|t=S1_T0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=action|cash=581373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=exit_early|cash=481373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=exit_small|cash=480373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T0|step=exit_big|cash=80373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=80373950032|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T0|step=exit_late|cash=0|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=19626049968|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T0|who=late|pos=4|claim=100000000000|got=80373950032|END
+  LOSS|EXIT|t=S1_T0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T0|treasuryIn=19626049968|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_T1|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T1|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T1|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_T2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T2|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T2|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS2_AddReserves_IsNotRepayment_PreciseDifferences() (gas: 8040252)
+Logs:
+  LOSS|ROW|t=S2_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_fwd|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_fwd|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_fwd|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_fwd|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_vs_S2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_vs_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_vs_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS2_ReservesUnbackedAfterExit_ReduceReservesFails() (gas: 6470100)
+[PASS] testS2_Revocable_AdminCanReduceReservesAndBringTheShortfallBack() (gas: 6650344)
+Logs:
+  LOSS|ROW|t=S2_revoked|step=after_reduceReserves|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[PASS] testS2_SizesAndTheMinimumSufficientAmount() (gas: 9959235)
+Logs:
+  LOSS|ROW|t=S2_T0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=action|cash=581373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=exit_early|cash=481373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=exit_small|cash=480373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T0|step=exit_big|cash=80373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=80373950032|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T0|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=19626049968|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T0|who=late|pos=4|claim=100000000000|got=80373950032|END
+  LOSS|EXIT|t=S2_T0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T0|treasuryIn=19626049968|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T1|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T1|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T1|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T2|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T2|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T3|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=action|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=exit_early|cash=520626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=exit_small|cash=519626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T3|step=exit_big|cash=119626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T3|step=exit_late|cash=19626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T3|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T3|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T3|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T3|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T3|treasuryIn=58878149904|removed=0|fromReserves=0|cashLeft=19626049968|END
+
+[PASS] testS3_Caps_PerCallAndPerPeriod() (gas: 6568898)
+[FAIL: events: reserves absorbed first (all of R): 0 != 19626049968] testS3_EventLog_SplitMatchesAccounting() (gas: 15523220)
+[PASS] testS3_ExitsBeforeTheWriteOff_ShiftTheWholeLossOntoTheRemainingSuppliers() (gas: 6793292)
+Logs:
+  LOSS|ROW|t=S3_race|step=after_early_exits|cash=460747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S3_race|step=after_writeoff|cash=460747900064|borrows=0|defDebt=0|reserves=0|rate=184299160025600|c_early=0|c_late=92149580012|c_big=368598320051|c_small=0|w_early=0|w_late=92149580012|w_big=368598320051|w_small=0|END
+
+[PASS] testS3_Preconditions_NonAdmin_Amounts_Healthy_CollateralRemains() (gas: 7377480)
+[FAIL: S3: all real reserves absorbed first: 0 != 71493719] testS3_RealReserveFactorAccrual_30Days_ReservesFirst() (gas: 9832004)
+Logs:
+  LOSS|REALRF|borrowsPreGap=162714937201|reservesPreGap=71493720|loss=23767037139|lossOverReservesBp=3324353|END
+  LOSS|ROW|t=RF_S0|step=event|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=action|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=exit_early|cash=477840837921|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287824|c_early=0|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=0|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=exit_small|cash=476839767300|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124288000|c_early=0|c_late=100107062144|c_big=400428248576|c_small=0|w_early=0|w_late=100107062144|w_big=400428248576|w_small=0|END
+  LOSS|ROW|t=RF_S0|step=exit_big|cash=76411518724|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124288000|c_early=0|c_late=100107062144|c_big=0|c_small=0|w_early=0|w_late=76411518724|w_big=0|w_small=0|END
+  LOSS|ROW|t=RF_S0|step=exit_late|cash=0|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287998|c_early=0|c_late=23695543419|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=RF_S0|who=early|pos=1|claim=100107062143|got=100107062143|END
+  LOSS|EXIT|t=RF_S0|who=late|pos=4|claim=100107062144|got=76411518724|END
+  LOSS|EXIT|t=RF_S0|who=big|pos=3|claim=400428248576|got=400428248576|END
+  LOSS|EXIT|t=RF_S0|who=small|pos=2|claim=1001070621|got=1001070621|END
+  LOSS|SUM|t=RF_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=RF_S3|step=event|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S3|step=action|cash=577947900064|borrows=0|defDebt=0|reserves=71493719|rate=192304960514143|c_early=96152480257|c_late=96152480257|c_big=384609921028|c_small=961524802|w_early=96152480257|w_late=96152480257|w_big=384609921028|w_small=961524802|END
+  LOSS|ROW|t=RF_S3|step=exit_early|cash=481795419807|borrows=0|defDebt=0|reserves=71493719|rate=192304960514171|c_early=0|c_late=96152480257|c_big=384609921028|c_small=961524802|w_early=0|w_late=96152480257|w_big=384609921028|w_small=961524802|END
+  LOSS|ROW|t=RF_S3|step=exit_small|cash=480833895005|borrows=0|defDebt=0|reserves=71493719|rate=192304960514400|c_early=0|c_late=96152480257|c_big=384609921028|c_small=0|w_early=0|w_late=96152480257|w_big=384609921028|w_small=0|END
+  LOSS|ROW|t=RF_S3|step=exit_big|cash=96223973977|borrows=0|defDebt=0|reserves=71493719|rate=192304960516000|c_early=0|c_late=96152480258|c_big=0|c_small=0|w_early=0|w_late=96152480258|w_big=0|w_small=0|END
+  LOSS|ROW|t=RF_S3|step=exit_late|cash=71493719|borrows=0|defDebt=0|reserves=71493719|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=RF_S3|who=early|pos=1|claim=96152480257|got=96152480257|END
+  LOSS|EXIT|t=RF_S3|who=late|pos=4|claim=96152480258|got=96152480258|END
+  LOSS|EXIT|t=RF_S3|who=big|pos=3|claim=384609921028|got=384609921028|END
+  LOSS|EXIT|t=RF_S3|who=small|pos=2|claim=961524802|got=961524802|END
+  LOSS|SUM|t=RF_S3|treasuryIn=0|removed=23767037139|fromReserves=0|cashLeft=71493719|END
+
+[PASS] testS3_Recognition_PushesALeveragedSupplierIntoShortfall_S0AndS1DoNot() (gas: 7280640)
+Logs:
+  LOSS|LEVERED|loss=39252099936|shortfallUsd18=1174140193484273773256|END
+
+[FAIL: RESERVE-FIRST: reserves absorb min(loss, reserves): 19626049968 > 16] testS3_ReserveFirst_ExhaustionGrid_LossBelowEqualAboveReserves() (gas: 26655556)
+Logs:
+  LOSS|ROW|t=S3_R0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S3_R0|step=action|cash=561747900064|borrows=0|defDebt=0|reserves=0|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R0|step=exit_early|cash=468279031501|borrows=0|defDebt=0|reserves=0|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R0|step=exit_small|cash=467344342816|borrows=0|defDebt=0|reserves=0|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=S3_R0|step=exit_big|cash=93468868564|borrows=0|defDebt=0|reserves=0|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=S3_R0|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S3_R0|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=S3_R0|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=S3_R0|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=S3_R0|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=S3_R0|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S3_R0_rev|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S3_R0_rev|step=action|cash=561747900064|borrows=0|defDebt=0|reserves=0|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R0_rev|step=exit_late|cash=468279031501|borrows=0|defDebt=0|reserves=0|rate=186937737126147|c_early=93468868563|c_late=0|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=0|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R0_rev|step=exit_big|cash=94403557249|borrows=0|defDebt=0|reserves=0|rate=186937737126732|c_early=93468868563|c_late=0|c_big=0|c_small=934688685|w_early=93468868563|w_late=0|w_big=0|w_small=934688685|END
+  LOSS|ROW|t=S3_R0_rev|step=exit_small|cash=93468868564|borrows=0|defDebt=0|reserves=0|rate=186937737128000|c_early=93468868564|c_late=0|c_big=0|c_small=0|w_early=93468868564|w_late=0|w_big=0|w_small=0|END
+  LOSS|ROW|t=S3_R0_rev|step=exit_early|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S3_R0_rev|who=early|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=S3_R0_rev|who=late|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=S3_R0_rev|who=big|pos=2|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=S3_R0_rev|who=small|pos=3|claim=934688685|got=934688685|END
+  LOSS|SUM|t=S3_R0_rev|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S3_R1|step=event|cash=581373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S3_R1|step=action|cash=581373950032|borrows=0|defDebt=0|reserves=19626049968|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R1|step=exit_early|cash=487905081469|borrows=0|defDebt=0|reserves=19626049968|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3_R1|step=exit_small|cash=486970392784|borrows=0|defDebt=0|reserves=19626049968|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=S3_R1|step=exit_big|cash=113094918532|borrows=0|defDebt=0|reserves=19626049968|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=S3_R1|step=exit_late|cash=19626049968|borrows=0|defDebt=0|reserves=19626049968|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S3_R1|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=S3_R1|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=S3_R1|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=S3_R1|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=S3_R1|treasuryIn=0|removed=39252099936|fromReserves=0|cashLeft=19626049968|END
+
+[FAIL: suppliers receive the same amounts in S1 and S3 + top-up: 6531131437 > 1] testS3_TopUpReservesThenWriteOff_SameSuppliersOutcomeAsRepayment_SameNetProtocolOutlay() (gas: 18102896)
+Logs:
+  LOSS|ROW|t=S1_R30|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=action|cash=612775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=exit_early|cash=512775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=exit_small|cash=511775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_R30|step=exit_big|cash=111775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_R30|step=exit_late|cash=11775629980|borrows=0|defDebt=0|reserves=11775629980|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_R30|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_R30|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_R30|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_R30|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_R30|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=11775629980|END
+  LOSS|ROW|t=S3TOPUP_R30|step=event|cash=573523530044|borrows=39252099936|defDebt=39252099936|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S3TOPUP_R30|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=39252099936|rate=186937737126123|c_early=93468868563|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=93468868563|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3TOPUP_R30|step=exit_early|cash=507531131437|borrows=0|defDebt=0|reserves=39252099936|rate=186937737126147|c_early=0|c_late=93468868563|c_big=373875474252|c_small=934688685|w_early=0|w_late=93468868563|w_big=373875474252|w_small=934688685|END
+  LOSS|ROW|t=S3TOPUP_R30|step=exit_small|cash=506596442752|borrows=0|defDebt=0|reserves=39252099936|rate=186937737126400|c_early=0|c_late=93468868563|c_big=373875474252|c_small=0|w_early=0|w_late=93468868563|w_big=373875474252|w_small=0|END
+  LOSS|ROW|t=S3TOPUP_R30|step=exit_big|cash=132720968500|borrows=0|defDebt=0|reserves=39252099936|rate=186937737128000|c_early=0|c_late=93468868564|c_big=0|c_small=0|w_early=0|w_late=93468868564|w_big=0|w_small=0|END
+  LOSS|ROW|t=S3TOPUP_R30|step=exit_late|cash=39252099936|borrows=0|defDebt=0|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S3TOPUP_R30|who=early|pos=1|claim=93468868563|got=93468868563|END
+  LOSS|EXIT|t=S3TOPUP_R30|who=late|pos=4|claim=93468868564|got=93468868564|END
+  LOSS|EXIT|t=S3TOPUP_R30|who=big|pos=3|claim=373875474252|got=373875474252|END
+  LOSS|EXIT|t=S3TOPUP_R30|who=small|pos=2|claim=934688685|got=934688685|END
+  LOSS|SUM|t=S3TOPUP_R30|treasuryIn=27476469956|removed=39252099936|fromReserves=0|cashLeft=39252099936|END
+
+[PASS] testSeizeShare_IsInTheCollateralMarket_NotInTheLossMarket() (gas: 6240432)
+Logs:
+  LOSS|SEIZERES|wavaxReserves=982558418353200457815|usd6AtShock=4199999999|lossUsdc=39252099936|coverageBp=1070|END
+
+[PASS] testTheft_CapAloneBoundsEachCallButNotTheTotal_PeriodCapBoundsThePeriod() (gas: 1694428)
+Logs:
+  LOSS|THEFT|variant=percall-cap-only|stolen=50000000000|calls=5|END
+
+[PASS] testTheft_OracleManipulationPassesThePrecondition_CapsBoundIt() (gas: 1651889)
+[PASS] testTheft_OracleManipulation_WithCapsLimitedToThePeriodAllowance() (gas: 1792234)
+[PASS] testTheft_PreconditionStopsIt_StrictRevertsOnTheHealthyLoan() (gas: 1582723)
+[PASS] testTheft_UnrestrictedAdmin_WritesOffItsOwnHealthyLoan_SuppliersPay() (gas: 1816868)
+Logs:
+  LOSS|ROW|t=THEFT_open|step=before|cash=551000000000|borrows=50000000000|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=THEFT_open|step=after_writeoff|cash=551000000000|borrows=0|defDebt=0|reserves=0|rate=183361064891846|c_early=91680532445|c_late=91680532445|c_big=366722129783|c_small=916805324|w_early=91680532445|w_late=91680532445|w_big=366722129783|w_small=916805324|END
+  LOSS|THEFT|variant=unrestricted|stolen=50000000000|rateBefore=200000000000000|rateAfter=183361064891846|END
+
+Suite result: FAILED. 23 passed; 6 failed; 0 skipped; finished in 2.34s (1.28s CPU time)
+
+Ran 1 test suite in 2.83s (2.34s CPU time): 23 tests passed, 6 failed, 0 skipped (29 total tests)
+
+Failing tests:
+Encountered 6 failing tests in test/AvalancheCashOnlyLossHandlingFork.t.sol:AvalancheCashOnlyLossHandlingForkTest
+[FAIL: assertion failed: 13062262873877 > 1332] testCross_SameEvent_ReservesCoverTheLoss() (gas: 20090550)
+[FAIL: S3 reserves: 11775629980 > 16] testCross_SameEvent_ReservesThirtyPercentOfLoss() (gas: 20094381)
+[FAIL: events: reserves absorbed first (all of R): 0 != 19626049968] testS3_EventLog_SplitMatchesAccounting() (gas: 15523220)
+[FAIL: S3: all real reserves absorbed first: 0 != 71493719] testS3_RealReserveFactorAccrual_30Days_ReservesFirst() (gas: 9832004)
+[FAIL: RESERVE-FIRST: reserves absorb min(loss, reserves): 19626049968 > 16] testS3_ReserveFirst_ExhaustionGrid_LossBelowEqualAboveReserves() (gas: 26655556)
+[FAIL: suppliers receive the same amounts in S1 and S3 + top-up: 6531131437 > 1] testS3_TopUpReservesThenWriteOff_SameSuppliersOutcomeAsRepayment_SameNetProtocolOutlay() (gas: 18102896)
+
+Encountered a total of 6 failing tests, 23 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 6 failed tests
+# exit: 1
