@@ -34,6 +34,8 @@ run_suite borrow-floor-margin '^AvalancheBorrowFloorMarginForkTest$'
 run_suite cash-only-pilot-config '^AvalancheCashOnlyPilotConfigForkTest$'
 run_suite cash-only-risk-study '^AvalancheCashOnlyRiskStudyForkTest$'
 run_suite cash-only-loss-handling '^AvalancheCashOnlyLossHandlingForkTest$'
+run_suite cash-only-pilot-outage '^AvalancheCashOnlyPilotOutageForkTest$'
+run_suite cash-only-reward-token '^AvalancheCashOnlyRewardTokenIndependenceForkTest$'
 run_suite vault-share-prototype '^AvalancheVaultSharePricingPrototype$'
 echo "[$(stamp)] START capacity matrix (per-test progress below; detailed logs in $OUT/matrix/)"
 tools/run-avalanche-capacity-matrix.sh "$OUT/matrix" 2>&1 | tee "$OUT/matrix.txt"
