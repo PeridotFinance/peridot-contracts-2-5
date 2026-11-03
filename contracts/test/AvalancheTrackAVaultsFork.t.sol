@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {console2} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {
@@ -50,6 +51,7 @@ abstract contract TrackACore is TrackAVaultsBase {
     function _feeRounds() internal pure virtual returns (uint256);
 
     // R2 thresholds (ppm of the deposit part; 1 bp = 100 ppm), defined per vault at the bottom of the concrete suites.
+    // They are HISTORICAL OBSERVATIONS taken from earlier logs (regression tripwires), not design limits or fairness bounds.
     function _kindLadderMaxLossPpm() internal pure virtual returns (uint256);
     function _kindLadderMaxGainPpm() internal pure virtual returns (uint256);
     function _kindStressMaxLossPpm() internal pure virtual returns (uint256);
@@ -1023,7 +1025,8 @@ abstract contract TrackACore is TrackAVaultsBase {
     }
 
     // ================================================================= 17 DIAGNOSTIC (not a launch gate): effect of a later deposit on the incumbent's in-kind value
-    /// @dev Supports OBSERVATION F-IK-2 (inkind/README.md). Logs only (`DIAG|`), asserts nothing: the incumbent's oracle-valued
+    /// @dev Supports OBSERVATION F-IK-2 (inkind/README.md); the investigation is `test_18_diag_*` .. `test_23_diag_*` below and the
+    ///      document avalanche-vault-entry-fairness.md (this test is kept unchanged). Logs only (`DIAG|`), asserts nothing: the incumbent's oracle-valued
     ///      in-kind legs alone, after a second holder deposited, and after the pool price was restored by an arbitrage swap.
     function test_17_diag_laterDepositEffectOnIncumbentInKindValue() public {
         _openCap(5_000_000);
@@ -1090,6 +1093,332 @@ abstract contract TrackACore is TrackAVaultsBase {
             })
         );
     }
+
+    // =================================================================================================================
+    // F-IK-2 INVESTIGATION (tests 18..21). DIAGNOSTICS: they log ledgers with the prefix `FIK2|` and assert ONLY exact
+    // accounting identities (token conservation of the ledger, the vault's own share formula, the Swap event amounts,
+    // the newcomer-plus-incumbents = contribution identity, formula entitlement = replayed redeemInKind within rounding).
+    // They assert NO fairness threshold. Method, definitions and results: docs/deployment-handoffs/avalanche-vault-entry-fairness.md.
+    // =================================================================================================================
+
+    struct FikRun {
+        string tag;
+        uint256 ref; // incumbent deposit, the reference for ppm
+        uint256[5] paid; // asset paid in (deposits) per holder index
+        uint256[5] recA; // asset received through redeemInKind
+        uint256[5] recP; // paired received through redeemInKind
+    }
+
+    /// @dev The incumbent: Alice builds `_stressSmallUsd()` of position (USD 2,000 on the Pharaoh USDC vault, USD 10,000 on the
+    ///      Pharaoh WAVAX vault; this is the same incumbent as test_17). The WHALE is pre-funded so no `deal` happens inside a measured step.
+    function _fikIncumbent() internal returns (uint256 S, uint256 aShares) {
+        console2.log(string.concat("FIK2|SETUP ", _label(), " live depositCap (asset units) ", _t(v.depositCap()), " totalSupply ", _t(v.totalSupply()), " haircut bps ", _t(v.valuationHaircutBps()), " slippage bps ", _t(v.slippageBps()), " pool fee ppm ", _t(pool.fee())));
+        _openCap(5_000_000);
+        _prefundWhale();
+        S = _usdToAsset(_stressSmallUsd());
+        (aShares,,,) = _buildPosition(ALICE, S, _usdToAsset(_chunkUsd()));
+        console2.log(string.concat("FIK2|SETUP incumbent Alice deposit ", _t(S), " shares ", _t(aShares), " spot tick ", _ti(_spotTick())));
+    }
+
+    function _fik18(string memory tag, uint256 bp) internal {
+        (uint256 S,) = _fikIncumbent();
+        DC memory d;
+        d.idx = 1;
+        d.D = S * bp / 10_000;
+        d.ref = S;
+        _dcRun(d);
+        _dcLog(d, string.concat(_label(), " ", tag));
+    }
+
+    function test_18_diag_ledgerLaterDeposit_pct1() public { _fik18("deposit=1%-of-incumbent", 100); }
+    function test_18_diag_ledgerLaterDeposit_pct10() public { _fik18("deposit=10%-of-incumbent", 1_000); }
+    /// @dev 50%: on the Pharaoh USDC vault this is the size of test_17 (Bob USD 1,000 against Alice USD 2,000), so its PARITY line must equal test_17's -111 ppm.
+    function test_18_diag_ledgerLaterDeposit_pct50() public { _fik18("deposit=50%-of-incumbent", 5_000); }
+    function test_18_diag_ledgerLaterDeposit_pct100() public { _fik18("deposit=100%-of-incumbent", 10_000); }
+
+    /// @dev "The cap": the live depositCap is 1 wei (nothing can be deposited; logged). With a hypothetical USD 100,000 cap the
+    ///      largest single-transaction deposit that succeeds (halving from maxDeposit) is run through the same ledger.
+    function test_18_diag_ledgerLaterDeposit_capSize() public {
+        console2.log(string.concat("FIK2|CAP live depositCap ", _t(v.depositCap()), " maxDeposit(BOB) ", _t(v.maxDeposit(BOB))));
+        (uint256 S,) = _fikIncumbent();
+        _openCap(100_000);
+        uint256 target = v.maxDeposit(BOB);
+        uint256 amt = target;
+        string memory firstFail = "";
+        uint256 minAmt = _usdToAsset(100);
+        bool found;
+        while (amt >= minAmt) {
+            if (asset.balanceOf(BOB) < amt) _fund(address(asset), BOB, amt);
+            uint256 snap = vm.snapshotState();
+            (bool ok,, bytes memory e) = _depositAs(BOB, amt);
+            vm.revertToState(snap);
+            if (ok) {
+                found = true;
+                break;
+            }
+            if (bytes(firstFail).length == 0) firstFail = _err(e);
+            amt /= 2;
+        }
+        console2.log(string.concat("FIK2|CAP ", _label(), " test cap USD 100000: maxDeposit ", _t(target), " ; first failure of the one-shot deposit ", bytes(firstFail).length == 0 ? "none" : firstFail, " ; largest one-shot deposit found ", _t(found ? amt : 0), " = ", _t(found ? _assetToUsdE2(amt) : 0), " USD x100"));
+        if (!found) return;
+        DC memory d;
+        d.idx = 1;
+        d.D = amt;
+        d.ref = S;
+        _dcRun(d);
+        _dcLog(d, string.concat(_label(), " deposit=cap-size"));
+    }
+
+    // ----------------------------------------------------------------------------------------------- 19 round trip
+    /// @dev Newcomer round trip: deposit -> redeemInKind of all shares -> sell the paired leg back to the asset through the
+    ///      real router (real fee, real price impact). Net P&L in asset units, ppm of the deposit. The "paper" figure values the
+    ///      paired leg at the oracle (no execution), the "net" figure is what the newcomer holds in the asset afterwards.
+    function test_19_diag_newcomerRoundTripNetOfExecutionCosts() public {
+        (uint256 S,) = _fikIncumbent();
+        uint256[3] memory bps = [uint256(100), 1_000, 10_000];
+        for (uint256 j; j < 3; ++j) {
+            uint256 snap = vm.snapshotState();
+            _fikRoundTrip(string.concat(_label(), " roundtrip D=", _t(bps[j] / 100), "%-of-incumbent"), S * bps[j] / 10_000, S, 0);
+            vm.revertToState(snap);
+        }
+    }
+
+    function _fikRoundTrip(string memory tag, uint256 D, uint256 S, uint256 inc) internal {
+        if (asset.balanceOf(BOB) < D) _fund(address(asset), BOB, D);
+        uint256 bob0 = asset.balanceOf(BOB);
+        FSnap memory a0 = _fSnap();
+        (bool ok, uint256 sh, bytes memory e) = _depositAs(BOB, D);
+        require(ok, string.concat("fik2 roundtrip: deposit failed ", _err(e)));
+        (bool ok2, uint256 gA, uint256 gP, bytes memory e2) = _redeemKindAs(BOB, sh);
+        require(ok2, string.concat("fik2 roundtrip: redeemInKind failed ", _err(e2)));
+        FSnap memory a2 = _fSnap();
+        uint256 conv = gP > 0 ? _swapAs(BOB, address(paired), address(asset), gP, 0) : 0;
+        FSnap memory a3 = _fSnap();
+        // exact identity: the newcomer's asset balance after the cycle
+        assertEq(asset.balanceOf(BOB), bob0 - D + gA + conv, string.concat(tag, ": newcomer asset balance != start - D + asset leg + converted paired leg"));
+        assertEq(paired.balanceOf(BOB), 0, string.concat(tag, ": newcomer still holds paired token"));
+        int256 paper = _i(gA) + _i(_pairedInAsset(gP)) - _i(D);
+        int256 net = _i(gA) + _i(conv) - _i(D);
+        int256 convCostOracle = _i(conv) - _i(_pairedInAsset(gP)); // sale proceeds vs oracle value of the paired leg
+        int256 convCostSpot = _i(conv) - _i(_p2a(gP, a2.sqrtP)); // sale proceeds vs pool spot just before the sale
+        console2.log(string.concat("FIK2|", tag, "|ROUNDTRIP D ", _t(D), " shares ", _t(sh), " legs asset/paired ", _t(gA), " ", _t(gP), " ; paper P&L (paired leg at oracle) ", _ti(paper), " = ", _ti(_ppm(paper, D)), " ppm of D"));
+        console2.log(string.concat("FIK2|", tag, "|ROUNDTRIP sale of the paired leg through the pool: proceeds ", _t(conv), " vs oracle value ", _ti(convCostOracle), " (", _ti(_ppm(convCostOracle, D)), " ppm of D) vs pool spot before the sale ", _ti(convCostSpot), " (", _ti(_ppm(convCostSpot, D)), " ppm of D); tick before/after the sale ", _ti(a2.tick), " ", _ti(a3.tick)));
+        console2.log(string.concat("FIK2|", tag, "|ROUNDTRIP NET P&L after converting both legs to the asset through the real pool: ", _ti(net), " asset units = ", _ti(_ppm(net, D)), " ppm of D (negative = the newcomer lost)"));
+        _fLedgerAssert(string.concat(tag, " whole cycle"), a0, a3, S, true);
+        // incumbent effect of the whole cycle (entitlement of Alice, oracle and pool spot after)
+        (uint256 e0A, uint256 e0P) = _ent(a0, inc);
+        (uint256 e3A, uint256 e3P) = _ent(a3, inc);
+        _fl(string.concat(tag, "|cycle"), "INCUMBENT (reference holder) change of in-kind entitlement over the whole cycle", _i(e3A) - _i(e0A), _i(e3P) - _i(e0P), a0.sqrtP, a3.sqrtP, S);
+    }
+
+    // ----------------------------------------------------------------------------------------------- 20 cycling / griefing
+    function test_20_diag_cyclingEntryExit_incumbentHarmAndAttackerCost() public {
+        (uint256 S,) = _fikIncumbent();
+        uint256 snap = vm.snapshotState();
+        _fikCycles(string.concat(_label(), " cycling D=100%"), S, S, 5);
+        vm.revertToState(snap);
+        _fikCycles(string.concat(_label(), " cycling D=10%"), S / 10, S, 5);
+    }
+
+    struct CY {
+        string tag;
+        uint256 D;
+        uint256 S;
+        uint256 bobStart;
+        uint256 e0A;
+        uint256 e0P;
+    }
+
+    function _fikCycleOnce(CY memory y, uint256 n) internal returns (uint256 swIn, bool inAsset, uint256 gP) {
+        uint256 bal = asset.balanceOf(BOB);
+        vm.recordLogs();
+        (bool ok, uint256 sh, bytes memory e) = _depositAs(BOB, bal);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        require(ok, string.concat("fik2 cycling: deposit failed ", _err(e)));
+        SwapInfo memory sw = _parseSwaps(logs);
+        swIn = sw.amtIn;
+        inAsset = sw.inIsAsset;
+        {
+            (bool ok2,, uint256 gotP, bytes memory e2) = _redeemKindAs(BOB, sh);
+            require(ok2, string.concat("fik2 cycling: redeemInKind failed ", _err(e2)));
+            gP = gotP;
+        }
+        if (gP > 0) _swapAs(BOB, address(paired), address(asset), gP, 0);
+        FSnap memory c = _fSnap();
+        (uint256 eA, uint256 eP) = _ent(c, 0);
+        int256 bobNet = _i(asset.balanceOf(BOB)) - _i(y.bobStart);
+        int256 vo = _vO(_i(eA) - _i(y.e0A), _i(eP) - _i(y.e0P));
+        int256 vs = _vS(_i(eA) - _i(y.e0A), _i(eP) - _i(y.e0P), c.sqrtP);
+        console2.log(string.concat("FIK2|", y.tag, "|CYCLE ", _t(n), " deposit ", _t(bal), " vault swap in ", _t(swIn), " ; attacker cumulative net asset P&L ", _ti(bobNet), " (", _ti(_ppm(bobNet, y.D)), " ppm of D)"));
+        console2.log(string.concat("FIK2|", y.tag, "|CYCLE ", _t(n), " Alice cumulative change @oracle ", _ti(vo), " (", _ti(_ppm(vo, y.S)), " ppm of her deposit) @pool spot now ", _ti(vs), " (", _ti(_ppm(vs, y.S)), " ppm) ; tick ", _ti(c.tick)));
+    }
+
+    function _fikCycles(string memory tag, uint256 D, uint256 S, uint256 N) internal {
+        uint256 snap0 = vm.snapshotState();
+        if (asset.balanceOf(BOB) < D) _fund(address(asset), BOB, D);
+        FSnap memory a0 = _fSnap();
+        CY memory y;
+        y.tag = tag;
+        y.D = D;
+        y.S = S;
+        y.bobStart = asset.balanceOf(BOB);
+        (y.e0A, y.e0P) = _ent(a0, 0);
+        uint256[] memory in1 = new uint256[](N);
+        uint256[] memory in2 = new uint256[](N);
+        bool in1Asset = true;
+        for (uint256 i; i < N; ++i) (in1[i], in1Asset, in2[i]) = _fikCycleOnce(y, i + 1);
+        _fikCyclesTail(tag, snap0, S, y.bobStart, a0, in1, in2, in1Asset);
+    }
+
+    function _fikCyclesTail(string memory tag, uint256 snap0, uint256 S, uint256 bobStart, FSnap memory a0, uint256[] memory in1, uint256[] memory in2, bool in1Asset) internal {
+        (uint256 e0A, uint256 e0P) = _ent(a0, 0);
+        FSnap memory aEnd = _fSnap();
+        _fLedgerAssert(string.concat(tag, " all cycles"), a0, aEnd, S, true);
+        (uint256 eEA, uint256 eEP) = _ent(aEnd, 0);
+        int256 harmO = _vO(_i(eEA) - _i(e0A), _i(eEP) - _i(e0P));
+        int256 bobCost = _i(bobStart) - _i(asset.balanceOf(BOB));
+        string memory ratio = (bobCost > 0 && harmO < 0) ? _ti(-harmO * 1_000_000 / bobCost) : "n/a (attacker gained or incumbent not harmed)";
+        console2.log(string.concat("FIK2|", tag, "|CYCLES TOTAL attacker cost (asset units, + = lost) ", _ti(bobCost), " ; Alice change @oracle ", _ti(harmO), " ; ratio incumbent-loss / attacker-cost (ppm) ", ratio));
+        // CONTROL: the same pool trades by an external account, no deposits
+        vm.revertToState(snap0);
+        for (uint256 i; i < in1.length; ++i) {
+            if (in1[i] > 0) _swapAs(WHALE, _tkn(in1Asset), _tkn(!in1Asset), in1[i], 0);
+            if (in2[i] > 0) _swapAs(WHALE, address(paired), address(asset), in2[i], 0);
+        }
+        FSnap memory cEnd = _fSnap();
+        (uint256 ecA, uint256 ecP) = _ent(cEnd, 0);
+        int256 ctlO = _vO(_i(ecA) - _i(e0A), _i(ecP) - _i(e0P));
+        console2.log(string.concat("FIK2|", tag, "|CONTROL external trades only (same amounts, no deposit): Alice change @oracle ", _ti(ctlO), " (", _ti(_ppm(ctlO, S)), " ppm) vs with deposits ", _ti(harmO), " (", _ti(_ppm(harmO, S)), " ppm) ; difference (share effect of the cycling) ", _ti(harmO - ctlO), " (", _ti(_ppm(harmO - ctlO, S)), " ppm)"));
+    }
+
+    // ----------------------------------------------------------------------------------------------- 21 three holders
+    function _fikEnter(FikRun memory r, uint256 idx, uint256 D) internal returns (uint256 minted) {
+        address who = _holder(idx);
+        if (asset.balanceOf(who) < D) _fund(address(asset), who, D);
+        FSnap memory a = _fSnap();
+        (bool ok, uint256 m, bytes memory e) = _depositAs(who, D);
+        require(ok, string.concat("fik2 enter failed: ", _err(e)));
+        FSnap memory b = _fSnap();
+        r.paid[idx] += D;
+        _fLedgerAssert(string.concat(r.tag, " ENTER ", _hname(idx), " D=", _t(D)), a, b, r.ref, true);
+        return m;
+    }
+
+    function _fikExit(FikRun memory r, uint256 idx, uint256 shares) internal {
+        address who = _holder(idx);
+        FSnap memory a = _fSnap();
+        (bool ok, uint256 gA, uint256 gP, bytes memory e) = _redeemKindAs(who, shares);
+        require(ok, string.concat("fik2 exit failed: ", _err(e)));
+        FSnap memory b = _fSnap();
+        r.recA[idx] += gA;
+        r.recP[idx] += gP;
+        _fLedgerAssert(string.concat(r.tag, " EXIT ", _hname(idx), " shares=", _t(shares)), a, b, r.ref, true);
+    }
+
+    function _fikSummary(FikRun memory r, FSnap memory aStart, uint256[3] memory aloneA, uint256[3] memory aloneP) internal {
+        FSnap memory aEnd = _fSnap();
+        _fLedgerAssert(string.concat(r.tag, " WHOLE RUN"), aStart, aEnd, r.ref, true);
+        for (uint256 i; i < 3; ++i) {
+            (uint256 eA, uint256 eP) = _ent(aEnd, i);
+            int256 gotA = _i(r.recA[i]) + _i(eA);
+            int256 gotP = _i(r.recP[i]) + _i(eP);
+            if (r.paid[i] == 0) {
+                // incumbent: compare with what the same shares would have paid at the start of the run, no later holders
+                int256 dA = gotA - _i(aloneA[i]);
+                int256 dP = gotP - _i(aloneP[i]);
+                _fl(string.concat(r.tag, "|summary"), string.concat(_hname(i), " (incumbent) received+remaining minus its entitlement at the start of the run"), dA, dP, aStart.sqrtP, aEnd.sqrtP, r.ref);
+            } else {
+                _fl(string.concat(r.tag, "|summary"), string.concat(_hname(i), " received+remaining minus paid-in ", _t(r.paid[i])), gotA - _i(r.paid[i]), gotP, aStart.sqrtP, aEnd.sqrtP, r.paid[i]);
+            }
+        }
+    }
+
+    function _fikThree(string memory tag, uint256 bBp, uint256 cBp, bool interleaved) internal {
+        (uint256 S, uint256 aShares) = _fikIncumbent();
+        FikRun memory r;
+        r.tag = string.concat(_label(), " ", tag);
+        r.ref = S;
+        // pre-fund the newcomers' wallets BEFORE the first snapshot so that no `deal` happens inside the measured run
+        _fund(address(asset), BOB, interleaved ? S : S * bBp / 10_000);
+        _fund(address(asset), CAROL, interleaved ? S / 10 : S * cBp / 10_000);
+        FSnap memory aStart = _fSnap();
+        uint256[3] memory aloneA;
+        uint256[3] memory aloneP;
+        for (uint256 i; i < 3; ++i) (aloneA[i], aloneP[i]) = _ent(aStart, i);
+        if (!interleaved) {
+            // A (incumbent) -> B enters -> C enters -> B (middle) exits -> C exits -> A exits
+            uint256 bSh = _fikEnter(r, 1, S * bBp / 10_000);
+            uint256 cSh = _fikEnter(r, 2, S * cBp / 10_000);
+            _fikExit(r, 1, bSh);
+            _fikExit(r, 2, cSh);
+            _fikExit(r, 0, aShares);
+        } else {
+            // A -> B (100%) enters -> A exits half -> C (10%) enters -> B exits half -> C exits all -> A exits the rest -> B exits the rest
+            uint256 bSh = _fikEnter(r, 1, S);
+            _fikExit(r, 0, aShares / 2);
+            uint256 cSh = _fikEnter(r, 2, S / 10);
+            _fikExit(r, 1, bSh / 2);
+            _fikExit(r, 2, cSh);
+            _fikExit(r, 0, aShares - aShares / 2);
+            _fikExit(r, 1, bSh - bSh / 2);
+        }
+        _fikSummary(r, aStart, aloneA, aloneP);
+    }
+
+    function test_21_diag_threeHolders_smallThenLarge() public { _fikThree("3 holders B=10% then C=100%; exits B,C,A", 1_000, 10_000, false); }
+    function test_21_diag_threeHolders_largeThenSmall() public { _fikThree("3 holders B=100% then C=10%; exits B,C,A", 10_000, 1_000, false); }
+    function test_21_diag_threeHolders_interleavedExits() public { _fikThree("3 holders interleaved entries and exits", 0, 0, true); }
+
+    // ----------------------------------------------------------------------------------------------- 22 live state (seed only)
+    /// @dev The live pin state: the only holder is the Safe's seed. A newcomer deposits (sizes in USD) and the same ledger and the
+    ///      round trip are run. Shows what a first depositor into today's vault sees, without any position built by the test.
+    function test_22_diag_newcomerIntoLiveSeedOnlyState() public {
+        _openCap(5_000_000);
+        _prefundWhale();
+        console2.log(string.concat("FIK2|SETUP live seed-only state ", _label(), ": supply ", _t(v.totalSupply()), " Safe shares ", _t(v.balanceOf(SAFE)), " idle asset/paired ", _t(asset.balanceOf(address(v))), " ", _t(paired.balanceOf(address(v))), " tick ", _ti(_spotTick())));
+        uint256[3] memory usd = [uint256(100), 1_000, _bobUsd()];
+        for (uint256 j; j < 3; ++j) {
+            uint256 snap = vm.snapshotState();
+            DC memory d;
+            d.idx = 1;
+            d.inc = 3;
+            d.D = _usdToAsset(usd[j]);
+            d.ref = d.D;
+            _dcRun(d);
+            _dcLog(d, string.concat(_label(), " LIVE seed-only, newcomer USD ", _t(usd[j])));
+            vm.revertToState(snap);
+            snap = vm.snapshotState();
+            _fikRoundTrip(string.concat(_label(), " LIVE seed-only roundtrip USD ", _t(usd[j])), _usdToAsset(usd[j]), _usdToAsset(usd[j]), 3);
+            vm.revertToState(snap);
+        }
+    }
+
+    // ----------------------------------------------------------------------------------------------- 23 mutation control
+    /// @dev CONTROL (local VM only, not a proposal): the vault's `valuationHaircutBps` is overwritten in storage with 0. If the
+    ///      share-price transfer of F-IK-2 comes from pricing shares on a haircut NAV while in-kind pays real tokens, the transfer
+    ///      should collapse; the chain and the round trip are logged both unmutated and mutated. Only identities are asserted.
+    function test_23_diag_mutationControl_haircutZero() public {
+        (uint256 S,) = _fikIncumbent();
+        uint256[2] memory bps = [uint256(100), 10_000];
+        for (uint256 j; j < 2; ++j) {
+            for (uint256 m; m < 2; ++m) {
+                uint256 snap = vm.snapshotState();
+                if (m == 1) _mutateHaircut(0);
+                string memory tag = string.concat(_label(), m == 1 ? " MUTATED haircut=0 " : " unmutated ", "D=", _t(bps[j] / 100), "%");
+                DC memory d;
+                d.idx = 1;
+                d.D = S * bps[j] / 10_000;
+                d.ref = S;
+                _dcRun(d);
+                _dcLog(d, tag);
+                vm.revertToState(snap);
+                snap = vm.snapshotState();
+                if (m == 1) _mutateHaircut(0);
+                _fikRoundTrip(string.concat(tag, " roundtrip"), S * bps[j] / 10_000, S, 0);
+                vm.revertToState(snap);
+            }
+        }
+    }
 }
 
 contract AvalancheTrackAUsdcVaultForkTest is TrackACore {
@@ -1123,6 +1452,11 @@ contract AvalancheTrackAUsdcVaultForkTest is TrackACore {
     function _bobUsd() internal pure override returns (uint256) { return 1_000; }
     function _feeRounds() internal pure override returns (uint256) { return 4; }
 
+    // HISTORICAL OBSERVATIONS, NOT DESIGN LIMITS: every KIND_*_PPM constant below was taken from earlier logs (or, for the
+    // JOINED class and the two-holder DISLOCATION caps, back-fitted from a failed run) and is kept unchanged as a regression
+    // tripwire. It is NOT an economic limit and NOT a fairness bound: F-IK-2 (docs/deployment-handoffs/avalanche-vault-entry-fairness.md)
+    // shows that a share-price transfer of the same order of magnitude exists at these states. Future economic limits are
+    // derived from a stated cost model in that document and are proposals only.
     // ---- R2 in-kind thresholds, Pharaoh USDC vault. Rule: threshold = worst value measured in the reference logs, rounded
     // UP to the next whole bp (100 ppm; a bps figure printed by the log is truncated, so its upper bound is the next integer),
     // plus a 3 bp (300 ppm) margin. Logs: docs/deployment-handoffs/avalanche-track-a-evidence/repro/attempt1-usdc.txt.
@@ -1207,6 +1541,11 @@ contract AvalancheTrackAWavaxVaultForkTest is TrackACore {
     function _bobUsd() internal pure override returns (uint256) { return 10_000; }
     function _feeRounds() internal pure override returns (uint256) { return 4; }
 
+    // HISTORICAL OBSERVATIONS, NOT DESIGN LIMITS: every KIND_*_PPM constant below was taken from earlier logs (or, for the
+    // JOINED class and the two-holder DISLOCATION caps, back-fitted from a failed run) and is kept unchanged as a regression
+    // tripwire. It is NOT an economic limit and NOT a fairness bound: F-IK-2 (docs/deployment-handoffs/avalanche-vault-entry-fairness.md)
+    // shows that a share-price transfer of the same order of magnitude exists at these states. Future economic limits are
+    // derived from a stated cost model in that document and are proposals only.
     // ---- R2 in-kind thresholds, Pharaoh WAVAX vault. Same rule as the Pharaoh USDC vault (worst measured value rounded up
     // to the next whole bp, plus 3 bp = 300 ppm). Logs: .../repro/attempt2-wavax.txt. Every measured in-kind value is a SURPLUS
     // versus the deposit (the deposit paid the entry haircut, in kind pays the real holdings, and the BENQI-rate oracle

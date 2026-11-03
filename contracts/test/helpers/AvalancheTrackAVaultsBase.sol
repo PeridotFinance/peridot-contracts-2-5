@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {TickMath} from "../../contracts/pancakev3/libraries/TickMath.sol";
@@ -67,6 +68,12 @@ interface ITAPositionManager {
         view
         returns (address, address, int24, int24, int24, uint128, uint256, uint256, uint128, uint128);
     function ownerOf(uint256) external view returns (address);
+}
+
+/// @dev Extra pool reads used only by the F-IK-2 ledger (protocol fees accrued inside the pool, TWAP accumulator).
+interface ITAPoolX {
+    function protocolFees() external view returns (uint128, uint128);
+    function observe(uint32[] calldata secondsAgos) external view returns (int56[] memory, uint160[] memory);
 }
 
 interface ITAGauge {
@@ -578,6 +585,687 @@ abstract contract TrackAVaultsBase is Test {
         } catch {
             return (false, 0);
         }
+    }
+
+
+    // ================================================================== F-IK-2 LEDGER (log prefix "FIK2|")
+    //
+    // Everything below is MEASUREMENT code for observation F-IK-2 (a later deposit lowers the incumbent's in-kind,
+    // oracle-valued holdings). It asserts only exact accounting identities (see the tests), never a fairness threshold.
+    //
+    // Holdings of the vault are measured EXACTLY, in token units:  H = idle balances + position principal + uncollected
+    // fees. Principal and fees are not computed from a formula: they are read by replaying `collect` and a full
+    // `decreaseLiquidity` + `collect` as the vault inside a snapshot that is reverted (the same calls the vault makes).
+    // A holder's in-kind entitlement is H * shares / supply (floor); it is cross-checked against a real `redeemInKind`
+    // replayed inside a snapshot (`_hypotheticalKind`).
+    // Token conservation: the changes of every account that can hold the two tokens in these tests (the five wallets,
+    // the vault holdings, the pool balance, the router and the position manager) must sum to zero; the pool balance
+    // is split into "vault principal + vault fees", "protocol fees accrued in the pool" and "everything else" (other
+    // liquidity providers: principal and fees; derived as pool balance minus the other two).
+
+    struct FSnap {
+        uint160 sqrtP;
+        int24 tick;
+        int24 twap;
+        uint128 poolLiq;
+        uint128 vLiq;
+        uint256 supply;
+        uint256 idleA;
+        uint256 idleP;
+        uint256 prinA;
+        uint256 prinP;
+        uint256 feeA;
+        uint256 feeP;
+        uint256 poolA;
+        uint256 poolP;
+        uint256 pfA;
+        uint256 pfP;
+        uint256 rtA;
+        uint256 rtP;
+        uint256 pmA;
+        uint256 pmP;
+        uint256[4] sh; // shares: ALICE, BOB, CAROL, SAFE
+        uint256[5] wA; // wallet asset: ALICE, BOB, CAROL, SAFE, WHALE
+        uint256[5] wP; // wallet paired
+    }
+
+    struct SwapInfo {
+        bool seen;
+        bool inIsAsset;
+        uint256 amtIn; // token in, includes the pool fee (pool Swap event amount)
+        uint256 amtOut;
+        uint160 sqrtPost;
+        int24 tickPost;
+        uint256 count;
+    }
+
+    function _holder(uint256 i) internal pure returns (address) {
+        if (i == 0) return ALICE;
+        if (i == 1) return BOB;
+        if (i == 2) return CAROL;
+        if (i == 3) return SAFE;
+        return WHALE;
+    }
+
+    function _hname(uint256 i) internal pure returns (string memory) {
+        if (i == 0) return "ALICE";
+        if (i == 1) return "BOB";
+        if (i == 2) return "CAROL";
+        if (i == 3) return "SAFE(seed)";
+        return "WHALE(external swapper)";
+    }
+
+    function _prefundWhale() internal {
+        _fund(address(asset), WHALE, 4_000_000_000 * aUnit);
+        _fund(address(paired), WHALE, 4_000_000_000 * pUnit);
+    }
+
+    function _twapTickX() internal view returns (int24) {
+        uint32 per = v.twapPeriod();
+        uint32[] memory ago = new uint32[](2);
+        ago[0] = per;
+        ago[1] = 0;
+        (int56[] memory c,) = ITAPoolX(address(pool)).observe(ago);
+        int56 delta = c[1] - c[0];
+        int56 p = int56(uint56(per));
+        int56 mean = delta / p;
+        if (delta < 0 && (delta % p != 0)) mean--;
+        return int24(mean);
+    }
+
+    /// @dev Exact principal and uncollected fees of the vault's NFT, in (asset, paired) units. Replays the vault's own
+    ///      calls on a snapshot that is reverted before returning.
+    function _vaultPosition() internal returns (uint256 prinA, uint256 prinP, uint256 feeA, uint256 feeP) {
+        uint256 tid = v.tokenId();
+        if (tid == 0) return (0, 0, 0, 0);
+        (,,,,, uint128 liq,,,,) = ITAPositionManager(POSITION_MANAGER).positions(tid);
+        IERC20 t0 = IERC20(pool.token0());
+        IERC20 t1 = IERC20(pool.token1());
+        address vault = address(v);
+        uint256 snap = vm.snapshotState();
+        uint256 b0 = t0.balanceOf(vault);
+        uint256 b1 = t1.balanceOf(vault);
+        uint256 f0;
+        uint256 f1;
+        uint256 p0;
+        uint256 p1;
+        vm.startPrank(vault);
+        (bool ok1,) = POSITION_MANAGER.call(
+            abi.encodeWithSignature("collect((uint256,address,uint128,uint128))", tid, vault, type(uint128).max, type(uint128).max)
+        );
+        require(ok1, "fik2: replay collect failed");
+        f0 = t0.balanceOf(vault) - b0;
+        f1 = t1.balanceOf(vault) - b1;
+        if (liq > 0) {
+            (bool ok2,) = POSITION_MANAGER.call(
+                abi.encodeWithSignature("decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))", tid, liq, 0, 0, block.timestamp)
+            );
+            require(ok2, "fik2: replay decreaseLiquidity failed");
+            (bool ok3,) = POSITION_MANAGER.call(
+                abi.encodeWithSignature("collect((uint256,address,uint128,uint128))", tid, vault, type(uint128).max, type(uint128).max)
+            );
+            require(ok3, "fik2: replay collect 2 failed");
+            p0 = t0.balanceOf(vault) - b0 - f0;
+            p1 = t1.balanceOf(vault) - b1 - f1;
+        }
+        vm.stopPrank();
+        vm.revertToState(snap);
+        if (v.assetIsToken0()) return (p0, p1, f0, f1);
+        return (p1, p0, f1, f0);
+    }
+
+    /// @dev The vault's own `valueBefore` of a deposit: totalAssets() after the fees were collected into idle.
+    function _navAfterCollect() internal returns (uint256 nav) {
+        uint256 tid = v.tokenId();
+        if (tid == 0) return v.totalAssets();
+        address vault = address(v);
+        uint256 snap = vm.snapshotState();
+        vm.prank(vault);
+        (bool ok,) = POSITION_MANAGER.call(
+            abi.encodeWithSignature("collect((uint256,address,uint128,uint128))", tid, vault, type(uint128).max, type(uint128).max)
+        );
+        require(ok, "fik2: replay collect failed (nav)");
+        nav = v.totalAssets();
+        vm.revertToState(snap);
+    }
+
+    function _fSnap() internal returns (FSnap memory s) {
+        (s.sqrtP, s.tick,,,,,) = pool.slot0();
+        s.twap = _twapTickX();
+        s.poolLiq = pool.liquidity();
+        s.vLiq = _positionLiquidity();
+        s.supply = v.totalSupply();
+        s.idleA = asset.balanceOf(address(v));
+        s.idleP = paired.balanceOf(address(v));
+        (s.prinA, s.prinP, s.feeA, s.feeP) = _vaultPosition();
+        s.poolA = asset.balanceOf(address(pool));
+        s.poolP = paired.balanceOf(address(pool));
+        (uint128 f0, uint128 f1) = ITAPoolX(address(pool)).protocolFees();
+        (s.pfA, s.pfP) = v.assetIsToken0() ? (uint256(f0), uint256(f1)) : (uint256(f1), uint256(f0));
+        s.rtA = asset.balanceOf(ROUTER);
+        s.rtP = paired.balanceOf(ROUTER);
+        s.pmA = asset.balanceOf(POSITION_MANAGER);
+        s.pmP = paired.balanceOf(POSITION_MANAGER);
+        for (uint256 i; i < 5; ++i) {
+            address h = _holder(i);
+            s.wA[i] = asset.balanceOf(h);
+            s.wP[i] = paired.balanceOf(h);
+            if (i < 4) s.sh[i] = v.balanceOf(h);
+        }
+    }
+
+    function _hA(FSnap memory s) internal pure returns (uint256) {
+        return s.idleA + s.prinA + s.feeA;
+    }
+
+    function _hP(FSnap memory s) internal pure returns (uint256) {
+        return s.idleP + s.prinP + s.feeP;
+    }
+
+    function _ent(FSnap memory s, uint256 i) internal pure returns (uint256 a, uint256 p) {
+        if (s.supply == 0) return (0, 0);
+        a = Math.mulDiv(_hA(s), s.sh[i], s.supply);
+        p = Math.mulDiv(_hP(s), s.sh[i], s.supply);
+    }
+
+    // ---- prices: paired -> asset and asset -> paired at a pool sqrt price, and at the vault's oracle
+    function _p2a(uint256 pAmt, uint160 sq) internal view returns (uint256) {
+        if (pAmt == 0) return 0;
+        if (v.assetIsToken0()) return Math.mulDiv(Math.mulDiv(pAmt, 1 << 96, sq), 1 << 96, sq);
+        return Math.mulDiv(Math.mulDiv(pAmt, sq, 1 << 96), sq, 1 << 96);
+    }
+
+    function _a2p(uint256 aAmt, uint160 sq) internal view returns (uint256) {
+        if (aAmt == 0) return 0;
+        if (v.assetIsToken0()) return Math.mulDiv(Math.mulDiv(aAmt, sq, 1 << 96), sq, 1 << 96);
+        return Math.mulDiv(Math.mulDiv(aAmt, 1 << 96, sq), 1 << 96, sq);
+    }
+
+    function _vO(int256 dA, int256 dP) internal view returns (int256) {
+        return dA + (dP >= 0 ? int256(_pairedInAsset(uint256(dP))) : -int256(_pairedInAsset(uint256(-dP))));
+    }
+
+    function _vS(int256 dA, int256 dP, uint160 sq) internal view returns (int256) {
+        return dA + (dP >= 0 ? int256(_p2a(uint256(dP), sq)) : -int256(_p2a(uint256(-dP), sq)));
+    }
+
+    function _ppm(int256 x, uint256 ref) internal pure returns (int256) {
+        return ref == 0 ? int256(0) : x * 1_000_000 / int256(ref);
+    }
+
+    function _i(uint256 x) internal pure returns (int256) {
+        return int256(x);
+    }
+
+    /// @dev One ledger line: token units and the same amount valued at three bases (oracle, pool spot before, pool spot after).
+    function _fl(string memory tag, string memory name, int256 dA, int256 dP, uint160 s0, uint160 s1, uint256 ref) internal view {
+        int256 vo = _vO(dA, dP);
+        int256 v0 = _vS(dA, dP, s0);
+        int256 v1 = _vS(dA, dP, s1);
+        string memory l1 = string.concat("FIK2|", tag, "|", name, "| dAsset ", _ti(dA), " dPaired ", _ti(dP));
+        string memory l2 = string.concat(" | @oracle ", _ti(vo), " (", _ti(_ppm(vo, ref)), " ppm)");
+        string memory l3 = string.concat(" | @spotBefore ", _ti(v0), " (", _ti(_ppm(v0, ref)), " ppm)");
+        string memory l4 = string.concat(" | @spotAfter ", _ti(v1), " (", _ti(_ppm(v1, ref)), " ppm)");
+        console2.log(string.concat(l1, l2, l3, l4));
+    }
+
+    function _pairSum(FSnap memory b, uint256 hi) internal pure returns (uint256 sumShares) {
+        for (uint256 i; i < hi; ++i) sumShares += b.sh[i];
+    }
+
+    struct LS {
+        int256 sumA;
+        int256 sumP;
+        uint256 eA0;
+        uint256 eP0;
+        uint256 eA1;
+        uint256 eP1;
+    }
+
+    function _fAdd(LS memory L, string memory tag, string memory name, int256 dA, int256 dP, FSnap memory a, FSnap memory b, uint256 ref, bool verbose) internal view {
+        L.sumA += dA;
+        L.sumP += dP;
+        if (verbose && (dA != 0 || dP != 0)) _fl(tag, name, dA, dP, a.sqrtP, b.sqrtP, ref);
+    }
+
+    function _fHolderLine(LS memory L, string memory tag, FSnap memory a, FSnap memory b, uint256 i, uint256 ref, bool verbose) internal view {
+        (uint256 a0, uint256 p0) = _ent(a, i);
+        (uint256 a1, uint256 p1) = _ent(b, i);
+        L.eA0 += a0;
+        L.eP0 += p0;
+        L.eA1 += a1;
+        L.eP1 += p1;
+        _fAdd(L, tag, string.concat("holder ", _hname(i), " [wallet + in-kind entitlement]"), _i(a1) - _i(a0) + _i(b.wA[i]) - _i(a.wA[i]), _i(p1) - _i(p0) + _i(b.wP[i]) - _i(a.wP[i]), a, b, ref, verbose);
+    }
+
+    /// @notice Token-conservation ledger from snapshot `a` to snapshot `b`. Returns the residual (sum of all lines) per token;
+    ///         the lines are logged with the valuations of `_fl` when `verbose`.
+    function _fLedger(string memory tag, FSnap memory a, FSnap memory b, uint256 ref, bool verbose)
+        internal
+        returns (int256, int256)
+    {
+        require(_pairSum(a, 4) == a.supply && _pairSum(b, 4) == b.supply, "fik2: a share holder is not in the list");
+        LS memory L;
+        for (uint256 i; i < 4; ++i) _fHolderLine(L, tag, a, b, i, ref, verbose);
+        _fAdd(L, tag, "external swapper wallet", _i(b.wA[4]) - _i(a.wA[4]), _i(b.wP[4]) - _i(a.wP[4]), a, b, ref, verbose);
+        // vault holdings not assigned to any share because of the floors of the entitlement formula
+        _fAdd(L, tag, "vault floor remainder (unassigned)", (_i(_hA(b)) - _i(L.eA1)) - (_i(_hA(a)) - _i(L.eA0)), (_i(_hP(b)) - _i(L.eP1)) - (_i(_hP(a)) - _i(L.eP0)), a, b, ref, verbose);
+        // other liquidity providers in the pool: pool balance - vault principal - vault pending fees - protocol fees
+        _fAdd(
+            L, tag, "other LPs in the pool (principal + fees, derived)",
+            (_i(b.poolA) - _i(b.prinA) - _i(b.feeA) - _i(b.pfA)) - (_i(a.poolA) - _i(a.prinA) - _i(a.feeA) - _i(a.pfA)),
+            (_i(b.poolP) - _i(b.prinP) - _i(b.feeP) - _i(b.pfP)) - (_i(a.poolP) - _i(a.prinP) - _i(a.feeP) - _i(a.pfP)),
+            a, b, ref, verbose
+        );
+        _fAdd(L, tag, "pool protocol fees accrued", _i(b.pfA) - _i(a.pfA), _i(b.pfP) - _i(a.pfP), a, b, ref, verbose);
+        _fAdd(L, tag, "router + position manager balances (dust)", _i(b.rtA) - _i(a.rtA) + _i(b.pmA) - _i(a.pmA), _i(b.rtP) - _i(a.rtP) + _i(b.pmP) - _i(a.pmP), a, b, ref, verbose);
+        console2.log(string.concat("FIK2|", tag, "|LEDGER residual (sum of all lines; 0 = every token accounted for) asset ", _ti(L.sumA), " paired ", _ti(L.sumP)));
+        return (L.sumA, L.sumP);
+    }
+
+    /// @dev Asserts the exact conservation identity of `_fLedger` (the residual must be 0: tokens only move between the listed accounts).
+    function _fLedgerAssert(string memory tag, FSnap memory a, FSnap memory b, uint256 ref, bool verbose) internal {
+        (int256 rA, int256 rP) = _fLedger(tag, a, b, ref, verbose);
+        assertEq(rA, int256(0), string.concat(tag, ": ledger residual (asset) != 0"));
+        assertEq(rP, int256(0), string.concat(tag, ": ledger residual (paired) != 0"));
+    }
+
+    function _parseSwaps(Vm.Log[] memory logs) internal view returns (SwapInfo memory s) {
+        bytes32 topic = keccak256("Swap(address,address,int256,int256,uint160,uint128,int24)");
+        bool a0 = v.assetIsToken0();
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter != address(pool) || logs[i].topics.length == 0 || logs[i].topics[0] != topic) continue;
+            (int256 x0, int256 x1, uint160 sq,, int24 tk) = abi.decode(logs[i].data, (int256, int256, uint160, uint128, int24));
+            bool in0 = x0 > 0;
+            bool inAsset = (in0 == a0);
+            if (s.count == 0) s.inIsAsset = inAsset;
+            else require(s.inIsAsset == inAsset, "fik2: swaps of both directions inside one call");
+            s.amtIn += uint256(in0 ? x0 : x1);
+            s.amtOut += uint256(in0 ? -x1 : -x0);
+            s.sqrtPost = sq;
+            s.tickPost = tk;
+            s.seen = true;
+            s.count++;
+        }
+    }
+
+    function _tkn(bool isAsset) internal view returns (address) {
+        return isAsset ? address(asset) : address(paired);
+    }
+
+    // ---- newcomer-deposit decomposition ------------------------------------------------------------------------
+    struct DC {
+        uint256 idx; // holder index of the newcomer
+        uint256 inc; // holder index of the reference incumbent (0 = ALICE, 3 = SAFE seed)
+        uint256 D; // newcomer deposit, asset units
+        uint256 ref; // reference size for ppm of the incumbent (Alice's deposit)
+        uint256 minted;
+        uint256 valBefore; // the vault's own valueBefore (totalAssets after collect)
+        uint256 navAfter; // totalAssets() after the deposit
+        FSnap a0; // before the deposit
+        FSnap a1; // after the real deposit
+        FSnap a1r; // after the real deposit and an external swap that restores the tick
+        FSnap c1; // CONTROL: same pool swap by an external account, no deposit
+        FSnap c1r; // control, tick restored
+        SwapInfo sw;
+        uint256 hk0A; // Alice real in-kind legs before (replayed redeemInKind)
+        uint256 hk0P;
+        uint256 hk1A; // ... after
+        uint256 hk1P;
+        uint256 hkNA; // newcomer real in-kind legs after
+        uint256 hkNP;
+    }
+
+    /// @dev Runs the newcomer deposit three times from the same state (real; real + tick restored; control swap) and leaves
+    ///      the state AFTER the real deposit. The newcomer's wallet is pre-funded so that no `deal` happens inside a step.
+    function _dcRun(DC memory d) internal {
+        address who = _holder(d.idx);
+        if (asset.balanceOf(who) < d.D) _fund(address(asset), who, d.D);
+        d.a0 = _fSnap();
+        d.valBefore = _navAfterCollect();
+        (d.hk0A, d.hk0P) = _hypotheticalKind(_holder(d.inc));
+        uint256 s1 = vm.snapshotState();
+        vm.recordLogs();
+        (bool ok, uint256 m, bytes memory e) = _depositAs(who, d.D);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        require(ok, string.concat("fik2: newcomer deposit failed: ", _err(e)));
+        d.minted = m;
+        d.sw = _parseSwaps(logs);
+        d.a1 = _fSnap();
+        d.navAfter = v.totalAssets();
+        (d.hk1A, d.hk1P) = _hypotheticalKind(_holder(d.inc));
+        (d.hkNA, d.hkNP) = _hypotheticalKind(who);
+        uint256 s2 = vm.snapshotState();
+        _moveToTick(d.a0.tick);
+        d.a1r = _fSnap();
+        vm.revertToState(s2);
+        vm.revertToState(s1);
+        // control: the same pool swap by an external account, no deposit
+        s1 = vm.snapshotState();
+        if (d.sw.seen) _swapAs(WHALE, _tkn(d.sw.inIsAsset), _tkn(!d.sw.inIsAsset), d.sw.amtIn, 0);
+        d.c1 = _fSnap();
+        s2 = vm.snapshotState();
+        _moveToTick(d.a0.tick);
+        d.c1r = _fSnap();
+        vm.revertToState(s2);
+        vm.revertToState(s1);
+        (ok,,) = _depositAs(who, d.D);
+        require(ok, "fik2: re-run of the real deposit failed");
+    }
+
+    /// @dev LOCAL VM ONLY mutation (a control, never a proposal): overwrite the vault's `valuationHaircutBps` in storage. The
+    ///      packed risk-parameter slot is located by matching all six packed values against the public getters.
+    function _mutateHaircut(uint16 newH) internal {
+        uint256 want = uint256(uint24(v.tickRange()));
+        want |= uint256(v.twapPeriod()) << 24;
+        want |= uint256(v.maxTwapDeviationTicks()) << 56;
+        want |= uint256(v.maxOracleDeviationBps()) << 80;
+        want |= uint256(v.slippageBps()) << 96;
+        want |= uint256(v.valuationHaircutBps()) << 112;
+        bytes32 found;
+        uint256 n;
+        for (uint256 i; i < 40; ++i) {
+            bytes32 w = vm.load(address(v), bytes32(i));
+            if (uint256(w) & ((1 << 128) - 1) == want) {
+                found = bytes32(i);
+                ++n;
+            }
+        }
+        require(n == 1, "fik2: risk-parameter slot not found uniquely");
+        uint256 cur = uint256(vm.load(address(v), found));
+        cur = (cur & ~(uint256(0xFFFF) << 112)) | (uint256(newH) << 112);
+        vm.store(address(v), found, bytes32(cur));
+        require(v.valuationHaircutBps() == newH, "fik2: haircut mutation failed");
+    }
+
+    function _dcLog(DC memory d, string memory tag) internal {
+        _dcLogHeader(d, tag);
+        _dcLogSwap(d, tag);
+        _dcLogEffects(d, tag);
+        _dcLogChain(d, tag, 0);
+        _dcLogChain(d, tag, 1);
+        _dcAssert(d, tag);
+    }
+
+    function _dcLogHeader(DC memory d, string memory tag) internal view {
+        uint256 oR = _pairedInAsset(pUnit); // asset units per one paired unit, oracle
+        uint256 pR = _p2a(pUnit, d.a0.sqrtP); // ... pool spot before
+        int256 gapPpm = oR == 0 ? int256(0) : (_i(oR) - _i(pR)) * 1_000_000 / _i(oR);
+        string memory m = string.concat("FIK2|", tag, "|HEADER newcomer ", _hname(d.idx), " deposit D ", _t(d.D), " incumbent size ", _t(d.ref), " reference incumbent ", _hname(d.inc));
+        m = string.concat(m, " (D = ", _t(d.D * 10_000 / d.ref), " bp of the incumbent), minted shares ", _t(d.minted), " of supply before ", _t(d.a0.supply));
+        console2.log(m);
+        m = string.concat("FIK2|", tag, "|HEADER ticks: spot before ", _ti(d.a0.tick), " TWAP before ", _ti(d.a0.twap), " spot after ", _ti(d.a1.tick));
+        m = string.concat(m, "; position range ", _ti(v.positionTickLower()), " ", _ti(v.positionTickUpper()));
+        m = string.concat(m, "; pool liquidity ", _t(d.a0.poolLiq), " vault liquidity before/after ", _t(d.a0.vLiq), " ", _t(d.a1.vLiq));
+        console2.log(m);
+        m = string.concat("FIK2|", tag, "|HEADER basis: oracle asset-per-paired ", _t(oR), " pool spot ", _t(pR), " -> oracle above pool by ", _ti(gapPpm));
+        m = string.concat(m, " ppm; pool fee ppm ", _t(pool.fee()), " haircut bps ", _t(v.valuationHaircutBps()));
+        console2.log(m);
+    }
+
+    struct SW {
+        uint256 fee;
+        uint256 fIn;
+        uint256 expSpot;
+        uint256 expOra;
+        uint256 feeOut;
+        int256 costSpot;
+        int256 impactOut;
+        int256 basisOut;
+    }
+
+    function _dcLogSwap(DC memory d, string memory tag) internal view {
+        SwapInfo memory sw = d.sw;
+        if (!sw.seen) {
+            console2.log(string.concat("FIK2|", tag, "|SWAP the vault made no deployment swap"));
+            return;
+        }
+        SW memory w;
+        uint160 s0 = d.a0.sqrtP;
+        w.fee = pool.fee();
+        w.fIn = sw.amtIn * w.fee / 1_000_000; // fee paid, in token-in units
+        w.expSpot = sw.inIsAsset ? _a2p(sw.amtIn, s0) : _p2a(sw.amtIn, s0);
+        w.expOra = sw.inIsAsset ? ITAOracle(oracleAddr).quoteAssetToPair(sw.amtIn) : _pairedInAsset(sw.amtIn);
+        w.feeOut = w.expSpot * w.fee / 1_000_000;
+        w.costSpot = _i(w.expSpot) - _i(sw.amtOut); // fee + price impact
+        w.impactOut = w.costSpot - _i(w.feeOut);
+        w.basisOut = (_i(w.expOra) - _i(sw.amtOut)) - w.costSpot; // extra apparent cost at the oracle: oracle/pool basis
+        uint256 inAssetEq = sw.inIsAsset ? sw.amtIn : _p2a(sw.amtIn, s0);
+        string memory m = string.concat("FIK2|", tag, "|SWAP direction ", sw.inIsAsset ? "asset->paired" : "paired->asset", " count ", _t(sw.count), " amountIn ", _t(sw.amtIn), " amountOut ", _t(sw.amtOut));
+        m = string.concat(m, " ; amountIn in asset terms ", _t(inAssetEq), " = ", _t(inAssetEq * 1_000_000 / d.D), " ppm of D; tick after swap ", _ti(sw.tickPost));
+        console2.log(m);
+        _dcLogSwapCost(d, tag, w);
+        _dcLogSwapFee(d, tag, w);
+        {
+            int256 dIn = sw.inIsAsset ? _i(d.c1.poolA) - _i(d.a0.poolA) : _i(d.c1.poolP) - _i(d.a0.poolP);
+            int256 dOut = sw.inIsAsset ? _i(d.c1.poolP) - _i(d.a0.poolP) : _i(d.c1.poolA) - _i(d.a0.poolA);
+            console2.log(string.concat("FIK2|", tag, "|SWAP pool balance change in the control: token-in ", _ti(dIn), " token-out ", _ti(dOut), " (Swap event: +", _t(sw.amtIn), " -", _t(sw.amtOut), ")"));
+        }
+    }
+
+    function _toAssetS(bool outIsPaired, int256 x, uint160 s0) internal view returns (int256) {
+        return outIsPaired ? _vS(0, x, s0) : x;
+    }
+
+    function _dcLogSwapCost(DC memory d, string memory tag, SW memory w) internal view {
+        bool outPaired = d.sw.inIsAsset;
+        uint160 s0 = d.a0.sqrtP;
+        int256 cS = _toAssetS(outPaired, w.costSpot, s0);
+        int256 iS = _toAssetS(outPaired, w.impactOut, s0);
+        int256 fS = _toAssetS(outPaired, _i(w.feeOut), s0);
+        int256 bS = _toAssetS(outPaired, w.basisOut, s0);
+        string memory m = string.concat("FIK2|", tag, "|SWAP execution cost vs pool spot before, in asset units: total ", _ti(cS), " (", _ti(_ppm(cS, d.D)), " ppm of D) = fee ", _ti(fS), " (", _ti(_ppm(fS, d.D)), ")");
+        m = string.concat(m, " + price impact ", _ti(iS), " (", _ti(_ppm(iS, d.D)), ")");
+        console2.log(m);
+        m = string.concat("FIK2|", tag, "|SWAP oracle/pool basis on this swap: expected out at oracle ", _t(w.expOra), " vs at pool spot ", _t(w.expSpot));
+        m = string.concat(m, " -> extra apparent cost at the oracle ", _ti(bS), " asset units = ", _ti(_ppm(bS, d.D)), " ppm of D");
+        console2.log(m);
+    }
+
+    function _dcLogSwapFee(DC memory d, string memory tag, SW memory w) internal view {
+        bool inA = d.sw.inIsAsset;
+        uint160 s0 = d.a0.sqrtP;
+        uint256 pfIn = inA ? d.c1.pfA - d.a0.pfA : d.c1.pfP - d.a0.pfP;
+        uint256 vIn = inA ? d.c1.feeA - d.a0.feeA : d.c1.feeP - d.a0.feeP;
+        int256 others = _i(w.fIn) - _i(pfIn) - _i(vIn);
+        int256 aF = inA ? _i(w.fIn) : _vS(0, _i(w.fIn), s0);
+        int256 aPf = inA ? _i(pfIn) : _vS(0, _i(pfIn), s0);
+        int256 aV = inA ? _i(vIn) : _vS(0, _i(vIn), s0);
+        int256 aO = inA ? others : _vS(0, others, s0);
+        string memory m = string.concat("FIK2|", tag, "|FEE paid by the swap (amountIn x fee): ", _t(w.fIn), " token-in units = ", _ti(aF), " asset units (", _ti(_ppm(aF, d.D)), " ppm of D); to pool protocol fees ", _ti(aPf), " (", _ti(_ppm(aPf, d.D)), ")");
+        m = string.concat(m, "; to the vault's own position (pending fees, shared by all holders) ", _ti(aV), " (", _ti(_ppm(aV, d.D)), "); to other LPs (derived) ", _ti(aO), " (", _ti(_ppm(aO, d.D)), ")");
+        console2.log(m);
+    }
+
+    function _dcLogEffects(DC memory d, string memory tag) internal {
+        _dcLogIncumbent(d, tag);
+        _dcLogNewcomer(d, tag);
+    }
+
+    function _flE(string memory tag, string memory name, uint256 xA, uint256 xP, uint256 yA, uint256 yP, DC memory d, uint256 ref) internal view {
+        _fl(tag, name, _i(xA) - _i(yA), _i(xP) - _i(yP), d.a0.sqrtP, d.a1.sqrtP, ref);
+    }
+
+    function _dcLogIncumbent(DC memory d, string memory tag) internal view {
+        (uint256 e0A, uint256 e0P) = _ent(d.a0, d.inc);
+        (uint256 e1A, uint256 e1P) = _ent(d.a1, d.inc);
+        (uint256 ecA, uint256 ecP) = _ent(d.c1, d.inc);
+        (uint256 e1rA, uint256 e1rP) = _ent(d.a1r, d.inc);
+        (uint256 ecrA, uint256 ecrP) = _ent(d.c1r, d.inc);
+        _flE(tag, "INCUMBENT (reference holder), total change of her in-kind entitlement (real deposit)", e1A, e1P, e0A, e0P, d, d.ref);
+        _flE(tag, "INCUMBENT (reference holder), (i) POOL effect: same swap by an external account, no deposit", ecA, ecP, e0A, e0P, d, d.ref);
+        _flE(tag, "INCUMBENT (reference holder), (ii) SHARE effect: real deposit minus control", e1A, e1P, ecA, ecP, d, d.ref);
+        _flE(tag, "INCUMBENT (reference holder), total change with the tick restored by an external swap (real deposit)", e1rA, e1rP, e0A, e0P, d, d.ref);
+        _flE(tag, "INCUMBENT (reference holder), pool effect with the tick restored (control + restore)", ecrA, ecrP, e0A, e0P, d, d.ref);
+        _flE(tag, "INCUMBENT (reference holder), share effect with the tick restored", e1rA, e1rP, ecrA, ecrP, d, d.ref);
+        // parity with test_17: real replayed redeemInKind legs
+        int256 pv = _vO(_i(d.hk1A) - _i(d.hk0A), _i(d.hk1P) - _i(d.hk0P));
+        string memory m = string.concat("FIK2|", tag, "|PARITY reference holder replayed redeemInKind legs before ", _t(d.hk0A), " ", _t(d.hk0P), " after ", _t(d.hk1A), " ", _t(d.hk1P));
+        m = string.concat(m, " ; oracle value change ", _ti(pv), " = ", _ti(_ppm(pv, d.ref)), " ppm of the incumbent size (for Alice this is the quantity test_17 measures)");
+        console2.log(m);
+    }
+
+    function _dcLogNewcomer(DC memory d, string memory tag) internal view {
+        uint160 s0 = d.a0.sqrtP;
+        uint160 s1 = d.a1.sqrtP;
+        int256 kA = _i(_hA(d.a1)) - _i(_hA(d.c1));
+        int256 kP = _i(_hP(d.a1)) - _i(_hP(d.c1));
+        (uint256 nA, uint256 nP) = _ent(d.a1, d.idx);
+        _fl(tag, "NEWCOMER contribution K = vault holdings after minus control holdings", kA, kP, s0, s1, d.D);
+        _fl(tag, "NEWCOMER in-kind entitlement after the deposit", _i(nA), _i(nP), s0, s1, d.D);
+        _fl(tag, "NEWCOMER share transfer T = entitlement - K (what the share price gives him beyond what he put in)", _i(nA) - kA, _i(nP) - kP, s0, s1, d.D);
+        _fl(tag, "NEWCOMER execution cost K - D (swap fee + price impact + basis, as valued)", kA - _i(d.D), kP, s0, s1, d.D);
+        _fl(tag, "NEWCOMER net change entitlement - D", _i(nA) - _i(d.D), _i(nP), s0, s1, d.D);
+        _fl(tag, "IDLE balances of the vault BEFORE the deposit (not deployed; shared by all holders)", _i(d.a0.idleA), _i(d.a0.idleP), s0, s1, d.D);
+        _fl(tag, "IDLE balances of the vault AFTER the deposit (undeployed residual: ratio mismatch + liquidity floor)", _i(d.a1.idleA), _i(d.a1.idleP), s0, s1, d.D);
+        uint256 hO0 = uint256(_vO(_i(_hA(d.a0)), _i(_hP(d.a0))));
+        uint256 kO = uint256(_vO(kA, kP));
+        uint256 pk = kP > 0 ? _pairedInAsset(uint256(kP)) : 0;
+        uint256 pk0 = _pairedInAsset(_hP(d.a0));
+        string memory m = string.concat("FIK2|", tag, "|COMPOSITION paired share of value at oracle: vault before ", _t(pk0 * 1_000_000 / (hO0 == 0 ? 1 : hO0)), " ppm, newcomer contribution K ", _t(pk * 1_000_000 / (kO == 0 ? 1 : kO)));
+        m = string.concat(m, " ppm (a haircut of ", _t(v.valuationHaircutBps()), " bp on the paired leg makes unequal mixes get unequal share prices)");
+        console2.log(m);
+    }
+
+    function _sgnOra(int256 dP) internal view returns (int256) {
+        return dP >= 0 ? int256(_pairedInAsset(uint256(dP))) : -int256(_pairedInAsset(uint256(-dP)));
+    }
+
+    struct CH {
+        int256 fAct;
+        int256 fEx;
+        int256 fS;
+        int256 fO;
+        int256 fS1;
+        int256 hB;
+        int256 fFair;
+        int256 tRound;
+        int256 tVal;
+        int256 tHair;
+        int256 tBasis;
+        int256 total;
+        int256 tDirect;
+    }
+
+    /// @dev Telescoping chain of the share-price difference between the fraction the vault minted and the fraction that
+    ///      matches the newcomer's contribution K, at one valuation basis (0 = oracle, 1 = pool spot after the deposit).
+    function _dcChain(DC memory d, uint256 basis) internal view returns (CH memory c) {
+        int256 kA = _i(_hA(d.a1)) - _i(_hA(d.c1));
+        int256 kP = _i(_hP(d.a1)) - _i(_hP(d.c1));
+        uint160 s1 = d.a1.sqrtP;
+        int256 hc = _i(10_000 - v.valuationHaircutBps());
+        c.fAct = _i(Math.mulDiv(d.minted, 1e18, d.a0.supply + d.minted));
+        c.fEx = _i(_fEx(d, d.a0.supply));
+        c.fS = (kA + _sgnOra(kP) * hc / 10_000) * 1e18 / (_i(_hA(d.a1)) + _sgnOra(_i(_hP(d.a1))) * hc / 10_000);
+        int256 h1O = _vO(_i(_hA(d.a1)), _i(_hP(d.a1)));
+        int256 h1S = _vS(_i(_hA(d.a1)), _i(_hP(d.a1)), s1);
+        c.fO = _vO(kA, kP) * 1e18 / h1O;
+        c.fS1 = _vS(kA, kP, s1) * 1e18 / h1S;
+        c.hB = basis == 0 ? h1O : h1S;
+        c.fFair = basis == 0 ? c.fO : c.fS1;
+        c.tRound = (c.fAct - c.fEx) * c.hB / 1e18;
+        c.tVal = (c.fEx - c.fS) * c.hB / 1e18;
+        c.tHair = (c.fS - c.fO) * c.hB / 1e18;
+        c.tBasis = (c.fO - c.fFair) * c.hB / 1e18;
+        c.total = c.tRound + c.tVal + c.tHair + c.tBasis;
+        (uint256 nA, uint256 nP) = _ent(d.a1, d.idx);
+        c.tDirect = basis == 0 ? _vO(_i(nA) - kA, _i(nP) - kP) : _vS(_i(nA) - kA, _i(nP) - kP, s1);
+    }
+
+    function _dcLogChain(DC memory d, string memory tag, uint256 basis) internal view {
+        CH memory c = _dcChain(d, basis);
+        string memory bn = basis == 0 ? "oracle" : "pool spot after";
+        string memory m = string.concat("FIK2|", tag, "|CHAIN[", bn, "] fractions (1e18): minted ", _ti(c.fAct), " exact-vault-formula ", _ti(c.fEx), " spot-haircut-NAV ", _ti(c.fS), " oracle-no-haircut ", _ti(c.fO), " pool-spot-no-haircut ", _ti(c.fS1));
+        console2.log(m);
+        m = string.concat("FIK2|", tag, "|CHAIN[", bn, "] share transfer to the newcomer T (asset units) = ", _ti(c.tDirect), " = ", _ti(_ppm(c.tDirect, d.D)), " ppm of D; terms: rounding (floor of mint) ", _ti(c.tRound));
+        m = string.concat(m, " | valuation tick/fee exclusion (vault values the position at the TWAP tick, not spot) ", _ti(c.tVal), " | paired-leg haircut ", _ti(c.tHair), " | oracle vs pool basis ", _ti(c.tBasis));
+        m = string.concat(m, " ; sum of terms ", _ti(c.total), " (", _ti(_ppm(c.total, d.D)), " ppm of D)");
+        console2.log(m);
+    }
+
+    function _fEx(DC memory d, uint256 sup) internal pure returns (uint256) {
+        uint256 net = d.navAfter - d.valBefore;
+        uint256 shEx = Math.mulDiv(net, (sup + 1) * 1e18, d.valBefore + 1);
+        return Math.mulDiv(shEx, 1e18, sup * 1e18 + shEx);
+    }
+
+    function _dcAssert(DC memory d, string memory tag) internal {
+        // (1) exact: shares minted = the vault's formula applied to the totalAssets() it reported before/after
+        assertEq(d.minted, Math.mulDiv(d.navAfter - d.valBefore, d.a0.supply + 1, d.valBefore + 1), string.concat(tag, ": minted shares != mulDiv(netContribution, supply+1, valueBefore+1)"));
+        // (2) exact: token conservation, real deposit and control swap
+        _fLedgerAssert(string.concat(tag, " REAL deposit"), d.a0, d.a1, d.ref, true);
+        _fLedgerAssert(string.concat(tag, " CONTROL swap-only"), d.a0, d.c1, d.ref, true);
+        // (3) exact: pool balance moves by exactly the Swap event amounts in the control
+        if (d.sw.seen) {
+            int256 dIn = d.sw.inIsAsset ? _i(d.c1.poolA) - _i(d.a0.poolA) : _i(d.c1.poolP) - _i(d.a0.poolP);
+            int256 dOut = d.sw.inIsAsset ? _i(d.c1.poolP) - _i(d.a0.poolP) : _i(d.c1.poolA) - _i(d.a0.poolA);
+            assertEq(dIn, _i(d.sw.amtIn), string.concat(tag, ": control pool token-in change != Swap event amountIn"));
+            assertEq(dOut, -_i(d.sw.amtOut), string.concat(tag, ": control pool token-out change != -Swap event amountOut"));
+        }
+        // (4) identity: change of all incumbents' entitlements (real vs control) + newcomer entitlement = K, within floors
+        {
+            int256 incA;
+            int256 incP;
+            for (uint256 i; i < 4; ++i) {
+                if (i == d.idx) continue;
+                (uint256 a1, uint256 p1) = _ent(d.a1, i);
+                (uint256 ac, uint256 pc) = _ent(d.c1, i);
+                incA += _i(a1) - _i(ac);
+                incP += _i(p1) - _i(pc);
+            }
+            (uint256 nA, uint256 nP) = _ent(d.a1, d.idx);
+            int256 rA = incA + _i(nA) - (_i(_hA(d.a1)) - _i(_hA(d.c1)));
+            int256 rP = incP + _i(nP) - (_i(_hP(d.a1)) - _i(_hP(d.c1)));
+            console2.log(string.concat("FIK2|", tag, "|IDENTITY sum(incumbents real-minus-control) + newcomer entitlement - K = asset ", _ti(rA), " paired ", _ti(rP), " (floor rounding only; asserted |x| <= 8)"));
+            assertLe(_absI(rA), 8, string.concat(tag, ": incumbents + newcomer != K (asset)"));
+            assertLe(_absI(rP), 8, string.concat(tag, ": incumbents + newcomer != K (paired)"));
+        }
+        // (5) formula entitlement equals the real replayed in-kind legs (rounding only)
+        _dcAssertHk(d, tag);
+        // (6) exact algebra: the haircut term of the share-transfer chain equals h*(K*P1 - O(kP)*H1)/(1e4*H1 - h*P1) (oracle basis)
+        _dcAssertHair(d, tag);
+    }
+
+    /// @dev The haircut term of the chain, recomputed from the closed form (all values at the oracle, asset units):
+    ///      T_hair = h * (K * P1 - O(kP) * H1) / (1e4 * H1 - h * P1), with K = oracle value of the newcomer's contribution,
+    ///      H1 = oracle value of the vault holdings after, P1 = oracle value of their paired part, O(kP) = oracle value of K's paired part.
+    function _dcHairClosedForm(DC memory d) internal view returns (int256) {
+        int256 kA = _i(_hA(d.a1)) - _i(_hA(d.c1));
+        int256 kP = _i(_hP(d.a1)) - _i(_hP(d.c1));
+        int256 K = _vO(kA, kP);
+        int256 H1 = _vO(_i(_hA(d.a1)), _i(_hP(d.a1)));
+        int256 P1 = _sgnOra(_i(_hP(d.a1)));
+        int256 kPo = _sgnOra(kP);
+        int256 h = _i(v.valuationHaircutBps());
+        return h * (K * P1 - kPo * H1) / (10_000 * H1 - h * P1);
+    }
+
+    function _dcAssertHair(DC memory d, string memory tag) internal {
+        CH memory c = _dcChain(d, 0);
+        int256 pred = _dcHairClosedForm(d);
+        console2.log(string.concat("FIK2|", tag, "|ALGEBRA haircut term measured ", _ti(c.tHair), " closed form h*(K*P1 - O(kP)*H1)/(1e4*H1 - h*P1) = ", _ti(pred), " ; difference ", _ti(c.tHair - pred)));
+        int256 H1 = _vO(_i(_hA(d.a1)), _i(_hP(d.a1)));
+        assertLe(_absI(c.tHair - pred), uint256(H1) / 1e12 + 64, string.concat(tag, ": haircut term != closed form"));
+    }
+
+    function _absI(int256 x) internal pure returns (uint256) {
+        return uint256(x >= 0 ? x : -x);
+    }
+
+    function _hkTol(uint256 x, uint256 supply, uint256 shares) internal pure returns (uint256) {
+        return KIND_TOL_WEI + 4 * (supply / (shares == 0 ? 1 : shares) + 1) + x / 1e9;
+    }
+
+    function _dcAssertHk(DC memory d, string memory tag) internal pure {
+        (uint256 a0A, uint256 a0P) = _ent(d.a0, d.inc);
+        (uint256 a1A, uint256 a1P) = _ent(d.a1, d.inc);
+        (uint256 nA, uint256 nP) = _ent(d.a1, d.idx);
+        require(_absDiff(a0A, d.hk0A) <= _hkTol(a0A, d.a0.supply, d.a0.sh[d.inc]), string.concat(tag, ": Alice before: formula entitlement != replayed in-kind (asset)"));
+        require(_absDiff(a0P, d.hk0P) <= _hkTol(a0P, d.a0.supply, d.a0.sh[d.inc]), string.concat(tag, ": Alice before: formula entitlement != replayed in-kind (paired)"));
+        require(_absDiff(a1A, d.hk1A) <= _hkTol(a1A, d.a1.supply, d.a1.sh[d.inc]), string.concat(tag, ": Alice after: formula entitlement != replayed in-kind (asset)"));
+        require(_absDiff(a1P, d.hk1P) <= _hkTol(a1P, d.a1.supply, d.a1.sh[d.inc]), string.concat(tag, ": Alice after: formula entitlement != replayed in-kind (paired)"));
+        require(_absDiff(nA, d.hkNA) <= _hkTol(nA, d.a1.supply, d.a1.sh[d.idx]), string.concat(tag, ": newcomer: formula entitlement != replayed in-kind (asset)"));
+        require(_absDiff(nP, d.hkNP) <= _hkTol(nP, d.a1.supply, d.a1.sh[d.idx]), string.concat(tag, ": newcomer: formula entitlement != replayed in-kind (paired)"));
     }
 
     // ------------------------------------------------------------------ log formatting (console2 lacks mixed overloads)
