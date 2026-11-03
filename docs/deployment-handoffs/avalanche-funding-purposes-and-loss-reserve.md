@@ -19,6 +19,15 @@ So "affordable allocation at the current caps" cannot be evaluated against an ex
 
 Income waterfall (scenario): collected strategy income -> (1) attributed reward entitlements stay with holders (unresolved/quarantined amounts stay quarantined) -> (2) operating costs, if an explicit fee line is chosen -> (3) retention to the loss reserve (scenario 50% of what remains) until a target -> (4) the rest to suppliers.
 
+## 1a. Pair, deposited asset and protection benchmark of every reserve table in this document and its companions
+| Table / analysis | Actual pair | Deposited asset | Protection benchmark | Exposure type |
+| --- | --- | --- | --- | --- |
+| Sections 2-3 here (strategy loss, seed, allocation) | **WAVAX/USDC** paired Pharaoh strategy (Pharaoh allocation: NOT BUILT), full range or simple wide range | USDC for a USDC supplier; WAVAX for a WAVAX supplier | holding the deposited asset (USDC resp. WAVAX) | **AVAX/stablecoin** price exposure |
+| `avalanche-cash-only-decision-table.md`, `-risk-proposal.md` (lending bad debt, protection capital) | cash-only lending markets pUSDC (USDC) / pWAVAX (WAVAX); no strategy | USDC suppliers deposit USDC; WAVAX is collateral | holding USDC (USDC suppliers) | AVAX/USD price risk of WAVAX collateral against USDC debt (**AVAX/stablecoin**); a USDC depeg acts like an AVAX rise in direction U |
+| Pharaoh USDC vault (share-pricing remedy, in-kind) | **USDC/USDt** (correlated stable pair) | USDC | holding USDC | stablecoin basis / depeg risk, not AVAX price risk |
+| Pharaoh WAVAX vault (share-pricing remedy, in-kind) | **sAVAX/WAVAX** (correlated liquid-staking pair, BENQI-rate oracle) | WAVAX | holding WAVAX | staking-rate / liquidity-basis risk, not AVAX/USD price risk |
+**The numbers of sections 2-3 apply only to the first two rows' AVAX/stablecoin exposure.** They must not be read across to the USDC/USDt or sAVAX/WAVAX vaults: those pairs lose through basis, depeg and the share-pricing rule (F-IK-2), not through the square-root price formula. The four pots (withdrawal cash, loss backing, operating funds, liquidator inventory) stay separate in every row; future yield is replenishment only and is never counted as backing.
+
 ## 2. Strategy loss the reserve must absorb (Pharaoh allocation; closed-form, no fees, instantaneous move, oracle-valued)
 For a **full-range** position the value in the supplier's own unit is the square root of the price ratio, so a USDC supplier loses `1 - sqrt(1 - X)` of the allocated notional when AVAX falls by X (and a WAVAX supplier loses `1 - 1/sqrt(r)` when AVAX is multiplied by r). Simple wide ranges lose more in the same move (computed for a 4x range [p0/4, 4p0] and a 2x range [p0/2, 2p0]):
 
