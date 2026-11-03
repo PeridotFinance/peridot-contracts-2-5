@@ -1,5 +1,7 @@
 # Pharaoh vaults: PHAR reward entitlement, remediation proposal (third draft, EXPERIMENTAL)
 
+> See `avalanche-vault-phar-decisions.md`: the ten questions of section 10 reduced to five product choices, and the independent verification of the reference model (which found model defects; read its section A before relying on section 9).
+
 **STATUS: EXPERIMENTAL. NOT IMPLEMENTATION-READY.** Nothing here has been implemented, deployed, signed or broadcast. The gates of the Pharaoh USDC vault and the Pharaoh WAVAX vault stay CLOSED; this document sets no cap and no date. The design is specified, checked against an exact-rational reference model (section 9) and against ten new fork probes (section 6.1), and it changes the second draft's recommendation. What still blocks implementation:
 
 1. **Operator decisions (section 10).** The window policy is no longer "W1 by default": W1 is rejected as a production default (section 6.4) and a queued, rate-limited batching variant is recommended instead (section 6.5). The operator still has to choose it and its parameters, accept or negotiate the Pharaoh governance surface, and pick the reconciliation rule for unresolved intervals. This document accepts nothing on the operator's behalf.
