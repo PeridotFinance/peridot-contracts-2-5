@@ -1,6 +1,6 @@
 # Cash-only lending: WAVAX -> USDC conversion routes and the complete liquidation cycle
 
-**STATUS: INTERIM (written while the remaining cycle cases are still running; FINAL replaces this file).** Product: cash-only lending pilot (pUSDC / pWAVAX, `PW30` and `PW40` as in `avalanche-cash-only-decision-table.md`). Research only: nothing here is an approved parameter or cap. No deployment, no signing, no broadcast, no keys; `contracts/contracts/` untouched. Pinned fork: Avalanche C-Chain block 99,200,000, Chainlink AVAX/USD 8.54911 (`854911000`).
+**STATUS: FINAL for the results below. The route agent was interrupted twice by the machine sleeping; the lead completed sections 3a-3d from its full run (`avalanche-cash-only-cycle-evidence/attempt09-final-both-suites.txt`: cycle suite 8/8, route suite 38/38) and re-ran both suites (8/8 and 38/38).** Product: cash-only lending pilot (pUSDC / pWAVAX, `PW30` and `PW40` as in `avalanche-cash-only-decision-table.md`). Research only: nothing here is an approved parameter or cap. No deployment, no signing, no broadcast, no keys; `contracts/contracts/` untouched. Pinned fork: Avalanche C-Chain block 99,200,000, Chainlink AVAX/USD 8.54911 (`854911000`).
 
 Files: `contracts/test/AvalancheWavaxUsdcRoutesFork.t.sol` (part A) with helper `contracts/test/helpers/AvalancheWavaxUsdcRoutes.sol`; `contracts/test/AvalancheCashOnlyLiquidationCycleFork.t.sol` (part B). Evidence: `avalanche-cash-only-cycle-evidence/` (every attempt kept, headers: UTC, git HEAD, command).
 
@@ -221,5 +221,41 @@ PW40, one borrower, gap 35% (two rounds; `attempt07-cycle-case1-PW40-first.txt`,
 | USD 10,000 | 10,000.00 | 7,500.00 | see log | see log | USD 7,500.00 | USD 5,000.00 | 2,500.00 |
 Gap 10% (one round), cap 5,000: both numbers are USD 2,500 (no difference, recycling cannot help a single round). The funding numbers were TESTED, not just computed: a run with exactly the requirement funds every step, one unit less leaves a step unfunded. Net per round = conversion proceeds - repaid - gas; theory is 1.08 x 0.972 - 1 = +497.6 bp before swap cost and gas; measured +489 to +494 bp.
 
-## 4. Still running / not yet reported in this interim file
-PW30 single borrower; concurrent borrowers (3 and 5, in sequence and interleaved by two operators); one operator unavailable; the min-out limit blocking the conversion (adverse pool move, with and without a second route); the funding table for PW30 and PW40 at all three caps. Running in `attempt08-cycle-full.txt`.
+### 3a. Concurrent borrowers (case 2), gap 35%, interleaved by two operators (each holds cap/2), identical for PW30 and PW40
+| Cap | Borrowers | Recycling | Rounds | Total repaid | Peak need operator A / B (USDC) | Unfunded steps | Bad debt |
+|---|---|---|---|---|---|---|---|
+| 1,000 | 3 | yes | 6 | 750 | 167 / 167 | 0 | 0 |
+| 1,000 | 3 | no | 6 | 750 | 417 / 333 | 0 (inventory 500 each suffices) | 0 |
+| 1,000 | 5 | yes | 10 | 750 | 100 / 100 | 0 | 0 |
+| 1,000 | 5 | no | 10 | 750 | 400 / 350 | 0 | 0 |
+| 5,000 | 3 | yes / no | 6 | 3,750 | 833 / 833 (yes); 2,083 / 1,667 (no) | 0 | 0 |
+| 5,000 | 5 | yes / no | 10 | 3,750 | 500 / 500 (yes); 2,000 / 1,750 (no) | 0 | 0 |
+| 10,000 | 3 / 5 | yes / no | 6 / 10 | 7,500 | 1,667 / 1,667 and 1,000 / 1,000 (yes); 4,167 / 3,333 and 4,000 / 3,500 (no) | 0 | 0 |
+With recycling the peak need falls with the number of borrowers (each round needs only 0.5 x one borrower's debt because proceeds return between rounds); without recycling it is the cumulative repayment (0.75 x debt in total, split across operators). A single operator working all borrowers in sequence behaves the same (`SEQ-1op`). Conversion output was 99.91 to 99.97% of the oracle value in every swap, net per round +489 to +494 bp.
+
+### 3b. One operator unavailable (case 3): operator B alone, 35% gap, then a second fall to -60% from the pin (stage 2)
+| Cap | Borrowers | Inventory of B | Recycling | Outcome |
+|---|---|---|---|---|
+| 1,000 / 5,000 | 3 or 5 | cap/2 | **yes** | all rounds funded (6 / 10), 0 accounts left in shortfall at stage 1, repaid 0.75 x debt, bad debt 0; at stage 2 the accounts are in shortfall again but bad debt is 0 |
+| 1,000 / 5,000 | 3 or 5 | cap/4 | **yes** | still fully funded (recycling restores the inventory every round) |
+| 1,000 | 3 | cap/2 | **no** | 4 of 6 rounds funded (repaid 0.50 x debt), 1 account left in shortfall; at stage 2 its bad debt is USD 44.3 |
+| 1,000 | 5 | cap/2 | **no** | 7 of 10 rounds funded, 2 accounts left in shortfall, 5 unfunded steps; bad debt at stage 2 USD 26.6 |
+| 5,000 | 5 | cap/2 | **no** | 5 unfunded steps, 2 accounts in shortfall; bad debt at stage 2 USD 133.0 |
+So an unavailable operator is covered ONLY if the remaining operator recycles successfully or holds the no-recycling requirement (0.75 x debt in this gap) alone; with half-cap inventory and no recycling, accounts stay unliquidated and the later fall turns them into bad debt (identical for PW30 and PW40).
+
+### 3c. Route blocked by the min-out limit (case 5): adverse pool move, limit Chainlink minus 1%
+- Adverse pool move 300 bp, limit 100 bp, **no fallback route**: the swap is blocked every time (the liquidator holds the WAVAX); with inventory cap/2 only the first round is funded (repaid 0.50 x debt, 1 account left in shortfall, 2 unfunded steps); with inventory = cap both rounds are funded without any swap (repaid 0.75 x debt, the liquidator ends holding about 460 WAVAX). Five borrowers, inventory cap/2: 7 blocked swaps, 5 unfunded steps, 2 accounts left in shortfall.
+- Same event **with a fallback route** (a second venue within the limit): all 10 rounds funded and converted at 99.96% of the oracle.
+- Adverse move 30 bp, limit 100 bp: swaps proceed (output 99.54% of the oracle), both rounds funded.
+Reading: the limit protects the liquidator from a bad fill but turns the swap into a hard stop; the funding then has to cover the no-recycling requirement or a second route must exist.
+
+### 3d. Funding summary (PW30 and PW40 are identical in these cycles; amounts in USDC)
+| Cap (research) | First-round need per operator (with recycling) | No-recycling requirement, 35% gap (0.75 x debt) | No-recycling requirement, 30-day outage worst case (about 0.88 x debt incl. interest) |
+|---|---|---|---|
+| 1,000 | 500 | 750 | about 890 |
+| 5,000 | 2,500 | 3,750 | about 4,440 |
+| 10,000 | 5,000 | 7,500 | about 8,890 |
+Recycling works at these sizes through Uniswap V3 0.05% with a 1% min-out limit, so the minimum is the first-round column; it is not ASSUMED anywhere in the capital tables of the qualification document, which carry the no-recycling requirement alongside it. Gas per round about USD 0.01 at 2.5 gwei.
+
+### 3e. Not tested
+Aggregators; swaps larger than USD 10,000 per round in the cycle (the route table covers up to 100,000); competing liquidators and MEV; a pool state other than the pin; real operator latency; WAVAX held through price moves between redemption and conversion (conversion is modelled in the same block); the interplay with a stale feed during the cycle (covered separately by the outage tests).
