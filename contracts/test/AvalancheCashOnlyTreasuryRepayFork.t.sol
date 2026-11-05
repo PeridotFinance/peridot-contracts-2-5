@@ -19,7 +19,8 @@ contract TreasuryDefaultDetector {
         HEALTHY, // 3 no shortfall
         LIQUIDATABLE_RECOVERABLE, // 4 shortfall, and a full liquidation clears the debt (C / LI >= D)
         UNRECOVERABLE_LIQUIDATE_FIRST, // 5 C / LI < D but collateral above dust: alert liquidators, do NOT repay
-        DEFAULT_EXHAUSTED // 6 C / LI < D and collateral <= dust: treasury repayment of the whole remaining debt is due
+        DEFAULT_EXHAUSTED, // 6 C / LI < D and collateral <= dust: treasury repayment of the whole remaining debt is due
+        PRICE_DIVERGENCE // 7 fail closed: oracle and reference price differ by more than the tolerance for a market the account touches
     }
 
     struct Result {
@@ -35,12 +36,14 @@ contract TreasuryDefaultDetector {
     Peridottroller public immutable controller;
     address public immutable debtMarket;
     uint256 public immutable dustUsd; // USD 1e18
+    uint256 public immutable toleranceBp; // oracle and reference are CONSISTENT iff |oracle - reference| / reference <= toleranceBp / 10,000
     uint256 public immutable mutation;
 
-    constructor(Peridottroller controller_, address debtMarket_, uint256 dustUsd_, uint256 mutation_) {
+    constructor(Peridottroller controller_, address debtMarket_, uint256 dustUsd_, uint256 toleranceBp_, uint256 mutation_) {
         controller = controller_;
         debtMarket = debtMarket_;
         dustUsd = dustUsd_;
+        toleranceBp = toleranceBp_;
         mutation = mutation_;
     }
 
@@ -76,6 +79,12 @@ contract TreasuryDefaultDetector {
             uint256 ref = refPrices[i];
             if (ref == 0) {
                 r.verdict = Verdict.NO_REFERENCE_PRICE;
+                return r;
+            }
+            // oracle and reference must AGREE within the tolerance, else one of them is wrong and nothing is paid
+            // (mutation 3 removes this check)
+            if (mutation != 3 && (p > ref ? p - ref : ref - p) * 10_000 > ref * toleranceBp) {
+                r.verdict = Verdict.PRICE_DIVERGENCE;
                 return r;
             }
             if (bBal > 0) r.debtUsd += (bBal * (p < ref ? p : ref)) / 1e18; // lower price: harder to call the debt unrecoverable
@@ -146,6 +155,9 @@ contract AvalancheCashOnlyTreasuryRepayForkTest is AvalancheCashOnlyBase {
     uint256 internal constant TOL = 32; // wei of USDC (rounding only; sequential exits and shares-accounting rounding)
     uint256 internal constant DUST_USD6 = 10_000; // USD 0.01 (liquidation loop stops here)
     uint256 internal constant DUST_USD18 = 0.01e18;
+    /// @dev Reference-price tolerance of the specification (treasury document 2.3): oracle and reference are consistent iff
+    ///      |oracle - reference| / reference <= REF_TOLERANCE_BP / 10,000. Value fixed from the 30-day TWAP-vs-Chainlink study.
+    uint256 internal constant REF_TOLERANCE_BP = 500;
     uint256 internal constant DAY = 1 days;
     uint256 internal constant LI = 1.08e18;
 
@@ -159,7 +171,7 @@ contract AvalancheCashOnlyTreasuryRepayForkTest is AvalancheCashOnlyBase {
 
     PeridottrollerAvalanche internal ctrl;
     TreasuryDefaultDetector internal detector;
-    uint256 internal mutation; // 0 = as specified; 1 = detector fires on shortfall alone; 2 = repay applied to the NEXT borrower
+    uint256 internal mutation; // 0 = as specified; 1 = detector fires on shortfall alone; 2 = repay applied to the NEXT borrower; 3 = detector without the reference-divergence gate
 
     struct Base {
         uint256 cap6;
@@ -198,7 +210,7 @@ contract AvalancheCashOnlyTreasuryRepayForkTest is AvalancheCashOnlyBase {
         if (address(controller) == address(0)) return;
         mutation = vm.envOr("TREASURY_MUTATION", uint256(0));
         ctrl = PeridottrollerAvalanche(address(controller));
-        detector = new TreasuryDefaultDetector(controller, address(pUsdc), DUST_USD18, mutation);
+        detector = new TreasuryDefaultDetector(controller, address(pUsdc), DUST_USD18, REF_TOLERANCE_BP, mutation);
         // the fixture LP withdraws its entire pUSDC supply so that the research suppliers dominate (here: are) the market
         uint256 lpTok = pUsdc.balanceOf(LP);
         vm.prank(LP);
@@ -308,6 +320,7 @@ contract AvalancheCashOnlyTreasuryRepayForkTest is AvalancheCashOnlyBase {
         if (v == TreasuryDefaultDetector.Verdict.HEALTHY) return "HEALTHY";
         if (v == TreasuryDefaultDetector.Verdict.LIQUIDATABLE_RECOVERABLE) return "LIQUIDATABLE_RECOVERABLE";
         if (v == TreasuryDefaultDetector.Verdict.UNRECOVERABLE_LIQUIDATE_FIRST) return "UNRECOVERABLE_LIQUIDATE_FIRST";
+        if (v == TreasuryDefaultDetector.Verdict.PRICE_DIVERGENCE) return "PRICE_DIVERGENCE";
         return "DEFAULT_EXHAUSTED";
     }
 
@@ -893,10 +906,78 @@ contract AvalancheCashOnlyTreasuryRepayForkTest is AvalancheCashOnlyBase {
             string.concat("TRP|MANIP|singleSource=", _verdictName(fooled.verdict), "|withReference=", _verdictName(safe.verdict), _kv("markets", ms.length), "|END")
         );
         assertEq(uint256(fooled.verdict), uint256(TreasuryDefaultDetector.Verdict.DEFAULT_EXHAUSTED), "a single-source rule IS fooled by a manipulated low price");
-        assertEq(uint256(safe.verdict), uint256(TreasuryDefaultDetector.Verdict.LIQUIDATABLE_RECOVERABLE), "with an independent reference the account is recoverable: no fire");
+        assertEq(uint256(safe.verdict), uint256(TreasuryDefaultDetector.Verdict.PRICE_DIVERGENCE), "with an independent reference the sources disagree: fail closed, no fire");
         // no reference supplied for a market the account touches: fail closed
         uint256[] memory none = new uint256[](ms.length);
         assertEq(uint256(detector.evaluate(_borrower(0), none).verdict), uint256(TreasuryDefaultDetector.Verdict.NO_REFERENCE_PRICE), "no reference: fail closed");
+    }
+
+    function _wavaxIndex() internal view returns (uint256 idx) {
+        PToken[] memory ms = controller.getAllMarkets();
+        for (uint256 i; i < ms.length; ++i) {
+            if (address(ms[i]) == address(pWavax)) return i;
+        }
+        revert("pWAVAX not listed");
+    }
+
+    function _verdictWithWavaxRef(address who, uint256 ref) internal returns (TreasuryDefaultDetector.Verdict) {
+        uint256[] memory refs = _refsFromOracle();
+        refs[_wavaxIndex()] = ref;
+        return detector.evaluate(who, refs).verdict;
+    }
+
+    /// @dev The tolerance of the reference-price specification, to the wei, in BOTH directions. The account is a tail account that still holds
+    ///      collateral (-75%, nothing liquidated): on agreeing prices it reads UNRECOVERABLE_LIQUIDATE_FIRST. At or inside the tolerance the
+    ///      verdict is unchanged (the sources are consistent); one wei beyond it, on either side, the rule fails closed with PRICE_DIVERGENCE.
+    function testDetect_ReferenceTolerance_ExactBoundary_BothDirections_FailsClosedBeyondIt() public {
+        if (!_live()) return;
+        _prepare(5_000, 0.40e18, "PW40");
+        _setAvaxBps(2_500);
+        address a = _borrower(0);
+        uint256 p = oracle.getUnderlyingPrice(PToken(address(pWavax)));
+        assertEq(uint256(_verdictWithWavaxRef(a, p)), uint256(TreasuryDefaultDetector.Verdict.UNRECOVERABLE_LIQUIDATE_FIRST), "agreeing prices: the ordinary verdict");
+        // reference ABOVE the oracle (e.g. a lagging TWAP after a fast fall): |p - ref| * 1e4 <= ref * tol  <=>  ref <= p * 1e4 / (1e4 - tol)
+        uint256 hi = (p * 10_000) / (10_000 - REF_TOLERANCE_BP);
+        assertEq(uint256(_verdictWithWavaxRef(a, hi)), uint256(TreasuryDefaultDetector.Verdict.UNRECOVERABLE_LIQUIDATE_FIRST), "reference above, at the tolerance: consistent");
+        assertEq(uint256(_verdictWithWavaxRef(a, hi + 1)), uint256(TreasuryDefaultDetector.Verdict.PRICE_DIVERGENCE), "reference above, one wei beyond: fail closed");
+        // reference BELOW the oracle (the oracle is too high, or the reference is wrong): ref >= p * 1e4 / (1e4 + tol)
+        uint256 lo = (p * 10_000 + 10_000 + REF_TOLERANCE_BP - 1) / (10_000 + REF_TOLERANCE_BP); // ceil
+        assertEq(uint256(_verdictWithWavaxRef(a, lo)), uint256(TreasuryDefaultDetector.Verdict.UNRECOVERABLE_LIQUIDATE_FIRST), "reference below, at the tolerance: consistent");
+        assertEq(uint256(_verdictWithWavaxRef(a, lo - 1)), uint256(TreasuryDefaultDetector.Verdict.PRICE_DIVERGENCE), "reference below, one wei beyond: fail closed");
+    }
+
+    /// @dev A reference that is WRONG can only make the treasury pay LESS. Checked on an UNGATED detector (tolerance effectively infinite), so
+    ///      that it is the conservative valuation itself (collateral at the higher price, debt at the lower) and not the divergence gate that
+    ///      is exercised: the exhausted account fires on agreeing prices, and for every other account no reference value from 0.01% to 10x
+    ///      of the oracle price ever produces DEFAULT_EXHAUSTED.
+    function testDetect_AWrongReferenceNeverCreatesAFire_ItOnlyDelays() public {
+        if (!_live()) return;
+        Base memory bs = _prepare(5_000, 0.40e18, "PW40");
+        _healthyHalf(HEALTHY_ACCT, bs);
+        _mintP(pWavax, NO_DEBT_ACCT, 10e18);
+        _enter(NO_DEBT_ACCT);
+        _setAvaxBps(2_500);
+        _clear(_borrower(0));
+        TreasuryDefaultDetector ungated = new TreasuryDefaultDetector(controller, address(pUsdc), DUST_USD18, 1e12, 0);
+        uint256 p = oracle.getUnderlyingPrice(PToken(address(pWavax)));
+        uint256[] memory refs = _refsFromOracle();
+        assertEq(uint256(ungated.evaluate(_borrower(0), refs).verdict), uint256(TreasuryDefaultDetector.Verdict.DEFAULT_EXHAUSTED), "exhausted account fires on agreeing prices");
+        assertEq(uint256(detector.evaluate(_borrower(0), refs).verdict), uint256(TreasuryDefaultDetector.Verdict.DEFAULT_EXHAUSTED), "and on the gated detector");
+        uint256[7] memory refBp = [uint256(1), 100, 1_000, 5_000, 10_000, 20_000, 100_000]; // 0.01% .. 10x of the oracle price
+        address[4] memory others = [HEALTHY_ACCT, _borrower(1), _borrower(2), NO_DEBT_ACCT];
+        uint256 checked;
+        for (uint256 k; k < others.length; ++k) {
+            for (uint256 m; m < refBp.length; ++m) {
+                refs[_wavaxIndex()] = (p * refBp[m]) / 10_000;
+                if (refs[_wavaxIndex()] == 0) continue;
+                assertTrue(
+                    ungated.evaluate(others[k], refs).verdict != TreasuryDefaultDetector.Verdict.DEFAULT_EXHAUSTED,
+                    "no reference value turns a non-exhausted account into a fire"
+                );
+                ++checked;
+            }
+        }
+        assertGe(checked, 25, "the property was checked over a grid of accounts and reference values");
     }
 
     // ================================================================= (b) roles, authorisation, what a malicious or mistaken repay can do
