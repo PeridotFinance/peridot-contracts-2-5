@@ -19,3 +19,554 @@ warning: invalid natspec tag '@member', custom tags must use format '@custom:nam
 116 │ ┃      */
     ╰╴┗━━━━━━━┛
 
+[2m2026-11-05T14:15:13.677548Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 41408375840213561664812296894468391847057171970138050131894584628506305723438: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78269fed06e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 [3mindex[0m[2m=[0m41408375840213561664812296894468391847057171970138050131894584628506305723438
+[2m2026-11-05T14:15:20.206857Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 84905451894969894250919756148744707424684654902330674644322972948528018184278: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c784f6ea606e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m84905451894969894250919756148744707424684654902330674644322972948528018184278
+[2m2026-11-05T14:15:26.749140Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 5794008731963855694683984801885872361802231809502744715447215438642334426524: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78784f2106e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m5794008731963855694683984801885872361802231809502744715447215438642334426524
+[2m2026-11-05T14:15:33.263758Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78a10ee406e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m86309799398285272718001828484324596886244553358258737527424725059074207245952
+[2m2026-11-05T14:15:39.782362Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78c9be5206e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m86309799398285272718001828484324596886244553358258737527424725059074207245952
+[2m2026-11-05T14:15:46.302462Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `basic` [3merr[0m[2m=[0mfailed to get account for 0x49D11CDcd33c042dE9CbDDf15282CFbe590e9844: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78f27a6b5e96-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x49D11CDcd33c042dE9CbDDf15282CFbe590e9844
+[2m2026-11-05T14:16:43.945084Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x1Abbf74e863e19940ED364C6EE1Ffb782e204d20 at 17796273438068182614389697993590108034867096868223857566772069424536124777670: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7a5abbd39dba-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x1Abbf74e863e19940ED364C6EE1Ffb782e204d20 [3mindex[0m[2m=[0m17796273438068182614389697993590108034867096868223857566772069424536124777670
+[2m2026-11-05T14:17:06.465338Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xb1E1Db50a98D49eC8eA9a1CCBBD4Af56842C43c1 at 108681749835453553911449998695228202123206905219601062916072500565492481402892: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7ae77b599dba-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xb1E1Db50a98D49eC8eA9a1CCBBD4Af56842C43c1 [3mindex[0m[2m=[0m108681749835453553911449998695228202123206905219601062916072500565492481402892
+[2m2026-11-05T14:17:58.233016Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x0bA96F2F9E56BBB75e5bb0Bd951B07adea3D2072 at 108059017160172443961470838738656117983865457815038211787293338647981615866388: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7c2b0edb06e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x0bA96F2F9E56BBB75e5bb0Bd951B07adea3D2072 [3mindex[0m[2m=[0m108059017160172443961470838738656117983865457815038211787293338647981615866388
+[2m2026-11-05T14:18:20.772853Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x8EAf84001447da898054D06EdF6e4Ebc010f33a1 at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7cb7ed5206e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x8EAf84001447da898054D06EdF6e4Ebc010f33a1 [3mindex[0m[2m=[0m1
+[2m2026-11-05T14:19:16.026976Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x1951BD56E82cC1eDFEc8546c3202eCBcC5B74A29 at 111888181921185656174292453898401326739674766904162124856097621982538893732617: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e114bb67cfe-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x1951BD56E82cC1eDFEc8546c3202eCBcC5B74A29 [3mindex[0m[2m=[0m111888181921185656174292453898401326739674766904162124856097621982538893732617
+[2m2026-11-05T14:19:38.540445Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xd18384F4398BF5415902aD5d87eAA96549Fd4f1E at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e9df8347cfe-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xd18384F4398BF5415902aD5d87eAA96549Fd4f1E [3mindex[0m[2m=[0m1
+
+Ran 38 tests for test/AvalancheWavaxUsdcRoutesFork.t.sol:AvalancheWavaxUsdcRoutesForkTest
+[PASS] test_A00_verifyAddresses() (gas: 1136749)
+Logs:
+  ADDR|Chainlink AVAX/USD|0x0A77230d17318075983913bC2145DB16C7366156|answer8=854911000
+  ADDR|UniswapV3 SwapRouter02|0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE|factory()=0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD|wrappedNative=WAVAX
+  ADDR|Sushi V3 SwapRouter|0x8E4638eefee96732C56291fBF48bBB98725c6b31|factory()=0x3e603C14aF37EBdaD31709C4f848Fc6aD5BEc715|wrappedNative=WAVAX
+  ADDR|Sushi V2 Router|0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506|factory()=0xc35DADB65012eC5796536bD9864eD8773aBc74C4|wrappedNative=WAVAX
+  ADDR|Pangolin Router|0xE54Ca86531e17Ef3616d22Ca28b0D458b6C89106|factory()=0xefa94DE7a4656D787667C749f7E1223D71E9FD88|wrappedNative=WAVAX
+  ADDR|LFJ V1 Router|0x60aE616a2155Ee3d9A68541Ba4544862310933d4|factory()=0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10|wrappedNative=WAVAX
+  ADDR|Pharaoh CL router|0xc8B8fCbDb5C019D7802fFb0b39603395D7d3915c|WETH9=WAVAX|deployer=0x6a4113ed0915bCf5E48e758e8f4cEBFFC07C66f9
+  ADDR|LFJ LBRouter|0x18556DA13313f3532c54711497A8FedAC273220E|WNATIVE=WAVAX|factoryV2.2=0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c|v1Factory=0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10|legacyV2.0=0x6E77932A92582f504FF6c4BdbCef7Da6c198aEEf
+  ADDR|pool Pharaoh CL ts10|0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534|token0=WAVAX|token1=USDC|tickSpacing=10|fee=490|factoryLookup=OK|liquidity=22224645411709421587|spot8=855522072
+  ADDR|pool Pharaoh CL ts5|0x1Abbf74e863e19940ED364C6EE1Ffb782e204d20|token0=WAVAX|token1=USDC|tickSpacing=5|fee=250|factoryLookup=OK|liquidity=0|spot8=935357724
+  ADDR|pool Pharaoh CL ts50|0xb1E1Db50a98D49eC8eA9a1CCBBD4Af56842C43c1|token0=WAVAX|token1=USDC|tickSpacing=50|fee=3000|factoryLookup=OK|liquidity=0|spot8=948100828
+  ADDR|pool Pharaoh CL ts100|0x2eB24B12177B7DF1c85fAC74d06675cbEadeD3d7|token0=WAVAX|token1=USDC|tickSpacing=100|fee=10000|factoryLookup=OK|liquidity=0|spot8=1168491097
+  ADDR|pool Uniswap V3 0.01%|0x1951BD56E82cC1eDFEc8546c3202eCBcC5B74A29|token0=WAVAX|token1=USDC|fee=100|factoryLookup=OK|liquidity=103672001768033|tick=-254861|spot8=855285149
+  ADDR|pool Uniswap V3 0.05%|0xfAe3f424a0a47706811521E3ee268f00cFb5c45E|token0=WAVAX|token1=USDC|fee=500|factoryLookup=OK|liquidity=3604141647665487467|tick=-254858|spot8=855546794
+  ADDR|pool Uniswap V3 0.3%|0x0E663593657B064e1baE76d28625Df5D0eBd4421|token0=WAVAX|token1=USDC|fee=3000|factoryLookup=OK|liquidity=2261390957573283|tick=-254847|spot8=856474951
+  ADDR|pool Uniswap V3 1%|0xd18384F4398BF5415902aD5d87eAA96549Fd4f1E|token0=WAVAX|token1=USDC|fee=10000|factoryLookup=OK|liquidity=2038676355259352|tick=-254774|spot8=862774947
+  ADDR|pool Sushi V3 0.01%|0x0bA96F2F9E56BBB75e5bb0Bd951B07adea3D2072|token0=WAVAX|token1=USDC|fee=100|factoryLookup=OK|liquidity=416137237|tick=-256464|spot8=728613411
+  ADDR|pool Sushi V3 0.05%|0x4A5c0E100F830A1F6B76A42e6bb4Be2A7fE0d61B|token0=WAVAX|token1=USDC|fee=500|factoryLookup=OK|liquidity=460440382171|tick=-254599|spot8=877966953
+  ADDR|pool Sushi V3 0.3%|0xD937a05dF90918f584A17a168026cc06f9cB099D|token0=WAVAX|token1=USDC|fee=3000|factoryLookup=OK|liquidity=38637642645637|tick=-254852|spot8=856024433
+  ADDR|pool Sushi V3 1%|0x8EAf84001447da898054D06EdF6e4Ebc010f33a1|token0=WAVAX|token1=USDC|fee=10000|factoryLookup=OK|liquidity=94509778921|tick=-255187|spot8=827802506
+  ADDR|pool LFJ LB V2.2 bin10|0x864d4e5Ee7318e97483DB7EB0912E09F161516EA|tokenX=WAVAX|tokenY=USDC|binStep=10|factoryLookup=OK|activeId=8363111|totalReservesWavax=28075681357232730830201|totalReservesUsdc=125386180192|activeBinPrice8=855709807
+  ADDR|pool LFJ LB V2.2 bin25|0xE52BeDE8CFd7C5C8894c8616E49Fb25811c97367|tokenX=WAVAX|tokenY=USDC|binStep=25|factoryLookup=OK|activeId=8378892|totalReservesWavax=196752609451767682|totalReservesUsdc=1|activeBinPrice8=2911731768
+  ADDR|pool LFJ LB V2.2 bin50|0x411E7f9e9F0584804bA23DF1182c28d28df0d69C|tokenX=WAVAX|tokenY=USDC|binStep=50|factoryLookup=OK|activeId=8383780|totalReservesWavax=0|totalReservesUsdc=0|activeBinPrice8=3485409732
+  ADDR|pool LFJ LB V2.2 bin100|0xE4379C25faaB825cF19cDd57b52187BDcF056729|tokenX=WAVAX|tokenY=USDC|binStep=100|factoryLookup=OK|activeId=8386064|totalReservesWavax=13160138407567747255|totalReservesUsdc=80|activeBinPrice8=1014904310
+  ADDR|pool LFJ LB V2.1 bin5|0x55a50aDBa067530b96d30225f9de86640431e86f|tokenX=WAVAX|tokenY=USDC|binStep=5|factoryLookup=OK|activeId=8341326|totalReservesWavax=0|totalReservesUsdc=0|activeBinPrice8=5437635434
+  ADDR|pool LFJ LB V2.1 bin20|0xD446eb1660F766d533BeCeEf890Df7A69d26f7d1|tokenX=WAVAX|tokenY=USDC|binStep=20|factoryLookup=OK|activeId=8375859|totalReservesWavax=20224600114773984193801|totalReservesUsdc=1348219|activeBinPrice8=865801229
+  ADDR|pool LFJ LB V2.1 bin25|0xe3a7045112cA6Bcc7f9A80B61c3fBA6EaD3d7124|tokenX=WAVAX|tokenY=USDC|binStep=25|factoryLookup=OK|activeId=8376797|totalReservesWavax=0|totalReservesUsdc=215726084|activeBinPrice8=15573009
+  ADDR|pool LFJ LB V2.1 bin50|0x79925795dF91424DB1d7d427859FFF709d731c8e|tokenX=WAVAX|tokenY=USDC|binStep=50|factoryLookup=OK|activeId=8383537|totalReservesWavax=0|totalReservesUsdc=0|activeBinPrice8=1037291532
+  ADDR|pool LFJ LB V2.1 bin100|0x75577CA07649B4824A0B24e78d5b8CeA54243699|tokenX=WAVAX|tokenY=USDC|binStep=100|factoryLookup=OK|activeId=8386096|totalReservesWavax=148544508049204788|totalReservesUsdc=0|activeBinPrice8=1395433221
+  ADDR|pool LFJ LB V2.0 bin20|0xB5352A39C11a81FE6748993D586EC448A01f08b5|V2.0 pair listed by legacy factory (no getTokenX): swaps not supported by the V2.2 adapter route; liquidity read as 0 or reverting
+  ADDR|pool LFJ V1 (constant product)|0xf4003F4efBE8691B60249E6afbD307aBE7758adb|token0=WAVAX|token1=USDC|factoryLookup=OK|reserveWavax=23555925670789417146321|reserveUsdc=201857450816|spot8=856928543
+  ADDR|pool Pangolin V2|0x0e0100Ab771E9288e0Aa97e11557E6654C3a9665|token0=WAVAX|token1=USDC|factoryLookup=OK|reserveWavax=5563657982797064522183|reserveUsdc=47625748085|spot8=856015021
+  ADDR|pool Sushi V2|0x6539bF462F73fF9497054bA261C195DA8639ED61|token0=WAVAX|token1=USDC|factoryLookup=OK|reserveWavax=364582268252718451760|reserveUsdc=3118535643|spot8=855372275
+
+[PASS] test_depth_lb22_bs10() (gas: 67697380)
+Logs:
+  DEPTH|LFJ LB V2.2 bin10|slippage<=100bp|maxUsd=14439
+  DEPTH|LFJ LB V2.2 bin10|slippage<=300bp|maxUsd=35560
+
+[PASS] test_depth_lfj_v1() (gas: 8621839)
+Logs:
+  DEPTH|LFJ V1 (constant product)|slippage<=100bp|maxUsd=1924
+  DEPTH|LFJ V1 (constant product)|slippage<=300bp|maxUsd=6129
+
+[PASS] test_depth_pangolin() (gas: 4640136)
+Logs:
+  DEPTH|Pangolin V2|slippage<=100bp|maxUsd=below-500
+  DEPTH|Pangolin V2|slippage<=300bp|maxUsd=1396
+
+[FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 41408375840213561664812296894468391847057171970138050131894584628506305723438: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78269fed06e3-TXL
+server: cloudflare] test_depth_pharaoh_ts10() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 84905451894969894250919756148744707424684654902330674644322972948528018184278: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c784f6ea606e3-TXL
+server: cloudflare] test_depth_sushi2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 5794008731963855694683984801885872361802231809502744715447215438642334426524: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78784f2106e3-TXL
+server: cloudflare] test_depth_sushi3_3000() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78a10ee406e3-TXL
+server: cloudflare] test_depth_uni3_3000() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78c9be5206e3-TXL
+server: cloudflare] test_depth_uni3_500() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x49D11CDcd33c042dE9CbDDf15282CFbe590e9844: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78f27a6b5e96-TXL
+server: cloudflare] test_route_lb20_bs20() (gas: 0)
+[PASS] test_route_lb21_bs100() (gas: 1840228)
+Logs:
+  ROUTE|LFJ LB V2.1 bin100|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin100|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin100|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin100|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin100|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin100|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb21_bs20() (gas: 7859688)
+Logs:
+  ROUTE|LFJ LB V2.1 bin20|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=1248234|effP8=2134257|feeUsdc=5894304|impactBp=9975|slipBp=9975|gas=745060|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin20|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=1248234|effP8=1067128|feeUsdc=11794304|impactBp=9987|slipBp=9987|gas=745060|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin20|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=1248234|effP8=213425|feeUsdc=58994304|impactBp=9997|slipBp=9997|gas=745060|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin20|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=1248234|effP8=106712|feeUsdc=117994304|impactBp=9998|slipBp=9998|gas=745060|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin20|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=1248234|effP8=21342|feeUsdc=589994304|impactBp=9999|slipBp=9999|gas=745060|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin20|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=1248234|effP8=10671|feeUsdc=1179994304|impactBp=9999|slipBp=9999|gas=745060|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb21_bs25() (gas: 3112224)
+Logs:
+  ROUTE|LFJ LB V2.1 bin25|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=9074890|effP8=15516446|feeUsdc=1252125|impactBp=11|slipBp=9818|gas=129425|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin25|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=18108350|effP8=15481027|feeUsdc=2528009|impactBp=33|slipBp=9818|gas=158907|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin25|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=89744963|effP8=15344791|feeUsdc=13766783|impactBp=119|slipBp=9820|gas=217871|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin25|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=178723577|effP8=15279275|feeUsdc=29367991|impactBp=159|slipBp=9821|gas=247373|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin25|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=291318|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin25|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=291318|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb21_bs5() (gas: 1839214)
+Logs:
+  ROUTE|LFJ LB V2.1 bin5|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin5|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin5|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin5|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin5|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin5|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb21_bs50() (gas: 1840155)
+Logs:
+  ROUTE|LFJ LB V2.1 bin50|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin50|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin50|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin50|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin50|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.1 bin50|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=58781|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb22_bs10() (gas: 10988575)
+Logs:
+  ROUTE|LFJ LB V2.2 bin10|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=499713727|effP8=854421524|feeUsdc=253509|impactBp=9|slipBp=5|gas=136971|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ LB V2.2 bin10|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=999165708|effP8=854197754|feeUsdc=510791|impactBp=12|slipBp=8|gas=152309|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ LB V2.2 bin10|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=4982854072|effP8=851979351|feeUsdc=2909738|impactBp=37|slipBp=34|gas=228939|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ LB V2.2 bin10|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=9932031424|effP8=849100291|feeUsdc=7694306|impactBp=69|slipBp=67|gas=320787|m05=N|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ LB V2.2 bin10|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=47210269645|effP8=807211576|feeUsdc=186981885|impactBp=531|slipBp=557|gas=2345853|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin10|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=88655554042|effP8=757926083|feeUsdc=456981885|impactBp=1102|slipBp=1134|gas=3308577|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb22_bs100() (gas: 1930452)
+Logs:
+  ROUTE|LFJ LB V2.2 bin100|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin100|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin100|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin100|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin100|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin100|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=72980|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb22_bs25() (gas: 1930940)
+Logs:
+  ROUTE|LFJ LB V2.2 bin25|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin25|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin25|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin25|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin25|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin25|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=73020|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lb22_bs50() (gas: 1849576)
+Logs:
+  ROUTE|LFJ LB V2.2 bin50|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin50|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin50|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin50|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin50|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ LB V2.2 bin50|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=61090|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_lfj_v1() (gas: 1925846)
+Logs:
+  ROUTE|LFJ V1 (constant product)|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=498442591|effP8=852248107|feeUsdc=1499999|impactBp=24|slipBp=31|gas=103886|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ V1 (constant product)|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=994429658|effP8=850148853|feeUsdc=2999999|impactBp=49|slipBp=55|gas=103890|m05=N|m1=Y|m2=Y|m3=Y
+  ROUTE|LFJ V1 (constant product)|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=4876062638|effP8=833719917|feeUsdc=14999999|impactBp=241|slipBp=247|gas=103892|m05=N|m1=N|m2=N|m3=Y
+  ROUTE|LFJ V1 (constant product)|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=9522109480|effP8=814055613|feeUsdc=29999999|impactBp=471|slipBp=477|gas=103896|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ V1 (constant product)|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=40052962696|effP8=684834367|feeUsdc=149999999|impactBp=1984|slipBp=1989|gas=103899|m05=N|m1=N|m2=N|m3=N
+  ROUTE|LFJ V1 (constant product)|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=66842835164|effP8=571446750|feeUsdc=299999999|impactBp=3311|slipBp=3315|gas=103903|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_pangolin() (gas: 1936400)
+Logs:
+  ROUTE|Pangolin V2|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=493966716|effP8=844595158|feeUsdc=1499999|impactBp=103|slipBp=120|gas=105795|m05=N|m1=N|m2=Y|m3=Y
+  ROUTE|Pangolin V2|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=977791930|effP8=835925076|feeUsdc=2999999|impactBp=205|slipBp=222|gas=105798|m05=N|m1=N|m2=N|m3=Y
+  ROUTE|Pangolin V2|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=4517933546|effP8=772486217|feeUsdc=14999999|impactBp=948|slipBp=964|gas=105801|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pangolin V2|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=8252964049|effP8=705554974|feeUsdc=29999999|impactBp=1732|slipBp=1747|gas=105805|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pangolin V2|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=24371606168|effP8=416711084|feeUsdc=149999999|impactBp=5117|slipBp=5125|gas=105808|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pangolin V2|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=32243295266|effP8=275651477|feeUsdc=299999999|impactBp=6770|slipBp=6775|gas=105811|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_pharaoh_ts10() (gas: 5648689)
+Logs:
+  ROUTE|Pharaoh CL ts10|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=500108367|effP8=855096288|feeUsdc=244999|impactBp=0|slipBp=-2|gas=121517|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Pharaoh CL ts10|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=1000209039|effP8=855089709|feeUsdc=489999|impactBp=0|slipBp=-2|gas=121563|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Pharaoh CL ts10|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=5000737420|effP8=855037085|feeUsdc=2449999|impactBp=0|slipBp=-1|gas=130309|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Pharaoh CL ts10|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=10000568613|effP8=854959611|feeUsdc=4899999|impactBp=1|slipBp=0|gas=166047|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Pharaoh CL ts10|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=49911357295|effP8=853395367|feeUsdc=24499999|impactBp=19|slipBp=17|gas=282638|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Pharaoh CL ts10|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=95716990323|effP8=818295079|feeUsdc=48999999|impactBp=430|slipBp=428|gas=4446121|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_pharaoh_ts100() (gas: 9216306)
+Logs:
+  ROUTE|Pharaoh CL ts100|500|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pharaoh CL ts100|1000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pharaoh CL ts100|5000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pharaoh CL ts100|10000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pharaoh CL ts100|50000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Pharaoh CL ts100|100000|REVERT|fillBp=0|spentWavax=0|outUsdc=0|effP8=0|feeUsdc=0|impactBp=0|slipBp=0|gas=1308394|m05=N|m1=N|m2=N|m3=N
+
+[FAIL: EVM error; database error: failed to get storage for 0x1Abbf74e863e19940ED364C6EE1Ffb782e204d20 at 17796273438068182614389697993590108034867096868223857566772069424536124777670: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7a5abbd39dba-TXL
+server: cloudflare] test_route_pharaoh_ts5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xb1E1Db50a98D49eC8eA9a1CCBBD4Af56842C43c1 at 108681749835453553911449998695228202123206905219601062916072500565492481402892: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7ae77b599dba-TXL
+server: cloudflare] test_route_pharaoh_ts50() (gas: 0)
+[PASS] test_route_sushi2() (gas: 1925902)
+Logs:
+  ROUTE|Sushi V2|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=429996635|effP8=735217706|feeUsdc=1499999|impactBp=1378|slipBp=1400|gas=103886|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V2|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=755782801|effP8=646127030|feeUsdc=2999999|impactBp=2423|slipBp=2442|gas=103889|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V2|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=1918807762|effP8=328081972|feeUsdc=14999999|impactBp=6152|slipBp=6162|gas=103892|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V2|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=2375804036|effP8=203110100|feeUsdc=29999999|impactBp=7618|slipBp=7624|gas=103896|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V2|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=2935024271|effP8=50183690|feeUsdc=149999999|impactBp=9411|slipBp=9412|gas=103899|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V2|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=3023998418|effP8=25852495|feeUsdc=299999999|impactBp=9696|slipBp=9697|gas=103902|m05=N|m1=N|m2=N|m3=N
+
+[FAIL: EVM error; database error: failed to get storage for 0x0bA96F2F9E56BBB75e5bb0Bd951B07adea3D2072 at 108059017160172443961470838738656117983865457815038211787293338647981615866388: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7c2b0edb06e3-TXL
+server: cloudflare] test_route_sushi3_100() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x8EAf84001447da898054D06EdF6e4Ebc010f33a1 at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7cb7ed5206e3-TXL
+server: cloudflare] test_route_sushi3_10000() (gas: 0)
+[PASS] test_route_sushi3_3000() (gas: 5416893)
+Logs:
+  ROUTE|Sushi V3 0.3%|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=9576661|effP8=16374385|feeUsdc=1499999|impactBp=9808|slipBp=9808|gas=669736|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.3%|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=9576723|effP8=8187245|feeUsdc=2999999|impactBp=9904|slipBp=9904|gas=677151|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.3%|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=9576771|effP8=1637457|feeUsdc=14999999|impactBp=9980|slipBp=9980|gas=690954|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.3%|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=9576777|effP8=818729|feeUsdc=29999999|impactBp=9990|slipBp=9990|gas=698349|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.3%|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=9576781|effP8=163745|feeUsdc=149999999|impactBp=9998|slipBp=9998|gas=714155|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.3%|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=9576781|effP8=81872|feeUsdc=299999999|impactBp=9999|slipBp=9999|gas=721579|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_sushi3_500() (gas: 5663583)
+Logs:
+  ROUTE|Sushi V3 0.05%|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=1376000|effP8=2352715|feeUsdc=249999|impactBp=9973|slipBp=9972|gas=584684|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.05%|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=1376767|effP8=1177013|feeUsdc=499999|impactBp=9986|slipBp=9986|gas=621710|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.05%|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=1377378|effP8=235507|feeUsdc=2499999|impactBp=9997|slipBp=9997|gas=717951|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.05%|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=1377452|effP8=117759|feeUsdc=4999999|impactBp=9998|slipBp=9998|gas=755035|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.05%|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=1377507|effP8=23552|feeUsdc=24999999|impactBp=9999|slipBp=9999|gas=851497|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Sushi V3 0.05%|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=1377512|effP8=11776|feeUsdc=49999999|impactBp=9999|slipBp=9999|gas=887671|m05=N|m1=N|m2=N|m3=N
+
+[FAIL: EVM error; database error: failed to get storage for 0x1951BD56E82cC1eDFEc8546c3202eCBcC5B74A29 at 111888181921185656174292453898401326739674766904162124856097621982538893732617: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e114bb67cfe-TXL
+server: cloudflare] test_route_uni3_100() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xd18384F4398BF5415902aD5d87eAA96549Fd4f1E at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e9df8347cfe-TXL
+server: cloudflare] test_route_uni3_10000() (gas: 0)
+[PASS] test_route_uni3_3000() (gas: 3480039)
+Logs:
+  ROUTE|Uniswap V3 0.3%|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=464369855|effP8=793989794|feeUsdc=1499999|impactBp=701|slipBp=712|gas=108640|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Uniswap V3 0.3%|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=865799552|effP8=740181560|feeUsdc=2999999|impactBp=1331|slipBp=1342|gas=209656|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Uniswap V3 0.3%|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=1015418585|effP8=173618503|feeUsdc=14999999|impactBp=7966|slipBp=7969|gas=465557|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Uniswap V3 0.3%|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=1015669511|effP8=86830703|feeUsdc=29999999|impactBp=8983|slipBp=8984|gas=472823|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Uniswap V3 0.3%|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=1015829164|effP8=17368870|feeUsdc=149999999|impactBp=9796|slipBp=9796|gas=487315|m05=N|m1=N|m2=N|m3=N
+  ROUTE|Uniswap V3 0.3%|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=1015847101|effP8=8684588|feeUsdc=299999999|impactBp=9898|slipBp=9898|gas=493587|m05=N|m1=N|m2=N|m3=N
+
+[PASS] test_route_uni3_500() (gas: 2570131)
+Logs:
+  ROUTE|Uniswap V3 0.05%|500|FULL|fillBp=10000|spentWavax=58485620140576036569|outUsdc=500097937|effP8=855078454|feeUsdc=249999|impactBp=0|slipBp=-1|gas=110635|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Uniswap V3 0.05%|1000|FULL|fillBp=10000|spentWavax=116971240281152073139|outUsdc=1000148429|effP8=855037893|feeUsdc=499999|impactBp=0|slipBp=-1|gas=110619|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Uniswap V3 0.05%|5000|FULL|fillBp=10000|spentWavax=584856201405760365698|outUsdc=4998844982|effP8=854713512|feeUsdc=2499999|impactBp=4|slipBp=2|gas=140553|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Uniswap V3 0.05%|10000|FULL|fillBp=10000|spentWavax=1169712402811520731397|outUsdc=9992950825|effP8=854308358|feeUsdc=4999999|impactBp=9|slipBp=7|gas=164232|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Uniswap V3 0.05%|50000|FULL|fillBp=10000|spentWavax=5848562014057603656988|outUsdc=49775816772|effP8=851077865|feeUsdc=24999999|impactBp=47|slipBp=44|gas=353784|m05=Y|m1=Y|m2=Y|m3=Y
+  ROUTE|Uniswap V3 0.05%|100000|FULL|fillBp=10000|spentWavax=11697124028115207313977|outUsdc=99079969253|effP8=847045555|feeUsdc=49999999|impactBp=94|slipBp=92|gas=448395|m05=N|m1=Y|m2=Y|m3=Y
+
+[PASS] test_split_uni3_500_lb22_bs10() (gas: 59057541)
+Logs:
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=0%|FULL|outUsdc=47210269645|slipBp=557
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=10%|FULL|outUsdc=47880933012|slipBp=423
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=20%|FULL|outUsdc=48483219712|slipBp=303
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=30%|FULL|outUsdc=48962332094|slipBp=207
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=40%|FULL|outUsdc=49295524698|slipBp=140
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=50%|FULL|outUsdc=49496522963|slipBp=100
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=60%|FULL|outUsdc=49637131493|slipBp=72
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=70%|FULL|outUsdc=49735134037|slipBp=52
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=80%|FULL|outUsdc=49790430233|slipBp=41
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=90%|FULL|outUsdc=49802322581|slipBp=39
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=100%|FULL|outUsdc=49775816772|slipBp=44
+  SPLITBEST|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=50000|shareA=90%|outUsdc=49802322581
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=0%|FULL|outUsdc=88655554042|slipBp=1134
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=10%|FULL|outUsdc=90531039007|slipBp=946
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=20%|FULL|outUsdc=92317042815|slipBp=768
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=30%|FULL|outUsdc=94011407026|slipBp=598
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=40%|FULL|outUsdc=95588864256|slipBp=441
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=50%|FULL|outUsdc=96986086417|slipBp=301
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=60%|FULL|outUsdc=98164634475|slipBp=183
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=70%|FULL|outUsdc=98882587456|slipBp=111
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=80%|FULL|outUsdc=99129852384|slipBp=87
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=90%|FULL|outUsdc=99188823534|slipBp=81
+  SPLIT|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=100%|FULL|outUsdc=99079969253|slipBp=92
+  SPLITBEST|Uniswap V3 0.05%|LFJ LB V2.2 bin10|usd=100000|shareA=90%|outUsdc=99188823534
+
+[PASS] test_split_uni3_500_lfj_v1() (gas: 12562146)
+Logs:
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=0%|FULL|outUsdc=40052962696|slipBp=1989
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=10%|FULL|outUsdc=41776256223|slipBp=1644
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=20%|FULL|outUsdc=43359450625|slipBp=1328
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=30%|FULL|outUsdc=44793984801|slipBp=1041
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=40%|FULL|outUsdc=46070559183|slipBp=785
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=50%|FULL|outUsdc=47179053836|slipBp=564
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=60%|FULL|outUsdc=48108435013|slipBp=378
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=70%|FULL|outUsdc=48846651725|slipBp=230
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=80%|FULL|outUsdc=49380508289|slipBp=123
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=90%|FULL|outUsdc=49695531147|slipBp=60
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=100%|FULL|outUsdc=49775816772|slipBp=44
+  SPLITBEST|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=50000|shareA=100%|outUsdc=49775816772
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=0%|FULL|outUsdc=66842835164|slipBp=3315
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=10%|FULL|outUsdc=72211810356|slipBp=2778
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=20%|FULL|outUsdc=77233899501|slipBp=2276
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=30%|FULL|outUsdc=81872978744|slipBp=1812
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=40%|FULL|outUsdc=86087384327|slipBp=1391
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=50%|FULL|outUsdc=89828779468|slipBp=1017
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=60%|FULL|outUsdc=93040865388|slipBp=695
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=70%|FULL|outUsdc=95657621941|slipBp=434
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=80%|FULL|outUsdc=97601155904|slipBp=239
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=90%|FULL|outUsdc=98778901590|slipBp=122
+  SPLIT|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=100%|FULL|outUsdc=99079969253|slipBp=92
+  SPLITBEST|Uniswap V3 0.05%|LFJ V1 (constant product)|usd=100000|shareA=100%|outUsdc=99079969253
+
+[PASS] test_split_uni3_500_pangolin() (gas: 12595506)
+Logs:
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=0%|FULL|outUsdc=24371606168|slipBp=5125
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=10%|FULL|outUsdc=28116283183|slipBp=4376
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=20%|FULL|outUsdc=31713226591|slipBp=3657
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=30%|FULL|outUsdc=35136509023|slipBp=2972
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=40%|FULL|outUsdc=38353528536|slipBp=2329
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=50%|FULL|outUsdc=41322713003|slipBp=1735
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=60%|FULL|outUsdc=43990207046|slipBp=1201
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=70%|FULL|outUsdc=46284977268|slipBp=743
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=80%|FULL|outUsdc=48111362858|slipBp=377
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=90%|FULL|outUsdc=49337402055|slipBp=132
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=100%|FULL|outUsdc=49775816772|slipBp=44
+  SPLITBEST|Uniswap V3 0.05%|Pangolin V2|usd=50000|shareA=100%|outUsdc=49775816772
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=0%|FULL|outUsdc=32243295266|slipBp=6775
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=10%|FULL|outUsdc=41119207527|slipBp=5888
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=20%|FULL|outUsdc=49801251933|slipBp=5019
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=30%|FULL|outUsdc=58244891667|slipBp=4175
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=40%|FULL|outUsdc=66389014654|slipBp=3361
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=50%|FULL|outUsdc=74147422940|slipBp=2585
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=60%|FULL|outUsdc=81394641354|slipBp=1860
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=70%|FULL|outUsdc=87940591294|slipBp=1205
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=80%|FULL|outUsdc=93482927937|slipBp=651
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=90%|FULL|outUsdc=97509756159|slipBp=249
+  SPLIT|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=100%|FULL|outUsdc=99079969253|slipBp=92
+  SPLITBEST|Uniswap V3 0.05%|Pangolin V2|usd=100000|shareA=100%|outUsdc=99079969253
+
+[PASS] test_split_uni3_500_pharaoh_ts10() (gas: 20153477)
+Logs:
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=0%|FULL|outUsdc=49911357295|slipBp=17
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=10%|FULL|outUsdc=49930240728|slipBp=13
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=20%|FULL|outUsdc=49941814089|slipBp=11
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=30%|FULL|outUsdc=49946092534|slipBp=10
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=40%|FULL|outUsdc=49943125853|slipBp=11
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=50%|FULL|outUsdc=49932923809|slipBp=13
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=60%|FULL|outUsdc=49915489159|slipBp=16
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=70%|FULL|outUsdc=49890830687|slipBp=21
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=80%|FULL|outUsdc=49858967422|slipBp=28
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=90%|FULL|outUsdc=49820205929|slipBp=35
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=100%|FULL|outUsdc=49775816772|slipBp=44
+  SPLITBEST|Uniswap V3 0.05%|Pharaoh CL ts10|usd=50000|shareA=30%|outUsdc=49946092534
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=0%|FULL|outUsdc=95716990323|slipBp=428
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=10%|FULL|outUsdc=98662557778|slipBp=133
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=20%|FULL|outUsdc=99373194531|slipBp=62
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=30%|FULL|outUsdc=99651475606|slipBp=34
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=40%|FULL|outUsdc=99718935109|slipBp=28
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=50%|FULL|outUsdc=99687174067|slipBp=31
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=60%|FULL|outUsdc=99623228852|slipBp=37
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=70%|FULL|outUsdc=99530188611|slipBp=46
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=80%|FULL|outUsdc=99408210050|slipBp=59
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=90%|FULL|outUsdc=99257360723|slipBp=74
+  SPLIT|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=100%|FULL|outUsdc=99079969253|slipBp=92
+  SPLITBEST|Uniswap V3 0.05%|Pharaoh CL ts10|usd=100000|shareA=40%|outUsdc=99718935109
+
+Suite result: FAILED. 26 passed; 12 failed; 0 skipped; finished in 305.26s (304.70s CPU time)
+
+Ran 1 test suite in 305.34s (305.26s CPU time): 26 tests passed, 12 failed, 0 skipped (38 total tests)
+
+Failing tests:
+Encountered 12 failing tests in test/AvalancheWavaxUsdcRoutesFork.t.sol:AvalancheWavaxUsdcRoutesForkTest
+[FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 41408375840213561664812296894468391847057171970138050131894584628506305723438: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78269fed06e3-TXL
+server: cloudflare] test_depth_pharaoh_ts10() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 84905451894969894250919756148744707424684654902330674644322972948528018184278: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c784f6ea606e3-TXL
+server: cloudflare] test_depth_sushi2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 5794008731963855694683984801885872361802231809502744715447215438642334426524: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78784f2106e3-TXL
+server: cloudflare] test_depth_sushi3_3000() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78a10ee406e3-TXL
+server: cloudflare] test_depth_uni3_3000() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 86309799398285272718001828484324596886244553358258737527424725059074207245952: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78c9be5206e3-TXL
+server: cloudflare] test_depth_uni3_500() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x49D11CDcd33c042dE9CbDDf15282CFbe590e9844: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c78f27a6b5e96-TXL
+server: cloudflare] test_route_lb20_bs20() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x1Abbf74e863e19940ED364C6EE1Ffb782e204d20 at 17796273438068182614389697993590108034867096868223857566772069424536124777670: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7a5abbd39dba-TXL
+server: cloudflare] test_route_pharaoh_ts5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xb1E1Db50a98D49eC8eA9a1CCBBD4Af56842C43c1 at 108681749835453553911449998695228202123206905219601062916072500565492481402892: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7ae77b599dba-TXL
+server: cloudflare] test_route_pharaoh_ts50() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x0bA96F2F9E56BBB75e5bb0Bd951B07adea3D2072 at 108059017160172443961470838738656117983865457815038211787293338647981615866388: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7c2b0edb06e3-TXL
+server: cloudflare] test_route_sushi3_100() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x8EAf84001447da898054D06EdF6e4Ebc010f33a1 at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7cb7ed5206e3-TXL
+server: cloudflare] test_route_sushi3_10000() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x1951BD56E82cC1eDFEc8546c3202eCBcC5B74A29 at 111888181921185656174292453898401326739674766904162124856097621982538893732617: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e114bb67cfe-TXL
+server: cloudflare] test_route_uni3_100() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xd18384F4398BF5415902aD5d87eAA96549Fd4f1E at 1: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a55c7e9df8347cfe-TXL
+server: cloudflare] test_route_uni3_10000() (gas: 0)
+
+Encountered a total of 12 failing tests, 26 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 12 failed tests
+-----
+UTC end: 2026-11-05T14:19:57Z  exit: 1
