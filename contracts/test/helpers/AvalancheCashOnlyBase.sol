@@ -93,7 +93,7 @@ abstract contract AvalancheCashOnlyBase is Test {
 
         peridot = new Peridot(address(this));
         unitroller = new Unitroller();
-        PeridottrollerAvalanche impl = new PeridottrollerAvalanche(address(peridot));
+        PeridottrollerAvalanche impl = new PeridottrollerAvalanche(address(peridot), false);
         require(unitroller._setPendingImplementation(address(impl)) == 0, "impl");
         impl._become(unitroller);
         controller = Peridottroller(address(unitroller));

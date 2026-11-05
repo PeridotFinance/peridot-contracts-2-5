@@ -555,10 +555,10 @@ contract AvalanchePharaohSection5ForkTest is AvalancheSection5Base {
     function testMainnetControllerWrapper_chainIdTokenAndProxy() public {
         vm.chainId(43_113);
         vm.expectRevert("AvalancheController: Avalanche only");
-        new PeridottrollerAvalanche(address(peridot));
+        new PeridottrollerAvalanche(address(peridot), false);
         vm.chainId(43_114);
         vm.expectRevert("AvalancheController: token not contract");
-        new PeridottrollerAvalanche(address(0xdead));
+        new PeridottrollerAvalanche(address(0xdead), false);
         assertEq(controller.getPeridotAddress(), address(peridot), "token visible through the Unitroller proxy");
         assertEq(unitroller.admin(), address(this));
         // zero speeds: claiming is a no-op and moves nothing

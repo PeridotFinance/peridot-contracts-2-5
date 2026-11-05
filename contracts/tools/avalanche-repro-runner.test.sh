@@ -77,5 +77,23 @@ check "cold wrapper: every attempt's home was EMPTY at start (nothing carried ov
 check "cold wrapper: homes are removed afterwards" "$(for h in $H1 $H2 $H3; do [ -e "$h" ] && echo left; done | wc -l | tr -d ' ')" "0"
 check "cold wrapper: each attempt log carries the git HEAD and the empty-cache statement" "$(grep -l 'RPC cache entries at start: 0' "$OUT"/attempt*/suite.txt | wc -l | tr -d ' ')" "3"
 
+# private RPC: the (fake, key-bearing) URL must reach the command only through the environment and never appear in any attempt file
+FAKE_URL="https://nodes.fake-private-host.example/ext/bc/C/rpc/KEYTOKEN1234567890abcdef"
+OUT="$T/cold2"
+env -u AVALANCHE_MAINNET_RPC_URL AVALANCHE_RPC="$FAKE_URL" \
+  REPRO_COLD_CMD='echo "alias-sees-value=$([ -n "$AVALANCHE_MAINNET_RPC_URL" ] && echo yes || echo no)" > "$REPRO_ATTEMPT_DIR/alias.txt"; echo "[FAIL: database error: error sending request for url ($AVALANCHE_MAINNET_RPC_URL) host nodes.fake-private-host.example token KEYTOKEN1234567890abcdef HTTP error 429] t()"; exit 1' \
+  tools/run-avalanche-suite-cold.sh demo '^X$' "$OUT" 1 > "$T/cold2.out" 2>&1
+check "private RPC: AVALANCHE_RPC alias is read when AVALANCHE_MAINNET_RPC_URL is unset" "$(cat "$OUT/attempt1/alias.txt")" "alias-sees-value=yes"
+check "private RPC: the 429 text is still classified (masking does not hide the failure kind)" "$(cut -f3 "$OUT/summary.tsv" | tail -1)" "TRANSIENT"
+check "private RPC: URL, host and key token appear NOWHERE in the attempt, driver output or summary" "$(grep -rl -e 'fake-private-host' -e 'KEYTOKEN1234567890abcdef' "$OUT" "$T/cold2.out" 2>/dev/null | wc -l | tr -d ' ')" "0"
+check "private RPC: header states the endpoint is masked and the log records a clean scan" "$(grep -c -e 'RPC endpoint: private (URL and host masked' -e 'mask scan: attempt directory contains no trace' "$OUT/attempt1/suite.txt")" "2"
+check "private RPC: the logged command line carries no --rpc-url value other than the alias" "$(grep -c -e '--rpc-url avalanche_cold' "$OUT/attempt1/suite.txt")" "1"
+# the scan itself must fire if masking were bypassed (a file written straight into the attempt directory)
+OUT="$T/cold3"
+env AVALANCHE_MAINNET_RPC_URL="$FAKE_URL" REPRO_COLD_CMD='echo "$AVALANCHE_MAINNET_RPC_URL" > "$REPRO_ATTEMPT_DIR/bypass.txt"; echo "Suite result: ok. 1 passed; 0 failed"; exit 0' \
+  tools/run-avalanche-suite-cold.sh demo '^X$' "$OUT" 1 > "$T/cold3.out" 2>&1
+check "private RPC: a bypassing write is caught by the scan (attempt exits 97, not a pass)" "$(cut -f2 "$OUT/summary.tsv" | tail -1)" "97"
+check "private RPC: scan names the file but not the secret" "$(grep -c 'bypass.txt' "$OUT/attempt1/mask-scan.txt")/$(grep -c 'fake-private-host' "$OUT/attempt1/mask-scan.txt")" "1/0"
+
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS runner test(s) FAILED"; exit 1; fi
 echo "all runner tests passed"

@@ -58,7 +58,7 @@ contract AvalancheCashOnlyRewardTokenIndependenceForkTest is AvalancheCashOnlyBa
 
     function testLendingPaths_NeverTouchTheRewardToken_TokenThatRevertsOnAnyCall() public {
         address revertToken = address(new RevertsOnAnyCall());
-        _switchTo(address(new PeridottrollerAvalanche(revertToken)));
+        _switchTo(address(new PeridottrollerAvalanche(revertToken, false)));
         assertEq(controller.getPeridotAddress(), revertToken);
         assertEq(controller.peridotSupplySpeeds(address(pUsdc)), 0, "no supply reward speed");
         assertEq(controller.peridotBorrowSpeeds(address(pUsdc)), 0, "no borrow reward speed");

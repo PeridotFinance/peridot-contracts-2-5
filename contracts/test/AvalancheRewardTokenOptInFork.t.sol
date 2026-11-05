@@ -3,15 +3,15 @@ pragma solidity ^0.8.20;
 
 import "./helpers/AvalancheCashOnlyBase.sol";
 import {PeridottrollerAvalanche} from "../contracts/PeridottrollerAvalanche.sol";
-import {PeridottrollerAvalancheOptionalRewardTokenPrototype as Proto} from "./prototype/PeridottrollerAvalancheOptionalRewardTokenPrototype.sol";
 
-contract RevertsOnAnyCall2 {}
+contract AnyContractToken {}
 
 /**
- * @notice Test-only prototype of an OPT-IN no-reward-token constructor for the Avalanche controller wrapper (no production change).
- *         Default guard preserved; `address(0)` only with the explicit flag; claimPeridot and _grantPeridot revert; every lending path passes.
+ * @notice The OPT-IN no-reward-token constructor of the PRODUCTION `PeridottrollerAvalanche` (reviewable diff, not merged).
+ *         Default guard preserved byte-for-byte (same revert string); `address(0)` only with the explicit flag; claimPeridot and
+ *         _grantPeridot revert with no token; every lending path (and the borrow cash floor) passes.
  */
-contract AvalancheRewardTokenOptInPrototypeForkTest is AvalancheCashOnlyBase {
+contract AvalancheRewardTokenOptInForkTest is AvalancheCashOnlyBase {
     function _switchTo(address impl) internal {
         require(unitroller._setPendingImplementation(impl) == 0, "pending");
         (bool ok,) = impl.call(abi.encodeWithSignature("_become(address)", address(unitroller)));
@@ -19,39 +19,38 @@ contract AvalancheRewardTokenOptInPrototypeForkTest is AvalancheCashOnlyBase {
     }
 
     // ---------------------------------------------------------------- the guard: default preserved, opt-in explicit
-    function testDefaultGuard_Preserved_ProductionWrapperRefusesZeroAndNoCode() public {
+    function testDefaultGuard_ZeroWithoutTheFlagIsRefused_NoSilentFallback_SameRevertString() public {
         vm.expectRevert(bytes("AvalancheController: token not contract"));
-        new PeridottrollerAvalanche(address(0));
-        vm.expectRevert(bytes("AvalancheController: token not contract"));
-        new PeridottrollerAvalanche(address(0xE0A));
+        new PeridottrollerAvalanche(address(0), false);
     }
 
-    function testPrototype_ZeroRefusedWithoutTheFlag_NoSilentFallback() public {
-        vm.expectRevert(bytes("AvalancheController: token not contract (explicit opt-in required for no reward token)"));
-        new Proto(address(0), false);
+    function testFlagDoesNotExcuseANonZeroAddressWithoutCode() public {
+        vm.expectRevert(bytes("AvalancheController: token not contract"));
+        new PeridottrollerAvalanche(address(0xE0A), true);
+        vm.expectRevert(bytes("AvalancheController: token not contract"));
+        new PeridottrollerAvalanche(address(0xE0A), false);
     }
 
-    function testPrototype_FlagDoesNotExcuseANonZeroAddressWithoutCode() public {
-        vm.expectRevert(bytes("AvalancheController: token not contract"));
-        new Proto(address(0xE0A), true);
-        vm.expectRevert(bytes("AvalancheController: token not contract"));
-        new Proto(address(0xE0A), false);
-    }
-
-    function testPrototype_RealTokenBehavesAsBefore_FlagIrrelevant() public {
-        address tok = address(new RevertsOnAnyCall2()); // any contract
-        Proto a = new Proto(tok, false);
-        Proto b = new Proto(tok, true);
+    function testRealTokenBehavesAsBefore_FlagIrrelevant() public {
+        address tok = address(new AnyContractToken());
+        PeridottrollerAvalanche a = new PeridottrollerAvalanche(tok, false);
+        PeridottrollerAvalanche b = new PeridottrollerAvalanche(tok, true);
         assertEq(a.getPeridotAddress(), tok);
         assertEq(b.getPeridotAddress(), tok);
-        assertFalse(a.noRewardToken());
-        assertFalse(b.noRewardToken());
+        assertEq(a.peridotToken(), tok);
+        assertEq(b.peridotToken(), tok);
     }
 
-    function testPrototype_OptInAcceptsZero() public {
-        Proto p = new Proto(address(0), true);
+    function testOptInAcceptsZero() public {
+        PeridottrollerAvalanche p = new PeridottrollerAvalanche(address(0), true);
         assertEq(p.getPeridotAddress(), address(0));
-        assertTrue(p.noRewardToken());
+        assertEq(p.peridotToken(), address(0));
+    }
+
+    function testChainIdGateStillAppliesWithTheOptIn() public {
+        vm.chainId(43_113);
+        vm.expectRevert(bytes("AvalancheController: Avalanche only"));
+        new PeridottrollerAvalanche(address(0), true);
     }
 
     // ---------------------------------------------------------------- behaviour with the opt-in controller
@@ -82,7 +81,7 @@ contract AvalancheRewardTokenOptInPrototypeForkTest is AvalancheCashOnlyBase {
     }
 
     function testOptInController_EveryLendingPathPasses_ClaimAndGrantRevert() public {
-        _switchTo(address(new Proto(address(0), true)));
+        _switchTo(address(new PeridottrollerAvalanche(address(0), true)));
         assertEq(controller.getPeridotAddress(), address(0));
         assertEq(controller.peridotSupplySpeeds(address(pUsdc)), 0);
         assertEq(controller.peridotBorrowSpeeds(address(pUsdc)), 0);
@@ -94,10 +93,27 @@ contract AvalancheRewardTokenOptInPrototypeForkTest is AvalancheCashOnlyBase {
         assertFalse(ok, "_grantPeridot reverts with no reward token (called by the admin)");
     }
 
-    function testOptInController_DefaultControllerStillWorksWithARealContractToken() public {
-        // the production-shaped controller (explicit contract token) is unaffected: lending paths pass and claims call the token
-        address tok = address(new RevertsOnAnyCall2());
-        _switchTo(address(new PeridottrollerAvalanche(tok)));
+    function testOptInController_BorrowCashFloorStillEnforced() public {
+        _switchTo(address(new PeridottrollerAvalanche(address(0), true)));
+        _unpauseBorrows();
+        require(controller._setCollateralFactor(PToken(address(pWavax)), 0.4e18) == 0, "cf");
+        require(controller._setCollateralFactor(PToken(address(pUsdc)), 0) == 0, "cf u");
+        PeridottrollerAvalanche ctrl = PeridottrollerAvalanche(address(controller));
+        uint256 cash = pUsdc.getCash();
+        require(ctrl._setBorrowCashFloor(PToken(address(pUsdc)), cash - 100e6) == 0, "floor");
+        _mintP(pWavax, DAVE, 100_000e18);
+        _enter(DAVE);
+        (bool ok,) = _borrow(pUsdc, DAVE, 100e6 + 1);
+        assertFalse(ok, "one unit beyond the floor refused");
+        (ok,) = _borrow(pUsdc, DAVE, 100e6);
+        assertTrue(ok, "within the floor");
+    }
+
+    function testRealTokenController_LendingPathsPass() public {
+        // the production-shaped controller (explicit contract token) is unaffected: lending paths pass
+        address tok = address(new AnyContractToken());
+        _switchTo(address(new PeridottrollerAvalanche(tok, false)));
+        assertEq(controller.getPeridotAddress(), tok);
         _lendingPaths();
     }
 }

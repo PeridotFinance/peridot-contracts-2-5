@@ -5,8 +5,8 @@ import {Peridottroller} from "./Peridottroller.sol";
 import {PToken} from "./PToken.sol";
 
 /**
- * @notice Avalanche C-Chain mainnet Peridottroller implementation with an explicit PERIDOT token and an optional per-market
- *         BORROW CASH FLOOR.
+ * @notice Avalanche C-Chain mainnet Peridottroller implementation with an explicit PERIDOT token (or an explicit, opt-in choice of NO
+ *         reward token, see the constructor) and an optional per-market BORROW CASH FLOOR.
  * @dev Mirror of `PeridottrollerAvalancheFuji` with the mainnet chain id. The token address is immutable bytecode so it is
  *      available behind Unitroller through delegatecall. Added for the handoff-09 fork checkpoint; it is NOT a deployment
  *      authorization.
@@ -37,9 +37,17 @@ contract PeridottrollerAvalanche is Peridottroller {
     /// @notice Emitted when the borrow cash floor of a market changes.
     event NewBorrowCashFloor(PToken indexed pToken, uint256 oldFloor, uint256 newFloor);
 
-    constructor(address peridotToken_) {
+    /// @param peridotToken_ the reward token: must be an existing contract, EXCEPT as below.
+    /// @param allowNoRewardToken_ explicit OPT-IN to deploy WITHOUT a reward token. Only with `peridotToken_ == address(0)` AND this flag
+    ///        set is a missing token accepted; `address(0)` without the flag reverts exactly as before (same revert string), and the flag
+    ///        never excuses a non-zero address without code. With no token `getPeridotAddress()` is `address(0)`: `claimPeridot` and
+    ///        the admin `_grantPeridot` (the only token-touching entry points) revert, while no lending path reads the token.
+    constructor(address peridotToken_, bool allowNoRewardToken_) {
         require(block.chainid == AVALANCHE_CHAIN_ID, "AvalancheController: Avalanche only");
-        require(peridotToken_.code.length > 0, "AvalancheController: token not contract");
+        require(
+            peridotToken_.code.length > 0 || (peridotToken_ == address(0) && allowNoRewardToken_),
+            "AvalancheController: token not contract"
+        );
         peridotToken = peridotToken_;
     }
 

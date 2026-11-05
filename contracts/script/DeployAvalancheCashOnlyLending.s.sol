@@ -25,7 +25,8 @@ import {GuardedAvalanchePriceOracle, IAvalanchePriceOracleSource} from "../contr
 ///         default admin. The script cannot unpause borrowing, set a collateral factor, or touch the margin stack.
 struct CashOnlyParams {
     address deployer; // broadcasting account (also the initial admin/owner; hand over to governance as a SEPARATE, verified step)
-    address peridotToken; // OPERATOR DECISION: production PERIDOT token (no placeholder is deployed or selected here)
+    address peridotToken; // OPERATOR DECISION: production PERIDOT token (no placeholder is deployed or selected here); address(0) only with the opt-in below
+    bool allowNoRewardToken; // OPERATOR DECISION, no default: true = deploy WITHOUT a reward token (requires peridotToken == address(0)); false = a token contract is required
     address pauseGuardian;
     uint256 wavaxSeed;
     uint256 usdcSeed;
@@ -72,7 +73,11 @@ abstract contract CashOnlyLendingChecks {
     function _checkParams(CashOnlyParams memory p) internal view {
         require(block.chainid == AVALANCHE_CHAIN_ID, "CashOnlyLending: Avalanche C-Chain only");
         require(p.deployer != address(0), "CashOnlyLending: zero deployer");
-        require(p.peridotToken.code.length > 0, "CashOnlyLending: PERIDOT token must be an existing contract (operator decision)");
+        if (p.allowNoRewardToken) {
+            require(p.peridotToken == address(0), "CashOnlyLending: no-reward-token opt-in requires PERIDOT_TOKEN = address(0)");
+        } else {
+            require(p.peridotToken.code.length > 0, "CashOnlyLending: PERIDOT token must be an existing contract (operator decision)");
+        }
         require(p.pauseGuardian != address(0), "CashOnlyLending: zero guardian");
         require(WAVAX.code.length > 0 && USDC.code.length > 0, "CashOnlyLending: token not contract");
         require(IERC20Metadata(WAVAX).decimals() == 18, "CashOnlyLending: WAVAX decimals");
@@ -192,6 +197,7 @@ contract DeployAvalancheCashOnlyLending is Script, CashOnlyLendingChecks {
     function readParams() public view returns (CashOnlyParams memory p) {
         p.deployer = vm.envAddress("DEPLOYER");
         p.peridotToken = vm.envAddress("PERIDOT_TOKEN"); // required: unset reverts; no placeholder is chosen
+        p.allowNoRewardToken = vm.envBool("LENDING_ALLOW_NO_REWARD_TOKEN"); // required: unset reverts; "true" is the explicit no-reward-token choice
         p.pauseGuardian = vm.envAddress("PAUSE_GUARDIAN");
         p.wavaxSeed = vm.envUint("LENDING_WAVAX_SEED_AMOUNT");
         p.usdcSeed = vm.envUint("LENDING_USDC_SEED_AMOUNT");
@@ -224,7 +230,7 @@ contract DeployAvalancheCashOnlyLending is Script, CashOnlyLendingChecks {
         d.sourceOracle = new AvalanchePriceOracle(p.deployer);
         d.oracle = new GuardedAvalanchePriceOracle(IAvalanchePriceOracleSource(address(d.sourceOracle)));
         d.unitroller = new Unitroller();
-        d.implementation = new PeridottrollerAvalanche(p.peridotToken);
+        d.implementation = new PeridottrollerAvalanche(p.peridotToken, p.allowNoRewardToken);
         require(d.unitroller._setPendingImplementation(address(d.implementation)) == 0, "CashOnlyLending: pending implementation");
         d.implementation._become(d.unitroller);
         d.controller = PeridottrollerAvalanche(address(d.unitroller));

@@ -85,6 +85,7 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
     function _env() internal {
         vm.setEnv("DEPLOYER", vm.toString(DEPLOYER));
         vm.setEnv("PERIDOT_TOKEN", vm.toString(tokenStandIn));
+        vm.setEnv("LENDING_ALLOW_NO_REWARD_TOKEN", "false");
         vm.setEnv("PAUSE_GUARDIAN", vm.toString(GUARDIAN));
         vm.setEnv("LENDING_WAVAX_SEED_AMOUNT", vm.toString(S_WAVAX_SEED));
         vm.setEnv("LENDING_USDC_SEED_AMOUNT", vm.toString(S_USDC_SEED));
@@ -195,6 +196,31 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
         script.deploy(p);
     }
 
+    /// @dev The explicit, opt-in NO-REWARD-TOKEN deployment: both inputs must say so (token 0 AND flag true). Everything else about the
+    ///      deployment is unchanged: verifier passes, borrowing stays paused, the reward-token entry points revert, supply and redeem work.
+    function testRehearsal_NoRewardTokenOptIn_DeploysAndVerifies_ClaimRevertsLendingWorks() public {
+        CashOnlyParams memory p = _params();
+        p.peridotToken = address(0);
+        p.allowNoRewardToken = true;
+        CashOnlyDeployment memory d = script.deploy(p);
+        new VerifyAvalancheCashOnlyLending().verify(d, p, DEPLOYER);
+        assertEq(d.controller.getPeridotAddress(), address(0));
+        assertEq(d.implementation.peridotToken(), address(0));
+        assertTrue(d.controller.borrowGuardianPaused(address(d.pUsdc)) && d.controller.borrowGuardianPaused(address(d.pWavax)), "borrowing paused");
+        assertEq(d.controller.isolatedMarginRiskHook(), address(0));
+        (bool ok,) = address(d.controller).call(abi.encodeWithSignature("claimPeridot(address)", DEPLOYER));
+        assertFalse(ok, "claimPeridot reverts with no reward token");
+        (ok,) = address(d.controller).call(abi.encodeWithSignature("_grantPeridot(address,uint256)", DEPLOYER, 1));
+        assertFalse(ok, "_grantPeridot reverts with no reward token");
+    }
+
+    function testRehearsal_OptInFlagWithATokenGiven_IsRefused_ContradictoryInputs() public {
+        CashOnlyParams memory p = _params(); // token = stand-in contract
+        p.allowNoRewardToken = true;
+        vm.expectRevert(bytes("CashOnlyLending: no-reward-token opt-in requires PERIDOT_TOKEN = address(0)"));
+        script.deploy(p);
+    }
+
     function testRehearsal_RefusesWrongChainAndBadParameters() public {
         CashOnlyParams memory p = _params();
         vm.chainId(1);
@@ -241,8 +267,8 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
         assertEq(d.controller.getPeridotAddress(), tokenStandIn);
         assertEq(d.controller.borrowCashFloor(address(d.pUsdc)), S_USDC_FLOOR);
         // each required variable, when empty, makes the script refuse to run (no default is substituted)
-        string[19] memory names = [
-            "DEPLOYER", "PERIDOT_TOKEN", "PAUSE_GUARDIAN", "LENDING_WAVAX_SEED_AMOUNT", "LENDING_USDC_SEED_AMOUNT",
+        string[20] memory names = [
+            "DEPLOYER", "PERIDOT_TOKEN", "LENDING_ALLOW_NO_REWARD_TOKEN", "PAUSE_GUARDIAN", "LENDING_WAVAX_SEED_AMOUNT", "LENDING_USDC_SEED_AMOUNT",
             "LENDING_WAVAX_BORROW_CAP", "LENDING_USDC_BORROW_CAP", "LENDING_RESERVE_FACTOR", "LENDING_CLOSE_FACTOR",
             "LENDING_LIQUIDATION_INCENTIVE", "LENDING_BLOCKS_PER_YEAR", "LENDING_BASE_RATE_PER_YEAR", "LENDING_MULTIPLIER_PER_YEAR",
             "LENDING_JUMP_MULTIPLIER_PER_YEAR", "LENDING_KINK", "AVAX_FEED_MAX_AGE", "USDC_FEED_MAX_AGE",
@@ -254,6 +280,21 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
             vm.expectRevert();
             script.readParams();
         }
+        _env();
+        // the explicit no-reward-token choice through the environment: token 0 + flag true deploys; token 0 + flag false and a token + flag true refuse
+        vm.setEnv("PERIDOT_TOKEN", vm.toString(address(0)));
+        vm.setEnv("LENDING_ALLOW_NO_REWARD_TOKEN", "true");
+        deal(WAVAX, DEPLOYER, S_WAVAX_SEED);
+        deal(USDC, DEPLOYER, S_USDC_SEED);
+        CashOnlyDeployment memory d2 = script.run();
+        assertEq(d2.controller.getPeridotAddress(), address(0));
+        vm.setEnv("LENDING_ALLOW_NO_REWARD_TOKEN", "false");
+        vm.expectRevert(bytes("CashOnlyLending: PERIDOT token must be an existing contract (operator decision)"));
+        script.run();
+        vm.setEnv("PERIDOT_TOKEN", vm.toString(tokenStandIn));
+        vm.setEnv("LENDING_ALLOW_NO_REWARD_TOKEN", "true");
+        vm.expectRevert(bytes("CashOnlyLending: no-reward-token opt-in requires PERIDOT_TOKEN = address(0)"));
+        script.run();
         _env();
     }
 
