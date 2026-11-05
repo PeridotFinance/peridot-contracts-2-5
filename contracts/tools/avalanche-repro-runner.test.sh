@@ -66,5 +66,16 @@ fi
 OUT="$T/wrap1"; REPRO_GATE_CMD='[ "$REPRO_ATTEMPT" -ge 2 ] && { echo "Suite result: ok. 1 passed; 0 failed" > "$REPRO_ATTEMPT_DIR/s.txt"; exit 0; } || { echo "[FAIL: database error: failed to get storage HTTP error 429] t()" > "$REPRO_ATTEMPT_DIR/s.txt"; exit 1; }' tools/run-avalanche-clean-repro.sh "$OUT" 4 > "$T/wrap1.out" 2>&1; check "gate wrapper: transient then pass (exit 0, 2 attempt dirs)" "$?/$(ls -d "$OUT"/attempt* | wc -l | tr -d ' ')" "0/2"
 OUT="$T/wrap2"; REPRO_VAULT_CMD='echo "[FAIL: assertion failed: x] t()" > "$REPRO_ATTEMPT_DIR/vault.txt"; exit 1' tools/run-avalanche-vault-clean-repro-retry.sh usdc "$OUT" 4 > "$T/wrap2.out" 2>&1; check "vault wrapper: assertion failure stops (exit 20, 1 attempt dir)" "$?/$(ls -d "$OUT"/attempt* | wc -l | tr -d ' ')" "20/1"
 
+
+# cold wrapper: every attempt starts in a FRESH EMPTY home (never populated across retries)
+OUT="$T/cold1"
+REPRO_COLD_CMD='echo "HOME=$HOME" > "$REPRO_ATTEMPT_DIR/home.txt"; echo "entries=$(find "$HOME/.foundry/cache/rpc" -type f | wc -l | tr -d " ")" >> "$REPRO_ATTEMPT_DIR/home.txt"; touch "$HOME/.foundry/cache/rpc/populated-by-this-attempt"; if [ "$REPRO_ATTEMPT" -lt 3 ]; then echo "[FAIL: database error: failed to get storage HTTP error 429] t()"; exit 1; fi; echo "Suite result: ok. 1 passed; 0 failed"; exit 0' tools/run-avalanche-suite-cold.sh demo '^X$' "$OUT" 5 > "$T/cold1.out" 2>&1
+check "cold wrapper: transient, transient, pass -> exit 0 after 3 attempts" "$?/$(ls -d "$OUT"/attempt* | wc -l | tr -d ' ')" "0/3"
+H1=$(sed -n 's/^HOME=//p' "$OUT/attempt1/home.txt"); H2=$(sed -n 's/^HOME=//p' "$OUT/attempt2/home.txt"); H3=$(sed -n 's/^HOME=//p' "$OUT/attempt3/home.txt")
+check "cold wrapper: three attempts used three DIFFERENT homes" "$([ "$H1" != "$H2" ] && [ "$H2" != "$H3" ] && [ "$H1" != "$H3" ] && echo distinct)" "distinct"
+check "cold wrapper: every attempt's home was EMPTY at start (nothing carried over)" "$(grep -h '^entries=' "$OUT"/attempt*/home.txt | sort -u | tr '\n' ',')" "entries=0,"
+check "cold wrapper: homes are removed afterwards" "$(for h in $H1 $H2 $H3; do [ -e "$h" ] && echo left; done | wc -l | tr -d ' ')" "0"
+check "cold wrapper: each attempt log carries the git HEAD and the empty-cache statement" "$(grep -l 'RPC cache entries at start: 0' "$OUT"/attempt*/suite.txt | wc -l | tr -d ' ')" "3"
+
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS runner test(s) FAILED"; exit 1; fi
 echo "all runner tests passed"

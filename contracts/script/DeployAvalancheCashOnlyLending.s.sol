@@ -180,7 +180,9 @@ abstract contract CashOnlyLendingChecks {
  *         pToken flash loans paused, collateral factors ZERO, margin hooks UNSET.
  *
  * NOT a deployment authorization. Rehearse on a local fork only (`AvalancheCashOnlyDeployRehearsalFork.t.sol`); the operator signs any
- * real transaction with their own keystore (`--account`/`--sender`, never a raw private key), after the PERIDOT-token decision and
+ * real transaction with the hardware wallet, `forge script ... --ledger --sender 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD` (the operator's
+ * Ledger; `DEPLOYER` must be that same address and becomes the initial admin/owner of the controller, markets, oracle and rate model; no
+ * raw private key, no key in environment or files, and the previous signer is not used), after the PERIDOT-token decision and
  * after choosing every parameter below, none of which has a default. Collateral factors, unpausing borrowing and the admin handover to
  * governance are SEPARATE steps outside this script.
  */

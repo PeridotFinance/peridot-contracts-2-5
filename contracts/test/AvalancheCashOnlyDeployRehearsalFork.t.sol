@@ -31,7 +31,8 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
     uint256 internal constant PIN_BLOCK = 99_200_000;
     address internal constant WAVAX = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
     address internal constant USDC = 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E;
-    address internal constant DEPLOYER = address(0xDE91);
+    // The operator's Ledger (the intended single admin/signer). In-VM only: nothing is signed or sent; the rehearsal just runs the script as this address.
+    address internal constant DEPLOYER = 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD;
     address internal constant GUARDIAN = address(0x6A2D);
     address internal constant STRANGER = address(0xBAD1);
 

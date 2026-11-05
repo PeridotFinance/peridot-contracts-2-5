@@ -2,6 +2,8 @@
 
 Status: **RESEARCH for an operator decision. Not approval of PW30, PW40, any cap, any production parameter or borrowing activation.** One-direction (borrow USDC against WAVAX) is the preferred direction to qualify; it stays DRAFT. No treasury funds are committed. Borrowing stays paused. Caps of USD 1,000 / 5,000 / 10,000 are **research sizes**. Product: cash-only lending markets pUSDC (USDC) and pWAVAX (WAVAX), Avalanche C-Chain. Vault accounting and PHAR work are separate (see their own documents) and are untouched here. (The instruction that arrived with this request was cut off after "Keep vault accounting and PHAR work separate. Preserve the fairness remedy, but"; I acted only on what was legible and changed nothing in the vault documents.)
 
+**PILOT OPERATOR REQUIREMENT (adopted; supersedes the "two operators each fund the first round" figure where they differ): each operator holds at least 0.75 x cap debt, about 0.88 x in a 30-day outage tail, with NO recycling assumed.** Per research cap (USDC, debt including accrued interest): cap 1,000: at least 750, about 890; cap 5,000: at least 3,750, about 4,440; cap 10,000: at least 7,500, about 8,890. Reason: tested cases show that one operator must be able to cover the pilot alone (the other may be unavailable) and that a blocked conversion route stops recycling; recycling then lowers the actual need to 0.5 x debt for the first round but is not relied on. This is a requirement on each operator separately, so two operators together hold twice that capital at work (it is recovered, not spent).
+
 ## 0. Summary and corrections
 1. **Correction to my earlier funding figures.** The first decision table sized protection capital at borrower utilisation 99% with no interest. With borrowers at **100% of capacity and 30 days of accrued interest before the event** the loss is higher: PW40 at a -60% tail needs about **USD 8,400 per 100,000 of cap** (not 6,472), at -75% 43,100 (not 41,545). The fork measurements (`AvalancheCashOnlyTreasuryRepayFork.t.sol`) and my closed form agree to the dollar.
 2. **The conversion step exists at pilot size.** A deep Uniswap V3 WAVAX/USDC 0.05% pool converts USD 0.5k to 10k of WAVAX at -1 to +7 bp versus the Chainlink mid (interim route study, section 2). The "liquidator conversion liquidity" constraint I listed earlier does not bind at these sizes; Pharaoh alone would have been a thin wall.
@@ -31,8 +33,8 @@ Method: closed form `loss = D x (1 - rho/LI)` with `rho = (1-x) / (CF x u x (1+i
 |---|---|---|---|---|
 | Supplier USDC supply (cap / 0.8; a 20% cash floor = withdrawal cash) | 1,250 | 6,250 | 12,500 | suppliers (NOT our capital) |
 | of which withdrawal cash held by the floor | 250 | 1,250 | 2,500 | suppliers' own un-lent cash |
-| Liquidator inventory, first round per operator (0.5 x debt incl. interest), x2 operators | 505 x 2 | 2,525 x 2 | 5,049 x 2 | liquidator operators (capital at work, not spent) |
-| Liquidator inventory, no recycling, worst tail on ONE operator (up to ~0.88 x debt) | 889 | 4,443 | 8,887 | the operator that stays available |
+| Liquidator inventory, first round per operator (0.5 x debt incl. interest; the minimum if recycling works, NOT the requirement) | 505 x 2 | 2,525 x 2 | 5,049 x 2 | liquidator operators (capital at work, not spent) |
+| **Liquidator inventory REQUIREMENT per operator, no recycling (at least 0.75 x cap debt; about 0.88 x in a 30-day outage tail)** | 889 | 4,443 | 8,887 | the operator that stays available |
 | Protection capital PW40, tail -60% | 84 | 420 | 839 | the operator (treasury, not yet committed) |
 | Protection capital PW40, tail -75% | 431 | 2,156 | 4,312 | the operator (treasury, not yet committed) |
 | Protection capital PW30, tail -75% | 238 | 1,191 | 2,383 | the operator (treasury, not yet committed) |

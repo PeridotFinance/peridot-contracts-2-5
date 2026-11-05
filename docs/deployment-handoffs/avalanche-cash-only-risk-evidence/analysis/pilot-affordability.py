@@ -28,8 +28,9 @@ sup = [c/0.8 for c in CAPS]
 print("| Supplier USDC supply (cap / 0.8; a 20% cash floor = withdrawal cash) | " + " | ".join(f"{s:,.0f}" for s in sup) + " | suppliers (NOT our capital) |")
 print("| of which withdrawal cash held by the floor | " + " | ".join(f"{s*0.2:,.0f}" for s in sup) + " | suppliers' own un-lent cash |")
 d = 1 + I30
-print("| Liquidator inventory, first round per operator (0.5 x debt incl. interest), x2 operators | " + " | ".join(f"{0.5*c*d:,.0f} x 2" for c in CAPS) + " | liquidator operators (capital at work, not spent) |")
-print("| Liquidator inventory, no recycling, worst tail on ONE operator (up to ~0.88 x debt) | " + " | ".join(f"{0.88*c*d:,.0f}" for c in CAPS) + " | the operator that stays available |")
+print("| Liquidator inventory, first round per operator (0.5 x debt incl. interest; minimum IF recycling works, not the requirement) | " + " | ".join(f"{0.5*c*d:,.0f}" for c in CAPS) + " | liquidator operators (capital at work, not spent) |")
+print("| **REQUIREMENT per operator, no recycling: at least 0.75 x cap debt** | " + " | ".join(f"{0.75*c:,.0f}" for c in CAPS) + " | each liquidator operator (capital at work, recovered, not spent) |")
+print("| **about 0.88 x in a 30-day outage tail (incl. interest)** | " + " | ".join(f"{0.88*c*d:,.0f}" for c in CAPS) + " | each liquidator operator |")
 for name, cf, f in (("PW40", 0.40, 0.60), ("PW40", 0.40, 0.75), ("PW30", 0.30, 0.75), ("PW30", 0.30, 0.80)):
     L = loss_frac_of_cap(cf, f)
     print(f"| Protection capital {name}, tail -{f*100:.0f}% | " + " | ".join(f"{L*c:,.0f}" for c in CAPS) + " | the operator (treasury, not yet committed) |")
