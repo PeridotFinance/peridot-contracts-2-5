@@ -1,0 +1,21 @@
+COLD SINGLE-RUN suite=routes-slow attempt=1
+UTC start: 2026-11-05T14:14:49Z
+git HEAD: 6c584f6d44c592e9e35fb04d74dd6cb39056994d
+git status --short (contracts/): 36 entries
+RPC host: https://api.avax.network (direct, no proxy)
+isolated home: /tmp/avalanche-cold-home.ktKQwL (fresh; RPC cache entries at start: 0)
+command: HOME=/tmp/avalanche-cold-home.ktKQwL forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheWavaxUsdcRoutesForkTest$ -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 2 --fork-retries 20 --fork-retry-backoff 5000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+

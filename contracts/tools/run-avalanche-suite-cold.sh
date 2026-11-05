@@ -5,12 +5,13 @@
 # here is a pass of one cold run. Per-attempt directory with the full forge log; summary.tsv lists every attempt.
 #
 # usage: AVALANCHE_MAINNET_RPC_URL=<archive RPC> tools/run-avalanche-suite-cold.sh <name> <contract-regex> <outdir> [max_attempts]
+# Optional pacing: COLD_CUPS (client-side compute units per second, default 10), COLD_BACKOFF_MS (default 2000).
 # Test hook: REPRO_COLD_CMD replaces the forge command (it runs with HOME set to the fresh home).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 NAME="$1"; REGEX="$2"; OUT="$3"; MAX="${4:-6}"
 : "${AVALANCHE_MAINNET_RPC_URL:=simulated}"; export AVALANCHE_MAINNET_RPC_URL
-export COLD_NAME="$NAME" COLD_REGEX="$REGEX"
+export COLD_NAME="$NAME" COLD_REGEX="$REGEX" COLD_CUPS="${COLD_CUPS:-10}" COLD_BACKOFF_MS="${COLD_BACKOFF_MS:-2000}"
 ATTEMPT_CMD='
 set -u
 H="$(mktemp -d /tmp/avalanche-cold-home.XXXXXX)"
@@ -20,7 +21,7 @@ for d in "Library/Application Support/svm" ".svm"; do
 done
 LOG="$REPRO_ATTEMPT_DIR/suite.txt"
 RPCHOST="$(echo "$AVALANCHE_MAINNET_RPC_URL" | sed -E "s#^(https?://[^/]+).*#\1#")"
-CMD="forge test --threads 1 --gas-limit 9000000000000000000 --match-contract $COLD_REGEX -vv --rpc-url $AVALANCHE_MAINNET_RPC_URL --compute-units-per-second 10 --fork-retries 20 --fork-retry-backoff 2000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol"
+CMD="forge test --threads 1 --gas-limit 9000000000000000000 --match-contract $COLD_REGEX -vv --rpc-url $AVALANCHE_MAINNET_RPC_URL --compute-units-per-second ${COLD_CUPS:-10} --fork-retries 20 --fork-retry-backoff ${COLD_BACKOFF_MS:-2000} --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol"
 {
   echo "COLD SINGLE-RUN suite=$COLD_NAME attempt=$REPRO_ATTEMPT"
   echo "UTC start: $(date -u +%FT%TZ)"
