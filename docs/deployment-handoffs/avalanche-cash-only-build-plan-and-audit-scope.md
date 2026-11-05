@@ -83,4 +83,4 @@ The isolated-margin stack (`contracts/margin/*` other than the two oracle files)
 3. **Reference-price and operator software** are off-chain: not audited as contracts. A security review of the key-handling and transaction-building code (steps 3 and 4 of section 2) is recommended before any live key is used.
 
 ### 4.4 Evidence the auditor receives
-Fork suites (gate: `tools/run-avalanche-section5-gate.sh`), the deployment rehearsal (10 tests), storage-layout checks, the mutation records in the loss-handling and treasury documents, and the reproduction record (`avalanche-cold-repro/`) with its stated gap (the routes suite is not yet reproduced from a cold cache).
+Fork suites (gate: `tools/run-avalanche-section5-gate.sh`), the deployment rehearsal (10 tests), storage-layout checks, the mutation records in the loss-handling and treasury documents, and the reproduction record (`avalanche-cold-repro/`) (the routes suite was reproduced cold once on a private archive RPC, 38/38; on the public endpoint it fails on HTTP 429).
