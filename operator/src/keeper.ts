@@ -91,6 +91,34 @@ export function checkBudget(args: { debt: bigint; keeperUsdc: bigint; spent24h: 
   return { ok: true, allowance };
 }
 
+/**
+ * The AUTHORITATIVE 24 h spend: every RepayBorrow on pUSDC whose payer is the keeper wallet, read from the chain. The state file's ledger can be
+ * lost (an ephemeral container filesystem, a restored backup, an operator deleting it); the daily cap must not depend on it. Looks back
+ * `lookbackBlocks` (0.5 s per block is assumed, a conservative bound for Avalanche, so 24 h = 172,800 blocks) and filters by block time.
+ */
+export async function spentOnChain(provider: providers.Provider, pUsdc: string, keeper: string, nowSeconds: number, chunkBlocks: number, notBefore: number, windowSeconds = 86_400, minBlockSeconds = 0.5): Promise<{ spent: bigint; payments: KeeperPayment[] }> {
+  const head = await provider.getBlockNumber();
+  const from = Math.max(1, notBefore, head - Math.ceil(windowSeconds / minBlockSeconds)); // no repayment can predate the deployment of pUSDC
+  const topic = pIface.getEventTopic("RepayBorrow");
+  const payments: KeeperPayment[] = [];
+  const tsCache = new Map<number, number>();
+  for (let s = from; s <= head; s += chunkBlocks) {
+    const logs = await provider.getLogs({ address: pUsdc, fromBlock: s, toBlock: Math.min(head, s + chunkBlocks - 1), topics: [topic] });
+    for (const l of logs) {
+      const ev = pIface.parseLog(l);
+      if ((ev.args.payer as string).toLowerCase() !== keeper.toLowerCase()) continue;
+      let ts = tsCache.get(l.blockNumber);
+      if (ts === undefined) {
+        ts = (await provider.getBlock(l.blockNumber)).timestamp;
+        tsCache.set(l.blockNumber, ts);
+      }
+      if (ts <= nowSeconds - windowSeconds) continue;
+      payments.push({ ts, account: ev.args.borrower as string, amountUsdc: (ev.args.repayAmount as BigNumber).toString(), debtAtDecision: "0", txHash: l.transactionHash, blockNumber: l.blockNumber });
+    }
+  }
+  return { spent: payments.reduce((a, p) => a + BigInt(p.amountUsdc), 0n), payments };
+}
+
 // ------------------------------------------------------------------ execution
 export interface KeeperDeps {
   ctx: Ctx;
@@ -196,7 +224,16 @@ async function payOne(deps: KeeperDeps, st: KeeperState, account: string): Promi
 
   // 3-5. budget, gas, fee
   const usdcBal: BigNumber = erc20.decodeFunctionResult("balanceOf", await provider.call({ to: USDC, data: erc20.encodeFunctionData("balanceOf", [keeper]) }))[0];
-  const budget = checkBudget({ debt, keeperUsdc: BigInt(usdcBal.toString()), spent24h: spentInWindow(st.payments, nowS()), capUnits: BigInt(cfg.keeper.dailySpendCapUsdc) * 1_000_000n, marginBp: cfg.keeper.allowanceMarginBp });
+  // the daily cap uses the larger of the state ledger and the chain's own record of this wallet's repayments (the ledger file may have been lost)
+  let onChain: { spent: bigint };
+  try {
+    onChain = await spentOnChain(provider, cfg.deployment.pUsdc, keeper, nowS(), cfg.monitor.logChunkBlocks, cfg.deployment.deploymentBlock);
+  } catch (e) {
+    // the cap cannot be verified (typically an RPC plan that limits eth_getLogs ranges): FAIL CLOSED, no payment, a human is told why
+    return { kind: "skip", reason: `the 24 h spend cannot be verified from the chain (eth_getLogs failed: ${safeError(e)}); no payment without a verifiable daily cap. Use an endpoint that allows eth_getLogs over monitor.logChunkBlocks blocks` };
+  }
+  const spent24h = (() => { const a = spentInWindow(st.payments, nowS()); return a > onChain.spent ? a : onChain.spent; })();
+  const budget = checkBudget({ debt, keeperUsdc: BigInt(usdcBal.toString()), spent24h, capUnits: BigInt(cfg.keeper.dailySpendCapUsdc) * 1_000_000n, marginBp: cfg.keeper.allowanceMarginBp });
   if (!budget.ok) return { kind: "skip", reason: budget.reason! };
   const gas = await provider.getBalance(keeper);
   if (gas.lt(cfg.keeper.minGasWei)) return { kind: "skip", reason: `keeper AVAX ${gas.toString()} wei is below the floor ${cfg.keeper.minGasWei}` };
@@ -218,6 +255,8 @@ async function payOne(deps: KeeperDeps, st: KeeperState, account: string): Promi
   const approve = (amount: bigint) => send(USDC, erc20.encodeFunctionData("approve", [cfg.deployment.pUsdc, amount.toString()]), BigNumber.from(120_000));
 
   // exact-need allowance, then simulate, then the sentinel repay. Everything that can throw WITHOUT sending is prepared BEFORE the approval.
+  // a standing allowance to the market before this payment means an earlier payment was interrupted (possibly with the state file lost): stop and let a human look
+  if ((await allowanceNow()).gt(0)) return { kind: "skip", reason: "the keeper wallet already has a non-zero USDC allowance to pUSDC before this payment (an interrupted earlier payment?): check it, reset it to 0, then clear the halt", halt: true };
   const startBal = usdcBal;
   const repayData = pIface.encodeFunctionData("repayBorrowBehalf", [account, MAX_UINT]);
   await approve(budget.allowance);

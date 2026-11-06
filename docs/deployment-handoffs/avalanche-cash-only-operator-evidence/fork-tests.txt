@@ -1,43 +1,45 @@
-Provenance: operator/ treasury keeper (build step 2) and monitor. Working tree on top of git c77c6c94, 2026-11-06T09:06:28Z. Node v26.4.0, ethers 5.8.0, anvil 1.7.1-Homebrew. Private archive RPC through a local pass-through proxy (URL from the environment, never printed); local anvil fork at block 99,200,000; accounts impersonated, the keeper signs with a THROWAWAY Foundry keystore created inside the test run and deleted afterwards; nothing signed or broadcast on any real network.
-command: cd operator && npm run test:fork
+Provenance: operator/ treasury keeper + monitor fork tests, 2026-11-06T11:43:45Z, working tree on top of git 99d50760 (keeper now also: on-chain daily cap, standing-allowance guard). Private archive RPC through a local pass-through proxy; THROWAWAY keystore; nothing real signed.
+command: cd operator && node --test --test-concurrency=1 dist/test/fork/truth-table.fork.test.js dist/test/fork/real-pool.fork.test.js
 -----
       real pool at 99200000: TWAP 8.5651 USD, Chainlink 8.5491 USD, gap 18.7 bp (tolerance 500 bp; 14-day max 308 bp)
-✔ real pool TWAP at the pinned block agrees with Chainlink within the 500 bp tolerance (1535.587458ms)
+✔ real pool TWAP at the pinned block agrees with Chainlink within the 500 bp tolerance (1679.163125ms)
 ▶ monitor reproduces the treasury truth table on a mainnet fork
-  ✔ stage 1: healthy half-power, no debt, full-power underwater from interest alone (139.077208ms)
-  ✔ stage 2: AVAX -20% (63.7855ms)
-  ✔ stage 3: AVAX -75%: tail accounts are NOT paid; the half-power account is still recoverable (58.799083ms)
-  ✔ stage 4: exhausted account fires, partially liquidated and untouched tail accounts do not (649.955167ms)
-  ✔ escalation timers: the unpaid default re-alerts at 1 h, 4 h and 24 h (and the alert stream carries the T0 message first) (138.628291ms)
-  ✔ stale AVAX price (1,201 s): nothing fires; an account without debt needs no price (39.072375ms)
-  ✔ a zero AVAX answer: nothing fires (57.887458ms)
-  ✔ oracle failure: a manipulated-low oracle with an honest reference reads PRICE_DIVERGENCE, never DEFAULT; the page tells the guardian (62.748833ms)
-  ✔ reference failure fails closed: observe() reverts (pool history shorter than the window) -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (98.703292ms)
-  ✔ reference failure fails closed: pool liquidity below the configured floor -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (81.371583ms)
-  ✔ a wrong reference can only delay: reference at 10x or 1/10 of the oracle never produces a payment (255.184625ms)
-  ✔ MUTATION 1 (fire on shortfall alone) and MUTATION 3 (no divergence gate) change a verdict this suite pins (175.080041ms)
-  ✔ health: exchange rate, shares consistency, operator inventory, treasury, configuration drift are all quiet on the pilot fixture (73.87025ms)
-  ✔ the incremental borrower index equals a full re-scan of the events from the deployment block (4.622667ms)
-  ✔ keeper refuses although the default is confirmed: a stale AVAX price (96.326542ms)
-  ✔ keeper refuses although the default is confirmed: a zero AVAX answer (160.074125ms)
-  ✔ keeper refuses although the default is confirmed: a manipulated oracle (divergence from the honest reference) (107.983917ms)
-  ✔ keeper refuses although the default is confirmed: no reference price (pool observe reverts) (116.865625ms)
-  ✔ keeper refuses although the default is confirmed: pool liquidity below the floor (108.243541ms)
-  ✔ keeper refuses before spending anything: daily spend cap (60.317083ms)
-  ✔ keeper refuses before spending anything: fee above the cap (60.579333ms)
-  ✔ keeper refuses before spending anything: AVAX gas below the floor (97.788ms)
-  ✔ keeper refuses before spending anything: USDC does not cover the debt (no partial repayment) (141.31475ms)
-  ✔ keeper: a wrong signer is refused at start; a pending (interrupted) payment or a halt stops everything (73.958708ms)
-  ✔ keeper: simulation fails after the approval -> the allowance is reset to 0, nothing is paid, a cooldown prevents spamming (140.488125ms)
-  ✔ keeper: the repay transaction fails after the simulation passed -> allowance reset attempted and the keeper HALTS (109.74775ms)
-  ✔ keeper PAYS exactly the default row: confirmation, exact-need allowance, sentinel repay, read-back, alert; nothing else is paid (297.057792ms)
-  ✔ keeper with several defaults: pays the largest debts first, the DAILY CAP stops the rest, and it alerts (529.394917ms)
-✔ monitor reproduces the treasury truth table on a mainnet fork (40086.344333ms)
-ℹ tests 30
+  ✔ stage 1: healthy half-power, no debt, full-power underwater from interest alone (130.10875ms)
+  ✔ stage 2: AVAX -20% (46.683291ms)
+  ✔ stage 3: AVAX -75%: tail accounts are NOT paid; the half-power account is still recoverable (42.389375ms)
+  ✔ stage 4: exhausted account fires, partially liquidated and untouched tail accounts do not (566.596459ms)
+  ✔ escalation timers: the unpaid default re-alerts at 1 h, 4 h and 24 h (and the alert stream carries the T0 message first) (121.357542ms)
+  ✔ stale AVAX price (1,201 s): nothing fires; an account without debt needs no price (41.21775ms)
+  ✔ a zero AVAX answer: nothing fires (50.653958ms)
+  ✔ oracle failure: a manipulated-low oracle with an honest reference reads PRICE_DIVERGENCE, never DEFAULT; the page tells the guardian (52.39375ms)
+  ✔ reference failure fails closed: observe() reverts (pool history shorter than the window) -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (79.586084ms)
+  ✔ reference failure fails closed: pool liquidity below the configured floor -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (80.529708ms)
+  ✔ a wrong reference can only delay: reference at 10x or 1/10 of the oracle never produces a payment (171.331833ms)
+  ✔ MUTATION 1 (fire on shortfall alone) and MUTATION 3 (no divergence gate) change a verdict this suite pins (130.8435ms)
+  ✔ health: exchange rate, shares consistency, operator inventory, treasury, configuration drift are all quiet on the pilot fixture (64.01125ms)
+  ✔ the incremental borrower index equals a full re-scan of the events from the deployment block (5.203083ms)
+  ✔ keeper refuses although the default is confirmed: a stale AVAX price (74.605125ms)
+  ✔ keeper refuses although the default is confirmed: a zero AVAX answer (89.568917ms)
+  ✔ keeper refuses although the default is confirmed: a manipulated oracle (divergence from the honest reference) (86.434ms)
+  ✔ keeper refuses although the default is confirmed: no reference price (pool observe reverts) (88.94625ms)
+  ✔ keeper refuses although the default is confirmed: pool liquidity below the floor (96.978083ms)
+  ✔ keeper refuses before spending anything: daily spend cap (56.559167ms)
+  ✔ keeper refuses before spending anything: fee above the cap (63.086666ms)
+  ✔ keeper refuses before spending anything: AVAX gas below the floor (64.262833ms)
+  ✔ keeper refuses before spending anything: USDC does not cover the debt (no partial repayment) (101.821167ms)
+  ✔ keeper: a wrong signer is refused at start; a pending (interrupted) payment or a halt stops everything (45.970291ms)
+  ✔ keeper: simulation fails after the approval -> the allowance is reset to 0, nothing is paid, a cooldown prevents spamming (142.714541ms)
+  ✔ keeper: the repay transaction fails after the simulation passed -> allowance reset attempted and the keeper HALTS (89.545834ms)
+  ✔ keeper PAYS exactly the default row: confirmation, exact-need allowance, sentinel repay, read-back, alert; nothing else is paid (580.940042ms)
+  ✔ keeper with several defaults: pays the largest debts first, the DAILY CAP stops the rest, and it alerts (818.275791ms)
+  ✔ keeper: the daily cap survives the loss of its state file (the chain's record of this wallet's repayments is authoritative) (75.105834ms)
+  ✔ keeper: a standing allowance to the market before a payment (an interrupted earlier payment) stops it and halts (104.261ms)
+✔ monitor reproduces the treasury truth table on a mainnet fork (11429.951917ms)
+ℹ tests 32
 ℹ suites 0
-ℹ pass 30
+ℹ pass 32
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 41886.969125
+ℹ duration_ms 13366.77925

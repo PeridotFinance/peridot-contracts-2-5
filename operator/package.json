@@ -13,7 +13,8 @@
     "test:fork": "npm run build && node --test --test-concurrency=1 dist/test/fork/*.test.js",
     "check": "node dist/src/main.js check",
     "run": "node dist/src/main.js run",
-    "build:contracts": "cd ../contracts && FOUNDRY_PROFILE=debt_accounting forge build --out ../operator/.forge-out --cache-path ../operator/.forge-cache --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol"
+    "build:contracts": "cd ../contracts && FOUNDRY_PROFILE=debt_accounting forge build --out ../operator/.forge-out --cache-path ../operator/.forge-cache --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol",
+    "build:prod": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "ethers": "5.8.0"

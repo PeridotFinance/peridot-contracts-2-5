@@ -495,7 +495,7 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
       const { out } = await keeperRound({ c: c(), report: good });
       assert.equal(out.paid.length, 0);
       assert.equal(await keeperTxCount(), 0, "no approval, no payment");
-      assert.match(out.skipped.map((x) => x.reason).join(" | "), expect);
+      assert.match(out.skipped.map((x) => x.reason).join(" | "), expect, JSON.stringify({ halted: ks.halted }));
       assert.ok(Object.keys(alerts.toJson().active).includes(`keeper:blocked:${b0.toLowerCase()}`), "a critical alert says the keeper did not pay");
       await undo();
     });
@@ -623,5 +623,37 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
     const spent = ks.payments.reduce((a, x) => a + Number(x.amountUsdc), 0) / 1e6;
     assert.ok(spent <= 1500, `spent ${spent} within the cap`);
     assert.equal(ks.payments.length, 2, "two payments in total in 24 h");
+  });
+  await t.test("keeper: the daily cap survives the loss of its state file (the chain's record of this wallet's repayments is authoritative)", async () => {
+    await refresh();
+    ks = emptyKeeperState(); // the state file (and with it the payment ledger) is gone, e.g. an ephemeral container filesystem
+    const rep = await cycle();
+    const open = rep.accounts.filter((a) => a.verdict === "DEFAULT_EXHAUSTED");
+    assert.equal(open.length, 1, "one default is still unpaid (it was stopped by the cap)");
+    const nonceBefore = await keeperTxCount();
+    ks = confirmed(open[0]!.account, rep);
+    const { out } = await keeperRound({ report: rep });
+    assert.equal(out.paid.length, 0, "no payment: the cap is computed from the chain, not from the lost ledger");
+    assert.match(out.skipped.map((x) => x.reason).join(" | "), /daily spend cap/);
+    assert.equal(await keeperTxCount(), nonceBefore, "no transaction");
+  });
+  await t.test("keeper: a standing allowance to the market before a payment (an interrupted earlier payment) stops it and halts", async () => {
+    await refresh();
+    const rep = await cycle();
+    const open = rep.accounts.filter((a) => a.verdict === "DEFAULT_EXHAUSTED");
+    assert.ok(open.length >= 1);
+    await chain.setErc20Balance(USDC, TREASURY, (await usdcOf(TREASURY)).add(BigNumber.from(3_000_000_000))); // plenty of USDC, only the cap blocked before
+    const cappedCtx = withKeeper({ dailySpendCapUsdc: 1_000_000 });
+    const sent = await signer.sendTransaction({ to: USDC, data: new utils.Interface(erc20Abi).encodeFunctionData("approve", [d.pUsdc.address, 5_000_000]), gasLimit: BigNumber.from(100_000), maxFeePerGas: utils.parseUnits("100", "gwei"), maxPriorityFeePerGas: utils.parseUnits("1", "gwei") });
+    await sent.wait();
+    ks = confirmed(open[0]!.account, rep);
+    const txBefore = await keeperTxCount();
+    const { out } = await keeperRound({ c: cappedCtx, report: rep });
+    assert.equal(out.paid.length, 0);
+    assert.equal(out.halted, true);
+    assert.equal(await keeperTxCount(), txBefore, "no further transaction");
+    assert.match(ks.halted?.reason ?? "", /non-zero USDC allowance/);
+    await ok(new Contract(USDC, erc20Abi, chain.signer(TREASURY)).approve(d.pUsdc.address, 0)); // the human resets it
+    ks = emptyKeeperState();
   });
 });

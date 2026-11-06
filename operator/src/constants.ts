@@ -13,3 +13,5 @@ export const AVAX_GUARD_SECONDS = 1200;
 export const USDC_GUARD_SECONDS = 90000;
 export const TWAP_WINDOW_SECONDS = 1800;
 export const LIQUIDATION_DUST_USD = 10n ** 16n; // USD 0.01 in 1e18
+/** Uniswap V3 SwapRouter02 on Avalanche (cycle document section 1: factory() and WETH9() checked on chain) and the pool fee used for the conversion. */
+export const UNIV3_SWAP_ROUTER02 = "0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE";

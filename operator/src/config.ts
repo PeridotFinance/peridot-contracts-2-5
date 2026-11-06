@@ -41,6 +41,17 @@ export interface MonitorConfig {
   reference: { toleranceBp: number; minPoolLiquidity: string; minPoolLiquiditySource: LiquiditySource };
   /** the TREASURY KEEPER wallet: a hot wallet holding the protection USDC (the Safe is the cold reserve that funds it) */
   treasury: { address: string };
+  /** the LIQUIDATOR EXECUTOR of ONE operator (each operator is its own process, host, keystore and inventory); never enabled together with the keeper */
+  executor: {
+    enabled: boolean;
+    operator: string; // the NAME of this process's entry in `operators` (the signer must be that entry's address)
+    keystorePath: string;
+    passwordEnv: string;
+    convertToUsdc: boolean; // redeem the seized pWAVAX and swap WAVAX -> USDC after each liquidation (false = hold, the no-recycling mode)
+    minRepayUsdc: number; // an operator with less USDC than this does not liquidate
+    maxFeeGwei: number;
+    minGasWei: string;
+  };
   keeper: {
     enabled: boolean;
     keystorePath: string; // Foundry keystore file (encrypted); the password comes from the environment variable named by passwordEnv
@@ -170,6 +181,21 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
     }
   }
   addr(problems, "treasury.address", c.treasury?.address);
+  {
+    const x = c.executor;
+    if (typeof x?.enabled !== "boolean") problems.push({ path: "executor.enabled", problem: "must be a boolean" });
+    else if (x.enabled) {
+      if (isUnsetString(x.operator)) problems.push({ path: "executor.operator", problem: "unset (placeholder): the name of this process's entry in `operators`" });
+      else if (Array.isArray(c.operators) && !c.operators.some((o: any) => o?.name === x.operator)) problems.push({ path: "executor.operator", problem: "does not name an entry of `operators`" });
+      if (isUnsetString(x.keystorePath)) problems.push({ path: "executor.keystorePath", problem: "unset (placeholder)" });
+      if (isUnsetString(x.passwordEnv) || !/^[A-Z][A-Z0-9_]*$/.test(String(x.passwordEnv))) problems.push({ path: "executor.passwordEnv", problem: "must be the NAME of an environment variable (the password itself never goes in the file)" });
+      if (typeof x.convertToUsdc !== "boolean") problems.push({ path: "executor.convertToUsdc", problem: "must be a boolean" });
+      int(problems, "executor.minRepayUsdc", x.minRepayUsdc, 1, 1_000_000);
+      int(problems, "executor.maxFeeGwei", x.maxFeeGwei, 1, 5000);
+      bigintString(problems, "executor.minGasWei", x.minGasWei, true);
+      if (c.keeper?.enabled === true) problems.push({ path: "executor.enabled", problem: "the executor and the treasury keeper are different wallets on different hosts: enable only one per process" });
+    }
+  }
   {
     const k = c.keeper;
     if (typeof k?.enabled !== "boolean") problems.push({ path: "keeper.enabled", problem: "must be a boolean" });

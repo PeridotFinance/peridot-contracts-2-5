@@ -17,6 +17,8 @@ import { multicall } from "./multicall";
 import { safeError } from "./mask";
 import { unrecoverableDebt } from "./backing";
 import { emptyKeeperState } from "./keeper";
+import { emptyExecutorState } from "./executor";
+import type { ExecutorState } from "./executor";
 import type { KeeperState } from "./keeper";
 import type { BackingResult } from "./backing";
 import { USDC } from "./constants";
@@ -28,9 +30,10 @@ export interface MonitorState {
   unknownPriceSince: number | null;
   lastIndexCrossCheckAt: number;
   keeper: KeeperState;
+  executor: ExecutorState;
 }
 export function emptyMonitorState(cfg: MonitorConfig): MonitorState {
-  return { index: emptyIndex(cfg.deployment.deploymentBlock), health: emptyHealthState(), alerts: { active: {} }, unknownPriceSince: null, lastIndexCrossCheckAt: 0, keeper: emptyKeeperState() };
+  return { index: emptyIndex(cfg.deployment.deploymentBlock), health: emptyHealthState(), alerts: { active: {} }, unknownPriceSince: null, lastIndexCrossCheckAt: 0, keeper: emptyKeeperState(), executor: emptyExecutorState() };
 }
 
 export interface AccountReport {
@@ -141,6 +144,7 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
     unknownPriceSince,
     lastIndexCrossCheckAt: state.lastIndexCrossCheckAt,
     keeper: state.keeper,
+    executor: state.executor,
   };
   return {
     report: {

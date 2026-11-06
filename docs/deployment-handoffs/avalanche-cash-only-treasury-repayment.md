@@ -2,7 +2,7 @@
 
 Status: **PROCEDURE SPECIFICATION backed by fork tests. NO treasury funds are committed. Nothing in this document is an approved parameter, cap, role assignment or deployment.** The operator accepted the treasury `repayBorrowBehalf` only as the *preferred loss-handling mechanism to qualify for* the one-direction pilot; this document specifies the procedure and measures what it can and cannot do. The USD 1,000 / 5,000 / 10,000 borrow caps are **illustrative research sizes, not approved caps**. The audited reserve-first write-off ("S3" in `avalanche-cash-only-loss-handling.md`) is a **separate scaling proposal**: it is neither built, extended nor re-tested here. Nothing under `contracts/contracts/` was changed; nothing was committed, signed, broadcast or deployed; no keys were used; borrowing stays paused in the repository's deployment state. Pilot candidates: `PW30` (WAVAX collateral factor 30%) and `PW40` (40%), USDC collateral factor 0, WAVAX borrowing paused, 20% cash floor on pUSDC, close factor 50%, liquidation incentive 1.08 (PROVISIONAL), from `avalanche-cash-only-decision-table.md`.
 
-> **Update 2026-11-06:** the operator replaced the manual Safe-signed repayment by an automatic **treasury keeper** (a hot wallet that holds the protection USDC and runs `repayBorrowBehalf` itself when this rule returns `DEFAULT_EXHAUSTED`; the Safe is the cold reserve that funds it). The rule of section 2 is unchanged and the keeper adds only restrictions; see `avalanche-cash-only-treasury-keeper.md`. Sections 3 (roles) and 5.3 (alerts) describe the earlier manual design where they differ.
+> **Update 2026-11-06:** the operator replaced the manual Safe-signed repayment by an automatic **treasury keeper** (a hot wallet that holds the protection USDC and runs `repayBorrowBehalf` itself when this rule returns `DEFAULT_EXHAUSTED`; the Safe is the cold reserve that funds it). The rule of section 2 is unchanged and the keeper adds only restrictions; see `avalanche-cash-only-treasury-keeper.md`. Sections 3 (roles) and 5.3 (alerts) were rewritten to the keeper design on the same date; sections 4 (funding) and 6 (insufficient funding) still speak of "the treasury" and "signers" where the keeper and the Safe-funded top-up are meant.
 
 ## 0. Summary
 
@@ -141,19 +141,20 @@ With the -75% gap applied but nothing liquidated, a treasury holding USD 10,000 
 
 ## 3. (b) Authorized operator, roles and what a malicious or mistaken repayment can do
 
-`repayBorrowBehalf` is **permissionless** in the contract: anyone can call it and it pulls the USDC from **the caller**. Authorization is therefore not a contract permission; it is **who holds the treasury USDC and which key can move it**.
+`repayBorrowBehalf` is **permissionless** in the contract: anyone can call it and it pulls the USDC from **the caller**. Authorization is therefore not a contract permission; it is **who holds the treasury USDC and which key can move it**. **Design (operator decision of 2026-11-06): the repayment is AUTOMATIC.** A dedicated hot wallet, the **treasury keeper**, holds the protection USDC and executes `repayBorrowBehalf` itself when the rule of section 2 returns `DEFAULT_EXHAUSTED`. The Avalanche Safe is only the **cold reserve that funds the keeper**; it is not an execution path for repayments. Specification, tests and limits of the keeper: `avalanche-cash-only-treasury-keeper.md` (code `operator/src/keeper.ts`).
 
-### 3.1 Roles (proposed; none assigned, none funded)
+### 3.1 Roles
 | Role | Holds | Can do | Cannot do |
 | --- | --- | --- | --- |
-| **Monitor / detector** | no funds, no signing key (read-only RPC; alert channel) | run `evaluate` every block, raise alerts, prepare the batch (approve + repay) for signature | move funds, sign, call any market function |
-| **Treasury signers** (multisig; M-of-N) | the treasury account's USDC (and a small amount of AVAX for gas) | sign `approve(pUSDC, budget)` + `repayBorrowBehalf(account, max)` batches that the rule justifies | pause, set parameters, reduce reserves, change oracle/floor (tested: all refused) |
-| **Liquidator operators** (two independent, per the decision table) | their own USDC inventory (not the treasury) | `liquidateBorrow` | touch the treasury; the treasury never liquidates |
+| **Monitor** (read-only process, any host) | no funds, no signing key (read-only RPC; alert channel) | evaluate the rule every cycle, raise alerts, tripwire on unexplained outflow of the keeper wallet | move funds, sign, call any market function |
+| **Treasury keeper** (hot wallet, Foundry keystore on its own dedicated host; password in that host's encrypted environment) | the protection USDC (sized to the -75% tail, USD 1,191 for PW30 at the USD 5,000 cap) and gas AVAX | `approve(pUSDC, debt + 10 bp)` and `repayBorrowBehalf(account, max)` for an account whose verdict is `DEFAULT_EXHAUSTED`, after confirmation (2 evaluations, 60 s), re-verification at execution, within the daily spend cap (USD 1,500) and the fee cap; halts on anything unexpected | pause, set parameters, reduce reserves, change oracle/floor, pay a partial amount, pay any account the rule does not name (tested: it sends no transaction on any other verdict, under a stale, zero or divergent price, or without a reference price) |
+| **Avalanche Safe** (cold reserve; the Ledger is its only owner today) | the reserve USDC | top the keeper up (a manual transaction, helper not built) | repay debts (not an execution path) |
+| **Liquidator operators** (two independent hot keeper wallets, each on its own host, each with its own USDC inventory and gas; no admin rights) | their own USDC inventory (not the treasury) | `liquidateBorrow` (permissionless), redeem, swap WAVAX to USDC (`avalanche-cash-only-operator-executor.md`) | touch the treasury; the treasury never liquidates |
 | **Market admin / timelock and pause guardian** | no treasury funds | parameters; guardian may pause borrowing and minting | repay for anyone using treasury funds |
 
-Key separation: the monitor key never signs; the treasury signers are not the market admin, not the pause guardian and not liquidator operators; the guardian key is separate from the admin timelock (existing design). The treasury account **holds only USDC (plus gas AVAX)** and **no admin power on the markets**.
+Key separation: three different hot wallets on three different hosts (operator 1, operator 2, treasury keeper); none is the market admin or the pause guardian; the guardian key is separate from the admin timelock (existing design). The keeper wallet **holds only USDC (plus gas AVAX)** and **no admin power on the markets**. What a compromised keeper host can do (everything the wallet holds; the daily cap is software) and the tripwire that detects it: keeper document section 5.
 
-Tested (`testRoles_...`): the treasury is not the controller admin, not the pause guardian, not a market admin; as the treasury key, `_setBorrowPaused`, `_setCollateralFactor`, `_reduceReserves`, `_setBorrowCashFloor` and `_setPriceOracle` are all refused; a third party with no funds cannot repay (the call pulls from the caller), and cannot `transferFrom` the treasury although the treasury approved the market; the approval is bounded (a second repayment beyond the approved budget fails); anyone may repay with their own money.
+Tested (`testRoles_...`, Foundry): the treasury account is not the controller admin, not the pause guardian, not a market admin; as that account, `_setBorrowPaused`, `_setCollateralFactor`, `_reduceReserves`, `_setBorrowCashFloor` and `_setPriceOracle` are all refused; a third party with no funds cannot repay (the call pulls from the caller), and cannot `transferFrom` the treasury although it approved the market; the approval is bounded (a second repayment beyond the approved budget fails); anyone may repay with their own money.
 
 ### 3.2 What a mistaken or malicious repayment can and cannot do (tested)
 | Action | Result |
@@ -166,9 +167,9 @@ Tested (`testRoles_...`): the treasury is not the controller admin, not the paus
 | Repay on the wrong market (pWAVAX has no borrows) | refused |
 | Third party calls with the treasury's approval | impossible: the call spends the caller's funds |
 | Rule fooled by a manipulated price | the treasury pays a recoverable account's debt: a loss bounded by the treasury balance; prevented by the independent reference price (2.3) |
-| Treasury signer colludes with a borrower (borrows at the cap, then "defaults") | same as any signer misuse: bounded by the treasury balance; the on-chain rule gives the co-signers something to verify before signing. Not preventable by the contract |
+| Keeper key compromised, or a keeper host operator colludes with a borrower (borrows at the cap, then "defaults") | bounded by the keeper wallet's balance (the daily cap is software and does not bind an attacker with the key); the monitor's `treasury:unexplained-outflow` finding detects USDC leaving without a recorded payment. Not preventable by the contract |
 
-Not tested: a transaction guard that restricts the multisig to `approve`/`repayBorrowBehalf` on pUSDC (a Safe module or similar); gas and nonce handling; signer availability.
+Not tested: gas and nonce handling on a congested chain, nonce recovery after a dropped transaction, the real Safe top-up flow, keeper host availability (a keeper that is down pays nothing; the unpaid-default alerts at 1 h / 4 h / 24 h are the safety net).
 
 ## 4. (c) Available funding the treasury must hold
 
@@ -322,18 +323,24 @@ The shortfall in percent of supply, the worst single supplier's recovery and the
 - **Early/late advantage does not grow with time; it exists for as long as the repayment is outstanding.** At 0% funding the spread between the best and worst order for the same supplier is the full range (e.g. PW40 -75%: supplier A recovers 31.7%..100%; supplier D 0%..100%).
 - **Funding 100% of L0 and responding late leaves a small residual**: at 7 days and below nobody is short (the reserves absorb the phantom interest); at 30 days PW40 -75% leaves **0.08% of supply** short (worst single recovery 99.2%) and PW30 -80% 0.06% (99.4%). Funding 100% of `L(delay)` leaves nobody short at any delay (asserted).
 
-### 5.3 Proposed response-time target and alerts (PROPOSAL; the tests measure the cost of waiting, they cannot choose the number)
-| Alert | Condition (monitor, every block) | Action |
-| --- | --- | --- |
-| feed age | AVAX price age above half the limit (600 s of 1,200 s); USDC age above 80,000 s of 90,000 s (the decision table's feed numbers) | investigate; the rule is silent on stale prices |
-| liquidatable | any account with verdict `LIQUIDATABLE_RECOVERABLE` or worse | liquidator operators |
-| tail account | any account `UNRECOVERABLE_LIQUIDATE_FIRST` (expected treasury call = `debtUsd - maxRecoveryUsd`, available from the detector output) | page treasury signers: a call is coming, check the balance |
-| default | any account `DEFAULT_EXHAUSTED` | **T0.** Page the signers; guardian pauses borrowing and minting (section 6.3); sign and submit the batch |
-| funding | treasury USDC balance below the sum of `debt` over the accounts at `UNRECOVERABLE_LIQUIDATE_FIRST` or worse | top up (section 4.3) |
-| unpaid | `DEFAULT_EXHAUSTED` unpaid at T0 + 1 h; again at T0 + 4 h | escalate; at T0 + 4 h consider partial repayment (section 6) |
-| market | `claims - cash > 0` for pUSDC (some supplier cannot exit) | same as default |
+### 5.3 Response-time target and alerts (keeper design; the targets are operational choices, the tests measure the cost of waiting)
+The keeper pays automatically, so the response time is the **confirmation window plus one transaction**: `DEFAULT_EXHAUSTED` must read on 2 evaluations at least 60 s apart, then the keeper re-verifies, approves, repays and reads back (about 3 transactions, seconds on Avalanche). The TWAP gate can hold a verdict at `PRICE_DIVERGENCE` for up to about 30 minutes after a fast move; nothing is paid during that time.
 
-**Proposed target: repayment mined within 1 hour of T0, escalation at 4 hours, outer bound 24 hours.** Basis: the interest cost is negligible even at 30 days (at most 0.52% of L0), so the target is not set by interest; it is set by the exit window (section 5.1), which a supplier watching the same on-chain facts can use immediately, and by multisig signing time. The numbers 1 h / 4 h / 24 h are operational choices, not results of these tests.
+| Alert | Condition (monitor, every cycle) | Action |
+| --- | --- | --- |
+| feed age | AVAX price age above half the limit (600 s of 1,200 s), critical at 80%; USDC age above 89% of 90,000 s, critical at 95% | investigate; the rule is silent on stale prices |
+| liquidatable | any account with verdict `LIQUIDATABLE_RECOVERABLE` or worse | liquidator operators (their executors act on their own) |
+| tail account | any account `UNRECOVERABLE_LIQUIDATE_FIRST` (expected keeper payment = `debtUsd - maxRecoveryUsd`) | watch: a payment is coming; check the keeper balance |
+| default (T0) | any account `DEFAULT_EXHAUSTED` | the keeper pays after confirmation; the guardian decides on pausing borrowing and minting (section 6.3) |
+| payment | every keeper payment | message with the read-back (account, amount, transaction, balance left) |
+| not paid | a confirmed default the keeper did NOT pay (cap, balance, fee, gas, re-verification, halt) | **page**: a human decides (top up from the Safe, raise the cap, clear a halt, partial repayment) |
+| unpaid | `DEFAULT_EXHAUSTED` still unresolved at T0 + 1 h, T0 + 4 h and T0 + 24 h | escalate; at T0 + 4 h consider partial repayment (section 6) |
+| funding | keeper USDC below the sum of `debt` over accounts at `UNRECOVERABLE_LIQUIDATE_FIRST` or worse | top up from the Safe (section 4.3) |
+| unrecoverable debt | `sum over borrowers of max(0, debt - collateral/LI) - reserves > 0` (`operator/src/backing.ts`; replaces the earlier "claims minus cash" condition, which is positive whenever borrows are outstanding) | same as default; zero on the healthy and recoverable rows, positive on the tail and default rows |
+| unexplained outflow | keeper USDC fell by more than its recorded payments explain | **page**: possible key compromise; move the remaining funds with the Safe procedure and rotate the key |
+| halted | keeper or executor halted (revert, read-back mismatch, interrupted payment) | a human checks allowance, balance, the account's debt, then clears the flag |
+
+**Targets: payment mined within minutes of T0 (confirmation window + one transaction); escalation at 1 h, 4 h and 24 h if unresolved.** Basis unchanged: the interest cost is negligible even at 30 days (at most 0.52% of L0); what matters is the exit window (section 5.1). The numbers 1 h / 4 h / 24 h are operational choices, not results of these tests.
 
 ## 6. (e) Insufficient funding
 
@@ -539,7 +546,7 @@ Earlier runs against the 14-test suite (before the late-funding and reference te
 - **Three identical-leverage borrowers** at 100% of power; different leverage, many borrowers, accounts holding USDC collateral, debt in both markets, the pWAVAX loss direction (not part of the pilot).
 - Liquidation by one liquidator without competition or gas spikes; liquidation dust above USD 0.01; liquidators that stop before the collateral is exhausted (the account then stays `UNRECOVERABLE_LIQUIDATE_FIRST` and nothing is paid: a monitoring alert, not a treasury action).
 - **Four suppliers in a single market** and exit orders where each supplier exits entirely; partial exits, re-deposits, suppliers entering after the event (the mint-pause mitigation is tested; their treatment if unpaused is not).
-- Multisig mechanics, signer availability, a Safe module/guard limiting the calls, gas payment, the real time-to-sign (the response targets are proposals).
+- Keeper mechanics beyond the fork tests (keeper document section 5): gas behaviour on a congested chain, nonce recovery after a dropped transaction, keeper host availability, the real Safe top-up flow (helper not built); the response targets are proposals.
 - Reserves are treated as they are in the fixture (10% of interest); an admin `_reduceReserves` before exits would raise the shortfall by the amount withdrawn (measured in the earlier loss-handling suite, not re-run).
 - The `cash + borrows - reserves` identity tolerance is 8 wei and the order-total tolerance 32 wei; rounding only.
 - Everything uses the placeholder rate model; the post-event APR (2.8% to 6.3%) depends on it. Interest is the fixture's 1 block = 1 second.

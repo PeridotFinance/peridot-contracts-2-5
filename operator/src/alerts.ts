@@ -6,7 +6,7 @@ import type { Finding, Severity } from "./health";
 import type { MonitorConfig } from "./config";
 
 export interface AlertMessage {
-  kind: "new" | "severity-up" | "escalation" | "resolved" | "payment";
+  kind: "new" | "severity-up" | "escalation" | "resolved" | "payment" | "action";
   key: string;
   severity: Severity;
   text: string;

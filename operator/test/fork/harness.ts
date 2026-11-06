@@ -74,15 +74,38 @@ function startProxy(upstream: string): Promise<{ server: http.Server; port: numb
         res.writeHead(r.statusCode ?? 502, { "content-type": "application/json" });
         r.pipe(res);
       });
+      // a stalled upstream request must not hang the fork: after 15 s answer 504 so that anvil's own retry logic re-asks
+      up.setTimeout(15_000, () => up.destroy(new Error("upstream timeout")));
       up.on("error", () => {
         stats.non200++;
-        res.writeHead(502);
-        res.end('{"error":"upstream unreachable"}');
+        if (!res.headersSent) res.writeHead(504);
+        res.end('{"error":"upstream timeout or unreachable"}');
       });
       up.end(body);
     });
   });
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, port: (server.address() as net.AddressInfo).port, stats })));
+}
+
+/**
+ * ethers v5 re-checks pending transactions only when its polling sees a NEW block number, which an instant-mining local node (or a node that has just
+ * been reverted to a lower block) may never produce for an already-mined transaction: `tx.wait()` then stalls forever. For the fork tests the wait is
+ * replaced by a direct receipt poll. (Production code uses the stock provider; this class exists only in the test harness.)
+ */
+class ForkProvider extends providers.JsonRpcProvider {
+  async _waitForTransaction(hash: string, confirmations: number, timeout: number, _replaceable: unknown): Promise<providers.TransactionReceipt> {
+    const deadline = Date.now() + (timeout || 120_000);
+    for (;;) {
+      const raw = await this.send("eth_getTransactionReceipt", [hash]);
+      if (raw && raw.blockNumber) {
+        const r = this.formatter.receipt(raw);
+        r.confirmations = Math.max(1, confirmations);
+        return r;
+      }
+      if (Date.now() > deadline) throw new Error(`timeout waiting for ${hash}`);
+      await new Promise((res) => setTimeout(res, 20));
+    }
+  }
 }
 
 export class ForkChain {
@@ -92,17 +115,22 @@ export class ForkChain {
   proxyStats!: { requests: number; non200: number };
   anvilLog = "";
 
-  static async start(): Promise<ForkChain> {
+  url = "";
+
+  /** `forkBlock`: a block number, or "latest" for the current mainnet head (the ceremony rehearsal); default = the pinned block of the study. */
+  static async start(forkBlock: number | "latest" = PIN_BLOCK): Promise<ForkChain> {
     const f = new ForkChain();
     const upstream = requireRpcUrlFromEnv();
     const px = await startProxy(upstream);
     f.proxy = px.server;
     f.proxyStats = px.stats;
     const port = await freePort();
-    f.anvil = spawn("anvil", ["--fork-url", `http://127.0.0.1:${px.port}`, "--fork-block-number", String(PIN_BLOCK), "--port", String(port), "--auto-impersonate", "--code-size-limit", "1000000", "--gas-limit", "1000000000", "--retries", "20", "--fork-retry-backoff", "1000", "--compute-units-per-second", "200", "--no-rate-limit", "--silent"], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, AVALANCHE_MAINNET_RPC_URL: "", AVALANCHE_RPC: "" } });
+    f.anvil = spawn("anvil", ["--fork-url", `http://127.0.0.1:${px.port}`, ...(forkBlock === "latest" ? [] : ["--fork-block-number", String(forkBlock)]), "--port", String(port), "--auto-impersonate", "--code-size-limit", "1000000", "--gas-limit", "1000000000", "--retries", "20", "--fork-retry-backoff", "1000", "--compute-units-per-second", "200", "--no-rate-limit", "--silent"], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, AVALANCHE_MAINNET_RPC_URL: "", AVALANCHE_RPC: "" } });
     f.anvil.stdout?.on("data", (d) => (f.anvilLog += String(d)));
     f.anvil.stderr?.on("data", (d) => (f.anvilLog += String(d)));
-    f.provider = new providers.JsonRpcProvider(`http://127.0.0.1:${port}`, { chainId: 43114, name: "avalanche-fork" });
+    f.url = `http://127.0.0.1:${port}`;
+    f.provider = new ForkProvider(`http://127.0.0.1:${port}`, { chainId: 43114, name: "avalanche-fork" });
+    f.provider.pollingInterval = 100; // ethers polls receipts every 4 s by default; the local fork mines instantly
     for (let i = 0; i < 120; i++) {
       try {
         await f.provider.send("eth_chainId", []);
@@ -172,6 +200,10 @@ export class Mocks {
   async install(): Promise<void> {
     for (const feed of [AVAX_FEED, USDC_FEED]) await this.chain.setCode(feed, this.feedAbi.deployed);
     await this.chain.setCode(UNIV3_POOL_WAVAX_USDC_500, this.poolAbi.deployed);
+  }
+  /** only the Chainlink feeds (the real Uniswap pool stays real: the executor swaps through it) */
+  async installFeedsOnly(): Promise<void> {
+    for (const feed of [AVAX_FEED, USDC_FEED]) await this.chain.setCode(feed, this.feedAbi.deployed);
   }
   feed(addr: string): any {
     return new Contract(addr, this.feedAbi.abi, this.chain.signer(this.admin));

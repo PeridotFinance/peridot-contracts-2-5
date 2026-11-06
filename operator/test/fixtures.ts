@@ -18,5 +18,7 @@ export function decidedConfig(over: { treasury?: string; keystorePath?: string; 
   c.treasury.address = over.treasury ?? A(0x200);
   c.keeper.keystorePath = over.keystorePath ?? "/tmp/synthetic-keystore.json";
   c.keeper.dailySpendCapUsdc = 1500;
+  c.executor.operator = "op-a";
+  c.executor.keystorePath = "/tmp/synthetic-operator-keystore.json";
   return c;
 }

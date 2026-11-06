@@ -14,6 +14,8 @@ import { crossCheckIndex, loadState, saveState } from "./borrowers";
 import { emptyMonitorState, reportBlind, runCycle } from "./monitor";
 import { keeperStep, verifySigner } from "./keeper";
 import type { KeeperState } from "./keeper";
+import { executorStep, verifyExecutorSigner } from "./executor";
+import type { ExecutorState } from "./executor";
 import { KeystoreSigner } from "./signer";
 import type { ExternalSigner } from "./signer";
 import type { MonitorState } from "./monitor";
@@ -46,6 +48,14 @@ async function buildContext(cfg: MonitorConfig) {
   if (parseInt(net, 16) !== CHAIN_ID) throw new Error(`RPC chain id ${parseInt(net, 16)} is not ${CHAIN_ID}`);
   if ((await provider.getCode(MULTICALL3)) === "0x") throw new Error("Multicall3 not deployed at the expected address");
   void MULTICALL3_ABI;
+  // eth_getLogs range probe: the borrower index and the keeper's on-chain daily-cap check scan events in chunks of monitor.logChunkBlocks.
+  // Some plans allow only a handful of blocks per request (a free tier allowed 10): refuse to start rather than fail later, mid-incident.
+  try {
+    const head = await provider.getBlockNumber();
+    await provider.getLogs({ address: cfg.deployment.pUsdc, fromBlock: Math.max(1, head - cfg.monitor.logChunkBlocks + 1), toBlock: head });
+  } catch (e) {
+    throw new Error(`the RPC endpoint does not serve eth_getLogs over monitor.logChunkBlocks (${cfg.monitor.logChunkBlocks}) blocks: ${safeError(e)}. Upgrade the plan or lower logChunkBlocks to the endpoint's limit (a free tier allowed 10)`);
+  }
   const identity = await checkPoolIdentity(provider);
   return { provider, cfg, poolIdentityOk: identity === null, identityProblem: identity };
 }
@@ -80,6 +90,16 @@ async function main(): Promise<number> {
   const ctx = await buildContext(cfg);
   // the treasury keeper pays ONLY in `run` (never in `check`): it needs the keystore password in the environment and a signer whose address is the configured treasury address
   let signer: ExternalSigner | undefined;
+  let execSigner: ExternalSigner | undefined;
+  if (cmd === "run" && cfg.executor.enabled) {
+    try {
+      execSigner = await KeystoreSigner.load(ctx.provider, cfg.executor.keystorePath, cfg.executor.passwordEnv);
+      await verifyExecutorSigner(execSigner, cfg, ctx.provider);
+    } catch (e) {
+      console.error(`start refused: liquidator executor signer: ${safeError(e)}`);
+      return EX_CONFIG;
+    }
+  }
   if (cmd === "run" && cfg.keeper.enabled) {
     try {
       signer = await KeystoreSigner.load(ctx.provider, cfg.keeper.keystorePath, cfg.keeper.passwordEnv);
@@ -90,7 +110,7 @@ async function main(): Promise<number> {
     }
   }
   const loaded = loadState<MonitorState>(cfg.monitor.statePath, emptyMonitorState(cfg));
-  const state0: MonitorState = { ...emptyMonitorState(cfg), ...loaded, keeper: { ...emptyMonitorState(cfg).keeper, ...(loaded.keeper ?? {}) } };
+  const state0: MonitorState = { ...emptyMonitorState(cfg), ...loaded, keeper: { ...emptyMonitorState(cfg).keeper, ...(loaded.keeper ?? {}) }, executor: { ...emptyMonitorState(cfg).executor, ...(loaded.executor ?? {}) } };
   const alerts = new AlertManager(sink, cfg.monitor.escalationSeconds, state0.alerts);
   let state = state0;
   const once = async (): Promise<number> => {
@@ -114,6 +134,15 @@ async function main(): Promise<number> {
         state = { ...state, keeper: k.state, alerts: alerts.toJson() };
         saveState(cfg.monitor.statePath, state);
         if (k.paid.length || k.skipped.length) console.log(mask(JSON.stringify({ keeper: { paid: k.paid, skipped: k.skipped, halted: k.halted } })));
+      }
+      if (execSigner) {
+        const x = await executorStep(
+          { ctx, signer: execSigner, alerts, slippageBoundBp: cfg.execution.slippageBoundBp, accounts: async () => state.index.borrowers, persist: (xs: ExecutorState) => { state = { ...state, executor: xs }; saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() }); } },
+          state.executor,
+        );
+        state = { ...state, executor: x.state, alerts: alerts.toJson() };
+        saveState(cfg.monitor.statePath, state);
+        if (x.round || x.skipped.length || x.halted) console.log(mask(JSON.stringify({ executor: { round: x.round, skipped: x.skipped, unfunded: x.unfunded, swapBlocked: x.swapBlocked, halted: x.halted } })));
       }
       console.log(mask(JSON.stringify(out.report, null, 2)));
       return out.report.findings.some((f) => f.severity === "crit") ? 1 : 0;

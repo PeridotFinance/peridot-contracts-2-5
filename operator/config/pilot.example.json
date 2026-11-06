@@ -73,6 +73,16 @@
     ],
     "noReferencePageSeconds": 900
   },
+  "executor": {
+    "enabled": false,
+    "operator": "UNSET",
+    "keystorePath": "UNSET",
+    "passwordEnv": "OPERATOR_KEYSTORE_PASSWORD",
+    "convertToUsdc": true,
+    "minRepayUsdc": 1,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
+  },
   "keeper": {
     "enabled": true,
     "keystorePath": "UNSET",

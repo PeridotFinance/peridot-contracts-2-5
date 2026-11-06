@@ -37,12 +37,12 @@ test("refuses with no configuration, and with a configuration but no RPC endpoin
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
-test("KEY HANDLING is confined to src/signer.ts and src/keeper.ts: no other module constructs a wallet or signer, reads a key, or sends a transaction", () => {
+test("KEY HANDLING is confined to src/signer.ts, src/keeper.ts, src/executor.ts and src/txkit.ts (the latter three only call the ExternalSigner): no other module constructs a wallet or signer, reads a key, or sends a transaction", () => {
   const banned = [/\bWallet\b/, /privateKey/i, /mnemonic/i, /\bgetSigner\b/, /\bsignTransaction\b/, /\bsendTransaction\b/, /\bsendRawTransaction\b/, /eth_sendTransaction/, /eth_sendRawTransaction/, /\bsignMessage\b/, /\.connect\(\s*signer/i];
   const files = fs.readdirSync(SRC).filter((f) => f.endsWith(".ts"));
   assert.ok(files.length >= 10);
   // the two modules that may hold a signer: the abstraction and the keeper that uses it (and nothing else in src/)
-  const mayHoldSigner = new Set(["signer.ts", "keeper.ts"]);
+  const mayHoldSigner = new Set(["signer.ts", "keeper.ts", "executor.ts", "txkit.ts"]);
   for (const f of files) {
     if (mayHoldSigner.has(f)) continue;
     const text = fs.readFileSync(path.join(SRC, f), "utf8");
@@ -54,12 +54,35 @@ test("KEY HANDLING is confined to src/signer.ts and src/keeper.ts: no other modu
   }
 });
 
-test("the keeper never reads key material itself: keeper.ts only talks to the ExternalSigner interface", () => {
-  const text = fs.readFileSync(path.join(SRC, "keeper.ts"), "utf8");
+test("the keeper and the executor never read key material themselves: they only talk to the ExternalSigner interface", () => {
+  for (const f of ["keeper.ts", "executor.ts", "txkit.ts"]) {
+  const text = fs.readFileSync(path.join(SRC, f), "utf8");
   for (const re of [/\bWallet\b/, /fromEncryptedJson/, /privateKey/i, /mnemonic/i, /process\.env/]) {
     const hits = text.split("\n").filter((l) => re.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l));
-    assert.deepEqual(hits, [], `keeper.ts matches ${re}`);
+    assert.deepEqual(hits, [], `${f} matches ${re}`);
+  }
   }
   const signer = fs.readFileSync(path.join(SRC, "signer.ts"), "utf8");
   assert.ok(!/console\./.test(signer), "the signer module never prints");
+});
+
+import { createHash } from "node:crypto";
+test("entrypoint: materialises the encrypted keystore with mode 600, prints no content, refuses to start without a keystore", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "entry-"));
+  try {
+    const content = JSON.stringify({ version: 3, crypto: { ciphertext: "deadbeef-synthetic" } });
+    const target = path.join(dir, "secrets", "keystore.json");
+    const sh = path.join(__dirname, "..", "..", "scripts", "entrypoint.sh");
+    const r = spawnSync("sh", [sh, "--materialize-only"], { env: { PATH: process.env.PATH ?? "", KEYSTORE_PATH: target, KEYSTORE_JSON_B64: Buffer.from(content).toString("base64") }, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(fs.readFileSync(target, "utf8"), content);
+    assert.equal(fs.statSync(target).mode & 0o777, 0o600);
+    assert.ok(!r.stdout.includes("deadbeef") && !r.stderr.includes("deadbeef"), "no keystore content in the output");
+    void createHash;
+    const missing = spawnSync("sh", [sh], { env: { PATH: process.env.PATH ?? "", KEYSTORE_PATH: path.join(dir, "nope.json") }, encoding: "utf8" });
+    assert.equal(missing.status, 78);
+    assert.match(missing.stderr, /no keystore/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

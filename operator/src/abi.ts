@@ -2,6 +2,7 @@
 export const CONTROLLER_ABI = [
   "function getAllMarkets() view returns (address[])",
   "function getAssetsIn(address) view returns (address[])",
+  "function liquidateCalculateSeizeTokens(address pTokenBorrowed, address pTokenCollateral, uint256 actualRepayAmount) view returns (uint256 err, uint256 seizeTokens)",
   "function oracle() view returns (address)",
   "function admin() view returns (address)",
   "function pauseGuardian() view returns (address)",
@@ -18,6 +19,10 @@ export const PTOKEN_ABI = [
   "function accrueInterest() returns (uint256)",
   "function repayBorrowBehalf(address borrower, uint256 repayAmount) returns (uint256)",
   "function borrowBalanceStored(address) view returns (uint256)",
+  "function liquidateBorrow(address borrower, uint256 repayAmount, address pTokenCollateral) returns (uint256)",
+  "function redeem(uint256 redeemTokens) returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function protocolSeizeShareMantissa() view returns (uint256)",
   "function underlying() view returns (address)",
   "function getAccountSnapshot(address) view returns (uint256 err, uint256 pTokenBalance, uint256 borrowBalance, uint256 exchangeRate)",
   "function exchangeRateStored() view returns (uint256)",
@@ -58,3 +63,6 @@ export const MULTICALL3_ABI = [
   "function getEthBalance(address) view returns (uint256)",
 ];
 export const SAFE_ABI = ["function nonce() view returns (uint256)", "function getThreshold() view returns (uint256)", "function getOwners() view returns (address[])"];
+export const SWAP_ROUTER02_ABI = [
+  "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+];
