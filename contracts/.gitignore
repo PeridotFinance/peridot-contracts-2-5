@@ -43,3 +43,5 @@ cache-orders/
 out-orders/
 deployments/orders-rehearsal.json
 deployments/orders-fork-test-journal.json
+.orders-deployer/
+deployments/orders-dryrun*.json

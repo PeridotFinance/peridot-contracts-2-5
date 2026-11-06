@@ -12,6 +12,27 @@
 `contracts/contracts/margin/orders/MarginOrderRegistry.sol` follows the deployment convention in `SPEC.md`. The
 script deploys it from its build artifact.
 
+## 0. Signing preparation (operator approved preparation 2026-11-06; timing decided Monday)
+
+- **When:** either in the 10 Nov recovery session or in the 15 to 17 Nov ceremony. The upgrade does not read the oracle,
+  so market hours do not matter. Do not overlap it with the SPY timelock batch: both use the same timelock, so schedule
+  one and let it finish first. **Position 4 stays untouched live.**
+- **Mainnet dry run** (simulation, no broadcast) at L2 107,648,285: every precondition holds. It estimates 10,525,160 gas,
+  about 0.00042 ETH at 0.04 gwei.
+- **Fund the throwaway deployer with 0.001 ETH:**
+  ```sh
+  cast wallet new .orders-deployer keystore      # git-ignored; note the printed address as DEPLOYER
+  ```
+- **Before the broadcast**, rerun the dry run. It must end `SIMULATION COMPLETE`:
+  ```sh
+  ORDERS_PUBLIC_SENDER=$DEPLOYER ORDERS_JOURNAL=/tmp/orders-dryrun.json FOUNDRY_PROFILE=robinhood_orders forge script \
+    script/orders/DeployRobinhoodOrders.s.sol:DeployRobinhoodOrders --rpc-url https://rpc.mainnet.chain.robinhood.com --sender $DEPLOYER
+  ```
+- **Then:** sections 1 to 3. After `verify` passes, sweep the deployer to the Ledger and delete `.orders-deployer`, as for
+  the SPY ceremony.
+- **Ledger signatures:** 2, the schedule and, at least 3,600 s later, the execute. The keeper needs its own gas-only
+  wallet (`ORDERS_KEEPER`) and holds no role.
+
 ## 1. Deploy (throwaway key, 4 creations)
 
 ```sh
