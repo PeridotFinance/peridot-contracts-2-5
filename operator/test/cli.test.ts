@@ -42,7 +42,7 @@ test("KEY HANDLING is confined to src/signer.ts, src/keeper.ts, src/executor.ts 
   const files = fs.readdirSync(SRC).filter((f) => f.endsWith(".ts"));
   assert.ok(files.length >= 10);
   // the two modules that may hold a signer: the abstraction and the keeper that uses it (and nothing else in src/)
-  const mayHoldSigner = new Set(["signer.ts", "keeper.ts", "executor.ts", "txkit.ts"]);
+  const mayHoldSigner = new Set(["signer.ts", "keeper.ts", "executor.ts", "txkit.ts", "rebalancer.ts"]);
   for (const f of files) {
     if (mayHoldSigner.has(f)) continue;
     const text = fs.readFileSync(path.join(SRC, f), "utf8");
@@ -55,7 +55,7 @@ test("KEY HANDLING is confined to src/signer.ts, src/keeper.ts, src/executor.ts 
 });
 
 test("the keeper and the executor never read key material themselves: they only talk to the ExternalSigner interface", () => {
-  for (const f of ["keeper.ts", "executor.ts", "txkit.ts"]) {
+  for (const f of ["keeper.ts", "executor.ts", "txkit.ts", "rebalancer.ts"]) {
   const text = fs.readFileSync(path.join(SRC, f), "utf8");
   for (const re of [/\bWallet\b/, /fromEncryptedJson/, /privateKey/i, /mnemonic/i, /process\.env/]) {
     const hits = text.split("\n").filter((l) => re.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l));

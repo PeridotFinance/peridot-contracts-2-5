@@ -83,6 +83,30 @@
     "maxFeeGwei": 100,
     "minGasWei": "500000000000000000"
   },
+  "rebalancer": {
+    "enabled": false,
+    "keystorePath": "UNSET",
+    "passwordEnv": "REBALANCER_KEYSTORE_PASSWORD",
+    "vaults": [
+      {
+        "name": "USDC vault",
+        "address": "0x855bF832f26a294d28500db59eE941dE3d654129",
+        "deployIdleMinAssetUnits": "1000000"
+      },
+      {
+        "name": "WAVAX vault",
+        "address": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+        "deployIdleMinAssetUnits": "100000000000000000"
+      }
+    ],
+    "edgeTicks": 5,
+    "minRebalanceIntervalSeconds": 3600,
+    "maxRebalanceLossBps": 50,
+    "maxDeployIdleLossBps": 50,
+    "maxActionsPerDay": 24,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
+  },
   "keeper": {
     "enabled": true,
     "keystorePath": "UNSET",

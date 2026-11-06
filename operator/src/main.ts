@@ -14,6 +14,8 @@ import { crossCheckIndex, loadState, saveState } from "./borrowers";
 import { emptyMonitorState, reportBlind, runCycle } from "./monitor";
 import { keeperStep, verifySigner } from "./keeper";
 import type { KeeperState } from "./keeper";
+import { rebalancerStep, emptyRebalancerState } from "./rebalancer";
+import type { RebalancerState } from "./rebalancer";
 import { executorStep, verifyExecutorSigner } from "./executor";
 import type { ExecutorState } from "./executor";
 import { KeystoreSigner } from "./signer";
@@ -62,8 +64,8 @@ async function buildContext(cfg: MonitorConfig) {
 
 async function main(): Promise<number> {
   const cmd = process.argv[2] ?? "";
-  if (!["check", "run", "validate-config"].includes(cmd)) {
-    console.error("usage: main.js check [--live-alerts] | run | validate-config   (configuration: OPERATOR_CONFIG or --config <file>; secrets: environment only)");
+  if (!["check", "run", "rebalance", "validate-config"].includes(cmd)) {
+    console.error("usage: main.js check [--live-alerts] | run | rebalance | validate-config   (configuration: OPERATOR_CONFIG or --config <file>; secrets: environment only)");
     return 2;
   }
   let cfg: MonitorConfig;
@@ -78,7 +80,7 @@ async function main(): Promise<number> {
     console.log("configuration valid");
     return 0;
   }
-  const live = cmd === "run" || process.argv.includes("--live-alerts");
+  const live = cmd === "run" || cmd === "rebalance" || process.argv.includes("--live-alerts");
   let sink;
   try {
     requireRpcUrlFromEnv();
@@ -88,6 +90,34 @@ async function main(): Promise<number> {
     return EX_CONFIG;
   }
   const ctx = await buildContext(cfg);
+  if (cmd === "rebalance") {
+    // the VAULT REBALANCER: its own process and keystore, only the two vault calls; state in its own file next to the monitor state
+    if (!cfg.rebalancer.enabled) {
+      console.error("start refused: rebalancer.enabled is false in this configuration");
+      return EX_CONFIG;
+    }
+    let rsigner: ExternalSigner;
+    try {
+      rsigner = await KeystoreSigner.load(ctx.provider, cfg.rebalancer.keystorePath, cfg.rebalancer.passwordEnv);
+    } catch (e) {
+      console.error(`start refused: rebalancer signer: ${safeError(e)}`);
+      return EX_CONFIG;
+    }
+    const rfile = cfg.monitor.statePath.replace(/\.json$/, "") + "-rebalancer.json";
+    let rstate = loadState<RebalancerState>(rfile, emptyRebalancerState());
+    const ralerts = new AlertManager(sink, cfg.monitor.escalationSeconds);
+    for (;;) {
+      try {
+        const o = await rebalancerStep({ provider: ctx.provider, cfg, signer: rsigner, alerts: ralerts, persist: (x: RebalancerState) => { rstate = x; saveState(rfile, x); } }, rstate);
+        rstate = o.state;
+        saveState(rfile, rstate);
+        console.log(mask(JSON.stringify({ rebalancer: { done: o.done, skipped: o.skipped, halted: o.halted } })));
+      } catch (e) {
+        console.error(`rebalancer cycle failed: ${safeError(e)}`);
+      }
+      await new Promise((r) => setTimeout(r, cfg.monitor.pollSeconds * 1000));
+    }
+  }
   // the treasury keeper pays ONLY in `run` (never in `check`): it needs the keystore password in the environment and a signer whose address is the configured treasury address
   let signer: ExternalSigner | undefined;
   let execSigner: ExternalSigner | undefined;

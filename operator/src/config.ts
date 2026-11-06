@@ -52,6 +52,20 @@ export interface MonitorConfig {
     maxFeeGwei: number;
     minGasWei: string;
   };
+  /** the VAULT REBALANCER module (its own process and its own, FOURTH keystore): calls `deployIdle()` / `rebalance()` on the Pharaoh vaults whose `rebalancer()` is this wallet */
+  rebalancer: {
+    enabled: boolean;
+    keystorePath: string;
+    passwordEnv: string;
+    vaults: Array<{ name: string; address: string; deployIdleMinAssetUnits: string }>; // idle asset (units of the vault's asset) above which deployIdle is sent
+    edgeTicks: number; // rebalance when the spot tick is within this many ticks of the position's edge (or outside the range)
+    minRebalanceIntervalSeconds: number;
+    maxRebalanceLossBps: number; // the module halts if a rebalance lowers totalAssets by more than this (the contract allows about 3%)
+    maxDeployIdleLossBps: number;
+    maxActionsPerDay: number;
+    maxFeeGwei: number;
+    minGasWei: string;
+  };
   keeper: {
     enabled: boolean;
     keystorePath: string; // Foundry keystore file (encrypted); the password comes from the environment variable named by passwordEnv
@@ -193,7 +207,29 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
       int(problems, "executor.minRepayUsdc", x.minRepayUsdc, 1, 1_000_000);
       int(problems, "executor.maxFeeGwei", x.maxFeeGwei, 1, 5000);
       bigintString(problems, "executor.minGasWei", x.minGasWei, true);
-      if (c.keeper?.enabled === true) problems.push({ path: "executor.enabled", problem: "the executor and the treasury keeper are different wallets on different hosts: enable only one per process" });
+      if (c.keeper?.enabled === true || c.rebalancer?.enabled === true) problems.push({ path: "executor.enabled", problem: "the executor, the treasury keeper and the rebalancer are different wallets: enable only one per process" });
+    }
+  }
+  {
+    const x = c.rebalancer;
+    if (typeof x?.enabled !== "boolean") problems.push({ path: "rebalancer.enabled", problem: "must be a boolean" });
+    else if (x.enabled) {
+      if (isUnsetString(x.keystorePath)) problems.push({ path: "rebalancer.keystorePath", problem: "unset (placeholder)" });
+      if (isUnsetString(x.passwordEnv) || !/^[A-Z][A-Z0-9_]*$/.test(String(x.passwordEnv))) problems.push({ path: "rebalancer.passwordEnv", problem: "must be the NAME of an environment variable" });
+      if (!Array.isArray(x.vaults) || x.vaults.length < 1) problems.push({ path: "rebalancer.vaults", problem: "list the vaults to manage" });
+      else x.vaults.forEach((vv: any, i: number) => {
+        if (isUnsetString(vv?.name)) problems.push({ path: `rebalancer.vaults[${i}].name`, problem: "unset (placeholder)" });
+        addr(problems, `rebalancer.vaults[${i}].address`, vv?.address);
+        bigintString(problems, `rebalancer.vaults[${i}].deployIdleMinAssetUnits`, vv?.deployIdleMinAssetUnits, true);
+      });
+      int(problems, "rebalancer.edgeTicks", x.edgeTicks, 0, 10_000);
+      int(problems, "rebalancer.minRebalanceIntervalSeconds", x.minRebalanceIntervalSeconds, 60, 86_400);
+      int(problems, "rebalancer.maxRebalanceLossBps", x.maxRebalanceLossBps, 1, 1000);
+      int(problems, "rebalancer.maxDeployIdleLossBps", x.maxDeployIdleLossBps, 1, 1000);
+      int(problems, "rebalancer.maxActionsPerDay", x.maxActionsPerDay, 1, 1000);
+      int(problems, "rebalancer.maxFeeGwei", x.maxFeeGwei, 1, 5000);
+      bigintString(problems, "rebalancer.minGasWei", x.minGasWei, true);
+      if (c.keeper?.enabled === true || c.executor?.enabled === true) problems.push({ path: "rebalancer.enabled", problem: "the rebalancer is its own process with its own keystore: do not enable it together with the keeper or the executor" });
     }
   }
   {
