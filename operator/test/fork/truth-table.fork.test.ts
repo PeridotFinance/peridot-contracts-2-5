@@ -8,14 +8,22 @@
 // value is quantised to 1 bp); the controller is the pilot's opt-in no-reward-token build. Verdicts are compared EXACTLY, amounts within 5 bp.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BigNumber, Contract, utils } from "ethers";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { BigNumber, Contract, Wallet, utils } from "ethers";
 import { AVAX_FEED, USDC, USDC_FEED, WAVAX } from "../../src/constants";
 import { AlertManager, MemorySink } from "../../src/alerts";
 import { checkPoolIdentity } from "../../src/reference";
 import { requireValidConfig } from "../../src/config";
+import { decidedConfig } from "../fixtures";
 import type { MonitorConfig } from "../../src/config";
 import { emptyMonitorState, runCycle } from "../../src/monitor";
 import { crossCheckIndex } from "../../src/borrowers";
+import { emptyKeeperState, keeperStep, verifySigner } from "../../src/keeper";
+import type { KeeperState } from "../../src/keeper";
+import { KeystoreSigner } from "../../src/signer";
+import type { ExternalSigner, TxRequest } from "../../src/signer";
 import type { CycleReport, MonitorState } from "../../src/monitor";
 import { Verdict, VERDICT_NAMES } from "../../src/detect";
 import { art, artifacts, deployCashOnly, ForkChain, Mocks, rpcAvailable } from "./harness";
@@ -27,7 +35,7 @@ const E18 = BigNumber.from(10).pow(18);
 const ADMIN = "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"; // the operator's Ledger address; IMPERSONATED on the local fork only
 const LP = "0x0000000000000000000000000000000000001001";
 const CAROL = "0x00000000000000000000000000000000000CA201";
-const TREASURY = "0x0000000000000000000000000000000000007EA5";
+const KS_PASSWORD = "fork-test-only-password-7c1e"; // protects a THROWAWAY keystore that exists only for this local-fork run
 const HEALTHY_ACCT = "0x0000000000000000000000000000000000004EA1";
 const NO_DEBT_ACCT = "0x00000000000000000000000000000000000040DB";
 const OP_A = "0x0000000000000000000000000000000000000a01";
@@ -43,6 +51,12 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
   const chain = await ForkChain.start();
   t.after(() => chain.stop());
   await chain.send("anvil_setBlockTimestampInterval", [1]); // deterministic: one second per block, no wall-clock drift
+  const ksDir = fs.mkdtempSync(path.join(os.tmpdir(), "keeper-ks-"));
+  t.after(() => fs.rmSync(ksDir, { recursive: true, force: true }));
+  const throwaway = Wallet.createRandom();
+  const ksFile = path.join(ksDir, "keeper");
+  fs.writeFileSync(ksFile, await throwaway.encrypt(KS_PASSWORD, { scrypt: { N: 1024 } }), { mode: 0o600 });
+  const TREASURY = throwaway.address; // the treasury keeper wallet
   for (const a of [ADMIN, LP, CAROL, TREASURY, HEALTHY_ACCT, NO_DEBT_ACCT, OP_A, OP_B, ...[0, 1, 2].map(borrower)]) await chain.setBalance(a);
   const mocks = new Mocks(chain, ADMIN);
   const usdcErc = new Contract(USDC, erc20Abi, chain.provider);
@@ -165,28 +179,43 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
   await fund(USDC, TREASURY, BigNumber.from(1_191_000_000));
 
   // ------------------------------------------------------------ the monitor configuration (synthetic operator decisions)
-  const rawCfg = JSON.parse(JSON.stringify(require("../../../config/pilot.example.json")));
+  const rawCfg = decidedConfig({ treasury: TREASURY, operators: [OP_A, OP_B], keystorePath: ksFile });
   rawCfg.deployment = { ...d.addresses, deploymentBlock: d.deployBlock };
   rawCfg.pilot = { ...rawCfg.pilot, label: "PW40-fork-test", wavaxCollateralFactorBp: 4000, usdcBorrowCapUsd: CAP_USD, cashFloorBp: 0 };
-  rawCfg.operators = [{ name: "op-a", address: OP_A }, { name: "op-b", address: OP_B }];
-  rawCfg.signer.type = "ledger";
-  rawCfg.alerts.channel = "webhook";
-  rawCfg.execution.slippageBoundBp = 100;
-  rawCfg.reference.minPoolLiquidity = "1000";
-  rawCfg.treasury.address = TREASURY;
+  rawCfg.reference.minPoolLiquidity = "500";
+  rawCfg.alerts.channel = "log";
   rawCfg.monitor.statePath = "state/fork-test-state.json";
   const cfg: MonitorConfig = requireValidConfig(rawCfg);
   const identity = await checkPoolIdentity(chain.provider);
   assert.equal(identity, null, "pool identity confirmed against the factory on the fork");
   const sink = new MemorySink();
   const alerts = new AlertManager(sink, cfg.monitor.escalationSeconds);
+  let ks: KeeperState = emptyKeeperState(); // the keeper's persisted state; the monitor reads its payment ledger (unexplained-outflow check)
   let state: MonitorState = emptyMonitorState(cfg);
   const ctx = { provider: chain.provider, cfg, poolIdentityOk: identity === null };
   const cycle = async (hooks?: { mutation?: 0 | 1 | 3 }, keepState = true): Promise<CycleReport> => {
-    const out = await runCycle(ctx, state, alerts, { hooks, extraAccounts: [NO_DEBT_ACCT] }); // the debt-free account never borrowed, so the event index cannot know it
+    const out = await runCycle(ctx, { ...state, keeper: ks }, alerts, { hooks, extraAccounts: [NO_DEBT_ACCT] }); // the debt-free account never borrowed, so the event index cannot know it
     if (keepState) state = out.state;
     return out.report;
   };
+  // ------------------------------------------------------------ the treasury keeper (Foundry-keystore signer, throwaway key)
+  const signer = await KeystoreSigner.load(chain.provider, ksFile, "KEEPER_KEYSTORE_PASSWORD", { KEEPER_KEYSTORE_PASSWORD: KS_PASSWORD });
+  await verifySigner(signer, cfg, chain.provider);
+  let chainNow = 0;
+  type Round = { rep: CycleReport; out: Awaited<ReturnType<typeof keeperStep>> };
+  const keeperRound = async (opts: { c?: typeof ctx; report?: CycleReport; sgn?: ExternalSigner } = {}): Promise<Round> => {
+    chainNow = await chain.now();
+    const rep = opts.report ?? (await cycle());
+    const out = await keeperStep({ ctx: opts.c ?? ctx, signer: opts.sgn ?? signer, alerts, persist: (x: KeeperState) => (ks = x), now: () => chainNow }, ks, rep);
+    ks = out.state;
+    return { rep, out };
+  };
+  const keeperTxCount = () => chain.provider.getTransactionCount(TREASURY);
+  const withKeeper = (patch: Partial<MonitorConfig["keeper"]>) => ({ ...ctx, cfg: { ...cfg, keeper: { ...cfg.keeper, ...patch } } });
+  const usdcOf = async (a: string): Promise<BigNumber> => new Contract(USDC, erc20Abi, chain.provider).balanceOf(a);
+  const allowanceOf = async (): Promise<BigNumber> => new Contract(USDC, [...erc20Abi, "function allowance(address,address) view returns (uint256)"], chain.provider).allowance(TREASURY, d.pUsdc.address);
+  const confirmed = (account: string, report: CycleReport) => ({ ...emptyKeeperState(), seen: { [account.toLowerCase()]: { count: 9, firstAt: chainNow - 100_000, lastAt: chainNow, lastBlock: report.blockNumber } } });
+
   const row = (r: CycleReport, who: string) => {
     const a = r.accounts.find((x) => x.account.toLowerCase() === who.toLowerCase());
     assert.ok(a, `account ${who} is in the report (index found it)`);
@@ -212,7 +241,9 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
   // ============================================================ STAGE 1: price unchanged, 30 days of interest
   await t.test("stage 1: healthy half-power, no debt, full-power underwater from interest alone", async () => {
     await refresh();
-    const r = await cycle();
+    const { rep: r } = await keeperRound();
+    assert.equal(await keeperTxCount(), 0, "the keeper does nothing on stage 1");
+    assert.equal(r.unrecoverableDebt.usd, "0", "unrecoverable debt is zero on the healthy / recoverable rows");
     assert.equal(r.reference.status, "ok");
     expectRow(r, HEALTHY_ACCT, "HEALTHY", 833.33, 832.9794, 4164.8971, 0, 0);
     assert.equal(row(r, NO_DEBT_ACCT)?.verdict ?? "NO_DEBT", "NO_DEBT");
@@ -222,14 +253,18 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
   // ============================================================ STAGE 2: AVAX -20%
   await t.test("stage 2: AVAX -20%", async () => {
     await setAvaxBps(8_000);
-    const r = await cycle();
+    const { rep: r } = await keeperRound();
+    assert.equal(await keeperTxCount(), 0);
+    assert.equal(r.unrecoverableDebt.usd, "0");
     expectRow(r, borrower(1), "LIQUIDATABLE_RECOVERABLE", 1683.11, 1682.3902, 3331.9177, 3085.109, 349.6231);
     expectRow(r, HEALTHY_ACCT, "HEALTHY", 833.33, 832.9794, 3331.9177, 0, 0);
   });
   // ============================================================ STAGE 3: AVAX -75%: tail
   await t.test("stage 3: AVAX -75%: tail accounts are NOT paid; the half-power account is still recoverable", async () => {
     await setAvaxBps(2_500);
-    const r = await cycle();
+    const { rep: r } = await keeperRound();
+    assert.equal(await keeperTxCount(), 0, "the tail rows are NOT paid by the keeper");
+    assert.ok(BigInt(r.unrecoverableDebt.usd) > 0n, "unrecoverable debt is positive on the tail rows");
     expectRow(r, borrower(0), "UNRECOVERABLE_LIQUIDATE_FIRST", 1683.11, 1682.3902, 1041.2243, 964.0966, 1265.9005);
     expectRow(r, borrower(1), "UNRECOVERABLE_LIQUIDATE_FIRST", 1683.11, 1682.3902, 1041.2243, 964.0966, 1265.9005);
     expectRow(r, HEALTHY_ACCT, "LIQUIDATABLE_RECOVERABLE", 833.33, 832.9794, 1041.2243, 964.0965, 416.4897);
@@ -238,6 +273,7 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
     assert.ok(BigInt(r.expectedTreasuryCall) > 0n, "expected treasury call computed");
   });
   // ============================================================ STAGE 4: liquidation to exhaustion
+  let stage4Report!: CycleReport;
   const liquidate = async (b: string, repay: BigNumber) => {
     await fund(USDC, CAROL, repay);
     await ok(new Contract(USDC, erc20Abi, chain.signer(CAROL)).approve(d.pUsdc.address, repay));
@@ -282,7 +318,12 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
     await clear(borrower(0));
     assert.ok(await liquidate(borrower(1), (await d.pUsdc.callStatic.borrowBalanceCurrent(borrower(1))).div(2)), "one liquidation round on account 1");
     await refresh();
-    const r = await cycle();
+    const { rep: r, out } = await keeperRound();
+    assert.equal(await keeperTxCount(), 0, "first sighting of the default: the keeper waits for its confirmation");
+    assert.equal(out.paid.length, 0);
+    assert.ok(out.skipped.some((x) => /awaiting confirmation/.test(x.reason)));
+    assert.ok(BigInt(r.unrecoverableDebt.usd) > BigInt(r.accounts.find((a) => a.verdict === "DEFAULT_EXHAUSTED")!.debtUnits) * 10n ** 12n / 2n, "unrecoverable debt is positive on the default rows");
+    stage4Report = r;
     expectRow(r, borrower(0), "DEFAULT_EXHAUSTED", 718.6, 718.2937, 0, 0, 718.2937);
     expectRow(r, borrower(1), "UNRECOVERABLE_LIQUIDATE_FIRST", 841.55, 841.1951, 132.7336, 122.9014, 788.1017);
     expectRow(r, borrower(2), "UNRECOVERABLE_LIQUIDATE_FIRST", 1683.11, 1682.3902, 1041.2243, 964.0966, 1265.9005);
@@ -347,7 +388,7 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
   });
   for (const [name, args] of [
     ["observe() reverts (pool history shorter than the window)", [BigNumber.from("1000000000000"), true] as const],
-    ["pool liquidity below the configured floor", [BigNumber.from(999), false] as const],
+    ["pool liquidity below the configured floor", [BigNumber.from(499), false] as const],
   ] as const) {
     await t.test(`reference failure fails closed: ${name} -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window`, async () => {
       await refresh(args[0], args[1]);
@@ -415,17 +456,172 @@ test("monitor reproduces the treasury truth table on a mainnet fork", { skip: SK
     assert.deepEqual(diff, { missingFromIndex: [], extraInIndex: [] });
     assert.deepEqual(state.index.borrowers, [borrower(0), borrower(1), borrower(2), HEALTHY_ACCT].map((a) => a.toLowerCase()).sort());
   });
-  await t.test("after the treasury repays the exhausted account the same account reads NO_DEBT and the default alert resolves", async () => {
-    await fund(USDC, TREASURY, BigNumber.from(1_000_000).mul(1_000_000));
-    await ok(new Contract(USDC, erc20Abi, chain.signer(TREASURY)).approve(d.pUsdc.address, BigNumber.from(2).pow(256).sub(1)));
-    await ok(pU(TREASURY).repayBorrowBehalf(borrower(0), BigNumber.from(2).pow(256).sub(1))); // the full-repay sentinel
+  // ============================================================ THE TREASURY KEEPER against the table
+  const b0 = borrower(0);
+  /** the keeper believes the default is confirmed (as it would be after N sightings), the chain is in a HOSTILE state: it must still refuse */
+  const refusesUnder = async (why: string, mutate: () => Promise<void>, undo: () => Promise<void>, expect: RegExp) => {
+    await t.test(`keeper refuses although the default is confirmed: ${why}`, async () => {
+      const snap = await chain.snapshot();
+      await refresh();
+      const good = await cycle(undefined, false); // a clean DEFAULT_EXHAUSTED report taken before the hostile change
+      assert.equal(row(good, b0).verdict, "DEFAULT_EXHAUSTED");
+      await mutate();
+      ks = confirmed(b0, good);
+      chainNow = await chain.now();
+      const { out } = await keeperRound({ report: good });
+      assert.equal(out.paid.length, 0, "no payment");
+      assert.equal(await keeperTxCount(), 0, "no transaction at all (no approval either)");
+      assert.match(out.skipped.map((x) => x.reason).join(" | "), expect);
+      await chain.revert(snap);
+      await undo();
+    });
+  };
+  const restore = async () => {
+    avaxAnswer = realAvax.mul(2_500).div(10_000);
     await refresh();
-    const r = await cycle();
-    assert.equal(row(r, borrower(0)).verdict, "NO_DEBT");
-    assert.ok(sink.messages.some((m) => m.kind === "resolved" && m.key.endsWith("DEFAULT_EXHAUSTED")), "the default alert was announced as resolved");
-    assert.equal(r.counts["DEFAULT_EXHAUSTED"] ?? 0, 0);
-    // the shares of the repaid account are gone: the index (events) still lists it, the sum still matches totalBorrowShares
-    assert.ok(!r.findings.some((f) => f.key === "shares:mismatch"));
+  };
+  await refusesUnder("a stale AVAX price", async () => chain.increaseTime(1_201), restore, /re-verification .* reads verdict 1 /);
+  await refusesUnder("a zero AVAX answer", async () => { avaxAnswer = BigNumber.from(0); await refresh(undefined, false, 1); }, restore, /re-verification .* reads verdict 1 /);
+  await refusesUnder("a manipulated oracle (divergence from the honest reference)", async () => { const honest = Number(avaxAnswer.toString()) / 1e8; avaxAnswer = BigNumber.from(1); await refresh(undefined, false, honest); }, restore, /re-verification .* reads verdict 7 /);
+  await refusesUnder("no reference price (pool observe reverts)", async () => refresh(BigNumber.from("1000000000000"), true), restore, /no healthy reference price/);
+  await refusesUnder("pool liquidity below the floor", async () => refresh(BigNumber.from(10), false), restore, /no healthy reference price/);
+
+  const refusesBudget = async (why: string, c: () => typeof ctx, prep: () => Promise<() => Promise<void>>, expect: RegExp) => {
+    await t.test(`keeper refuses before spending anything: ${why}`, async () => {
+      await refresh();
+      const good = await cycle(undefined, false);
+      ks = confirmed(b0, good);
+      const undo = await prep();
+      const { out } = await keeperRound({ c: c(), report: good });
+      assert.equal(out.paid.length, 0);
+      assert.equal(await keeperTxCount(), 0, "no approval, no payment");
+      assert.match(out.skipped.map((x) => x.reason).join(" | "), expect);
+      assert.ok(Object.keys(alerts.toJson().active).includes(`keeper:blocked:${b0.toLowerCase()}`), "a critical alert says the keeper did not pay");
+      await undo();
+    });
+  };
+  const noop = async () => async () => {};
+  await refusesBudget("daily spend cap", () => withKeeper({ dailySpendCapUsdc: 1 }), noop, /daily spend cap/);
+  await refusesBudget("fee above the cap", () => withKeeper({ maxFeeGwei: 1 }), noop, /above the cap/);
+  await refusesBudget("AVAX gas below the floor", () => withKeeper({ minGasWei: "1" + "0".repeat(30) }), noop, /below the floor/);
+  await refusesBudget("USDC does not cover the debt (no partial repayment)", () => ctx, async () => {
+    const was = await usdcOf(TREASURY);
+    await chain.setErc20Balance(USDC, TREASURY, BigNumber.from(100_000_000));
+    return async () => chain.setErc20Balance(USDC, TREASURY, was);
+  }, /no partial repayment/);
+
+  await t.test("keeper: a wrong signer is refused at start; a pending (interrupted) payment or a halt stops everything", async () => {
+    await assert.rejects(verifySigner(signer, { ...cfg, treasury: { address: OP_A } } as MonitorConfig, chain.provider), /not the configured treasury address/);
+    await refresh();
+    const good = await cycle(undefined, false);
+    ks = { ...confirmed(b0, good), pending: { account: b0, at: 1 } };
+    let r = await keeperRound({ report: good });
+    assert.equal(r.out.halted, true);
+    assert.equal(await keeperTxCount(), 0);
+    assert.ok(sink.messages.some((m) => m.key === "keeper:halted"), "halt alert");
+    ks = { ...confirmed(b0, good), halted: { reason: "test", at: 1 } };
+    r = await keeperRound({ report: good });
+    assert.equal(r.out.paid.length, 0);
+    assert.equal(await keeperTxCount(), 0, "halted: no payment even though the default is confirmed");
+  });
+
+  await t.test("keeper: simulation fails after the approval -> the allowance is reset to 0, nothing is paid, a cooldown prevents spamming", async () => {
+    await refresh();
+    const good = await cycle(undefined, false);
+    ks = confirmed(b0, good);
+    // a signer that drains the keeper's USDC right after its approval was mined (a race) so the simulated repay fails
+    const racing: ExternalSigner = {
+      kind: "test-race", getAddress: () => signer.getAddress(),
+      sendTransaction: async (tx: TxRequest) => { const sent = await signer.sendTransaction(tx); const m = await sent.wait(); if (tx.to.toLowerCase() === USDC.toLowerCase() && (await allowanceOf()).gt(0)) await chain.setErc20Balance(USDC, TREASURY, BigNumber.from(1)); return { hash: sent.hash, wait: async () => m }; },
+    };
+    const was = await usdcOf(TREASURY);
+    const { out } = await keeperRound({ report: good, sgn: racing });
+    assert.equal(out.paid.length, 0);
+    assert.match(out.skipped.map((x) => x.reason).join(" "), /simulation of repayBorrowBehalf failed/, JSON.stringify({ halted: ks.halted }));
+    assert.equal((await allowanceOf()).toString(), "0", "the allowance does not stay behind");
+    assert.ok((ks.cooldown[b0.toLowerCase()] ?? 0) > chainNow, "cooldown set");
+    const n = await keeperTxCount();
+    const again = await keeperRound({ report: good });
+    assert.match(again.out.skipped.map((x) => x.reason).join(" "), /cooling down/);
+    assert.equal(await keeperTxCount(), n, "no new transaction while cooling down");
+    await chain.setErc20Balance(USDC, TREASURY, was);
+  });
+  await t.test("keeper: the repay transaction fails after the simulation passed -> allowance reset attempted and the keeper HALTS", async () => {
+    await refresh();
+    const good = await cycle(undefined, false);
+    ks = confirmed(b0, good);
+    let n = 0;
+    const breaking: ExternalSigner = {
+      kind: "test-break", getAddress: () => signer.getAddress(),
+      sendTransaction: async (tx: TxRequest) => { n++; if (n === 2) throw new Error("simulated send failure"); return signer.sendTransaction(tx); },
+    };
+    const { out } = await keeperRound({ report: good, sgn: breaking });
+    assert.equal(out.halted, true);
+    assert.equal(out.paid.length, 0);
+    assert.equal((await allowanceOf()).toString(), "0", "allowance reset after the failed repay");
+    assert.ok(sink.messages.some((m) => m.key === "keeper:halted" && m.severity === "crit"));
+    ks = emptyKeeperState();
+  });
+
+  await t.test("keeper PAYS exactly the default row: confirmation, exact-need allowance, sentinel repay, read-back, alert; nothing else is paid", async () => {
+    await refresh();
+    ks = emptyKeeperState();
+    const sharesBefore = await Promise.all([borrower(1), borrower(2), HEALTHY_ACCT].map((a) => d.pUsdc.borrowShares(a)));
+    const balBefore = await usdcOf(TREASURY);
+    const txBefore = await keeperTxCount();
+    const first = await keeperRound();
+    assert.equal(first.out.paid.length, 0, "first sighting: waits");
+    await chain.increaseTime(61);
+    await refresh();
+    const second = await keeperRound();
+    assert.equal(second.out.paid.length, 1, "confirmed: pays " + JSON.stringify({ skipped: second.out.skipped, halted: ks.halted }));
+    const p = second.out.paid[0]!;
+    assert.equal(p.account.toLowerCase(), b0.toLowerCase(), "exactly the default row");
+    const delta = balBefore.sub(await usdcOf(TREASURY));
+    assert.equal(delta.toString(), p.amountUsdc, "the keeper's USDC fell by exactly the payment");
+    assert.ok(BigNumber.from(p.amountUsdc).gte(p.debtAtDecision) && BigNumber.from(p.amountUsdc).lte(BigNumber.from(p.debtAtDecision).mul(10_010).div(10_000)), "paid the debt (plus at most the interest of the blocks until inclusion), bounded by the margin");
+    close(Number(p.amountUsdc) / 1e6, 718.6, "paid amount vs the table's debt of the exhausted account");
+    assert.equal((await d.pUsdc.borrowShares(b0)).toString(), "0", "the exhausted account's debt is gone");
+    assert.equal((await allowanceOf()).toString(), "0", "no allowance left behind");
+    assert.equal(((await keeperTxCount()) - txBefore), 3, "approve, repay, approve(0)");
+    const sharesAfter = await Promise.all([borrower(1), borrower(2), HEALTHY_ACCT].map((a) => d.pUsdc.borrowShares(a)));
+    assert.deepEqual(sharesAfter.map(String), sharesBefore.map(String), "no other account's debt changed");
+    assert.ok(sink.messages.some((m) => m.kind === "payment" && m.text.includes(b0) && /Read-back ok/.test(m.text)), "alert on the payment, with the read-back");
+    const third = await keeperRound();
+    assert.equal(third.out.paid.length, 0, "the next evaluation: nothing left to pay");
+    assert.equal(row(third.rep, b0).verdict, "NO_DEBT");
+    assert.ok(sink.messages.some((m) => m.kind === "resolved" && m.key.endsWith("DEFAULT_EXHAUSTED")), "the default alert resolved");
+    assert.equal(third.rep.counts["DEFAULT_EXHAUSTED"] ?? 0, 0);
+    assert.ok(!third.rep.findings.some((f) => f.key === "shares:mismatch"));
+    assert.ok(!third.rep.findings.some((f) => f.key === "treasury:unexplained-outflow"), "the keeper's own payment is explained by its ledger");
+    // money leaving the keeper wallet WITHOUT a recorded payment (a stolen key) is critical
+    const kept = await usdcOf(TREASURY);
+    await chain.setErc20Balance(USDC, TREASURY, kept.sub(1_000_000));
+    await refresh();
+    const stolen = await cycle();
+    assert.ok(stolen.findings.some((f) => f.key === "treasury:unexplained-outflow" && f.severity === "crit"), "unexplained outflow detected");
+    await chain.setErc20Balance(USDC, TREASURY, kept);
     void VERDICT_NAMES;
+  });
+  await t.test("keeper with several defaults: pays the largest debts first, the DAILY CAP stops the rest, and it alerts", async () => {
+    await refresh();
+    await clear(borrower(1));
+    await refresh();
+    await clear(borrower(2));
+    await fund(USDC, TREASURY, BigNumber.from(3_000_000_000)); // the Safe tops the keeper up (cold reserve)
+    await refresh();
+    ks = { ...ks, seen: {} };
+    const r1 = await keeperRound();
+    assert.equal(r1.rep.counts["DEFAULT_EXHAUSTED"], 2, "two more exhausted accounts");
+    assert.equal(r1.out.paid.length, 0);
+    await chain.increaseTime(61);
+    await refresh();
+    const r2 = await keeperRound();
+    assert.equal(r2.out.paid.length, 1, "one payment fits under the 24 h cap (718.6 already spent, cap 1,500)");
+    assert.ok(r2.out.skipped.some((x) => /daily spend cap/.test(x.reason)), "the other is stopped by the cap");
+    assert.ok(sink.messages.some((m) => m.key.startsWith("keeper:blocked:") && /daily spend cap/.test(m.text)), "alert says the cap blocked a payment");
+    const spent = ks.payments.reduce((a, x) => a + Number(x.amountUsdc), 0) / 1e6;
+    assert.ok(spent <= 1500, `spent ${spent} within the cap`);
+    assert.equal(ks.payments.length, 2, "two payments in total in 24 h");
   });
 });

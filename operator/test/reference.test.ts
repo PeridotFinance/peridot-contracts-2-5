@@ -52,3 +52,17 @@ test("reference FAILS CLOSED on every listed cause", () => {
   for (const [name, args] of cases) assert.equal(interpretReference(args).status, "none", name);
   void poolIface;
 });
+
+import { floorFromMedian, medianBig, sampleBlocks } from "../src/liquidity";
+test("liquidity floor: median (odd and even counts), 50% with floor division, hourly sampling over 7 days", () => {
+  assert.equal(medianBig([5n, 1n, 3n]), 3n);
+  assert.equal(medianBig([4n, 1n, 3n, 10n]), 3n); // floor((3 + 4) / 2)
+  assert.equal(floorFromMedian(1001n), 500n);
+  assert.equal(floorFromMedian(1000n), 500n);
+  const b = sampleBlocks(1_000_000, 7, 3600, 2);
+  assert.equal(b.length, 7 * 24 + 1);
+  assert.equal(b.at(-1), 1_000_000);
+  assert.equal(b[0], 1_000_000 - 7 * 24 * 1800);
+  assert.ok(b.every((x, i) => i === 0 || x > b[i - 1]!));
+  assert.throws(() => medianBig([]));
+});

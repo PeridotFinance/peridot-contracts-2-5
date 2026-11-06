@@ -23,8 +23,22 @@ export interface HealthState {
   lastExchangeRate: Record<string, string>;
   /** operator nonce last seen and when it last changed (unix seconds, block time) */
   operatorNonce: Record<string, { nonce: number; changedAt: number }>;
+  /** keeper wallet USDC at the previous evaluation (units) and its block, for the unexplained-outflow check */
+  lastTreasury?: { usdc: string; blockNumber: number };
 }
 export const emptyHealthState = (): HealthState => ({ lastExchangeRate: {}, operatorNonce: {} });
+
+/**
+ * USDC may leave the keeper wallet ONLY through a recorded keeper payment. If the balance is lower than (previous balance - payments recorded
+ * between the two blocks), money moved without the keeper: the signature of a stolen key or a rogue process. Critical, page at once.
+ */
+export function treasuryOutflowFinding(prev: HealthState["lastTreasury"], nowUsdc: bigint, nowBlock: number, payments: Array<{ blockNumber: number; amountUsdc: string }>, treasuryAddress: string): Finding | undefined {
+  if (!prev || nowBlock <= prev.blockNumber) return undefined;
+  const paid = payments.filter((p) => p.blockNumber > prev.blockNumber && p.blockNumber <= nowBlock).reduce((a, p) => a + BigInt(p.amountUsdc), 0n);
+  const floor = BigInt(prev.usdc) - paid;
+  if (nowUsdc >= floor) return undefined;
+  return { key: "treasury:unexplained-outflow", severity: "crit", message: `keeper wallet ${treasuryAddress} lost ${floor - nowUsdc} USDC units that no recorded payment explains (balance ${nowUsdc}, expected at least ${floor}): possible key compromise. Move the remaining funds with the Safe procedure and rotate the key`, audience: "treasury-signers" };
+}
 
 const usd6 = (n: number): bigint => BigInt(n) * 1_000_000n;
 const wei = (s: string): bigint => BigInt(s);

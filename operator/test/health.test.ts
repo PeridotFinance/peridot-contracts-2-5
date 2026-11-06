@@ -1,17 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { marketFindings, operatorFindings, oracleFindings, treasuryFindings, emptyHealthState } from "../src/health";
+import { marketFindings, operatorFindings, oracleFindings, treasuryFindings, emptyHealthState, treasuryOutflowFinding } from "../src/health";
 import type { BlockSnapshot, MarketStat } from "../src/chain";
 import { requireValidConfig } from "../src/config";
-import fs from "node:fs";
-import path from "node:path";
 import { USDC, WAVAX } from "../src/constants";
 
-const A = (n: number) => "0x" + n.toString(16).padStart(40, "0");
-const cfgRaw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "config", "pilot.example.json"), "utf8"));
+import { A, decidedConfig } from "./fixtures";
+const cfgRaw = decidedConfig({ treasury: A(0x200), operators: [A(0x101), A(0x102)] });
 cfgRaw.deployment = { controller: A(1), pWavax: A(0x11), pUsdc: A(0x12), oracle: A(0x13), deploymentBlock: 1 };
-cfgRaw.operators = [{ name: "op-a", address: A(0x101) }, { name: "op-b", address: A(0x102) }];
-cfgRaw.signer.type = "ledger"; cfgRaw.alerts.channel = "webhook"; cfgRaw.execution.slippageBoundBp = 100; cfgRaw.reference.minPoolLiquidity = "1"; cfgRaw.treasury.address = A(0x200);
 const cfg = requireValidConfig(cfgRaw);
 
 const mk = (pToken: string, underlying: string, o: Partial<MarketStat> = {}): MarketStat => ({ pToken, underlying, cash: 0n, totalBorrows: 0n, totalReserves: 0n, totalSupply: 0n, exchangeRate: 2n * 10n ** 14n, collateralFactor: 0n, borrowCap: 0n, cashFloor: 0n, mintPaused: false, borrowPaused: false, accountingEnabled: true, totalBorrowShares: 0n, readOk: true, ...o });
@@ -79,4 +75,16 @@ test("treasury: capital below the requirement (warn) and below the expected call
   assert.deepEqual(keys(treasuryFindings(snap(), cfg, 0n)), []);
   assert.deepEqual(keys(treasuryFindings(snap({ treasury: { address: cfg.treasury.address, usdc: 1n, allowanceToPUsdc: 0n } }), cfg, 0n)), ["treasury:capital:warn"]);
   assert.ok(keys(treasuryFindings(snap(), cfg, 2_000_000_000n)).includes("treasury:funding:crit"));
+});
+
+test("USDC leaving the keeper wallet without a recorded payment is critical; recorded payments and inflows are not", () => {
+  const prev = { usdc: "1000", blockNumber: 100 };
+  const addr = "0xkeeper";
+  assert.equal(treasuryOutflowFinding(undefined, 5n, 200, [], addr), undefined, "first evaluation: nothing to compare");
+  assert.equal(treasuryOutflowFinding(prev, 1000n, 200, [], addr), undefined);
+  assert.equal(treasuryOutflowFinding(prev, 5000n, 200, [], addr), undefined, "a top-up is an inflow");
+  assert.equal(treasuryOutflowFinding(prev, 400n, 200, [{ blockNumber: 150, amountUsdc: "600" }], addr), undefined, "explained by a recorded payment");
+  assert.equal(treasuryOutflowFinding(prev, 400n, 200, [{ blockNumber: 99, amountUsdc: "600" }], addr)?.severity, "crit", "a payment from before the previous evaluation does not explain it");
+  assert.equal(treasuryOutflowFinding(prev, 399n, 200, [{ blockNumber: 150, amountUsdc: "600" }], addr)?.severity, "crit", "one unit more than explained");
+  assert.equal(treasuryOutflowFinding(prev, 0n, 200, [], addr)?.key, "treasury:unexplained-outflow");
 });

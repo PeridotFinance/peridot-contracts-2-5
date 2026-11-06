@@ -12,6 +12,10 @@ import { ConfigError, findSecretsInConfigText, requireRpcUrlFromEnv, requireVali
 import type { MonitorConfig } from "./config";
 import { crossCheckIndex, loadState, saveState } from "./borrowers";
 import { emptyMonitorState, reportBlind, runCycle } from "./monitor";
+import { keeperStep, verifySigner } from "./keeper";
+import type { KeeperState } from "./keeper";
+import { KeystoreSigner } from "./signer";
+import type { ExternalSigner } from "./signer";
 import type { MonitorState } from "./monitor";
 import { mask, safeError } from "./mask";
 import { CHAIN_ID, MULTICALL3 } from "./constants";
@@ -74,7 +78,19 @@ async function main(): Promise<number> {
     return EX_CONFIG;
   }
   const ctx = await buildContext(cfg);
-  const state0 = loadState<MonitorState>(cfg.monitor.statePath, emptyMonitorState(cfg));
+  // the treasury keeper pays ONLY in `run` (never in `check`): it needs the keystore password in the environment and a signer whose address is the configured treasury address
+  let signer: ExternalSigner | undefined;
+  if (cmd === "run" && cfg.keeper.enabled) {
+    try {
+      signer = await KeystoreSigner.load(ctx.provider, cfg.keeper.keystorePath, cfg.keeper.passwordEnv);
+      await verifySigner(signer, cfg, ctx.provider);
+    } catch (e) {
+      console.error(`start refused: treasury keeper signer: ${safeError(e)}`);
+      return EX_CONFIG;
+    }
+  }
+  const loaded = loadState<MonitorState>(cfg.monitor.statePath, emptyMonitorState(cfg));
+  const state0: MonitorState = { ...emptyMonitorState(cfg), ...loaded, keeper: { ...emptyMonitorState(cfg).keeper, ...(loaded.keeper ?? {}) } };
   const alerts = new AlertManager(sink, cfg.monitor.escalationSeconds, state0.alerts);
   let state = state0;
   const once = async (): Promise<number> => {
@@ -89,6 +105,16 @@ async function main(): Promise<number> {
         state = { ...state, lastIndexCrossCheckAt: nowS, index: { ...state.index, borrowers: [...new Set([...state.index.borrowers, ...diff.missingFromIndex])].sort() } };
       }
       saveState(cfg.monitor.statePath, state);
+      if (signer) {
+        const k = await keeperStep(
+          { ctx, signer, alerts, persist: (ks: KeeperState) => { state = { ...state, keeper: ks }; saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() }); } },
+          state.keeper,
+          out.report,
+        );
+        state = { ...state, keeper: k.state, alerts: alerts.toJson() };
+        saveState(cfg.monitor.statePath, state);
+        if (k.paid.length || k.skipped.length) console.log(mask(JSON.stringify({ keeper: { paid: k.paid, skipped: k.skipped, halted: k.halted } })));
+      }
       console.log(mask(JSON.stringify(out.report, null, 2)));
       return out.report.findings.some((f) => f.severity === "crit") ? 1 : 0;
     } catch (e) {

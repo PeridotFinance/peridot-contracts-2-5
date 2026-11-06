@@ -11,10 +11,15 @@ import { evaluateRule, Verdict, VERDICT_NAMES } from "./detect";
 import type { RuleResult, RuleTestHooks } from "./detect";
 import { emptyIndex, updateIndex } from "./borrowers";
 import type { IndexState } from "./borrowers";
-import { emptyHealthState, marketFindings, operatorFindings, oracleFindings, treasuryFindings } from "./health";
+import { emptyHealthState, marketFindings, operatorFindings, oracleFindings, treasuryFindings, treasuryOutflowFinding } from "./health";
 import type { Finding, HealthState } from "./health";
 import { multicall } from "./multicall";
 import { safeError } from "./mask";
+import { unrecoverableDebt } from "./backing";
+import { emptyKeeperState } from "./keeper";
+import type { KeeperState } from "./keeper";
+import type { BackingResult } from "./backing";
+import { USDC } from "./constants";
 
 export interface MonitorState {
   index: IndexState;
@@ -22,9 +27,10 @@ export interface MonitorState {
   alerts: AlertStateJson;
   unknownPriceSince: number | null;
   lastIndexCrossCheckAt: number;
+  keeper: KeeperState;
 }
 export function emptyMonitorState(cfg: MonitorConfig): MonitorState {
-  return { index: emptyIndex(cfg.deployment.deploymentBlock), health: emptyHealthState(), alerts: { active: {} }, unknownPriceSince: null, lastIndexCrossCheckAt: 0 };
+  return { index: emptyIndex(cfg.deployment.deploymentBlock), health: emptyHealthState(), alerts: { active: {} }, unknownPriceSince: null, lastIndexCrossCheckAt: 0, keeper: emptyKeeperState() };
 }
 
 export interface AccountReport {
@@ -48,6 +54,8 @@ export interface CycleReport {
   alertsSent: AlertMessage[];
   reference: { status: string; detail: string };
   expectedTreasuryCall: string;
+  /** unrecoverable debt (src/backing.ts): sum of max(0, debt - collateral/LI) over borrowers, minus pUSDC reserves, clipped at 0; 1e18 USD */
+  unrecoverableDebt: { usd: string; rawUsd: string; reservesUsd: string; complete: boolean };
 }
 
 export interface CycleOptions {
@@ -108,7 +116,14 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
     const persisted = now - unknownPriceSince >= cfg.monitor.noReferencePageSeconds;
     findings.push({ key: "unknown-price", severity: persisted ? "crit" : "warn", message: `an indebted account cannot be evaluated (stale/zero oracle price or no reference price) for ${now - unknownPriceSince}s; the rule is silent and nothing is paid`, audience: "monitor-operator" });
   } else unknownPriceSince = null;
+  const usdcIdx = snap.markets.findIndex((m) => m.underlying.toLowerCase() === USDC.toLowerCase());
+  const reservesUsd = usdcIdx >= 0 ? (snap.markets[usdcIdx]!.totalReserves * snap.oraclePrices[usdcIdx]!) / 10n ** 18n : 0n;
+  const backing: BackingResult = unrecoverableDebt(results.values(), snap.liquidationIncentive, reservesUsd);
+  if (backing.unrecoverableUsd > 0n) findings.push({ key: "market:unrecoverable-debt", severity: "crit", message: `unrecoverable debt USD ${fmt18(backing.unrecoverableUsd)} (debt beyond what liquidating the remaining collateral can recover, minus reserves USD ${fmt18(reservesUsd)}${backing.complete ? "" : "; INCOMPLETE: some accounts could not be valued"}): suppliers are not fully backed once this is realised`, audience: "treasury-signers" });
+  else if (!backing.complete) findings.push({ key: "market:unrecoverable-debt-incomplete", severity: "warn", message: "unrecoverable debt cannot be stated: at least one indebted account could not be valued (stale/zero price, no reference or divergence)", audience: "monitor-operator" });
   findings.push(...treasuryFindings(snap, cfg, expectedTreasuryCall));
+  const outflow = treasuryOutflowFinding(state.health.lastTreasury, snap.treasury.usdc, snap.blockNumber, state.keeper.payments, cfg.treasury.address);
+  if (outflow) findings.push(outflow);
   // 5. alerts
   const alertsSent = await alerts.process(findings, now);
   const counts: Record<string, number> = {};
@@ -121,10 +136,11 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   accountReports.sort((x, y) => (BigInt(y.shortfallUsd) > BigInt(x.shortfallUsd) ? 1 : BigInt(y.shortfallUsd) < BigInt(x.shortfallUsd) ? -1 : 0));
   const next: MonitorState = {
     index,
-    health: { lastExchangeRate: mk.next.lastExchangeRate, operatorNonce: op.next.operatorNonce },
+    health: { lastExchangeRate: mk.next.lastExchangeRate, operatorNonce: op.next.operatorNonce, lastTreasury: { usdc: snap.treasury.usdc.toString(), blockNumber: snap.blockNumber } },
     alerts: alerts.toJson(),
     unknownPriceSince,
     lastIndexCrossCheckAt: state.lastIndexCrossCheckAt,
+    keeper: state.keeper,
   };
   return {
     report: {
@@ -137,6 +153,7 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
       alertsSent,
       reference: snap.reference.status === "ok" ? { status: "ok", detail: `tick ${snap.reference.tick}` } : { status: "none", detail: snap.reference.reason },
       expectedTreasuryCall: expectedTreasuryCall.toString(),
+      unrecoverableDebt: { usd: backing.unrecoverableUsd.toString(), rawUsd: backing.rawUsd.toString(), reservesUsd: reservesUsd.toString(), complete: backing.complete },
     },
     state: next,
   };

@@ -18,3 +18,14 @@ mean tick truncates toward zero instead of flooring              1
 a `new Wallet(...)` added to operator/src                        1 (the no-key-handling test)
 equivalent (not a gap): `signer.type` unset check removed -> the value "UNSET" is still refused by the enum check on the next line.
 Rule-level mutants through the monitor on the fork (hooks, see truth-table.fork.test.ts): M1 (fire on shortfall alone) pays the untouched tail account and a recoverable account; M3 (no divergence gate) lets a divergent oracle through. Both are asserted.
+
+Treasury keeper mutants (2026-11-06), each applied alone and run against the 30-test fork suite (the keeper tests are in truth-table.fork.test.ts):
+mutant                                                                         fork tests failing
+K1 re-verification at execution removed                                        15 (the hostile-state refusals, the budget refusals and the later keeper tests)
+K2 confirmation always satisfied                                               23
+K3 daily spend cap removed                                                     10
+K4 approve the maximum instead of the exact-need allowance                      5
+K5 repay the wrong account (the keeper's own address)                           5
+K6 halt flag ignored                                                           6
+K7 reference status not required at execution                                  3
+All seven are killed. (Many failures per mutant are cascades: once a mutant pays in an early test the later tests start from a changed chain.)

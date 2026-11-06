@@ -5,28 +5,16 @@ import path from "node:path";
 import { findSecretsInConfigText, requireValidConfig, validateConfig, ConfigError } from "../src/config";
 import { loadConfig } from "../src/main";
 
-const TEMPLATE = path.join(__dirname, "..", "..", "config", "pilot.example.json");
-const tpl = () => JSON.parse(fs.readFileSync(TEMPLATE, "utf8"));
-const A1 = "0x00000000000000000000000000000000000a0001";
-const A2 = "0x00000000000000000000000000000000000a0002";
-/** the template with EVERY undecided value filled by a synthetic one */
-const filled = () => {
-  const c = tpl();
-  c.deployment = { controller: A1, pWavax: A1.replace("0001", "0011"), pUsdc: A1.replace("0001", "0012"), oracle: A1.replace("0001", "0013"), deploymentBlock: 99_000_000 };
-  c.operators = [{ name: "op-a", address: A1.replace("0001", "0101") }, { name: "op-b", address: A1.replace("0001", "0102") }];
-  c.signer.type = "ledger";
-  c.alerts.channel = "webhook";
-  c.execution.slippageBoundBp = 100;
-  c.reference.minPoolLiquidity = "1000000";
-  c.treasury.address = A2;
-  return c;
-};
+import { decidedConfig, template, TEMPLATE_PATH as TEMPLATE, A as _A } from "./fixtures";
+const tpl = template;
+const filled = () => decidedConfig();
+void _A;
 
 test("the checked-in template is REFUSED, and every operator decision is reported", () => {
   const { problems, config } = validateConfig(tpl());
   assert.equal(config, undefined);
   const paths = problems.map((p) => p.path);
-  for (const must of ["operators[0].name", "operators[0].address", "operators[1].address", "signer.type", "alerts.channel", "execution.slippageBoundBp", "reference.minPoolLiquidity", "treasury.address", "deployment.controller", "deployment.pUsdc", "deployment.deploymentBlock"]) {
+  for (const must of ["operators[0].name", "operators[0].address", "operators[1].address", "reference.minPoolLiquidity", "treasury.address", "keeper.keystorePath", "keeper.dailySpendCapUsdc", "deployment.controller", "deployment.pUsdc", "deployment.deploymentBlock"]) {
     assert.ok(paths.includes(must), `${must} must be reported as unset; got ${paths.join(", ")}`);
   }
   assert.throws(() => requireValidConfig(tpl()), ConfigError);
@@ -36,13 +24,20 @@ test("a fully decided configuration is accepted", () => {
   assert.deepEqual(problems, []);
   assert.ok(config);
 });
-test("each of the four named decisions, unset alone, refuses the start", () => {
+test("each operator decision and each recorded-source rule, unset or broken alone, refuses the start", () => {
   const cases: Array<[string, (c: any) => void]> = [
-    ["operators", (c) => (c.operators = [{ name: "UNSET", address: "UNSET" }, { name: "op-b", address: A2 }])],
+    ["operators", (c) => (c.operators = [{ name: "UNSET", address: "UNSET" }, { name: "op-b", address: _A(0x202) }])],
     ["operators (one only)", (c) => (c.operators = [c.operators[0]])],
     ["signer type", (c) => (c.signer.type = "UNSET")],
     ["alert channel", (c) => (c.alerts.channel = "UNSET")],
     ["slippage bound", (c) => (c.execution.slippageBoundBp = "UNSET")],
+    ["pool liquidity floor", (c) => (c.reference.minPoolLiquidity = "UNSET")],
+    ["floor without its source range", (c) => delete c.reference.minPoolLiquiditySource],
+    ["floor that is not 50% of the recorded median", (c) => (c.reference.minPoolLiquidity = "501")],
+    ["keeper daily spend cap", (c) => (c.keeper.dailySpendCapUsdc = "UNSET")],
+    ["keeper keystore path", (c) => (c.keeper.keystorePath = "UNSET")],
+    ["keeper password env name replaced by a password-looking value", (c) => (c.keeper.passwordEnv = "hunter2 !")],
+    ["signer type that is not implemented (ledger)", (c) => (c.signer.type = "ledger")],
     ["slippage bound missing", (c) => delete c.execution],
     ["signer type unknown", (c) => (c.signer.type = "private-key-file")],
     ["slippage out of range", (c) => (c.execution.slippageBoundBp = 5000)],

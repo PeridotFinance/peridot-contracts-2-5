@@ -20,14 +20,38 @@
     "cashFloorBp": 2000
   },
   "operators": [
-    { "name": "UNSET", "address": "UNSET" },
-    { "name": "UNSET", "address": "UNSET" }
+    {
+      "name": "UNSET",
+      "address": "UNSET"
+    },
+    {
+      "name": "UNSET",
+      "address": "UNSET"
+    }
   ],
-  "signer": { "type": "UNSET" },
-  "alerts": { "channel": "UNSET" },
-  "execution": { "slippageBoundBp": "UNSET" },
-  "reference": { "toleranceBp": 500, "minPoolLiquidity": "UNSET" },
-  "treasury": { "address": "UNSET" },
+  "signer": {
+    "type": "foundry-keystore"
+  },
+  "alerts": {
+    "channel": "log"
+  },
+  "execution": {
+    "slippageBoundBp": 100
+  },
+  "reference": {
+    "toleranceBp": 500,
+    "minPoolLiquidity": "UNSET",
+    "minPoolLiquiditySource": {
+      "fromBlock": "UNSET",
+      "toBlock": "UNSET",
+      "samples": "UNSET",
+      "medianLiquidity": "UNSET",
+      "method": "UNSET"
+    }
+  },
+  "treasury": {
+    "address": "UNSET"
+  },
   "monitor": {
     "pollSeconds": 15,
     "maxBlockLagSeconds": 60,
@@ -42,7 +66,22 @@
     "minOperatorGasWei": "500000000000000000",
     "utilisationWarnBp": 8000,
     "borrowCapWarnBp": 9000,
-    "escalationSeconds": [3600, 14400, 86400],
+    "escalationSeconds": [
+      3600,
+      14400,
+      86400
+    ],
     "noReferencePageSeconds": 900
+  },
+  "keeper": {
+    "enabled": true,
+    "keystorePath": "UNSET",
+    "passwordEnv": "KEEPER_KEYSTORE_PASSWORD",
+    "dailySpendCapUsdc": "UNSET",
+    "confirmEvaluations": 2,
+    "confirmSeconds": 60,
+    "allowanceMarginBp": 10,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
   }
 }

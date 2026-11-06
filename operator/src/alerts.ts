@@ -6,7 +6,7 @@ import type { Finding, Severity } from "./health";
 import type { MonitorConfig } from "./config";
 
 export interface AlertMessage {
-  kind: "new" | "severity-up" | "escalation" | "resolved";
+  kind: "new" | "severity-up" | "escalation" | "resolved" | "payment";
   key: string;
   severity: Severity;
   text: string;
@@ -42,6 +42,21 @@ export class AlertManager {
 
   toJson(): AlertStateJson {
     return { active: Object.fromEntries(this.active) };
+  }
+
+  /** Send a message that is NOT de-duplicated (one per payment). Text is masked. */
+  async notify(msg: AlertMessage): Promise<AlertMessage> {
+    const m = { ...msg, text: mask(msg.text) };
+    await this.sink.send(m);
+    return m;
+  }
+
+  /** Announce that a raised key is resolved (no-op when it is not active). */
+  async clear(key: string, nowSeconds: number): Promise<void> {
+    const cur = this.active.get(key);
+    if (!cur) return;
+    this.active.delete(key);
+    await this.sink.send({ kind: "resolved", key, severity: cur.severity, text: mask(`resolved: ${key}`), audience: "monitor-operator", ageSeconds: nowSeconds - cur.firstSeen });
   }
 
   /** Raise one finding WITHOUT touching the others (used when a cycle failed and nothing else can be judged). */
@@ -128,6 +143,7 @@ export class WebhookSink implements AlertSink {
 
 /** Builds the sink of the configured channel. Throws (so the process refuses to start) when its credentials are not in the environment. */
 export function createSink(cfg: MonitorConfig, env: NodeJS.ProcessEnv = process.env): AlertSink {
+  if (cfg.alerts.channel === "log") return new StdoutSink(); // until the Telegram bot exists
   if (cfg.alerts.channel === "telegram") {
     const token = env.OPERATOR_ALERT_TELEGRAM_TOKEN;
     const chat = env.OPERATOR_ALERT_TELEGRAM_CHAT_ID;

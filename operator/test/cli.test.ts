@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 const MAIN = path.join(__dirname, "..", "src", "main.js");
-const TEMPLATE = path.join(__dirname, "..", "..", "config", "pilot.example.json");
+import { decidedConfig, TEMPLATE_PATH as TEMPLATE } from "./fixtures";
 const SRC = path.join(__dirname, "..", "..", "src");
 
 const run = (args: string[], env: Record<string, string>) =>
@@ -15,16 +15,13 @@ const run = (args: string[], env: Record<string, string>) =>
 test("the process REFUSES TO START (exit 78) with the checked-in template and names the unset decisions", () => {
   const r = run(["check"], { OPERATOR_CONFIG: TEMPLATE, AVALANCHE_MAINNET_RPC_URL: "http://127.0.0.1:1" });
   assert.equal(r.status, 78);
-  for (const must of ["operators[0].address", "signer.type", "alerts.channel", "execution.slippageBoundBp", "the process did not start"]) assert.ok(r.stderr.includes(must), must);
+  for (const must of ["operators[0].address", "reference.minPoolLiquidity", "keeper.keystorePath", "keeper.dailySpendCapUsdc", "treasury.address", "the process did not start"]) assert.ok(r.stderr.includes(must), must);
   assert.equal(r.stdout, "");
 });
 test("refuses with no configuration, and with a configuration but no RPC endpoint or alert credentials in the environment", () => {
   assert.equal(run(["check"], {}).status, 78);
-  const cfg = JSON.parse(fs.readFileSync(TEMPLATE, "utf8"));
-  const A = (n: number) => "0x" + n.toString(16).padStart(40, "0");
-  cfg.deployment = { controller: A(1), pWavax: A(2), pUsdc: A(3), oracle: A(4), deploymentBlock: 5 };
-  cfg.operators = [{ name: "a", address: A(0x101) }, { name: "b", address: A(0x102) }];
-  cfg.signer.type = "ledger"; cfg.alerts.channel = "telegram"; cfg.execution.slippageBoundBp = 100; cfg.reference.minPoolLiquidity = "1"; cfg.treasury.address = A(0x200);
+  const cfg = decidedConfig();
+  cfg.alerts.channel = "telegram";
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "opcfg-"));
   const file = path.join(dir, "c.json");
   fs.writeFileSync(file, JSON.stringify(cfg));
@@ -40,11 +37,14 @@ test("refuses with no configuration, and with a configuration but no RPC endpoin
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
-test("NO KEY HANDLING in the monitor: the source never constructs a wallet or signer, reads a key, or sends a transaction", () => {
+test("KEY HANDLING is confined to src/signer.ts and src/keeper.ts: no other module constructs a wallet or signer, reads a key, or sends a transaction", () => {
   const banned = [/\bWallet\b/, /privateKey/i, /mnemonic/i, /\bgetSigner\b/, /\bsignTransaction\b/, /\bsendTransaction\b/, /\bsendRawTransaction\b/, /eth_sendTransaction/, /eth_sendRawTransaction/, /\bsignMessage\b/, /\.connect\(\s*signer/i];
   const files = fs.readdirSync(SRC).filter((f) => f.endsWith(".ts"));
   assert.ok(files.length >= 10);
+  // the two modules that may hold a signer: the abstraction and the keeper that uses it (and nothing else in src/)
+  const mayHoldSigner = new Set(["signer.ts", "keeper.ts"]);
   for (const f of files) {
+    if (mayHoldSigner.has(f)) continue;
     const text = fs.readFileSync(path.join(SRC, f), "utf8");
     for (const re of banned) {
       // the config validator and its comments may MENTION the words; a match is only a failure in executable code lines
@@ -52,4 +52,14 @@ test("NO KEY HANDLING in the monitor: the source never constructs a wallet or si
       assert.deepEqual(hits, [], `${f} matches ${re}`);
     }
   }
+});
+
+test("the keeper never reads key material itself: keeper.ts only talks to the ExternalSigner interface", () => {
+  const text = fs.readFileSync(path.join(SRC, "keeper.ts"), "utf8");
+  for (const re of [/\bWallet\b/, /fromEncryptedJson/, /privateKey/i, /mnemonic/i, /process\.env/]) {
+    const hits = text.split("\n").filter((l) => re.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l));
+    assert.deepEqual(hits, [], `keeper.ts matches ${re}`);
+  }
+  const signer = fs.readFileSync(path.join(SRC, "signer.ts"), "utf8");
+  assert.ok(!/console\./.test(signer), "the signer module never prints");
 });

@@ -9,8 +9,8 @@
 import { utils } from "ethers";
 
 export const UNSET = "UNSET";
-export const SIGNER_TYPES = ["ledger", "trezor", "kms", "safe-owner"] as const;
-export const ALERT_CHANNELS = ["telegram", "webhook"] as const;
+export const SIGNER_TYPES = ["foundry-keystore"] as const; // the only implemented external signer (hot keeper wallets, Foundry keystore accounts)
+export const ALERT_CHANNELS = ["log", "telegram", "webhook"] as const; // "log" until the Telegram bot exists
 export type SignerType = (typeof SIGNER_TYPES)[number];
 export type AlertChannel = (typeof ALERT_CHANNELS)[number];
 
@@ -38,8 +38,20 @@ export interface MonitorConfig {
   signer: { type: SignerType };
   alerts: { channel: AlertChannel };
   execution: { slippageBoundBp: number };
-  reference: { toleranceBp: number; minPoolLiquidity: string };
+  reference: { toleranceBp: number; minPoolLiquidity: string; minPoolLiquiditySource: LiquiditySource };
+  /** the TREASURY KEEPER wallet: a hot wallet holding the protection USDC (the Safe is the cold reserve that funds it) */
   treasury: { address: string };
+  keeper: {
+    enabled: boolean;
+    keystorePath: string; // Foundry keystore file (encrypted); the password comes from the environment variable named by passwordEnv
+    passwordEnv: string;
+    dailySpendCapUsdc: number; // rolling 24 h
+    confirmEvaluations: number; // consecutive evaluations (on distinct blocks) that must read DEFAULT_EXHAUSTED before paying
+    confirmSeconds: number; // ... spanning at least this many seconds of chain time
+    allowanceMarginBp: number; // the exact-need allowance is the debt read now plus this margin (interest until inclusion)
+    maxFeeGwei: number; // do not send above this max fee
+    minGasWei: string; // keeper AVAX balance floor
+  };
   // ---- monitor settings with defaults (proposals, not results) ----
   monitor: {
     pollSeconds: number;
@@ -58,6 +70,15 @@ export interface MonitorConfig {
     escalationSeconds: number[]; // [3600, 14400, 86400] = 1 h / 4 h / 24 h
     noReferencePageSeconds: number; // an unknown price (stale/zero oracle, no reference) that persists this long is paged
   };
+}
+
+/** How `reference.minPoolLiquidity` was computed (scripts/compute-min-pool-liquidity.ts): 50% of the trailing 7-day median of pool.liquidity(). */
+export interface LiquiditySource {
+  fromBlock: number;
+  toBlock: number;
+  samples: number;
+  medianLiquidity: string;
+  method: string;
 }
 
 export interface ConfigProblem {
@@ -131,7 +152,38 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
   int(problems, "execution.slippageBoundBp", c.execution?.slippageBoundBp, 1, 1000);
   int(problems, "reference.toleranceBp", c.reference?.toleranceBp, 1, 5000);
   bigintString(problems, "reference.minPoolLiquidity", c.reference?.minPoolLiquidity, true);
+  {
+    // the floor is 50% of the pool's trailing 7-day median in-range liquidity, computed ONCE at deployment and recorded with its source range
+    const src = c.reference?.minPoolLiquiditySource;
+    if (isUnsetString(c.reference?.minPoolLiquidity)) {
+      /* already reported */
+    } else if (typeof src !== "object" || src === null) problems.push({ path: "reference.minPoolLiquiditySource", problem: "the floor must be recorded with its source block range (run scripts/compute-min-pool-liquidity.ts)" });
+    else {
+      int(problems, "reference.minPoolLiquiditySource.fromBlock", src.fromBlock, 1, 1_000_000_000);
+      int(problems, "reference.minPoolLiquiditySource.toBlock", src.toBlock, 1, 1_000_000_000);
+      int(problems, "reference.minPoolLiquiditySource.samples", src.samples, 100, 100_000);
+      bigintString(problems, "reference.minPoolLiquiditySource.medianLiquidity", src.medianLiquidity, true);
+      if (typeof src.fromBlock === "number" && typeof src.toBlock === "number" && src.fromBlock >= src.toBlock) problems.push({ path: "reference.minPoolLiquiditySource", problem: "fromBlock must be below toBlock" });
+      if (/^[0-9]+$/.test(String(src.medianLiquidity)) && /^[0-9]+$/.test(String(c.reference.minPoolLiquidity)) && BigInt(c.reference.minPoolLiquidity) !== BigInt(src.medianLiquidity) / 2n) {
+        problems.push({ path: "reference.minPoolLiquidity", problem: "must equal 50% of reference.minPoolLiquiditySource.medianLiquidity (floor division)" });
+      }
+    }
+  }
   addr(problems, "treasury.address", c.treasury?.address);
+  {
+    const k = c.keeper;
+    if (typeof k?.enabled !== "boolean") problems.push({ path: "keeper.enabled", problem: "must be a boolean" });
+    else if (k.enabled) {
+      if (isUnsetString(k.keystorePath)) problems.push({ path: "keeper.keystorePath", problem: "unset (placeholder)" });
+      if (isUnsetString(k.passwordEnv) || !/^[A-Z][A-Z0-9_]*$/.test(String(k.passwordEnv))) problems.push({ path: "keeper.passwordEnv", problem: "must be the NAME of an environment variable (the password itself never goes in the file)" });
+      int(problems, "keeper.dailySpendCapUsdc", k.dailySpendCapUsdc, 1, 1_000_000_000);
+      int(problems, "keeper.confirmEvaluations", k.confirmEvaluations, 1, 20);
+      int(problems, "keeper.confirmSeconds", k.confirmSeconds, 0, 3600);
+      int(problems, "keeper.allowanceMarginBp", k.allowanceMarginBp, 0, 1000);
+      int(problems, "keeper.maxFeeGwei", k.maxFeeGwei, 1, 5000);
+      bigintString(problems, "keeper.minGasWei", k.minGasWei, true);
+    }
+  }
 
   const m = c.monitor ?? {};
   int(problems, "monitor.pollSeconds", m.pollSeconds, 1, 3600);

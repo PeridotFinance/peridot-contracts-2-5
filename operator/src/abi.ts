@@ -16,6 +16,8 @@ export const CONTROLLER_ABI = [
 ];
 export const PTOKEN_ABI = [
   "function accrueInterest() returns (uint256)",
+  "function repayBorrowBehalf(address borrower, uint256 repayAmount) returns (uint256)",
+  "function borrowBalanceStored(address) view returns (uint256)",
   "function underlying() view returns (address)",
   "function getAccountSnapshot(address) view returns (uint256 err, uint256 pTokenBalance, uint256 borrowBalance, uint256 exchangeRate)",
   "function exchangeRateStored() view returns (uint256)",
@@ -39,6 +41,7 @@ export const FEED_ABI = [
 export const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
   "function decimals() view returns (uint8)",
 ];
 export const UNIV3_FACTORY_ABI = ["function getPool(address,address,uint24) view returns (address)"];
