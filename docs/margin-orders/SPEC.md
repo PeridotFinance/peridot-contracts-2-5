@@ -53,7 +53,8 @@ are shared so the frontend uses one component on Robinhood, Avalanche and the St
 
 ## Authorization
 
-- Create, modify and cancel: `msg.sender == adapter.positionOwner(positionId)`.
+- Create and modify: `msg.sender == adapter.positionOwner(positionId)`. Modify also requires the order's own owner.
+- Cancel: the order's owner (`order.owner`), at any time while it is open, even after the position closed.
 - Execute: anyone. The executor receives nothing; proceeds follow the existing close path to the owner. `adapterData`
   only routes the swap and can never name a recipient.
 - On the margin engine, the registry's adapter is the only extra caller allowed to close for an owner. On Robinhood that

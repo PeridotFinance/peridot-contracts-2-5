@@ -51,6 +51,9 @@ class Keeper:
         self.state_path = Path(state_path)
         text = self.state_path.read_text().strip() if self.state_path.exists() else ''
         self.state = json.loads(text) if text else {}
+        if self.state.get('registry', self.registry).lower() != self.registry.lower():
+            self.state = {}  # a different registry (redeploy or another chain): its ids mean nothing here
+        self.state['registry'] = self.registry
         self.state.setdefault('firstOpen', 1)
         self.state.setdefault('final', [])
 

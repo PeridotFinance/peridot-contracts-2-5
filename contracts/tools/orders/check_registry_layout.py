@@ -27,6 +27,14 @@ def current():
         label = types[s['type']]['label']
         rows.append({'label': s['label'], 'slot': int(s['slot']), 'offset': s['offset'],
                      'type': re.sub(r'\)\d+', ')', label)})
+    # Struct members, so reordering fields inside a mapped struct (Order) is caught too.
+    for t in sorted(types):
+        members = types[t].get('members')
+        if members:
+            name = re.sub(r'\)\d+', ')', types[t]['label'])
+            for m in members:
+                rows.append({'struct': name, 'label': m['label'], 'slot': int(m['slot']), 'offset': m['offset'],
+                             'type': re.sub(r'\)\d+', ')', types[m['type']]['label'])})
     return rows
 
 
@@ -36,7 +44,16 @@ def main():
         SNAPSHOT.write_text(json.dumps(rows, indent=1) + '\n')
         print('recorded', len(rows), 'variables')
         return 0
-    old = json.loads(SNAPSHOT.read_text())
+    old_all = json.loads(SNAPSHOT.read_text())
+    old_structs = [r for r in old_all if 'struct' in r]
+    new_structs = [r for r in rows if 'struct' in r]
+    for name in {r['struct'] for r in old_structs}:
+        before = [r for r in old_structs if r['struct'] == name]
+        after = [r for r in new_structs if r['struct'] == name]
+        if after[:len(before)] != before:
+            sys.exit(f'FAIL: struct {name} members changed or reordered')
+    old = [r for r in old_all if 'struct' not in r]
+    rows = [r for r in rows if 'struct' not in r]
     gap_old, gap_new = old[-1], rows[-1]
     if gap_old['label'] != '__gap' or gap_new['label'] != '__gap':
         sys.exit('FAIL: __gap must stay the last variable')

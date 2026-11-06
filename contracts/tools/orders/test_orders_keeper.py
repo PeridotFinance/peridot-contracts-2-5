@@ -116,6 +116,11 @@ class Tests(unittest.TestCase):
         k.step(True)
         self.assertEqual(chain.reads, [2])
 
+    def test_state_from_another_registry_is_discarded(self):
+        k = keeper(FakeChain({}), state=json.dumps({'registry': '0x' + '99' * 20, 'firstOpen': 50, 'final': [51]}))
+        self.assertEqual(k.state['firstOpen'], 1)
+        self.assertEqual(k.state['final'], [])
+
     def test_empty_state_file_is_no_state(self):
         self.assertEqual(keeper(FakeChain({}), state='').state['firstOpen'], 1)
 
