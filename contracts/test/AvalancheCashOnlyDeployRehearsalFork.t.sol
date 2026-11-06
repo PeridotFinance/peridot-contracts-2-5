@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {PErc20} from "../contracts/PErc20.sol";
@@ -183,6 +184,117 @@ contract AvalancheCashOnlyDeployRehearsalForkTest is Test {
         assertEq(d.pUsdc.redeem(bal), 0, "supplier can exit while borrowing is paused");
         // the deployment itself still reads as paused
         assertTrue(d.controller.borrowGuardianPaused(address(d.pWavax)) && d.controller.borrowGuardianPaused(address(d.pUsdc)));
+    }
+
+    // ================================================================= pause guardian: pausing minting and borrowing from the Ledger
+    bytes32 internal constant ACTION_PAUSED_SIG = keccak256("ActionPaused(address,string,bool)");
+
+    function _guardianSetup(address guardian) internal returns (CashOnlyDeployment memory d) {
+        CashOnlyParams memory p = _params();
+        p.pauseGuardian = guardian;
+        d = script.deploy(p);
+    }
+
+    function _countActionPaused(address controller) internal returns (uint256 n) {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i; i < logs.length; i++) {
+            if (logs[i].emitter == controller && logs[i].topics.length > 0 && logs[i].topics[0] == ACTION_PAUSED_SIG) n++;
+        }
+    }
+
+    /// The Ledger is the deployer, hence the admin; it is also the pause guardian when PAUSE_GUARDIAN is set to its address. From it:
+    /// `_setMintPaused(market,true)` and `_setBorrowPaused(market,true)` on BOTH markets take effect (read-backs, logs, real reverts), and
+    /// repayment and redemption keep working while minting and borrowing are paused.
+    function testRehearsal_Ledger_AsAdminAndGuardian_PausesMintAndBorrow_OnBothMarkets_ReadBacksAndEffects() public {
+        CashOnlyDeployment memory d = _guardianSetup(DEPLOYER);
+        assertEq(d.controller.pauseGuardian(), DEPLOYER, "read-back: pauseGuardian() is the Ledger");
+        assertEq(d.controller.admin(), DEPLOYER, "read-back: admin() is the Ledger");
+        PToken[2] memory ms = [PToken(address(d.pWavax)), PToken(address(d.pUsdc))];
+        for (uint256 i; i < 2; i++) {
+            assertTrue(d.controller.borrowGuardianPaused(address(ms[i])), "fresh deployment: borrowing paused");
+            assertFalse(d.controller.mintGuardianPaused(address(ms[i])), "fresh deployment: minting NOT paused");
+        }
+        // SYNTHETIC later step (not part of the script): the admin enables borrowing so that pausing it has an effect to observe
+        vm.startPrank(DEPLOYER);
+        for (uint256 i; i < 2; i++) {
+            assertEq(d.controller._setCollateralFactor(ms[i], 0.5e18), 0);
+            d.controller._setBorrowPaused(ms[i], false);
+            assertFalse(d.controller.borrowGuardianPaused(address(ms[i])));
+        }
+        vm.stopPrank();
+        address user = address(0x5E12);
+        deal(USDC, user, 500e6);
+        deal(WAVAX, user, 10e18);
+        vm.startPrank(user);
+        IERC20(USDC).approve(address(d.pUsdc), type(uint256).max);
+        IERC20(WAVAX).approve(address(d.pWavax), type(uint256).max);
+        assertEq(d.pUsdc.mint(500e6), 0);
+        assertEq(d.pWavax.mint(10e18), 0);
+        address[] memory enter = new address[](2);
+        enter[0] = address(d.pWavax);
+        enter[1] = address(d.pUsdc);
+        d.controller.enterMarkets(enter);
+        assertEq(d.pUsdc.borrow(5e6), 0, "borrowing works while unpaused");
+        vm.stopPrank();
+
+        // THE LEDGER PAUSES: four calls (mint and borrow, on each market)
+        vm.recordLogs();
+        vm.startPrank(DEPLOYER);
+        for (uint256 i; i < 2; i++) {
+            assertTrue(d.controller._setMintPaused(ms[i], true));
+            assertTrue(d.controller._setBorrowPaused(ms[i], true));
+        }
+        vm.stopPrank();
+        assertEq(_countActionPaused(address(d.controller)), 4, "four ActionPaused events");
+        for (uint256 i; i < 2; i++) {
+            assertTrue(d.controller.mintGuardianPaused(address(ms[i])), "read-back: mint paused");
+            assertTrue(d.controller.borrowGuardianPaused(address(ms[i])), "read-back: borrow paused");
+        }
+        // effects
+        vm.startPrank(user);
+        vm.expectRevert(bytes("mint is paused"));
+        d.pUsdc.mint(1e6);
+        vm.expectRevert(bytes("mint is paused"));
+        d.pWavax.mint(1e18);
+        vm.expectRevert(bytes("borrow is paused"));
+        d.pUsdc.borrow(1e6);
+        vm.expectRevert(bytes("borrow is paused"));
+        d.pWavax.borrow(1e15);
+        // the exits stay open: repay and redeem
+        assertEq(d.pUsdc.repayBorrow(type(uint256).max), 0, "repay works while paused");
+        assertEq(d.pUsdc.redeem(d.pUsdc.balanceOf(user)), 0, "redeem works while paused");
+        vm.stopPrank();
+        // the Ledger (admin) can lift a pause again
+        vm.prank(DEPLOYER);
+        assertFalse(d.controller._setMintPaused(ms[1], false));
+        assertFalse(d.controller.mintGuardianPaused(address(ms[1])));
+    }
+
+    /// A guardian that is NOT the admin can only pause: unpausing is admin-only; a stranger can do neither. (The Ledger as guardian is
+    /// the test above; this shows the role split the controller enforces if the guardian is ever set to a different hot account.)
+    function testRehearsal_DistinctGuardian_CanPauseNeverUnpause_Stranger_Neither_LedgerAdminUnpauses() public {
+        CashOnlyDeployment memory d = _guardianSetup(GUARDIAN);
+        PToken[2] memory ms = [PToken(address(d.pWavax)), PToken(address(d.pUsdc))];
+        vm.startPrank(GUARDIAN);
+        for (uint256 i; i < 2; i++) {
+            assertTrue(d.controller._setMintPaused(ms[i], true));
+            assertTrue(d.controller._setBorrowPaused(ms[i], true));
+            assertTrue(d.controller.mintGuardianPaused(address(ms[i])));
+            vm.expectRevert(bytes("only admin can unpause"));
+            d.controller._setMintPaused(ms[i], false);
+            vm.expectRevert(bytes("only admin can unpause"));
+            d.controller._setBorrowPaused(ms[i], false);
+        }
+        vm.stopPrank();
+        vm.startPrank(STRANGER);
+        vm.expectRevert(bytes("only pause guardian and admin can pause"));
+        d.controller._setMintPaused(ms[0], true);
+        vm.expectRevert(bytes("only pause guardian and admin can pause"));
+        d.controller._setBorrowPaused(ms[0], true);
+        vm.stopPrank();
+        vm.prank(DEPLOYER);
+        d.controller._setMintPaused(ms[0], false);
+        assertFalse(d.controller.mintGuardianPaused(address(ms[0])), "the Ledger (admin) unpauses");
     }
 
     // ================================================================= inputs the script must refuse (struct entry point)
