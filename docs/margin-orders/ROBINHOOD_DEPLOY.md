@@ -15,8 +15,8 @@ script deploys it from its build artifact.
 ## 0. Signing preparation (operator approved preparation 2026-11-06; timing decided Monday)
 
 - **When:** either in the 10 Nov recovery session or in the 15 to 17 Nov ceremony. The upgrade does not read the oracle,
-  so market hours do not matter. Do not overlap it with the SPY timelock batch: both use the same timelock, so schedule
-  one and let it finish first. **Position 4 stays untouched live.**
+  so market hours do not matter. It is a separate timelock operation from the SPY batch (its own salt), so the two can be
+  scheduled in the same session. **Position 4 stays untouched live.**
 - **Mainnet dry run** (simulation, no broadcast) at L2 107,648,285: every precondition holds. It estimates 10,525,160 gas,
   about 0.00042 ETH at 0.04 gwei.
 - **Fund the throwaway deployer with 0.001 ETH:**
