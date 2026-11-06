@@ -1,6 +1,7 @@
 {
-  "startedAt": "2026-11-06T11:33:19.859Z",
-  "forkHead": 99580846,
+  "startedAt": "2026-11-06T12:18:01.314Z",
+  "estimateGas": false,
+  "forkHead": 99583517,
   "safe": {
     "owners": [
       "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
@@ -14,6 +15,20 @@
       "name": "USDC vault",
       "address": "0x855bF832f26a294d28500db59eE941dE3d654129",
       "cap": "5000000000",
+      "teamSeed": "500000000",
+      "afterSeed": {
+        "ledgerShares": "497207618",
+        "totalAssets": "527240176",
+        "totalSupply": "527058047",
+        "idleAssetInVault": "0",
+        "depositGasUsed": "2389255"
+      },
+      "afterDeploy": {
+        "idleAssetInVault": "0",
+        "totalAssets": "527261853",
+        "deployIdleGasUsed": "742632",
+        "ledgerRedeemable": "497399881"
+      },
       "before": {
         "owner": "0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12",
         "paused": false,
@@ -30,27 +45,41 @@
         "maxDepositForAnyone": "4970157475",
         "safeNonce": "13"
       },
-      "depositTestGas": "2384999",
-      "redeemableOfSmallDeposit": "99496105",
+      "depositTestGas": "978777",
+      "redeemableOfSmallDeposit": "99466172",
       "depositedToCap": true,
       "overCapRefused": true,
       "deployIdle": "ok",
       "redeem": "ok",
-      "redeemedAssets": "4943102154",
-      "depositedTotal": "4970156085",
-      "roundTripLossBp": 54,
+      "redeemedAssets": "4448233900",
+      "depositedTotal": "4472834644",
+      "roundTripLossBp": 55,
       "note": "round trip = deposit, deployIdle (liquidity into the Pharaoh position), immediate redeem of all shares"
     },
     {
       "name": "WAVAX vault",
       "address": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
       "cap": "595000000000000000000",
+      "teamSeed": "60000000000000000000",
+      "afterSeed": {
+        "ledgerShares": "58632549059345564480",
+        "totalAssets": "60858243929246513219",
+        "totalSupply": "60356146873529686472",
+        "idleAssetInVault": "0",
+        "depositGasUsed": "2314842"
+      },
+      "afterDeploy": {
+        "idleAssetInVault": "0",
+        "totalAssets": "60991152183633783352",
+        "deployIdleGasUsed": "667181",
+        "ledgerRedeemable": "59249420445712214452"
+      },
       "before": {
         "owner": "0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12",
         "paused": false,
         "rebalancer": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
         "depositCap": "1",
-        "totalAssets": "1737289652617579971",
+        "totalAssets": "1737121340791551348",
         "totalSupply": "1723597814184121992"
       },
       "setDepositCapCalldata": "0x866512030000000000000000000000000000000000000000000000204148a38e0d6c0000",
@@ -58,21 +87,21 @@
       "setDepositCapGas": "73752",
       "after": {
         "depositCap": "595000000000000000000",
-        "maxDepositForAnyone": "593262710347382420029",
+        "maxDepositForAnyone": "593262878659208448652",
         "safeNonce": "14"
       },
-      "depositTestGas": "2328938",
-      "redeemableOfSmallDeposit": "1971109312052777315",
+      "depositTestGas": "781101",
+      "redeemableOfSmallDeposit": "1991315516680963342",
       "depositedToCap": true,
-      "overCapRefused": true,
+      "overCapRefused": false,
       "deployIdle": "ok",
       "redeem": "ok",
-      "redeemedAssets": "585881417644476805535",
-      "depositedTotal": "593231659454292574417",
-      "roundTripLossBp": 123,
+      "redeemedAssets": "527186142269794229348",
+      "depositedTotal": "533964330419121778579",
+      "roundTripLossBp": 126,
       "note": "round trip = deposit, deployIdle (liquidity into the Pharaoh position), immediate redeem of all shares"
     }
   ],
   "ok": true,
-  "finishedAt": "2026-11-06T11:35:41.551Z"
+  "finishedAt": "2026-11-06T12:20:35.450Z"
 }

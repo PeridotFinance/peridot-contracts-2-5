@@ -1,0 +1,26 @@
+Provenance: repeated runs of operator/scripts/rehearse-vault-opening.ts on forks of mainnet, 2026-11-06. Part A: 12 runs at successive heads with EXPLICIT gas limits. Part B: 8 runs at fixed blocks with the node's RAW gas estimate (--estimate-gas); exit=1 means a transaction was mined and reverted (out of gas).
+-----
+PART A
+explicit gas limits, fork head 99582435: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582483: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582535: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582581: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582629: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582689: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582746: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582790: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582865: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582903: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582946: ok=True round trip [54, 123] bp
+explicit gas limits, fork head 99582992: ok=True round trip [54, 123] bp
+
+PART B (raw estimate): 
+block 99580756 exit=0
+block 99580750 exit=1
+block 99580760 exit=1
+block 99580745 exit=1
+block 99580765 exit=1
+block 99580740 exit=1
+block 99580770 exit=1
+block 99580735 exit=0
+done
