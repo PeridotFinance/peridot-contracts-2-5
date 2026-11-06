@@ -61,6 +61,9 @@ contract DeployRobinhoodOrders is Script {
     bytes32 constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
+    /// @dev PROTOTYPE branch: the range custodian the adapter unwinds before an order closes; address(0) on the prepared path.
+    address internal rangeCustodianForAdapter;
+
     struct Deployment {
         address executorImplementation;
         address registryImplementation;
@@ -100,7 +103,7 @@ contract DeployRobinhoodOrders is Script {
         bytes memory init = abi.encodeWithSignature("initialize(address,address)", predictedAdapter, TIMELOCK);
         d.registry = _create(abi.encodePacked(vm.getCode(PROXY_ARTIFACT), abi.encode(d.registryImplementation, TIMELOCK, init)));
         d.adapter = _create(
-            abi.encodePacked(vm.getCode(ADAPTER_ARTIFACT), abi.encode(EXECUTOR, d.registry, ORACLE, QUOTER, CONFIG))
+            abi.encodePacked(vm.getCode(ADAPTER_ARTIFACT), abi.encode(EXECUTOR, d.registry, ORACLE, QUOTER, CONFIG, rangeCustodianForAdapter))
         );
         require(d.adapter == predictedAdapter, "ADAPTER_ADDRESS");
         d.registryProxyAdmin = address(uint160(uint256(vm.load(d.registry, ADMIN_SLOT))));

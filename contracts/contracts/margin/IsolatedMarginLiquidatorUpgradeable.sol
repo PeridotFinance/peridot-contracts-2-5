@@ -6,6 +6,7 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/ut
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {IERC3156FlashBorrower, IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
@@ -14,6 +15,11 @@ import {IsolatedMarginQuoter} from "./IsolatedMarginQuoter.sol";
 import {IsolatedMarginRiskEngineUpgradeable} from "./IsolatedMarginRiskEngineUpgradeable.sol";
 import {IsolatedMarginSwapModule} from "./IsolatedMarginSwapModule.sol";
 import {IsolatedMarginTypes} from "./IsolatedMarginTypes.sol";
+
+/// @dev Range take-profit custodian (prototype): removes an active band and returns it to the position.
+interface IRangeUnwind {
+    function unwind(uint256 positionId) external returns (bool);
+}
 import {IsolatedMarginVaultUpgradeable} from "./IsolatedMarginVaultUpgradeable.sol";
 import {MarginInsuranceFundUpgradeable} from "./MarginInsuranceFundUpgradeable.sol";
 import {IIsolatedMarginConfig} from "./interfaces/IIsolatedMarginConfig.sol";
@@ -134,7 +140,17 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         swapModule = IsolatedMarginSwapModule(swapModule_);
     }
 
+    /// @notice PROTOTYPE: one-time wiring of the range take-profit custodian, by the proxy admin inside upgradeAndCall.
+    function initializeRangeCustodian(address custodian) external reinitializer(2) {
+        if (msg.sender != ERC1967Utils.getAdmin()) revert LiquidationError(40);
+        if (custodian.code.length == 0) revert LiquidationError(41);
+        rangeCustodian = custodian;
+    }
+
     function liquidate(LiquidationParams calldata params) external nonReentrant {
+        // An active range band is removed first, so seizure always finds the collateral (never blocked by a band).
+        address custodian = rangeCustodian;
+        if (custodian != address(0)) IRangeUnwind(custodian).unwind(params.positionId);
         IsolatedMarginTypes.Position memory position = _getPosition(params.positionId);
         if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert LiquidationError(8);
         if (params.recipient == address(0)) revert LiquidationError(9);
@@ -430,5 +446,8 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         ) = executor.positions(positionId);
     }
 
-    uint256[40] private __gap;
+    /// @dev Appended (prototype); taken from the gap so the layout is unchanged.
+    address public rangeCustodian;
+
+    uint256[39] private __gap;
 }

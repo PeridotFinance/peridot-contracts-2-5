@@ -12,6 +12,11 @@ import {IsolatedMarginMath} from "./IsolatedMarginMath.sol";
 import {IsolatedMarginTypes} from "./IsolatedMarginTypes.sol";
 import {IIsolatedMarginConfig} from "./interfaces/IIsolatedMarginConfig.sol";
 import {IIsolatedMarginRiskHook} from "./interfaces/IIsolatedMarginRiskHook.sol";
+
+/// @dev Range take-profit custodian (prototype): a position's stock that sits in a band, valued at the oracle.
+interface IRangeHoldings {
+    function holdings(address account) external view returns (uint256 stockAmount, uint256 usdgAmount);
+}
 import {IMarginPriceOracle} from "./interfaces/IMarginPriceOracle.sol";
 
 interface IIsolatedMarginControllerRegistry {
@@ -59,6 +64,8 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     );
     event AccountStatusUpdated(address indexed account, IsolatedMarginTypes.Status status);
     event MovementAuthorized(address indexed account, address indexed pToken, uint256 amount);
+
+    event RangeCustodianSet(address indexed custodian);
 
     error PriceUnavailable(address asset);
 
@@ -265,6 +272,23 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         emit AccountStatusUpdated(account, accountConfig.status);
     }
 
+    /// @notice PROTOTYPE (range take-profit). Off until set; the owner sets it.
+    function setRangeCustodian(address custodian) external onlyOwner {
+        rangeCustodian = custodian;
+        emit RangeCustodianSet(custodian);
+    }
+
+    /// @notice PROTOTYPE: lets the executor move position collateral of an ACTIVE account into its range order. The
+    /// custodian then holds it as a band, which `_metrics` keeps counting at the oracle price.
+    function authorizeRangeRelease(address account, uint256 amount) external onlyExecutor {
+        AccountConfig memory accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        require(rangeCustodian != address(0) && amount > 0, "RiskEngine: no range release");
+        movementAuthorizations[account][accountConfig.positionPToken] =
+            MovementAuthorization({remainingAmount: amount, blockNumber: uint64(block.number)});
+        emit MovementAuthorized(account, accountConfig.positionPToken, amount);
+    }
+
     function authorizeMovement(address account, address pToken, uint256 amount) external onlyOperator {
         AccountConfig memory accountConfig = accounts[account];
         bool debtRepayMovement = msg.sender == executor && pToken == accountConfig.debtPToken
@@ -417,6 +441,13 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
             );
         }
 
+        address custodian = rangeCustodian;
+        if (custodian != address(0)) {
+            (uint256 bandStock, uint256 bandUsdg) = IRangeHoldings(custodian).holdings(account);
+            if (bandStock != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.positionPToken, bandStock);
+            if (bandUsdg != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.debtPToken, bandUsdg);
+        }
+
         uint256 debt = PErc20(accountConfig.debtPToken).borrowBalanceStored(account) + additionalBorrow;
         uint256 debtValueUsd = underlyingValueUsd(accountConfig.debtPToken, debt);
         IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
@@ -447,5 +478,8 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         return true;
     }
 
-    uint256[40] private __gap;
+    /// @dev Appended (prototype); taken from the gap so the layout is unchanged.
+    address public rangeCustodian;
+
+    uint256[39] private __gap;
 }
