@@ -38,3 +38,8 @@ ethers-scripts
 lib
 verify_project
 script/verify
+# Robinhood orders profile build output and rehearsal journals
+cache-orders/
+out-orders/
+deployments/orders-rehearsal.json
+deployments/orders-fork-test-journal.json

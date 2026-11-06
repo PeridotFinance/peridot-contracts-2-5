@@ -94,3 +94,18 @@ are shared so the frontend uses one component on Robinhood, Avalanche and the St
 - **`OrderCancelled.reason`:** 0 owner, 1 sibling executed, 2 position inactive, 3 owner changed.
 - **`canExecute.reason`:** 0 executable, 1 not open, 2 expired, 3 position inactive, 4 owner changed,
   5 oracle unavailable, 6 trigger not reached.
+
+## Deployment convention (the Robinhood deploy script depends on it)
+
+- **Constructor:** takes no arguments and calls `_disableInitializers()`.
+- **Initializer:** `initialize(IMarginCloseAdapter adapter_, address admin_)`. `admin_` is the chain's timelock; it holds
+  every admin power (pause, limits). `adapter()` returns `adapter_` from then on.
+- **Proxy:** OpenZeppelin 5 `TransparentUpgradeableProxy(implementation, timelock, initData)`. Its own `ProxyAdmin` is
+  then owned by the timelock. Storage stays append-only across upgrades.
+- **Address order:** the adapter needs the registry address, and the registry needs the adapter's. The deploy script
+  predicts the adapter address from the deployer nonce, initializes the proxy with it, then deploys the adapter and
+  asserts the two match.
+- **One-time wiring on Robinhood:** the executor's `orderExecutor` is set once, inside the timelocked upgrade
+  (`reinitializer(2)`), and the adapter's `registry` is immutable.
+  - The registry can be upgraded behind its proxy at any time.
+  - Replacing the adapter needs another executor implementation with a `reinitializer(3)` setter.
