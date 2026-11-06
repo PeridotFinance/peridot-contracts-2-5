@@ -1,28 +1,22 @@
 # Robinhood TP/SL: registry deployment and executor upgrade (prepared, not sent)
 
-**Prepared 2026-11-06. Ready for when the registry implementation arrives.** Nothing below has been sent.
+**Prepared 2026-11-06.** The registry is `MarginOrderRegistry` (this branch). Nothing below has been sent.
 
 - **Signers:** a throwaway key sends 4 creations, with gas only. The Ledger `0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD`
   signs 2: the timelock schedule and the execute.
 - **Script:** `contracts/script/orders/DeployRobinhoodOrders.s.sol`, profile `robinhood_orders`. That profile uses the live
   margin stack's compiler settings: 0.8.26, cancun, via-IR, 1 optimizer run.
 
-## What the registry must provide
+## The registry
 
-The registry follows the deployment convention in `SPEC.md`:
-- a no-argument constructor that disables initializers;
-- `initialize(adapter, admin)`, with admin set to the timelock;
-- `adapter()`;
-- OZ 5 `TransparentUpgradeableProxy`.
-
-To use it, put the source under `contracts/contracts/margin/orders/` and set
-`ORDERS_REGISTRY_ARTIFACT=<File>.sol:<Contract>`.
+`contracts/contracts/margin/orders/MarginOrderRegistry.sol` follows the deployment convention in `SPEC.md`. The
+script deploys it from its build artifact.
 
 ## 1. Deploy (throwaway key, 4 creations)
 
 ```sh
 cd contracts
-export ORDERS_PUBLIC_SENDER=$DEPLOYER ORDERS_REGISTRY_ARTIFACT=<File>.sol:<Contract> ORDERS_JOURNAL=deployments/orders-mainnet.json
+export ORDERS_PUBLIC_SENDER=$DEPLOYER ORDERS_JOURNAL=deployments/orders-mainnet.json
 export ORDERS_SOURCE_COMMIT=$(git rev-parse HEAD)
 FOUNDRY_PROFILE=robinhood_orders forge script script/orders/DeployRobinhoodOrders.s.sol:DeployRobinhoodOrders \
   --rpc-url https://rpc.mainnet.chain.robinhood.com --sender $DEPLOYER --keystore <throwaway keystore> --broadcast --slow
@@ -30,7 +24,7 @@ FOUNDRY_PROFILE=robinhood_orders forge script script/orders/DeployRobinhoodOrder
 
 **What it deploys, in order:**
 1. the new executor implementation;
-2. the registry implementation;
+2. the `MarginOrderRegistry` implementation;
 3. the registry proxy, initialized with the adapter address predicted from the deployer nonce;
 4. `RobinhoodMarginCloseAdapter(executor, registry proxy, oracle 0x6315, quoter 0xeD3c, config 0x09F9)`.
 
@@ -46,7 +40,8 @@ FOUNDRY_PROFILE=robinhood_orders forge script script/orders/DeployRobinhoodOrder
 - the executor implementation's code equals this build's artifact;
 - the registry's `adapter()` and the adapter's `registry()` point at each other;
 - the registry ProxyAdmin is owned by the timelock;
-- the registry implementation cannot be initialized;
+- the registry implementation's code equals this build's, and it cannot be initialized;
+- the registry's admin is the timelock, it is not paused, and `nextOrderId` is 1;
 - the deployer holds nothing: no proxy ownership, and no registry owner or admin.
 
 The journal records every address, the operation id, the source commit and both timelock calldatas.
@@ -88,19 +83,47 @@ does not read the oracle.
   - The registry can be upgraded behind its own proxy, by the timelock.
   - Replacing the adapter needs another executor implementation with a `reinitializer(3)` setter. That is not built.
 
+## 3. Keeper (after verify)
+
+The keeper is permissionless: its wallet needs gas only, and it receives nothing.
+
+```sh
+python3 contracts/tools/orders/orders_keeper.py --journal contracts/deployments/orders-mainnet.json \
+  --sender $ORDERS_KEEPER --keystore <keeper keystore> --password-file <file> --execute
+```
+
+- It runs `executeOrder` for orders that `canExecute` reports as executable.
+- It sweeps expired orders and orders on closed positions.
+- It waits on a stale oracle, an untouched trigger or a pause.
+- Every send is simulated first, with a gas-price cap and at most 10 sends per step.
+
 ## Evidence (2026-11-06)
 
-- `test/orders/RobinhoodOrdersDeployFork.t.sol`, 3/3 at L2 107,575,444 against the live stack. It uses the script's own
-  deploy, with `RehearsalRegistryStub`, a test-only stand-in that is **not a registry**. Results:
-  - The real timelock and ProxyAdmin, with the Ledger: `check`, the schedule, a refused early execute, the execute, and
-    `verify`. Every position is byte-identical, and the operation cannot run twice.
-  - Only the Ledger can schedule.
-  - Live position 4 was closed through stub → adapter → `closePositionFor`, and 2,746,084,854 pUSDG units were credited to
-    its owner in the margin vault.
-    - That needs an active position. If none exists at the pin, the test logs that and still verifies the deploy path.
-- `test/orders/RobinhoodOrderCloseFork.t.sol`, 10/10 at the same pin under this profile.
-- **Anvil script rehearsal (`--broadcast`, Ledger unlocked):**
-  - 4 deployments, 0.00011 ETH of gas.
-  - `check` ok; Ledger schedule 58,771 gas, then `check` showed it scheduled.
-  - An early execute was refused; the execute took 93,979 gas.
-  - `verify` passed.
+- **Registry unit suite:** `test/orders/MarginOrderRegistry.t.sol`, 32/32, including a 256-run fuzz test of the open-set
+  bookkeeping.
+- **Mutants:** `tools/orders/mutate_registry.py` kills every mutant (see the commit). One equivalent mutant is
+  documented in the tool.
+- **Storage layout:** `tools/orders/check_registry_layout.py`, against the snapshot `tools/orders/registry-layout.json`.
+- **Fork suite:** `test/orders/RobinhoodOrdersDeployFork.t.sol`, 7/7 at L2 107,629,698 against the live stack, using the
+  script's own deploy with the real registry.
+  - **Timelock pair:** the real timelock and ProxyAdmin, with the Ledger: `check`, the schedule, a refused early execute,
+    the execute, and `verify`. Positions are byte-identical, and the operation runs only once. Only the Ledger can
+    schedule.
+  - **Before the upgrade:** an order whose trigger is crossed still cannot close, and stays `OPEN`.
+  - **Live position 4:** a stranger cannot create an order. `canExecute` reports 0 for the take-profit and 6 for the
+    stop-loss. A keeper executed the take-profit: the position closed, 2,779,322,504 pUSDG units were credited to its
+    owner, and the stop-loss was cancelled (mutual cancellation).
+  - **Stale feed (13 h):** `canExecute` reports 5 and `executeOrder` reverts `OracleUnavailable`. After a fresh answer, the
+    order executes.
+  - **Liquidation:** the same outcome and return data with and without open orders.
+  - **Pause:** only the timelock can pause; a pause stops execution only.
+- `test/orders/RobinhoodOrderCloseFork.t.sol`: 10/10 at the same pin.
+- **Anvil script rehearsal:** `bash contracts/tools/orders/rehearse_orders.sh`, fork at L2 107,636,516.
+  - 4 deployments, 0.00013 ETH of gas. Ledger schedule 58,771 gas, execute 93,979 gas, then `verify` passed.
+  - The owner of position 4 placed a far stop-loss and a take-profit at the oracle price.
+  - **Keeper:** the dry run reported the take-profit due and the stop-loss waiting. With `--execute` it sent the
+    take-profit (2,231,254 gas). The position closed, the stop-loss was cancelled, and the next pass had nothing to do.
+  - **On anvil the markets' `accrualBlockNumber` is set to the anvil block.** Anvil's `block.number` is the L2 height,
+    while the markets accrue on the native L1 number. Without that, the close path sees about 81M blocks of interest and
+    its swap floor refuses the trade (`V4TooLittleReceived`). The keeper treats that error as a wait, since on mainnet it
+    means the pool is further from the oracle than the order allows.

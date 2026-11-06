@@ -8,6 +8,7 @@ import {console2} from "forge-std/console2.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IsolatedMarginExecutorUpgradeable} from "../../contracts/margin/IsolatedMarginExecutorUpgradeable.sol";
 import {RobinhoodMarginCloseAdapter, IRobinhoodOrderExecutor} from "../../contracts/margin/orders/RobinhoodMarginCloseAdapter.sol";
+import {MarginOrderRegistry} from "../../contracts/margin/orders/MarginOrderRegistry.sol";
 
 interface IOrdersTimelock {
     function getMinDelay() external view returns (uint256);
@@ -31,7 +32,7 @@ interface IOrdersRegistryView {
 /// @title Robinhood TP/SL deployment path: three deployments by a throwaway key, then one timelock pair for the Ledger.
 /// @notice Stage 1 (`run`, gas-only throwaway deployer, 4 creations):
 ///   1. the new executor implementation (closePositionFor + initializeOrderExecutor);
-///   2. the registry implementation (`ORDERS_REGISTRY_ARTIFACT`, built to the SPEC's deployment convention);
+///   2. the registry implementation, MarginOrderRegistry (SPEC deployment convention);
 ///   3. the registry proxy, an OZ 5 TransparentUpgradeableProxy whose own ProxyAdmin the timelock owns, initialized with
 ///      the adapter address predicted from the deployer nonce;
 ///   4. RobinhoodMarginCloseAdapter(executor, registry proxy, oracle, quoter, config), asserted to land on that address.
@@ -72,21 +73,21 @@ contract DeployRobinhoodOrders is Script {
     function run() external {
         require(block.chainid == 4663, "CHAIN");
         address sender = vm.envAddress("ORDERS_PUBLIC_SENDER");
-        string memory artifact = vm.envString("ORDERS_REGISTRY_ARTIFACT");
         string memory journal = vm.envString("ORDERS_JOURNAL");
         require(!vm.exists(journal), "JOURNAL_EXISTS");
         require(sender != LEDGER && sender != TIMELOCK, "SENDER_IS_GOVERNANCE");
         _preconditions();
         vm.startBroadcast(sender);
-        Deployment memory d = _deploy(sender, vm.getCode(artifact));
+        Deployment memory d = _deploy(sender, vm.getCode(REGISTRY_ARTIFACT));
         vm.stopBroadcast();
         _postconditions(d, sender);
-        _writeJournal(journal, d, artifact);
+        _writeJournal(journal, d, REGISTRY_ARTIFACT);
     }
 
     /// @dev Shared with the fork test. `creator` is the address whose nonce CREATE uses.
     string constant EXECUTOR_ARTIFACT = "IsolatedMarginExecutorUpgradeable.sol:IsolatedMarginExecutorUpgradeable";
     string constant ADAPTER_ARTIFACT = "RobinhoodMarginCloseAdapter.sol:RobinhoodMarginCloseAdapter";
+    string constant REGISTRY_ARTIFACT = "MarginOrderRegistry.sol:MarginOrderRegistry";
     string constant PROXY_ARTIFACT = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
 
     /// @dev Shared with the fork test. `creator` is the address whose nonce CREATE uses. Creation code comes from this
@@ -132,6 +133,9 @@ contract DeployRobinhoodOrders is Script {
         );
         require(IOrdersRegistryView(d.registry).adapter() == d.adapter, "REGISTRY_ADAPTER");
         require(address(uint160(uint256(vm.load(d.registry, IMPLEMENTATION_SLOT)))) == d.registryImplementation, "REGISTRY_IMPL");
+        require(keccak256(d.registryImplementation.code) == keccak256(vm.getDeployedCode(REGISTRY_ARTIFACT)), "REGISTRY_CODE");
+        MarginOrderRegistry r = MarginOrderRegistry(d.registry);
+        require(r.admin() == TIMELOCK && !r.paused() && r.nextOrderId() == 1, "REGISTRY_STATE");
         require(IOrdersOwnable(d.registryProxyAdmin).owner() == TIMELOCK, "REGISTRY_PROXY_ADMIN_OWNER");
         RobinhoodMarginCloseAdapter a = RobinhoodMarginCloseAdapter(d.adapter);
         require(address(a.executor()) == EXECUTOR && a.registry() == d.registry, "ADAPTER_WIRING");

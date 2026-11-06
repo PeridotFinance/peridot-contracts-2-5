@@ -1,0 +1,50 @@
+[
+ {
+  "label": "adapter",
+  "slot": 0,
+  "offset": 0,
+  "type": "contract IMarginCloseAdapter"
+ },
+ {
+  "label": "admin",
+  "slot": 1,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "paused",
+  "slot": 1,
+  "offset": 20,
+  "type": "bool"
+ },
+ {
+  "label": "nextOrderId",
+  "slot": 2,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "label": "_orders",
+  "slot": 3,
+  "offset": 0,
+  "type": "mapping(uint256 => struct IMarginOrderRegistry.Order)"
+ },
+ {
+  "label": "_openOrders",
+  "slot": 4,
+  "offset": 0,
+  "type": "mapping(uint256 => uint256[])"
+ },
+ {
+  "label": "_openIndex",
+  "slot": 5,
+  "offset": 0,
+  "type": "mapping(uint256 => uint256)"
+ },
+ {
+  "label": "__gap",
+  "slot": 6,
+  "offset": 0,
+  "type": "uint256[44]"
+ }
+]

@@ -1,6 +1,8 @@
 # Margin take-profit / stop-loss orders: one-page spec
 
-Interface: `contracts/contracts/margin/orders/IMarginOrderRegistry.sol` (registry plus `IMarginCloseAdapter`). One
+Interface: `contracts/contracts/margin/orders/IMarginOrderRegistry.sol` (registry plus `IMarginCloseAdapter`).
+Reference implementation: `contracts/contracts/margin/orders/MarginOrderRegistry.sol`. It is shared by every EVM chain; only the
+adapter is chain-specific. One
 registry implementation per chain behind a proxy (append-only storage); one adapter per chain's close path. Field names
 are shared so the frontend uses one component on Robinhood, Avalanche and the Stellar port.
 
@@ -93,7 +95,24 @@ are shared so the frontend uses one component on Robinhood, Avalanche and the St
   - 6: too many open orders on the position
 - **`OrderCancelled.reason`:** 0 owner, 1 sibling executed, 2 position inactive, 3 owner changed.
 - **`canExecute.reason`:** 0 executable, 1 not open, 2 expired, 3 position inactive, 4 owner changed,
-  5 oracle unavailable, 6 trigger not reached.
+  5 oracle unavailable, 6 trigger not reached, 7 execution paused (reference implementation).
+
+## Reference implementation details
+
+- **Modify:** only by the order's owner while they still own the active position. Not allowed once the order is past
+  its expiry: that order can only become `EXPIRED`.
+- **Cancel:** the order's owner can always withdraw an open order, even after the position closed. Cancelling an order
+  past its expiry marks it `EXPIRED`.
+- **Expiry is inclusive:** an order is valid while `block.timestamp <= expiry`.
+- **Execution:** the order is marked `EXECUTED` and leaves the open set before the adapter call. A revert in the close
+  path reverts the whole transaction, so the order stays `OPEN`. One reentrancy guard covers every state-changing
+  function.
+- **Admin (the timelock):** `setPaused(bool)` stops execution only. The limits (`MAX_SLIPPAGE_BPS` 300,
+  `MAX_ORDER_LIFETIME` 30 days, `MAX_ORDERS_PER_POSITION` 4) are constants and change by upgrade.
+- **Keeper:** `contracts/tools/orders/orders_keeper.py` scans `nextOrderId`, decides with `canExecute`, simulates, then
+  sends `executeOrder`. It also sweeps reasons 2 to 4 so that dead orders free their slots.
+- **Storage:** append-only from slot 0. Initializable and ReentrancyGuard are namespaced (OZ 5).
+  `tools/orders/check_registry_layout.py` checks the layout.
 
 ## Deployment convention (the Robinhood deploy script depends on it)
 
