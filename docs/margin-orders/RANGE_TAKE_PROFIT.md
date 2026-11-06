@@ -24,6 +24,8 @@ remove, collect, repay the current debt with interest, return the equity. **This
 - **Conversion is not repayment.** `finalize` marks the order `SETTLED` only after `executor.rangeReturn(id, true)`
   returns; that call accrues the debt first and repays it. A failing repay reverts the whole finalisation, and the order
   stays `ACTIVE` (tested).
+- **Partial commit:** `createRangeOrder(id, preset, positionPTokens)` can commit only part of the collateral. On
+  finalisation the USDG repays what it covers; the position closes only when the debt reaches zero.
 - **Not final until removed.** `finalize` requires the market to have traded through the whole band. A partial fill is
   refused (`BandNotFullyConverted`) and reverses on a fall (tested).
 - **One order per position.** A second order is refused. A range order is refused while the registry holds an open
@@ -50,9 +52,9 @@ remove, collect, repay the current debt with interest, return the equity. **This
   the liquidator, the order adapter and the owner.
 - **Approved presets only.** There are no arbitrary user ranges.
 
-## Evidence (fork, L2 107,658,090; nothing sent)
+## Evidence (fork, L2 107,658,090 and, after the partial-commit test, 107,665,837; nothing sent)
 
-`test/orders/RangeTakeProfitFork.t.sol`, 14/14, runs against the **live** stack upgraded on the fork through its
+`test/orders/RangeTakeProfitFork.t.sol`, 15/15, runs against the **live** stack upgraded on the fork through its
 ProxyAdmins as the timelock: live long position 4, the real Ramses NVDA/USDG pool and position manager.
 
 | case | result |
@@ -62,6 +64,7 @@ ProxyAdmins as the timelock: live long position 4, the real Ramses NVDA/USDG poo
 | Pool moved, oracle not | still valued as all stock; finalise refused |
 | Full fill, keeper finalises | debt and interest repaid to 0; position CLOSED; 3,162,996,004 pUSDG units of equity to the owner; fee split 157 / 78 USDG raw to protocol and reserve (2:1); custodian keeps nothing |
 | Repay fails | finalise reverts, the order stays ACTIVE |
+| Half the collateral committed, full fill | the band's USDG repays what it can (0.96 to 0.18 USDG of debt); the position stays open on the uncommitted stock with better health; it closes only if the proceeds cover the debt |
 | Liquidation with an active band | band unwound, position LIQUIDATED, debt 0 |
 | Without the pre-hook | `LiquidationError(12)`, the band stays |
 | Stop-loss through the registry | band unwound first, position CLOSED, SL EXECUTED |

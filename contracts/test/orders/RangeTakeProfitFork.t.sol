@@ -309,6 +309,30 @@ contract RangeTakeProfitForkTest is Test {
         assertGt(IRtpMarket(p.debtPToken).borrowBalanceStored(p.account), 0);
     }
 
+    /// @dev Committing part of the collateral: the band's proceeds repay what they can; if they do not cover the whole
+    /// debt the position stays open on its remaining collateral with less debt (and better health), never closed short.
+    function testPartialCommitRepaysWhatTheBandEarnedAndKeepsThePositionOpen() public {
+        uint256 all = IRtpMarket(p.positionPToken).balanceOf(p.account);
+        vm.prank(p.owner);
+        (int24 lo,,) = rtp.createRangeOrder(id, 1, all / 2);
+        assertEq(IRtpMarket(p.positionPToken).balanceOf(p.account), all - all / 2, "half stays as collateral");
+        assertFalse(risk.isLiquidatable(p.account));
+        _marketTo(lo - 20);
+        uint256 debtBefore = IRtpMarket(p.debtPToken).borrowBalanceStored(p.account);
+        uint256 hBefore = _health();
+        rtp.finalize(id);
+        uint256 debtAfter = IRtpMarket(p.debtPToken).borrowBalanceStored(p.account);
+        emit log_named_uint("debt before (USDG raw)", debtBefore);
+        emit log_named_uint("debt after (USDG raw)", debtAfter);
+        assertEq(uint8(_status()), uint8(RangeTakeProfit.Status.SETTLED));
+        assertLt(debtAfter, debtBefore, "the band's USDG repaid debt");
+        if (debtAfter != 0) {
+            assertEq(uint8(IRobinhoodOrderExecutor(EXECUTOR).positions(id).status), uint8(IsolatedMarginTypes.Status.ACTIVE));
+            assertGe(IRtpMarket(p.positionPToken).balanceOf(p.account), all - all / 2, "uncommitted stock kept as collateral");
+            assertGt(_health(), hBefore, "health improved");
+        }
+    }
+
     // ------------------------------------------------------------------ 4. liquidation while a band is active
     function testLiquidationRemovesTheActiveBandAndProceeds() public {
         _create();
