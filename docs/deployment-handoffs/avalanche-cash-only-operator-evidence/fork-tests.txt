@@ -1,0 +1,30 @@
+Provenance: operator/ monitor, step 1. Working tree on top of git 6d799022, 2026-11-06T08:31:20Z. Node v26.4.0, ethers 5.8.0, anvil 1.7.1-Homebrew. Private archive RPC through a local pass-through proxy (URL from the environment, never printed); local anvil fork at block 99,200,000; accounts impersonated, nothing signed or broadcast. Compared with the Foundry truth table: verdicts exact, amounts within 5 bp.
+command: cd operator && npm run test:fork
+-----
+      real pool at 99200000: TWAP 8.5651 USD, Chainlink 8.5491 USD, gap 18.7 bp (tolerance 500 bp; 14-day max 308 bp)
+✔ real pool TWAP at the pinned block agrees with Chainlink within the 500 bp tolerance (1838.052209ms)
+▶ monitor reproduces the treasury truth table on a mainnet fork
+  ✔ stage 1: healthy half-power, no debt, full-power underwater from interest alone (160.009375ms)
+  ✔ stage 2: AVAX -20% (50.71625ms)
+  ✔ stage 3: AVAX -75%: tail accounts are NOT paid; the half-power account is still recoverable (48.787958ms)
+  ✔ stage 4: exhausted account fires, partially liquidated and untouched tail accounts do not (564.914792ms)
+  ✔ escalation timers: the unpaid default re-alerts at 1 h, 4 h and 24 h (and the alert stream carries the T0 message first) (128.961583ms)
+  ✔ stale AVAX price (1,201 s): nothing fires; an account without debt needs no price (42.487334ms)
+  ✔ a zero AVAX answer: nothing fires (58.032792ms)
+  ✔ oracle failure: a manipulated-low oracle with an honest reference reads PRICE_DIVERGENCE, never DEFAULT; the page tells the guardian (59.818666ms)
+  ✔ reference failure fails closed: observe() reverts (pool history shorter than the window) -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (84.078333ms)
+  ✔ reference failure fails closed: pool liquidity below the configured floor -> NO_REFERENCE_PRICE, nothing fires, page after the persistence window (80.430959ms)
+  ✔ a wrong reference can only delay: reference at 10x or 1/10 of the oracle never produces a payment (178.693542ms)
+  ✔ MUTATION 1 (fire on shortfall alone) and MUTATION 3 (no divergence gate) change a verdict this suite pins (157.969292ms)
+  ✔ health: exchange rate, shares consistency, operator inventory, treasury, configuration drift are all quiet on the pilot fixture (74.452125ms)
+  ✔ the incremental borrower index equals a full re-scan of the events from the deployment block (5.461542ms)
+  ✔ after the treasury repays the exhausted account the same account reads NO_DEBT and the default alert resolves (79.759792ms)
+✔ monitor reproduces the treasury truth table on a mainnet fork (37076.218334ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39155.104208
