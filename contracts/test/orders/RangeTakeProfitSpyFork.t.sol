@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IsolatedMarginTypes} from "../../contracts/margin/IsolatedMarginTypes.sol";
 import {RangeTakeProfit} from "../../contracts/margin/orders/range/RangeTakeProfit.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {TickMath} from "../../contracts/margin/orders/range/vendor/TickMath.sol";
 
 interface ISpyPool {
@@ -129,6 +130,10 @@ contract StandInExecutor {
         return false;
     }
 
+    function rangeCustodian() external view returns (address) {
+        return custodian;
+    }
+
     function getPairRisk(address, address, address) external pure returns (IsolatedMarginTypes.PairRiskConfig memory c) {
         c.oracleDeviationBps = 100;
     }
@@ -162,8 +167,14 @@ contract RangeTakeProfitSpyForkTest is Test {
         price = new SpyGuardedPrice();
         ex = new StandInExecutor(OWNER, SPY, USDG, 5e6); // 0.02 SPY collateral (~$15) against 5 USDG of debt
         deal(SPY, address(ex), 0.02e18);
-        rtp = new RangeTakeProfit(
-            address(ex), address(ex), NFP, POOL, GAUGE, address(price), address(ex), address(0), SPY, USDG, address(this)
+        rtp = RangeTakeProfit(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(new RangeTakeProfit()), address(this),
+                    abi.encodeCall(RangeTakeProfit.initialize, (RangeTakeProfit.InitParams(
+                        address(ex), address(ex), NFP, POOL, GAUGE, address(price), address(ex), address(0), SPY, USDG, address(this))))
+                )
+            )
         );
         ex.setCustodian(address(rtp));
         spacing = ISpyPool(POOL).tickSpacing();

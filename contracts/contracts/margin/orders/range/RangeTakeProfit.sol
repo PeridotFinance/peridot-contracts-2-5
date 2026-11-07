@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IsolatedMarginTypes} from "../../IsolatedMarginTypes.sol";
@@ -20,6 +21,7 @@ interface IRangeExecutor {
 
 interface IRangeRiskEngine {
     function isLiquidatable(address account) external view returns (bool);
+    function rangeCustodian() external view returns (address);
 }
 
 interface IRangeOracle {
@@ -85,7 +87,8 @@ interface IRangeGauge {
     function getRewardTokens() external view returns (address[] memory);
 }
 
-/// @title Range take-profit for a leveraged long (PROTOTYPE, fork-tested; not for deployment as is).
+/// @title Range take-profit for a leveraged long. Behind an OZ 5 transparent proxy whose ProxyAdmin the timelock owns;
+/// admin (presets, fee split, unwinders) = the timelock. Storage append-only (tools/orders/check_registry_layout.py).
 /// @notice The position's stock is placed into a concentrated-liquidity band entirely above the market. As the market
 /// trades up through the band, swaps convert the stock to USDG; a fall back below reverses that. Nothing is final until a
 /// keeper `finalize`s: remove the liquidity, collect fees, repay the current debt with accrued interest through the
@@ -103,7 +106,7 @@ interface IRangeGauge {
 ///    the owner to cancel;
 ///  * the band is valued for the risk engine at the ORACLE price (`holdings`), never at the pool price;
 ///  * the fee split (user / protocol / reserve) is snapshotted into the order at opt-in and emitted.
-contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
+contract RangeTakeProfit is Initializable, ReentrancyGuardUpgradeable, IERC721Receiver {
     using SafeERC20 for IERC20;
 
     enum Status {
@@ -138,23 +141,24 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
 
     uint256 internal constant BPS = 10_000;
 
-    IRangeExecutor public immutable executor;
-    IRangeRiskEngine public immutable riskEngine;
-    IRangeNfp public immutable positionManager;
-    IRangePool public immutable pool;
-    IRangeGauge public immutable gauge;
-    IRangeOracle public immutable oracle;
-    IRangeConfig public immutable config;
-    IMarginOrderRegistry public immutable registry;
-    address public immutable stock;
-    address public immutable usdg;
-    bool public immutable stockIsToken0;
-    int24 public immutable tickSpacing;
-    address public immutable admin;
+    // ------------------------------------------------------------------ storage (append-only, slot 0 onwards)
+    IRangeExecutor public executor;
+    IRangeRiskEngine public riskEngine;
+    IRangeNfp public positionManager;
+    IRangePool public pool;
+    IRangeGauge public gauge;
+    IRangeOracle public oracle;
+    IRangeConfig public config;
+    IMarginOrderRegistry public registry;
+    address public stock;
+    address public usdg;
+    bool public stockIsToken0;
+    int24 public tickSpacing;
+    address public admin;
 
     address public liquidator;
     address public orderAdapter;
-    uint16 public userFeeBps = uint16(BPS);
+    uint16 public userFeeBps;
     uint16 public protocolFeeBps;
     uint16 public reserveFeeBps;
     address public protocolRecipient;
@@ -164,6 +168,21 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
     mapping(address => uint256) public positionOfAccount;
     /// @notice Bands currently placed. The risk engine refuses to drop this custodian while any exist.
     uint256 public activeOrders;
+    uint256[30] private __gap;
+
+    struct InitParams {
+        address executor;
+        address riskEngine;
+        address positionManager;
+        address pool;
+        address gauge;
+        address oracle;
+        address config;
+        address registry;
+        address stock;
+        address usdg;
+        address admin;
+    }
 
     event PresetSet(uint8 indexed id, bool enabled, int24 distanceTicks, int24 widthTicks);
     event FeeSplitSet(uint16 userBps, uint16 protocolBps, uint16 reserveBps, address protocolRecipient, address reserveRecipient);
@@ -197,36 +216,33 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
     error BandNotFullyConverted();
     error WouldBeLiquidatable();
     error NoActiveOrder();
+    error NotWired();
 
-    constructor(
-        address executor_,
-        address riskEngine_,
-        address positionManager_,
-        address pool_,
-        address gauge_,
-        address oracle_,
-        address config_,
-        address registry_,
-        address stock_,
-        address usdg_,
-        address admin_
-    ) {
-        executor = IRangeExecutor(executor_);
-        riskEngine = IRangeRiskEngine(riskEngine_);
-        positionManager = IRangeNfp(positionManager_);
-        pool = IRangePool(pool_);
-        gauge = IRangeGauge(gauge_);
-        oracle = IRangeOracle(oracle_);
-        config = IRangeConfig(config_);
-        registry = IMarginOrderRegistry(registry_);
-        stock = stock_;
-        usdg = usdg_;
-        address t0 = IRangePool(pool_).token0();
-        address t1 = IRangePool(pool_).token1();
-        require((t0 == stock_ && t1 == usdg_) || (t1 == stock_ && t0 == usdg_), "RANGE_POOL");
-        stockIsToken0 = t0 == stock_;
-        tickSpacing = IRangePool(pool_).tickSpacing();
-        admin = admin_;
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(InitParams calldata a) external initializer {
+        __ReentrancyGuard_init();
+        require(a.executor.code.length != 0 && a.riskEngine.code.length != 0 && a.positionManager.code.length != 0
+            && a.oracle.code.length != 0 && a.config.code.length != 0 && a.admin != address(0), "RANGE_CONFIG");
+        executor = IRangeExecutor(a.executor);
+        riskEngine = IRangeRiskEngine(a.riskEngine);
+        positionManager = IRangeNfp(a.positionManager);
+        pool = IRangePool(a.pool);
+        gauge = IRangeGauge(a.gauge);
+        oracle = IRangeOracle(a.oracle);
+        config = IRangeConfig(a.config);
+        registry = IMarginOrderRegistry(a.registry);
+        stock = a.stock;
+        usdg = a.usdg;
+        address t0 = IRangePool(a.pool).token0();
+        address t1 = IRangePool(a.pool).token1();
+        require((t0 == a.stock && t1 == a.usdg) || (t1 == a.stock && t0 == a.usdg), "RANGE_POOL");
+        stockIsToken0 = t0 == a.stock;
+        tickSpacing = IRangePool(a.pool).tickSpacing();
+        admin = a.admin;
+        userFeeBps = uint16(BPS);
     }
 
     // ------------------------------------------------------------------ admin
@@ -270,6 +286,7 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         returns (int24 tickLower, int24 tickUpper, uint128 liquidity)
     {
         IsolatedMarginTypes.Position memory p = executor.positions(positionId);
+        if (riskEngine.rangeCustodian() != address(this)) revert NotWired(); // bands must be counted before any is placed
         if (msg.sender != p.owner) revert NotOwner();
         if (p.status != IsolatedMarginTypes.Status.ACTIVE) revert PositionNotEligible(1);
         if (p.side != IsolatedMarginTypes.Side.LONG) revert PositionNotEligible(2);

@@ -37,26 +37,27 @@ setfeed $ANS
 
 # Deploy: registry impl, registry proxy (initialised with the predicted adapter), custodian, adapter, trader.
 N0=$(cast nonce $D --rpc-url $F)
-RTP_P=$(cast compute-address $D --nonce $((N0 + 2)) | awk '{print $NF}'); AD_P=$(cast compute-address $D --nonce $((N0 + 3)) | awk '{print $NF}')
+PROXY=lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy
+# Ceremony first (registry V1 + adapter v1, executor initializeOrderExecutor(v1)), then the range wiring.
+V1_P=$(cast compute-address $D --nonce $((N0 + 2)) | awk '{print $NF}')
 RIMPL=$(create contracts/margin/orders/MarginOrderRegistry.sol:MarginOrderRegistry)
-REG=$(create lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $RIMPL $T $(cast calldata 'initialize(address,address)' $AD_P $T))
-RTP=$(create contracts/margin/orders/range/RangeTakeProfit.sol:RangeTakeProfit --constructor-args $EX $RISK $NFP $POOL $GAUGE $ORACLE $CONFIG $REG $NVDA $USDG $D)
+REG=$(create $PROXY --constructor-args $RIMPL $T $(cast calldata 'initialize(address,address)' $V1_P $T))
+AD1=$(create contracts/margin/orders/RobinhoodMarginCloseAdapter.sol:RobinhoodMarginCloseAdapter --constructor-args $EX $REG $ORACLE $QUOTER $CONFIG 0x0000000000000000000000000000000000000000)
+[ "$AD1" = "$V1_P" ] || { echo "STOPPED: predicted adapter v1 differs"; kill $AP; exit 1; }
+RTPIMPL=$(create contracts/margin/orders/range/RangeTakeProfit.sol:RangeTakeProfit)
+RTP=$(create $PROXY --constructor-args $RTPIMPL $T $(cast calldata 'initialize((address,address,address,address,address,address,address,address,address,address,address))' "($EX,$RISK,$NFP,$POOL,$GAUGE,$ORACLE,$CONFIG,$REG,$NVDA,$USDG,$D)"))
 AD=$(create contracts/margin/orders/RobinhoodMarginCloseAdapter.sol:RobinhoodMarginCloseAdapter --constructor-args $EX $REG $ORACLE $QUOTER $CONFIG $RTP)
-[ "$RTP" = "$RTP_P" ] && [ "$AD" = "$AD_P" ] || { echo "STOPPED: predicted addresses differ"; exit 1; }
 TR=$(create test/orders/RangeTakeProfitFork.t.sol:RtpTrader --constructor-args $POOL $USDG $NVDA)
 echo "registry $REG custodian $RTP adapter $AD"
 
 # Upgrades exactly as the timelock would, then the Ledger's risk-engine setting.
 up(){ PA=0x$(cast storage $1 $ADMIN_SLOT --rpc-url $F | cut -c27-); cast send $PA 'upgradeAndCall(address,address,bytes)' $1 $2 $3 --from $T --unlocked --gas-limit 3000000 --rpc-url $F --json | st "$4"; }
 EIMPL=$(create contracts/margin/IsolatedMarginExecutorUpgradeable.sol:IsolatedMarginExecutorUpgradeable)
-up $EX $EIMPL $(cast calldata 'initializeOrderExecutor(address)' $AD) "timelock: executor upgrade + orderExecutor"
-up $EX $EIMPL $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock: executor rangeCustodian"
-up $RISK $(create contracts/margin/IsolatedMarginRiskEngineUpgradeable.sol:IsolatedMarginRiskEngineUpgradeable) 0x "timelock: risk engine upgrade"
-cast send $RISK 'queueRangeCustodian(address)' $RTP --from $L --unlocked --rpc-url $F --json | st "Ledger: queue risk engine custodian"
-cast rpc evm_increaseTime 3601 --rpc-url $F >/dev/null; cast rpc evm_mine --rpc-url $F >/dev/null
-cast send $RISK 'applyRangeCustodian()' --from $L --unlocked --rpc-url $F --json | st "Ledger: apply risk engine custodian (after the action delay)"
-up $LIQ $(create contracts/margin/IsolatedMarginLiquidatorUpgradeable.sol:IsolatedMarginLiquidatorUpgradeable) $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock: liquidator upgrade + custodian"
+up $EX $EIMPL $(cast calldata 'initializeOrderExecutor(address)' $AD1) "timelock (ceremony): executor upgrade + orderExecutor v1"
+up $EX $EIMPL $(cast calldata 'initializeRange(address,address)' $RTP $AD) "timelock (range): executor custodian + orderExecutor v2"
+up $REG $(create contracts/margin/orders/MarginOrderRegistryV2.sol:MarginOrderRegistryV2) $(cast calldata 'initializeV2(address,address)' $AD $RTP) "timelock (range): registry V2 + adapter v2"
+up $RISK $(create contracts/margin/IsolatedMarginRiskEngineUpgradeable.sol:IsolatedMarginRiskEngineUpgradeable) $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock (range): risk engine + custodian"
+up $LIQ $(create contracts/margin/IsolatedMarginLiquidatorUpgradeable.sol:IsolatedMarginLiquidatorUpgradeable) $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock (range): liquidator + custodian"
 for args in "1 true 100 200" "2 true 300 200" "3 true 490 200"; do cast send $RTP 'setPreset(uint8,bool,int24,int24)' $args --from $D --unlocked --rpc-url $F --json | st "preset $args"; done
 cast send $RTP 'setFeeSplit(uint16,uint16,uint16,address,address)' 7000 2000 1000 0x0000000000000000000000000000000000BeEF01 0x0000000000000000000000000000000000BeEF02 --from $D --unlocked --rpc-url $F --json | st "fee split 70/20/10"
 cast send $RTP 'setUnwinders(address,address)' $LIQ $AD --from $D --unlocked --rpc-url $F --json | st "unwinders"

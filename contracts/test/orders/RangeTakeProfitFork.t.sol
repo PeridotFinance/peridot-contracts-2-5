@@ -150,7 +150,18 @@ contract RangeTakeProfitForkTest is Test {
         _upgrade(EXECUTOR, execImpl, abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeOrderExecutor, (address(adapterV1))));
 
         // 2. The range batch: custodian and range-aware adapter v2, then every upgrade in one timelocked batch.
-        rtp = new RangeTakeProfit(EXECUTOR, RISK, NFP, POOL, GAUGE, ORACLE, CONFIG, address(reg), NVDA, USDG, address(this));
+        rtp = RangeTakeProfit(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(new RangeTakeProfit()),
+                    TIMELOCK,
+                    abi.encodeCall(
+                        RangeTakeProfit.initialize,
+                        (RangeTakeProfit.InitParams(EXECUTOR, RISK, NFP, POOL, GAUGE, ORACLE, CONFIG, address(reg), NVDA, USDG, address(this)))
+                    )
+                )
+            )
+        );
         adapter = new RobinhoodMarginCloseAdapter(EXECUTOR, address(reg), ORACLE, QUOTER, CONFIG, address(rtp));
         _upgrade(EXECUTOR, execImpl,
             abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRange, (address(rtp), address(adapter))));
@@ -534,6 +545,26 @@ contract RangeTakeProfitForkTest is Test {
         IRtpProxyAdmin(address(uint160(uint256(vm.load(EXECUTOR, ADMIN_SLOT))))).upgradeAndCall(
             EXECUTOR, _impl(EXECUTOR), abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRange, (address(rtp), address(adapterV1)))
         );
+    }
+
+    function testCustodianRefusesBandsUntilTheRiskEngineCountsItAndItsImplementationIsLocked() public {
+        // a second custodian, not wired into the risk engine
+        RangeTakeProfit other = RangeTakeProfit(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(new RangeTakeProfit()), TIMELOCK,
+                    abi.encodeCall(RangeTakeProfit.initialize,
+                        (RangeTakeProfit.InitParams(EXECUTOR, RISK, NFP, POOL, GAUGE, ORACLE, CONFIG, address(reg), NVDA, USDG, address(this))))
+                )
+            )
+        );
+        other.setPreset(1, true, 100, 200);
+        vm.prank(p.owner);
+        vm.expectRevert(RangeTakeProfit.NotWired.selector);
+        other.createRangeOrder(id, 1, 0);
+        RangeTakeProfit impl = new RangeTakeProfit();
+        vm.expectRevert();
+        impl.initialize(RangeTakeProfit.InitParams(EXECUTOR, RISK, NFP, POOL, GAUGE, ORACLE, CONFIG, address(reg), NVDA, USDG, address(this)));
     }
 
     function testHooksAreCustodianOnly() public {

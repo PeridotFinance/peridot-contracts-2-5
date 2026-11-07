@@ -159,6 +159,14 @@ contract DeployRobinhoodOrders is Script {
         if (ok && r.length == 32) require(abi.decode(r, (address)) != deployer, "DEPLOYER_REGISTRY_ADMIN");
     }
 
+    /// @dev Fork tests of later paths (the range take-profit batch) replay the ceremony through this; never broadcast.
+    function deployForFork(string memory path) external returns (Deployment memory d) {
+        _preconditions();
+        d = _deploy(address(this), vm.getCode(REGISTRY_ARTIFACT));
+        _postconditions(d, address(this));
+        _writeJournal(path, d, REGISTRY_ARTIFACT);
+    }
+
     // ------------------------------------------------------------------ the timelock pair
     function upgradeCall(Deployment memory d) public pure returns (bytes memory) {
         return abi.encodeWithSignature(
