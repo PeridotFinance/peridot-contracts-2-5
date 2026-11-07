@@ -77,6 +77,44 @@ all behave as on NVDA.
 
 The other orders suites still pass on this branch: registry 32, deploy path 7, close path 10.
 
+## Finalisation keeper and alarm (2026-11-07)
+
+**Same host and process as the order keeper.** `contracts/tools/orders/orders_keeper.py` runs the TP/SL orders first,
+so a stop-loss removes the band through the adapter, then the range phase. It uses one wallet: gas only, no role.
+- The range phase reads the journal's `rangeCustodian` and `executor`.
+- It simulates `finalize` for every active band and sends it only when the band is fully converted.
+- It waits on `BandNotFullyConverted` (partly filled, reversed or not reached), `OracleUnavailable` and
+  `PoolOracleDeviation`.
+- It never unwinds a band. When a liquidation, a stop-loss or the owner removes one, it records that once.
+- It applies the gas-price cap and the per-step send budget.
+
+**Tests:** 15 keeper unit tests (orders and range).
+
+**Alarm:** `contracts/tools/orders/orders_alarm.py`, with `.github/workflows/orders-alarm.yml`. It is chain-only, with no
+DigitalOcean token, and follows the pattern of `keeper/alarm.py`: a pure `classify`, and one de-duplicated GitHub issue
+assigned to the operator.
+- States: `RPC_FAILURE`, `GAS_CRITICAL` (below one send at the cap), `GAS_LOW` (under 10 sends), `IDLE`, `SERVED`,
+  `STALLED`, `FAILED_SENDS` (still due while the nonce moved).
+- **Stall detection:** an order or band has no age on chain. So the alarm reads what is due, waits 150 s, and reads
+  again. Work still due with an unmoved keeper nonce is `STALLED`.
+- It stays idle until a mainnet journal exists. 9 tests.
+
+**Anvil fork rehearsal:** `contracts/tools/orders/rehearse_range_keeper.sh`, fork at L2 108,369,009.
+- **Setup:** the live stack, upgraded through its real ProxyAdmins as the timelock; the Ledger sets the risk engine's
+  custodian. Order created on live position 4 with preset 1: tick 223,944, band 223,640 to 223,840.
+
+| scenario | band holdings at the oracle (NVDA, USDG raw) | keeper | end state |
+| --- | --- | --- | --- |
+| not reached | 7.93e15, 0 | wait, BandNotFullyConverted | ACTIVE |
+| partial fill (mid-band) | 3.95e15, 759,430 | wait, BandNotFullyConverted | ACTIVE, debt unchanged |
+| reversal | back to all NVDA | wait | ACTIVE |
+| full fill | 578, 1,522,667 | **finalize sent** (2,089,736 gas); alarm `STALLED` before, `IDLE` after | SETTLED, position CLOSED, debt 0 |
+| liquidation (stricter margin, fixture) | | records "removed by a risk path"; nothing sent | UNWOUND, position LIQUIDATED, debt 0 |
+| stop-loss at the oracle price | | the order phase executes the SL (2,905,729 gas); the range phase records the removal | UNWOUND, position CLOSED, debt 0 |
+
+**Host:** the keeper is not yet provisioned anywhere. It goes where the order keeper goes, after the ceremony, with its
+own gas-only wallet.
+
 ## Not done, and decisions for the operator
 
 1. **SPY has no margin engine,** so the SPY test uses a labelled test-only stand-in for the margin position.
@@ -91,7 +129,6 @@ The other orders suites still pass on this branch: registry 32, deploy path 7, c
    - `setRangeCustodian` on the risk engine is immediate for the owner; it should be delayed like `queuePairRisk`.
    - The removal mins are 0, because risk paths must not be blockable. Placement is single-sided out of range, and
      finalisation checks the pool against the oracle.
-   - No keeper for `finalize` yet. The order keeper's pattern applies: simulate, then send.
    - Gauge anti-sybil applies: rewards are claimed before the removal, and a removal within 99 s of placement forfeits
      that window's RAM.
    - The executor has only 127 bytes to spare.
