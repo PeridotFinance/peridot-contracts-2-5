@@ -404,15 +404,14 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
     /// @dev Band strictly on the stock's favourable side of the current tick, aligned to the tick spacing.
     function _band(uint160 spot, Preset memory preset) private view returns (int24 lower, int24 upper) {
         int24 tick = TickMath.getTickAtSqrtPrice(spot);
+        // Snapped to the tick spacing AWAY from the market: the near edge is never closer than the preset's distance.
         if (stockIsToken0) {
             // stock price up = tick up: the band sits above the tick and holds only token0
-            lower = _ceil(tick + 1) + preset.distanceTicks - tickSpacing;
-            if (lower <= tick) lower += tickSpacing;
+            lower = _ceil(tick + preset.distanceTicks);
             upper = lower + preset.widthTicks;
         } else {
             // stock price up = tick down: the band sits below the tick and holds only token1
-            upper = _floor(tick) - preset.distanceTicks + tickSpacing;
-            if (upper > tick) upper -= tickSpacing;
+            upper = _floor(tick - preset.distanceTicks);
             lower = upper - preset.widthTicks;
         }
         require(lower >= TickMath.MIN_TICK && upper <= TickMath.MAX_TICK, "RANGE_TICKS");
@@ -441,9 +440,9 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         positionManager.burn(tokenId);
         (uint256 stockOut, uint256 usdgOut, uint256 stockPrincipal, uint256 usdgPrincipal) =
             stockIsToken0 ? (c0, c1, p0, p1) : (c1, c0, p1, p0);
-        // Swap fees (collected minus principal) and gauge rewards paid in the pool's own tokens share one split.
-        uint256 stockFees = stockOut - stockPrincipal + rewardStock;
-        uint256 usdgFees = usdgOut - usdgPrincipal + rewardUsdg;
+        // Swap fees (collected minus principal) are split; rewards paid in the pool's own tokens go to the owner whole.
+        uint256 stockFees = stockOut - stockPrincipal;
+        uint256 usdgFees = usdgOut - usdgPrincipal;
         stockOut += rewardStock;
         usdgOut += rewardUsdg;
         stockOut -= _payFeeShares(o, stock, stockFees);
@@ -466,8 +465,9 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         return toProtocol + toReserve;
     }
 
-    /// @dev Gauge rewards follow the same disclosed split; the user's share goes to the owner's wallet (a reward token is
-    /// not position collateral). A failing claim never blocks the removal.
+    /// @dev Gauge rewards (RAM) on an active band accrue to the order owner and are paid out whole when the band is removed
+    /// (operator decision 2026-11-07: not part of the fee split). Rewards paid in the pool's own tokens join the proceeds.
+    /// A failing claim never blocks the removal.
     function _claimRewards(Order storage o, uint256 tokenId) private returns (uint256 rewardStock, uint256 rewardUsdg) {
         if (address(gauge) == address(0)) return (0, 0);
         address[] memory tokens = gauge.getRewardTokens();
@@ -487,8 +487,7 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
                 rewardUsdg = got;
                 continue;
             }
-            uint256 paid = _payFeeShares(o, tokens[i], got);
-            IERC20(tokens[i]).safeTransfer(o.owner, got - paid);
+            IERC20(tokens[i]).safeTransfer(o.owner, got);
         }
     }
 

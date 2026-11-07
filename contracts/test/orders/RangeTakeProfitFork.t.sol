@@ -156,8 +156,11 @@ contract RangeTakeProfitForkTest is Test {
             abi.encodeCall(IsolatedMarginLiquidatorUpgradeable.initializeRangeCustodian, (address(rtp))));
 
         // Presets and the disclosed fee split (parameters; production values undecided).
-        rtp.setPreset(1, true, 100, 200); // band starts 100 ticks (~1%) above the market, 200 ticks (~2%) wide
-        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE);
+        // Pilot presets (operator 2026-11-07): 1%, 3% and 5% above the market, each 2% wide (1.0001^ticks; spacing 10).
+        rtp.setPreset(1, true, 100, 200);
+        rtp.setPreset(2, true, 300, 200);
+        rtp.setPreset(3, true, 490, 200);
+        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE); // pilot fee split
         rtp.setUnwinders(LIQUIDATOR, address(adapter));
 
         trader = new RtpTrader(IRtpPool(POOL), IERC20(USDG), IERC20(NVDA));
@@ -244,6 +247,23 @@ contract RangeTakeProfitForkTest is Test {
         assertApproxEqRel(s, o.stockCommitted, 1e14);
         assertApproxEqRel(_health(), hBefore, 2e15, "health unchanged within 0.2%: the band is counted at the oracle");
         assertFalse(risk.isLiquidatable(p.account));
+    }
+
+    function testPilotPresetsSitOneThreeAndFivePercentAboveAndTwoPercentWide() public {
+        (, int24 tick,,,,,) = IRtpPool(POOL).slot0();
+        uint256 snap = vm.snapshotState();
+        uint8[3] memory ids = [uint8(1), 2, 3];
+        for (uint256 i; i < 3; i++) {
+            vm.revertToState(snap);
+            vm.prank(p.owner);
+            (int24 lo, int24 hi,) = rtp.createRangeOrder(id, ids[i], 0);
+            // NVDA is token1: price of NVDA in USD = 1e12 / (1.0001^tick); a lower tick is a higher NVDA price.
+            emit log_named_int("preset distance (ticks from the current tick to the near edge)", tick - hi);
+            int24[3] memory want = [int24(100), 300, 490];
+            assertGe(tick - hi, want[i], "never closer than the preset");
+            assertLt(tick - hi, want[i] + 10, "within one tick spacing of it");
+            assertEq(hi - lo, 200, "2% wide");
+        }
     }
 
     // ------------------------------------------------------------------ 2. partial fill and reversal
@@ -405,16 +425,16 @@ contract RangeTakeProfitForkTest is Test {
         rtp.createRangeOrder(id, 1, 0);
         vm.prank(p.owner);
         vm.expectRevert(RangeTakeProfit.InvalidPreset.selector);
-        rtp.createRangeOrder(id, 2, 0); // not an approved preset
+        rtp.createRangeOrder(id, 9, 0); // not an approved preset
         vm.expectRevert(RangeTakeProfit.InvalidPreset.selector);
-        rtp.setPreset(3, true, 0, 200); // distance 0: the band would touch the market
+        rtp.setPreset(4, true, 0, 200); // distance 0: the band would touch the market
         vm.expectRevert(RangeTakeProfit.InvalidPreset.selector);
-        rtp.setPreset(3, true, -100, 200); // below the market: never a stop-loss substitute
+        rtp.setPreset(4, true, -100, 200); // below the market: never a stop-loss substitute
         vm.expectRevert(RangeTakeProfit.InvalidPreset.selector);
-        rtp.setPreset(3, true, 105, 200); // not a multiple of the tick spacing
+        rtp.setPreset(4, true, 105, 200); // not a multiple of the tick spacing
         vm.prank(address(0xbad));
         vm.expectRevert(RangeTakeProfit.NotAdmin.selector);
-        rtp.setPreset(3, true, 100, 200);
+        rtp.setPreset(4, true, 100, 200);
         vm.expectRevert(RangeTakeProfit.InvalidFeeSplit.selector);
         rtp.setFeeSplit(7000, 2000, 2000, PROTOCOL, RESERVE);
     }
