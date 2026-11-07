@@ -17,5 +17,14 @@ Status: notes for whoever builds the screens; every number is from a FORK rehear
 - Liquidation: a position is liquidatable when the controller reports a shortfall; the close factor is 50% and the liquidator receives a 8% incentive. Show a health indicator from `getAccountLiquidity`. Liquidations are done by the pilot's two operator bots and by anyone else.
 - Interest accrues per block (about 0.94 s): refresh balances with `borrowBalanceCurrent`-style reads or compute from the borrow index.
 
-## 3. Things the screens must never imply
-No guarantee of yield; the pilot is capped at USD 5,000 per market and per vault; the contracts are not audited; the exit cost above is real; borrowing against WAVAX can be liquidated (including at a loss of the 8% incentive).
+## 3. Margin 2x (long AVAX against USDC; enabled by 18 Nov at the latest; figures marked TO MEASURE come from the margin rehearsal)
+- **What it is:** long WAVAX with USDC margin and USDC debt, 2x at most, one pair (WAVAX/USDC on the Pharaoh pool). **No shorts.** Position cap **USD 5,000** (margin up to about 2,500); debt cap USD 2,500. Show the cap and refuse nothing on the screen: the contract refuses.
+- **Shared budget:** margin debt is borrowed from the same USDC market as ordinary lending, so it counts against the same USD 5,000 borrow cap and the same cash floor. Show "USDC available to borrow" for both screens from one number. While the pilot rule holds (team lending borrows at most USD 2,000), about USD 2,450 of margin debt fits.
+- **Stop-loss orders are NOT guaranteed in fast moves.** A stop-loss closes through the pool with a floor of at most 1% below the oracle price (the pair's limit; an order may ask for less, never more). In a fast move the swap can fail and the order stays open and retries; it does not execute at any price. **Liquidation is the backstop**: a long is liquidated when its equity falls below 25% of the position (about -33% in AVAX for a 2x long). Say so next to the stop-loss field, in plain words, and show the liquidation price.
+- **Take-profit orders** have the same floor and can wait for the same reason.
+- **Liquidation is not a swap into the pool.** It is done by the pilot's two operator wallets, who repay the debt and take the collateral plus a 5% bonus. If the price falls below about -50% in one step, the position is insolvent and the operators decline; the shortfall stays in the market (the monitor alerts). Do not describe liquidation as "protected".
+- **Exit cost:** TO MEASURE (open and close round trip at 500, 2,500 and 5,000 on the pool); show it on the open screen like the vault exit cost.
+- **Orders:** an order is cancelled automatically when its position is closed or liquidated; the screen shows it as "position closed". Orders expire (at most 30 days).
+
+## 4. Things the screens must never imply
+No guarantee of yield; the pilot is capped at USD 5,000 per market and per vault; the contracts are not audited; the exit cost above is real; borrowing against WAVAX can be liquidated (including at a loss of the 8% incentive); margin positions can be liquidated and stop-loss orders are not guaranteed.

@@ -51,7 +51,9 @@ positions(uint256) view returns (Position)     // id, owner, account, marginPTok
 - Show the stop-loss clamp (100 bp) and that liquidation (at about -33% for a 2x long) is the backstop.
 - Position cap USD 5,000, margin up to about 2,500, one pair.
 
-## 4. What is not fixed yet
+## 4. The 9 Nov package (compiled, ABIs, fork recipe)
 
-- Contract addresses (registry, adapter, executor, quoter, oracle): after the ceremony; the fork recipe gives stand-ins.
-- The ABI JSON of the Avalanche adapter: 9 Nov, committed under `docs/deployment-handoffs/avalanche-margin-abi/`.
+- **Code (compiled, `debt_accounting` profile, solc 0.8.35):** `contracts/contracts/margin/orders/{IMarginOrderRegistry,MarginOrderRegistry,AvalancheMarginCloseAdapter}.sol`; the order-executor change in `IsolatedMarginExecutorUpgradeable.sol` (verbatim from `e8f225ba`; layout unchanged: `orderExecutor` takes slot 24, `__gap` 40 -> 39, end slot 63 both before and after; runtime 21,926 bytes). The registry files are copied unchanged from the order branch, so the later merge sees identical content.
+- **ABIs:** `avalanche-margin-abi/*.json` (registry, close adapter, executor, liquidator, risk engine, config, vault, quoter, flash vault).
+- **Fork recipe:** `operator/scripts/margin-fork-up.ts` (`node dist/scripts/margin-fork-up.js --demo-position --out margin-fork.json`). It starts a local anvil fork of the current head, runs the PW30 ceremony and the four margin stages (impersonated accounts, nothing real), replaces the two Chainlink feeds by settable mocks (`set(int256 answer8, uint256 updatedAt)`), opens one 2x position for ALICE, writes the local RPC URL and every address to `margin-fork.json` and keeps the fork alive. Needs `AVALANCHE_MAINNET_RPC_URL` in the environment and `npm run build:contracts` once (for the mock feeds).
+- **Real addresses:** after the live ceremony (stage 1 prints them; `ceremony/margin-addresses.env`).

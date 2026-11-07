@@ -1,0 +1,509 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "config",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IIsolatedMarginConfig"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "executor",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IIsolatedMarginPositionRegistry"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "initialize",
+  "inputs": [
+   {
+    "name": "executor_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "config_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "riskEngine_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "vault_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "insuranceFund_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "quoter_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "swapModule_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "insuranceFund",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract MarginInsuranceFundUpgradeable"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "liquidate",
+  "inputs": [
+   {
+    "name": "params",
+    "type": "tuple",
+    "internalType": "struct IsolatedMarginLiquidatorUpgradeable.LiquidationParams",
+    "components": [
+     {
+      "name": "positionId",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "minDebtUnderlying",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "minMarginUnderlying",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "collateralToDebtSwapData",
+      "type": "bytes",
+      "internalType": "bytes"
+     },
+     {
+      "name": "debtToMarginSwapData",
+      "type": "bytes",
+      "internalType": "bytes"
+     }
+    ]
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "liquidateFunded",
+  "inputs": [
+   {
+    "name": "params",
+    "type": "tuple",
+    "internalType": "struct IsolatedMarginLiquidatorUpgradeable.FundedLiquidationParams",
+    "components": [
+     {
+      "name": "positionId",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "maxRepayUnderlying",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "minPositionPTokens",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "minMarginPTokens",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "minSeizeValueBps",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "onFlashLoan",
+  "inputs": [
+   {
+    "name": "initiator",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "fee",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "data",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "quoter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IsolatedMarginQuoter"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "riskEngine",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IsolatedMarginRiskEngineUpgradeable"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "swapModule",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IsolatedMarginSwapModule"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "vault",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IsolatedMarginVaultUpgradeable"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "event",
+  "name": "FundedPositionLiquidated",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "funder",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "debtRepaid",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "positionPTokensSeized",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "marginPTokensSeized",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "positionPTokensReturnedToOwner",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "marginPTokensReturnedToVault",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "lockedMarginReduction",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "fullyLiquidated",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Initialized",
+  "inputs": [
+   {
+    "name": "version",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "InsuranceExcessReturned",
+  "inputs": [
+   {
+    "name": "pToken",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "underlyingAmount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "pTokenAmount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PositionLiquidated",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "caller",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "debtRepaid",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "collateralPTokensRedeemed",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "lockedMarginReduction",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "returnedMarginPTokens",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "liquidatorReward",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "fullyLiquidated",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "UnderlyingDustReturned",
+  "inputs": [
+   {
+    "name": "pToken",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "underlyingAmount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "InvalidInitialization",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "LiquidationError",
+  "inputs": [
+   {
+    "name": "code",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotInitializing",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "PriceUnavailable",
+  "inputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ReentrancyGuardReentrantCall",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SafeERC20FailedOperation",
+  "inputs": [
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ }
+]
