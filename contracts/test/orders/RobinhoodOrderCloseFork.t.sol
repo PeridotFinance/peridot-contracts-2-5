@@ -139,6 +139,7 @@ contract RobinhoodOrderCloseForkTest is Test {
     // ------------------------------------------------------------------ closes on the live positions
     function testFullCloseOfEachLivePositionReturnsMarginToTheOwnerAndRepaysAllDebt() public {
         _upgrade();
+        _stampFeed(); // the real answer, re-stamped: the test must not depend on the weekday
         for (uint256 i; i < active.length; i++) {
             uint256 id = active[i];
             IsolatedMarginTypes.Position memory p = _pos(id);
@@ -156,6 +157,7 @@ contract RobinhoodOrderCloseForkTest is Test {
 
     function testPartialCloseUsesTheClosePathsOwnPartialSupport() public {
         _upgrade();
+        _stampFeed();
         uint256 id = active[active.length - 1];
         IsolatedMarginTypes.Position memory p = _pos(id);
         uint256 debt0 = IOrdersMarket(p.debtPToken).borrowBalanceCurrent(p.account);
