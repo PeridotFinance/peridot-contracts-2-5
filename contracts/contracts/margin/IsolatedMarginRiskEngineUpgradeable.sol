@@ -16,6 +16,11 @@ import {IIsolatedMarginRiskHook} from "./interfaces/IIsolatedMarginRiskHook.sol"
 /// @dev Range take-profit custodian (prototype): a position's stock that sits in a band, valued at the oracle.
 interface IRangeHoldings {
     function holdings(address account) external view returns (uint256 stockAmount, uint256 usdgAmount);
+    function activeOrders() external view returns (uint256);
+}
+
+interface IConfigActionDelay {
+    function actionDelay() external view returns (uint256);
 }
 import {IMarginPriceOracle} from "./interfaces/IMarginPriceOracle.sol";
 
@@ -66,6 +71,7 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     event MovementAuthorized(address indexed account, address indexed pToken, uint256 amount);
 
     event RangeCustodianSet(address indexed custodian);
+    event RangeCustodianQueued(address indexed custodian, uint64 eta);
 
     error PriceUnavailable(address asset);
 
@@ -272,10 +278,34 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         emit AccountStatusUpdated(account, accountConfig.status);
     }
 
-    /// @notice PROTOTYPE (range take-profit). Off until set; the owner sets it.
-    function setRangeCustodian(address custodian) external onlyOwner {
-        rangeCustodian = custodian;
-        emit RangeCustodianSet(custodian);
+    /// @notice Range take-profit: queue a custodian change (or removal, address 0). It applies after the margin config's
+    /// action delay (at least 1 h), like every other margin risk change.
+    function queueRangeCustodian(address custodian) external onlyOwner {
+        uint256 delay = IConfigActionDelay(address(config)).actionDelay();
+        if (delay < 1 hours) delay = 1 hours;
+        pendingRangeCustodian = custodian;
+        pendingRangeCustodianEta = uint64(block.timestamp + delay);
+        emit RangeCustodianQueued(custodian, pendingRangeCustodianEta);
+    }
+
+    function cancelRangeCustodian() external onlyOwner {
+        emit RangeCustodianQueued(address(0), 0);
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+    }
+
+    /// @notice Applies the queued change. Refused while the current custodian holds active bands: dropping their
+    /// valuation would make healthy positions liquidatable at once. Unwind or finalise them first.
+    function applyRangeCustodian() external onlyOwner {
+        uint64 eta = pendingRangeCustodianEta;
+        require(eta != 0 && block.timestamp >= eta, "RiskEngine: range custodian not ready");
+        address current = rangeCustodian;
+        address next = pendingRangeCustodian;
+        require(current == address(0) || IRangeHoldings(current).activeOrders() == 0, "RiskEngine: active range orders");
+        rangeCustodian = next;
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+        emit RangeCustodianSet(next);
     }
 
     /// @notice PROTOTYPE: lets the executor move position collateral of an ACTIVE account into its range order. The
@@ -478,8 +508,10 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         return true;
     }
 
-    /// @dev Appended (prototype); taken from the gap so the layout is unchanged.
+    /// @dev Appended (range take-profit); taken from the gap so the layout is unchanged.
     address public rangeCustodian;
+    address public pendingRangeCustodian; // packed with the eta below
+    uint64 public pendingRangeCustodianEta;
 
-    uint256[39] private __gap;
+    uint256[38] private __gap;
 }

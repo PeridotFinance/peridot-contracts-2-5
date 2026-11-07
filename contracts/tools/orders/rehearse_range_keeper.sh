@@ -53,7 +53,9 @@ EIMPL=$(create contracts/margin/IsolatedMarginExecutorUpgradeable.sol:IsolatedMa
 up $EX $EIMPL $(cast calldata 'initializeOrderExecutor(address)' $AD) "timelock: executor upgrade + orderExecutor"
 up $EX $EIMPL $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock: executor rangeCustodian"
 up $RISK $(create contracts/margin/IsolatedMarginRiskEngineUpgradeable.sol:IsolatedMarginRiskEngineUpgradeable) 0x "timelock: risk engine upgrade"
-cast send $RISK 'setRangeCustodian(address)' $RTP --from $L --unlocked --rpc-url $F --json | st "Ledger: risk engine custodian"
+cast send $RISK 'queueRangeCustodian(address)' $RTP --from $L --unlocked --rpc-url $F --json | st "Ledger: queue risk engine custodian"
+cast rpc evm_increaseTime 3601 --rpc-url $F >/dev/null; cast rpc evm_mine --rpc-url $F >/dev/null
+cast send $RISK 'applyRangeCustodian()' --from $L --unlocked --rpc-url $F --json | st "Ledger: apply risk engine custodian (after the action delay)"
 up $LIQ $(create contracts/margin/IsolatedMarginLiquidatorUpgradeable.sol:IsolatedMarginLiquidatorUpgradeable) $(cast calldata 'initializeRangeCustodian(address)' $RTP) "timelock: liquidator upgrade + custodian"
 for args in "1 true 100 200" "2 true 300 200" "3 true 490 200"; do cast send $RTP 'setPreset(uint8,bool,int24,int24)' $args --from $D --unlocked --rpc-url $F --json | st "preset $args"; done
 cast send $RTP 'setFeeSplit(uint16,uint16,uint16,address,address)' 7000 2000 1000 0x0000000000000000000000000000000000BeEF01 0x0000000000000000000000000000000000BeEF02 --from $D --unlocked --rpc-url $F --json | st "fee split 70/20/10"

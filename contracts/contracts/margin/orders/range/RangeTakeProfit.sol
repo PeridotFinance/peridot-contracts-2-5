@@ -162,6 +162,8 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
     mapping(uint8 => Preset) public presets;
     mapping(uint256 => Order) internal _orders;
     mapping(address => uint256) public positionOfAccount;
+    /// @notice Bands currently placed. The risk engine refuses to drop this custodian while any exist.
+    uint256 public activeOrders;
 
     event PresetSet(uint8 indexed id, bool enabled, int24 distanceTicks, int24 widthTicks);
     event FeeSplitSet(uint16 userBps, uint16 protocolBps, uint16 reserveBps, address protocolRecipient, address reserveRecipient);
@@ -295,6 +297,7 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         o.reserveFeeBps = reserveFeeBps;
         o.createdAt = uint64(block.timestamp);
         positionOfAccount[p.account] = positionId;
+        ++activeOrders;
 
         uint256 released = executor.rangeRelease(positionId, positionPTokens);
         o.stockCommitted = released;
@@ -344,6 +347,7 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         (uint256 repaid, uint256 remaining, bool closed) = executor.rangeReturn(positionId, true);
         o.status = Status.SETTLED;
         delete positionOfAccount[o.account];
+        --activeOrders;
         emit RangeOrderSettled(positionId, repaid, remaining, closed);
     }
 
@@ -359,6 +363,7 @@ contract RangeTakeProfit is ReentrancyGuard, IERC721Receiver {
         (uint256 repaid,,) = executor.rangeReturn(positionId, false);
         o.status = Status.UNWOUND;
         delete positionOfAccount[o.account];
+        --activeOrders;
         emit RangeOrderUnwound(positionId, msg.sender, repaid);
         return true;
     }

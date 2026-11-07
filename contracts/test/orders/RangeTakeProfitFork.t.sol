@@ -151,7 +151,11 @@ contract RangeTakeProfitForkTest is Test {
         _upgrade(EXECUTOR, _impl(EXECUTOR), abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRangeCustodian, (address(rtp))));
         _upgrade(RISK, address(new IsolatedMarginRiskEngineUpgradeable()), "");
         vm.prank(risk.owner());
-        risk.setRangeCustodian(address(rtp));
+        risk.queueRangeCustodian(address(rtp));
+        vm.warp(block.timestamp + 3600);
+        _stamp();
+        vm.prank(risk.owner());
+        risk.applyRangeCustodian();
         _upgrade(LIQUIDATOR, address(new IsolatedMarginLiquidatorUpgradeable()),
             abi.encodeCall(IsolatedMarginLiquidatorUpgradeable.initializeRangeCustodian, (address(rtp))));
 
@@ -472,6 +476,34 @@ contract RangeTakeProfitForkTest is Test {
         assertGt(IRtpMarket(p.positionPToken).balanceOf(p.account), 0, "stock back as collateral");
         assertEq(uint8(IRobinhoodOrderExecutor(EXECUTOR).positions(id).status), uint8(IsolatedMarginTypes.Status.ACTIVE));
         assertFalse(risk.isLiquidatable(p.account));
+    }
+
+    function testRiskEngineCustodianChangeIsDelayedAndRefusedWhileBandsAreActive() public {
+        address owner = risk.owner();
+        vm.prank(address(0xbad));
+        vm.expectRevert();
+        risk.queueRangeCustodian(address(0));
+        _create();
+        vm.prank(owner);
+        risk.queueRangeCustodian(address(0)); // try to switch the band valuation off
+        vm.prank(owner);
+        vm.expectRevert(bytes("RiskEngine: range custodian not ready"));
+        risk.applyRangeCustodian();
+        vm.warp(block.timestamp + 3600);
+        _stamp();
+        vm.prank(owner);
+        vm.expectRevert(bytes("RiskEngine: active range orders"));
+        risk.applyRangeCustodian();
+        assertEq(risk.rangeCustodian(), address(rtp));
+        vm.prank(p.owner);
+        rtp.unwind(id);
+        assertEq(rtp.activeOrders(), 0);
+        vm.prank(owner);
+        risk.applyRangeCustodian();
+        assertEq(risk.rangeCustodian(), address(0));
+        vm.prank(owner);
+        vm.expectRevert(bytes("RiskEngine: range custodian not ready"));
+        risk.applyRangeCustodian(); // consumed
     }
 
     function testHooksAreCustodianOnly() public {

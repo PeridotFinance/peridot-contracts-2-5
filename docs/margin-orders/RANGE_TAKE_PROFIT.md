@@ -11,7 +11,7 @@ remove, collect, repay the current debt with interest, return the equity. **This
 | --- | --- | --- |
 | `orders/range/RangeTakeProfit.sol` (new) | custodian: one Ramses NFT per order; presets; fee split; finalise; unwind; `holdings` at the oracle | 16,457 B |
 | `IsolatedMarginExecutorUpgradeable` | `rangeRelease` (stock collateral to the custodian), `rangeReturn(id, settle)` (repay from USDG, stock back to collateral, debt-free exit when settling); `initializeRangeCustodian` reinitializer(3), proxy admin only; slot 25 from the gap | 24,449 B (127 spare) |
-| `IsolatedMarginRiskEngineUpgradeable` | `_metrics` counts the band's holdings at the oracle; `authorizeRangeRelease` (executor only, ACTIVE accounts); `setRangeCustodian` (owner); slot 8 from the gap | 15,646 B |
+| `IsolatedMarginRiskEngineUpgradeable` | `_metrics` counts the band's holdings at the oracle; `authorizeRangeRelease` (executor only, ACTIVE accounts); `queueRangeCustodian` / `applyRangeCustodian` / `cancelRangeCustodian` (owner); slots 8 and 9 from the gap | 16,445 B |
 | `IsolatedMarginLiquidatorUpgradeable` | `liquidate` first calls `custodian.unwind(id)`; `initializeRangeCustodian` reinitializer(2); slot 22 from the gap | 13,304 B |
 | `RobinhoodMarginCloseAdapter` | optional immutable `rangeCustodian`; `closeFor` unwinds an active band before any order closes (stop-loss path) | 5,059 B |
 
@@ -77,6 +77,26 @@ all behave as on NVDA.
 
 The other orders suites still pass on this branch: registry 32, deploy path 7, close path 10.
 
+## Delayed risk-engine setter (2026-11-07)
+
+The custodian the risk engine counts is now changed by the owner (the Ledger) in two steps, like `queuePairRisk` and
+`setPairRisk`:
+1. `queueRangeCustodian(address)`;
+2. `applyRangeCustodian()`, after the margin config's `actionDelay`, which is 3,600 s live, with a floor of 1 h.
+
+`cancelRangeCustodian()` withdraws a queued change.
+
+**Applying is refused while the current custodian has active bands** (`activeOrders() > 0`). Removing or replacing it
+would drop those bands from every health calculation, so healthy positions would become liquidatable at once.
+
+Fork test, live stack, L2 108,373,287:
+- a stranger cannot queue;
+- an early apply is refused, and so is an apply with a band active;
+- after the owner unwinds the band, the apply succeeds;
+- the queued change can be used only once.
+
+The keeper rehearsal now goes through queue, wait, apply.
+
 ## Finalisation keeper and alarm (2026-11-07)
 
 **Same host and process as the order keeper.** `contracts/tools/orders/orders_keeper.py` runs the TP/SL orders first,
@@ -100,8 +120,8 @@ assigned to the operator.
 - It stays idle until a mainnet journal exists. 9 tests.
 
 **Anvil fork rehearsal:** `contracts/tools/orders/rehearse_range_keeper.sh`, fork at L2 108,369,009.
-- **Setup:** the live stack, upgraded through its real ProxyAdmins as the timelock; the Ledger sets the risk engine's
-  custodian. Order created on live position 4 with preset 1: tick 223,944, band 223,640 to 223,840.
+- **Setup:** the live stack, upgraded through its real ProxyAdmins as the timelock; the Ledger queues and, an hour later,
+  applies the risk engine's custodian. Order created on live position 4 with preset 1: tick 223,944, band 223,640 to 223,840.
 
 | scenario | band holdings at the oracle (NVDA, USDG raw) | keeper | end state |
 | --- | --- | --- | --- |
@@ -126,7 +146,6 @@ own gas-only wallet.
    frozen for Monday and for the signing package. The adapter unwinds the band before any order closes, so the two never
    act on the same collateral. Strict exclusivity in that direction would be a small registry upgrade later.
 3. **Production gaps:**
-   - `setRangeCustodian` on the risk engine is immediate for the owner; it should be delayed like `queuePairRisk`.
    - The removal mins are 0, because risk paths must not be blockable. Placement is single-sided out of range, and
      finalisation checks the pool against the oracle.
    - Gauge anti-sybil applies: rewards are claimed before the removal, and a removal within 99 s of placement forfeits
