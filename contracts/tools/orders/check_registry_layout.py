@@ -15,6 +15,8 @@ SNAPSHOT = Path('tools/orders/registry-layout.json')
 TARGET = 'contracts/margin/orders/MarginOrderRegistry.sol:MarginOrderRegistry'
 if '--target' in sys.argv:  # e.g. the prepared V2: contracts/margin/orders/MarginOrderRegistryV2.sol:MarginOrderRegistryV2
     TARGET = sys.argv[sys.argv.index('--target') + 1]
+if 'RangeTakeProfit' in TARGET:  # each proxied contract has its own snapshot
+    SNAPSHOT = Path('tools/orders/range-layout.json')
 TOTAL_SLOTS = 50  # the contract's own variables plus __gap always cover slots 0..49
 
 
@@ -67,8 +69,9 @@ def main():
                 sys.exit(f'FAIL: recorded variable changed: {a} -> {b}')
     appended = rows[len(kept):-1]
     size = int(re.search(r'\[(\d+)\]', gap_new['type']).group(1))
-    if gap_new['slot'] + size != TOTAL_SLOTS:
-        sys.exit(f'FAIL: __gap ends at slot {gap_new["slot"] + size}, expected {TOTAL_SLOTS}')
+    total = gap_old['slot'] + int(re.search(r'\[(\d+)\]', gap_old['type']).group(1))  # the recorded end of the layout
+    if gap_new['slot'] + size != total:
+        sys.exit(f'FAIL: __gap ends at slot {gap_new["slot"] + size}, expected {total}')
     print(f'ok: {len(kept)} recorded variables unchanged, {len(appended)} appended, __gap {size} slots from slot {gap_new["slot"]}')
     return 0
 

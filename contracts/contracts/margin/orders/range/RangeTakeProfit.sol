@@ -88,7 +88,8 @@ interface IRangeGauge {
 }
 
 /// @title Range take-profit for a leveraged long. Behind an OZ 5 transparent proxy whose ProxyAdmin the timelock owns;
-/// admin (presets, fee split, unwinders) = the timelock. Storage append-only (tools/orders/check_registry_layout.py).
+/// admin (presets, fee split, unwinders) = the timelock. Storage append-only: tools/orders/check_registry_layout.py
+/// --target <this contract> against tools/orders/range-layout.json.
 /// @notice The position's stock is placed into a concentrated-liquidity band entirely above the market. As the market
 /// trades up through the band, swaps convert the stock to USDG; a fall back below reverses that. Nothing is final until a
 /// keeper `finalize`s: remove the liquidity, collect fees, repay the current debt with accrued interest through the

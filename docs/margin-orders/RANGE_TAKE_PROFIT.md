@@ -9,9 +9,9 @@ remove, collect, repay the current debt with interest, return the equity. **This
 
 | piece | change | size |
 | --- | --- | --- |
-| `orders/range/RangeTakeProfit.sol` (new) | custodian: one Ramses NFT per order; presets; fee split; finalise; unwind; `holdings` at the oracle | 16,457 B |
-| `IsolatedMarginExecutorUpgradeable` | `rangeRelease` (stock collateral to the custodian), `rangeReturn(id, settle)` (repay from USDG, stock back to collateral, debt-free exit when settling); `initializeRangeCustodian` reinitializer(3), proxy admin only; slot 25 from the gap | 24,449 B (127 spare) |
-| `IsolatedMarginRiskEngineUpgradeable` | `_metrics` counts the band's holdings at the oracle; `authorizeRangeRelease` (executor only, ACTIVE accounts); `queueRangeCustodian` / `applyRangeCustodian` / `cancelRangeCustodian` (owner); slots 8 and 9 from the gap | 16,445 B |
+| `orders/range/RangeTakeProfit.sol` (new) | custodian behind an OZ 5 transparent proxy (admin = timelock; storage snapshot `tools/orders/range-layout.json`): one Ramses NFT per order; presets; fee split; finalise; unwind; `holdings` at the oracle; refuses bands until the risk engine counts it (`NotWired`) | see `forge build --sizes` |
+| `IsolatedMarginExecutorUpgradeable` | `rangeRelease` (stock collateral to the custodian), `rangeReturn(id, settle)` (repay from USDG, stock back to collateral, debt-free exit when settling); `initializeRange(custodian, orderExecutor)` reinitializer(3), proxy admin only: sets the custodian and hands the order executor from adapter v1 to the range-aware adapter v2; slot 25 from the gap | 24,512 B (64 spare) |
+| `IsolatedMarginRiskEngineUpgradeable` | `_metrics` counts the band's holdings at the oracle; `authorizeRangeRelease` (executor only, ACTIVE accounts); `initializeRangeCustodian` reinitializer(2), proxy admin only (the first wiring, inside the timelocked batch); `queueRangeCustodian` / `applyRangeCustodian` / `cancelRangeCustodian` (owner, for later changes); slots 8 and 9 from the gap | 16,926 B |
 | `IsolatedMarginLiquidatorUpgradeable` | `liquidate` first calls `custodian.unwind(id)`; `initializeRangeCustodian` reinitializer(2); slot 22 from the gap | 13,304 B |
 | `RobinhoodMarginCloseAdapter` | optional immutable `rangeCustodian`; `closeFor` unwinds an active band before any order closes (stop-loss path) | 5,059 B |
 
@@ -95,7 +95,8 @@ Fork test, live stack, L2 108,373,287:
 - after the owner unwinds the band, the apply succeeds;
 - the queued change can be used only once.
 
-The keeper rehearsal now goes through queue, wait, apply.
+The first wiring is not the queue: it is a proxy-admin reinitializer inside the timelocked range batch, so the timelock's
+delay is the delay (see `RANGE_DEPLOY.md`). Queue and apply are for any later change.
 
 ## Finalisation keeper and alarm (2026-11-07)
 
@@ -119,9 +120,13 @@ assigned to the operator.
   again. Work still due with an unmoved keeper nonce is `STALLED`.
 - It stays idle until a mainnet journal exists. 9 tests.
 
-**Anvil fork rehearsal:** `contracts/tools/orders/rehearse_range_keeper.sh`, fork at L2 108,369,009.
-- **Setup:** the live stack, upgraded through its real ProxyAdmins as the timelock; the Ledger queues and, an hour later,
-  applies the risk engine's custodian. Order created on live position 4 with preset 1: tick 223,944, band 223,640 to 223,840.
+**Anvil fork rehearsal:** `contracts/tools/orders/rehearse_range_keeper.sh`. First run at L2 108,369,009, then rerun at
+108,400,520 after the handover and proxy changes, with the same results.
+- **Setup:** the live stack, upgraded through its real ProxyAdmins as the timelock in the real sequence. First the
+  ceremony (registry V1, adapter v1). Then the range wiring: executor `initializeRange`, registry V2, risk engine and
+  liquidator reinitializers. The custodian sits behind its proxy.
+- Order created on live position 4 with preset 1: tick 223,944, band 223,640 to 223,840 (in the rerun: tick 223,954,
+  band 223,650 to 223,850).
 
 | scenario | band holdings at the oracle (NVDA, USDG raw) | keeper | end state |
 | --- | --- | --- | --- |
@@ -156,6 +161,6 @@ own gas-only wallet.
      finalisation checks the pool against the oracle.
    - Gauge anti-sybil applies: rewards are claimed before the removal, and a removal within 99 s of placement forfeits
      that window's RAM.
-   - The executor has only 127 bytes to spare.
-   - The prototype custodian is not behind a proxy.
-4. **Fee split percentages** (the tests use 70 / 20 / 10) **and the presets are undecided.** Both are parameters.
+   - The executor has only 64 bytes to spare.
+4. **Decided 2026-11-07:** fee split 70/20/10 for the pilot; presets 1%, 3% and 5% above the market, each 2% wide; RAM
+   to the order owner at finalisation. **Still undecided:** the protocol and reserve recipient addresses.

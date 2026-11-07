@@ -1,0 +1,271 @@
+[
+ {
+  "label": "executor",
+  "slot": 0,
+  "offset": 0,
+  "type": "contract IRangeExecutor"
+ },
+ {
+  "label": "riskEngine",
+  "slot": 1,
+  "offset": 0,
+  "type": "contract IRangeRiskEngine"
+ },
+ {
+  "label": "positionManager",
+  "slot": 2,
+  "offset": 0,
+  "type": "contract IRangeNfp"
+ },
+ {
+  "label": "pool",
+  "slot": 3,
+  "offset": 0,
+  "type": "contract IRangePool"
+ },
+ {
+  "label": "gauge",
+  "slot": 4,
+  "offset": 0,
+  "type": "contract IRangeGauge"
+ },
+ {
+  "label": "oracle",
+  "slot": 5,
+  "offset": 0,
+  "type": "contract IRangeOracle"
+ },
+ {
+  "label": "config",
+  "slot": 6,
+  "offset": 0,
+  "type": "contract IRangeConfig"
+ },
+ {
+  "label": "registry",
+  "slot": 7,
+  "offset": 0,
+  "type": "contract IMarginOrderRegistry"
+ },
+ {
+  "label": "stock",
+  "slot": 8,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "usdg",
+  "slot": 9,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "stockIsToken0",
+  "slot": 9,
+  "offset": 20,
+  "type": "bool"
+ },
+ {
+  "label": "tickSpacing",
+  "slot": 9,
+  "offset": 21,
+  "type": "int24"
+ },
+ {
+  "label": "admin",
+  "slot": 10,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "liquidator",
+  "slot": 11,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "orderAdapter",
+  "slot": 12,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "userFeeBps",
+  "slot": 12,
+  "offset": 20,
+  "type": "uint16"
+ },
+ {
+  "label": "protocolFeeBps",
+  "slot": 12,
+  "offset": 22,
+  "type": "uint16"
+ },
+ {
+  "label": "reserveFeeBps",
+  "slot": 12,
+  "offset": 24,
+  "type": "uint16"
+ },
+ {
+  "label": "protocolRecipient",
+  "slot": 13,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "reserveRecipient",
+  "slot": 14,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "presets",
+  "slot": 15,
+  "offset": 0,
+  "type": "mapping(uint8 => struct RangeTakeProfit.Preset)"
+ },
+ {
+  "label": "_orders",
+  "slot": 16,
+  "offset": 0,
+  "type": "mapping(uint256 => struct RangeTakeProfit.Order)"
+ },
+ {
+  "label": "positionOfAccount",
+  "slot": 17,
+  "offset": 0,
+  "type": "mapping(address => uint256)"
+ },
+ {
+  "label": "activeOrders",
+  "slot": 18,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "label": "__gap",
+  "slot": 19,
+  "offset": 0,
+  "type": "uint256[30]"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "owner",
+  "slot": 0,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "account",
+  "slot": 1,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "status",
+  "slot": 1,
+  "offset": 20,
+  "type": "enum RangeTakeProfit.Status"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "preset",
+  "slot": 1,
+  "offset": 21,
+  "type": "uint8"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "tickLower",
+  "slot": 1,
+  "offset": 22,
+  "type": "int24"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "tickUpper",
+  "slot": 1,
+  "offset": 25,
+  "type": "int24"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "liquidity",
+  "slot": 2,
+  "offset": 0,
+  "type": "uint128"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "tokenId",
+  "slot": 3,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "stockCommitted",
+  "slot": 4,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "stockIdle",
+  "slot": 5,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "userFeeBps",
+  "slot": 6,
+  "offset": 0,
+  "type": "uint16"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "protocolFeeBps",
+  "slot": 6,
+  "offset": 2,
+  "type": "uint16"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "reserveFeeBps",
+  "slot": 6,
+  "offset": 4,
+  "type": "uint16"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Order",
+  "label": "createdAt",
+  "slot": 6,
+  "offset": 6,
+  "type": "uint64"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Preset",
+  "label": "enabled",
+  "slot": 0,
+  "offset": 0,
+  "type": "bool"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Preset",
+  "label": "distanceTicks",
+  "slot": 0,
+  "offset": 1,
+  "type": "int24"
+ },
+ {
+  "struct": "struct RangeTakeProfit.Preset",
+  "label": "widthTicks",
+  "slot": 0,
+  "offset": 4,
+  "type": "int24"
+ }
+]
