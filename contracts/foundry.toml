@@ -54,6 +54,7 @@ optimizer_runs = 50  # adjust if needed
 
 # Robinhood TP/SL close path: the same compiler settings as the live margin stack (RobinhoodVaults profile margin_mainnet).
 [profile.robinhood_orders]
+extra_output = ["storageLayout"]  # the layout checks (tools/orders/check_registry_layout.py) read it from the artifacts
 src = "contracts/margin"
 test = "test/orders"
 script = "script/orders"

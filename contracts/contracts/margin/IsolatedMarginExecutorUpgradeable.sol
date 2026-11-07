@@ -372,6 +372,71 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         return _close(position, params);
     }
 
+    // ------------------------------------------------------------------ range take-profit (PROTOTYPE)
+    /// @notice One-time range wiring, by the proxy admin inside upgradeAndCall: the custodian, and the order executor
+    /// re-pointed to the range-aware close adapter (the registry is re-pointed to the same adapter in the same batch).
+    function initializeRange(address custodian, address orderExecutor_) external reinitializer(3) {
+        if (msg.sender != ERC1967Utils.getAdmin()) revert ExecutorError(58);
+        if (custodian.code.length == 0 || orderExecutor_.code.length == 0) revert ExecutorError(59);
+        rangeCustodian = custodian;
+        orderExecutor = orderExecutor_;
+        emit OrderExecutorSet(orderExecutor_);
+    }
+
+    function _onlyRangeCustodian() internal view {
+        if (msg.sender != rangeCustodian) revert ExecutorError(61); // msg.sender is never address(0)
+    }
+
+    /// @notice Moves a long's stock collateral to the custodian for its band. The risk engine keeps counting it there at
+    /// the oracle price; the custodian refuses the order if the position would then be liquidatable.
+    function rangeRelease(uint256 positionId, uint256 positionPTokens) external nonReentrant returns (uint256 stockReleased) {
+        _onlyRangeCustodian();
+        IsolatedMarginTypes.Position storage position = positions[positionId];
+        if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert ExecutorError(47);
+        if (position.side != IsolatedMarginTypes.Side.LONG) revert ExecutorError(62);
+        uint256 balance = PErc20(position.positionPToken).balanceOf(position.account);
+        uint256 amount = positionPTokens == 0 ? balance : positionPTokens;
+        if (amount == 0 || amount > balance) revert ExecutorError(63);
+        riskEngine.authorizeRangeRelease(position.account, amount);
+        stockReleased = IsolatedMarginAccount(position.account).redeem(position.positionPToken, amount);
+        IsolatedMarginAccount(position.account).transferToken(_asset(position.positionPToken), msg.sender, stockReleased);
+    }
+
+    /// @notice The custodian has sent a removed band's stock and USDG to the account. USDG repays the current debt
+    /// (accrued first), stock goes back to collateral, USDG left over stays as margin collateral. With `settle` and no
+    /// debt left, the debt-free exit then returns the equity to the owner (margin pTokens through the margin vault,
+    /// position pTokens to the wallet), less the configured close fee.
+    function rangeReturn(uint256 positionId, bool settle)
+        external
+        nonReentrant
+        returns (uint256 repaid, uint256 remainingDebt, bool closed)
+    {
+        _onlyRangeCustodian();
+        IsolatedMarginTypes.Position storage position = positions[positionId];
+        if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert ExecutorError(47);
+        address account = position.account;
+        uint256 debt = PErc20(position.debtPToken).borrowBalanceCurrent(account);
+        uint256 cash = IERC20(_asset(position.debtPToken)).balanceOf(account);
+        repaid = cash < debt ? cash : debt;
+        if (repaid != 0) IsolatedMarginAccount(account).repayBorrow(repaid);
+        _mintIfShares(account, position.positionPToken);
+        _mintIfShares(account, position.marginPToken);
+        remainingDebt = PErc20(position.debtPToken).borrowBalanceStored(account);
+        position.borrowedPrincipal = remainingDebt;
+        if (settle && remainingDebt == 0) {
+            _exitDebtFree(position, positionId, config.closeFeeBps());
+            closed = true;
+        }
+    }
+
+    /// @dev Never lets dust block a risk path: an amount too small to mint a share stays in the account.
+    function _mintIfShares(address account, address pToken) internal {
+        uint256 amount = IERC20(_asset(pToken)).balanceOf(account);
+        if (amount == 0) return;
+        if (Math.mulDiv(amount, 1e18, PErc20(pToken).exchangeRateCurrent()) == 0) return;
+        IsolatedMarginAccount(account).mint(pToken, amount);
+    }
+
     function _close(IsolatedMarginTypes.Position storage position, CloseParams calldata params)
         private
         returns (uint256 returnedMarginPTokens)
@@ -488,7 +553,13 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         IsolatedMarginTypes.Position storage position = _activeOwnedPosition(positionId);
         uint16 closingFeeBps = config.closeFeeBps();
         if (closingFeeBps > maxClosingFeeBps) revert ExecutorError(54);
+        return _exitDebtFree(position, positionId, closingFeeBps);
+    }
 
+    function _exitDebtFree(IsolatedMarginTypes.Position storage position, uint256 positionId, uint16 closingFeeBps)
+        internal
+        returns (uint256 returnedMarginPTokens, uint256 returnedPositionPTokens, uint256 returnedDebtPTokens)
+    {
         PErc20(position.debtPToken).borrowBalanceCurrent(position.account);
         if (PErc20(position.debtPToken).borrowBalanceStored(position.account) != 0) revert ExecutorError(55);
         riskEngine.beginDebtFreeClose(position.account);
@@ -767,5 +838,8 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
     /// @dev Appended in the order-executor upgrade; taken from the gap so the layout is unchanged.
     address public orderExecutor;
 
-    uint256[39] private __gap;
+    /// @dev Appended (range take-profit prototype); taken from the gap so the layout is unchanged.
+    address public rangeCustodian;
+
+    uint256[38] private __gap;
 }

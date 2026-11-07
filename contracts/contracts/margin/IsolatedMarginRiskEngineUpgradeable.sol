@@ -5,6 +5,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
@@ -12,6 +13,16 @@ import {IsolatedMarginMath} from "./IsolatedMarginMath.sol";
 import {IsolatedMarginTypes} from "./IsolatedMarginTypes.sol";
 import {IIsolatedMarginConfig} from "./interfaces/IIsolatedMarginConfig.sol";
 import {IIsolatedMarginRiskHook} from "./interfaces/IIsolatedMarginRiskHook.sol";
+
+/// @dev Range take-profit custodian (prototype): a position's stock that sits in a band, valued at the oracle.
+interface IRangeHoldings {
+    function holdings(address account) external view returns (uint256 stockAmount, uint256 usdgAmount);
+    function activeOrders() external view returns (uint256);
+}
+
+interface IConfigActionDelay {
+    function actionDelay() external view returns (uint256);
+}
 import {IMarginPriceOracle} from "./interfaces/IMarginPriceOracle.sol";
 
 interface IIsolatedMarginControllerRegistry {
@@ -59,6 +70,9 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     );
     event AccountStatusUpdated(address indexed account, IsolatedMarginTypes.Status status);
     event MovementAuthorized(address indexed account, address indexed pToken, uint256 amount);
+
+    event RangeCustodianSet(address indexed custodian);
+    event RangeCustodianQueued(address indexed custodian, uint64 eta);
 
     error PriceUnavailable(address asset);
 
@@ -265,6 +279,56 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         emit AccountStatusUpdated(account, accountConfig.status);
     }
 
+    /// @notice First range wiring, by the proxy admin inside the timelocked upgradeAndCall (the timelock's delay is the
+    /// delay). Later changes go through queueRangeCustodian / applyRangeCustodian.
+    function initializeRangeCustodian(address custodian) external reinitializer(2) {
+        require(msg.sender == ERC1967Utils.getAdmin(), "RiskEngine: not proxy admin");
+        require(custodian.code.length != 0 && rangeCustodian == address(0), "RiskEngine: bad range custodian");
+        rangeCustodian = custodian;
+        emit RangeCustodianSet(custodian);
+    }
+
+    /// @notice Range take-profit: queue a custodian change (or removal, address 0). It applies after the margin config's
+    /// action delay (at least 1 h), like every other margin risk change.
+    function queueRangeCustodian(address custodian) external onlyOwner {
+        uint256 delay = IConfigActionDelay(address(config)).actionDelay();
+        if (delay < 1 hours) delay = 1 hours;
+        pendingRangeCustodian = custodian;
+        pendingRangeCustodianEta = uint64(block.timestamp + delay);
+        emit RangeCustodianQueued(custodian, pendingRangeCustodianEta);
+    }
+
+    function cancelRangeCustodian() external onlyOwner {
+        emit RangeCustodianQueued(address(0), 0);
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+    }
+
+    /// @notice Applies the queued change. Refused while the current custodian holds active bands: dropping their
+    /// valuation would make healthy positions liquidatable at once. Unwind or finalise them first.
+    function applyRangeCustodian() external onlyOwner {
+        uint64 eta = pendingRangeCustodianEta;
+        require(eta != 0 && block.timestamp >= eta, "RiskEngine: range custodian not ready");
+        address current = rangeCustodian;
+        address next = pendingRangeCustodian;
+        require(current == address(0) || IRangeHoldings(current).activeOrders() == 0, "RiskEngine: active range orders");
+        rangeCustodian = next;
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+        emit RangeCustodianSet(next);
+    }
+
+    /// @notice PROTOTYPE: lets the executor move position collateral of an ACTIVE account into its range order. The
+    /// custodian then holds it as a band, which `_metrics` keeps counting at the oracle price.
+    function authorizeRangeRelease(address account, uint256 amount) external onlyExecutor {
+        AccountConfig memory accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        require(rangeCustodian != address(0) && amount > 0, "RiskEngine: no range release");
+        movementAuthorizations[account][accountConfig.positionPToken] =
+            MovementAuthorization({remainingAmount: amount, blockNumber: uint64(block.number)});
+        emit MovementAuthorized(account, accountConfig.positionPToken, amount);
+    }
+
     function authorizeMovement(address account, address pToken, uint256 amount) external onlyOperator {
         AccountConfig memory accountConfig = accounts[account];
         bool debtRepayMovement = msg.sender == executor && pToken == accountConfig.debtPToken
@@ -417,6 +481,13 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
             );
         }
 
+        address custodian = rangeCustodian;
+        if (custodian != address(0)) {
+            (uint256 bandStock, uint256 bandUsdg) = IRangeHoldings(custodian).holdings(account);
+            if (bandStock != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.positionPToken, bandStock);
+            if (bandUsdg != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.debtPToken, bandUsdg);
+        }
+
         uint256 debt = PErc20(accountConfig.debtPToken).borrowBalanceStored(account) + additionalBorrow;
         uint256 debtValueUsd = underlyingValueUsd(accountConfig.debtPToken, debt);
         IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
@@ -447,5 +518,10 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         return true;
     }
 
-    uint256[40] private __gap;
+    /// @dev Appended (range take-profit); taken from the gap so the layout is unchanged.
+    address public rangeCustodian;
+    address public pendingRangeCustodian; // packed with the eta below
+    uint64 public pendingRangeCustodianEta;
+
+    uint256[38] private __gap;
 }
