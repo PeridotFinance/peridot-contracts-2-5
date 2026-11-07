@@ -1,0 +1,135 @@
+DEVELOPMENT RUN proto1 of an EARLIER VERSION of AvalancheVaultSharePricingPrototype.t.sol (kept verbatim; the file text of that version was not saved; failures in it were test or model bugs fixed afterwards, see the README of this directory)
+log mtime: 2026-11-03T11:30:28
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 14 tests for test/AvalancheVaultSharePricingPrototype.t.sol:AvalancheVaultSharePricingPrototype
+[PASS] testFuzz_conservation_and_value_ledger(uint256) (runs: 256, μ: 2533970, ~: 2525262)
+[PASS] test_00_currentRule_matchesClosedForm_grid() (gas: 704916041)
+Logs:
+  PROTO|00 closed form matches model in 288 cases, max |T-Tcf| (asset raw units) 5; cases with T<0 or negative swap cost 198
+
+[PASS] test_01_grid_R1_protects_every_incumbent() (gas: 711461991)
+Logs:
+  PROTO|GRID R1 | Pharaoh USDC vault (pair USDC/USDt, deposited USDC) cases=144 violations=0 max|dE|/bound(ppm)=74074 max|T|/D(ppm)=0 max incumbent loss(ppm)=0 worst ib/pb/dep(bps)=0/0/0
+  PROTO|GRID R1 | Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX) cases=144 violations=0 max|dE|/bound(ppm)=76923 max|T|/D(ppm)=0 max incumbent loss(ppm)=0 worst ib/pb/dep(bps)=0/0/0
+
+[PASS] test_02_grid_R3_protects_every_incumbent() (gas: 711374005)
+Logs:
+  PROTO|GRID R3 | Pharaoh USDC vault (pair USDC/USDt, deposited USDC) cases=144 violations=0 max|dE|/bound(ppm)=74074 max|T|/D(ppm)=0 max incumbent loss(ppm)=0 worst ib/pb/dep(bps)=0/0/0
+  PROTO|GRID R3 | Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX) cases=144 violations=0 max|dE|/bound(ppm)=76923 max|T|/D(ppm)=0 max incumbent loss(ppm)=0 worst ib/pb/dep(bps)=0/0/0
+
+[PASS] test_03_R2_transfer_equals_its_own_closed_form_and_is_second_order() (gas: 236628796)
+Logs:
+  PROTO|R2 Pharaoh USDC vault (USDC/USDt, deposited USDC) 48 cases, max |T|/D (ppm) 0, max incumbent loss (ppm of its value) 0
+  PROTO|R2 Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) 48 cases, max |T|/D (ppm) 12, max incumbent loss (ppm of its value) 0
+
+[PASS] test_04_grid_CURRENT_fails() (gas: 711178627)
+Logs:
+  PROTO|GRID CURRENT | Pharaoh USDC vault (pair USDC/USDt, deposited USDC) cases=144 violations=138 max|dE|/bound(ppm)=60501259259 max|T|/D(ppm)=252476 max incumbent loss(ppm)=3267 worst ib/pb/dep(bps)=5000/7000/100
+  PROTO|GRID CURRENT | Pharaoh WAVAX vault (pair sAVAX/WAVAX, deposited WAVAX) cases=144 violations=144 max|dE|/bound(ppm)=126919402198380648615384 max|T|/D(ppm)=765932 max incumbent loss(ppm)=9899 worst ib/pb/dep(bps)=5000/7000/100
+
+[FAIL: EvmError: Revert] test_05_mutations_of_R1_are_caught() (gas: 1073709343)
+[PASS] test_06_valuation_gap_residual_has_exact_form() (gas: 9936596)
+Logs:
+  PROTO|06 R1 valuation skew bps 0 -> T (raw) -2 ppm of D 0
+  PROTO|06 R1 valuation skew bps 5 -> T (raw) -2 ppm of D 0
+  PROTO|06 R1 valuation skew bps 25 -> T (raw) -2 ppm of D 0
+  PROTO|06 R1 valuation skew bps -25 -> T (raw) -2 ppm of D 0
+
+[PASS] test_10_sequences_R1_R3_protect_all_holders() (gas: 379682727)
+Logs:
+  PROTO|SEQ Pharaoh USDC vault (USDC/USDt, deposited USDC) seq 0 R1 violations 0 R3 violations 0 ops each 36
+  PROTO|SEQ Pharaoh USDC vault (USDC/USDt, deposited USDC) seq 1 R1 violations 0 R3 violations 0 ops each 30
+  PROTO|SEQ Pharaoh USDC vault (USDC/USDt, deposited USDC) seq 2 R1 violations 0 R3 violations 0 ops each 42
+  PROTO|SEQ Pharaoh USDC vault (USDC/USDt, deposited USDC) seq 3 R1 violations 0 R3 violations 0 ops each 30
+  PROTO|SEQ Pharaoh USDC vault (USDC/USDt, deposited USDC) seq 4 R1 violations 0 R3 violations 0 ops each 54
+  PROTO|SEQ Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) seq 0 R1 violations 0 R3 violations 0 ops each 36
+  PROTO|SEQ Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) seq 1 R1 violations 0 R3 violations 0 ops each 30
+  PROTO|SEQ Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) seq 2 R1 violations 0 R3 violations 0 ops each 42
+  PROTO|SEQ Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) seq 3 R1 violations 0 R3 violations 0 ops each 30
+  PROTO|SEQ Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX) seq 4 R1 violations 0 R3 violations 0 ops each 54
+
+[PASS] test_11_sequences_CURRENT_fails() (gas: 188377547)
+Logs:
+  PROTO|SEQ CURRENT Pharaoh USDC vault seq 0 violations 33
+  PROTO|SEQ CURRENT Pharaoh USDC vault seq 1 violations 47
+  PROTO|SEQ CURRENT Pharaoh USDC vault seq 2 violations 43
+  PROTO|SEQ CURRENT Pharaoh USDC vault seq 3 violations 29
+  PROTO|SEQ CURRENT Pharaoh USDC vault seq 4 violations 72
+  PROTO|SEQ CURRENT Pharaoh WAVAX vault seq 0 violations 42
+  PROTO|SEQ CURRENT Pharaoh WAVAX vault seq 1 violations 66
+  PROTO|SEQ CURRENT Pharaoh WAVAX vault seq 2 violations 54
+  PROTO|SEQ CURRENT Pharaoh WAVAX vault seq 3 violations 42
+  PROTO|SEQ CURRENT Pharaoh WAVAX vault seq 4 violations 84
+
+[FAIL: haircut cash exit identity: 70490 > 80] test_12_cashExitAtHaircutBasis_isAnExitFee_identity() (gas: 2732417)
+[FAIL: R1 round trip positive beyond rounding: 2601923260474775 > 41] test_20_roundTrips_cannot_be_positive_under_R1_R3() (gas: 373277664)
+Logs:
+  PROTO|20 round trip (deposit, exit in kind, sell paired through the modelled pool) Pharaoh USDC vault (USDC/USDt, deposited USDC) best case over the grid, ppm of D: R1 -15 R3 -30 CURRENT 247959
+
+[PASS] test_30_reserve_drain_current_vs_remedy() (gas: 240270803)
+Logs:
+  PROTO|CYCLE CURRENT | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 4247 | attacker cumulative net (ppm of his stake) 417249 | first cycle with cumulative loss >= reserve of 1000 ppm: 16
+  PROTO|CYCLE R1 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7478 | first cycle with cumulative loss >= reserve of 1000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -3839 | first cycle with cumulative loss >= reserve of 1000 ppm: 0
+  PROTO|CYCLE CURRENT | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 4247 | attacker cumulative net (ppm of his stake) 417249 | first cycle with cumulative loss >= reserve of 5000 ppm: 0
+  PROTO|CYCLE R1 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7478 | first cycle with cumulative loss >= reserve of 5000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -3839 | first cycle with cumulative loss >= reserve of 5000 ppm: 0
+  PROTO|CYCLE CURRENT | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 4247 | attacker cumulative net (ppm of his stake) 417249 | first cycle with cumulative loss >= reserve of 10000 ppm: 0
+  PROTO|CYCLE R1 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7478 | first cycle with cumulative loss >= reserve of 10000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -3839 | first cycle with cumulative loss >= reserve of 10000 ppm: 0
+  PROTO|CYCLE CURRENT-no-replenish-10 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 1500 bps, replenished per cycle 0 bps of vault value | cycles 10 | cumulative incumbent loss (ppm of vault value) 753 | attacker cumulative net (ppm of his stake) 73555 | first cycle with cumulative loss >= reserve of 1 ppm: 1
+  PROTO|CYCLE CURRENT-no-replenish-60 | Pharaoh USDC vault pair USDC/USDt, deposited USDC, benchmark hold USDC | idle paired at start 1500 bps, replenished per cycle 0 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 753 | attacker cumulative net (ppm of his stake) 70853 | first cycle with cumulative loss >= reserve of 1 ppm: 1
+  PROTO|CYCLE CURRENT | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 12827 | attacker cumulative net (ppm of his stake) 1203942 | first cycle with cumulative loss >= reserve of 1000 ppm: 4
+  PROTO|CYCLE R1 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -76790 | first cycle with cumulative loss >= reserve of 1000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7626 | first cycle with cumulative loss >= reserve of 1000 ppm: 0
+  PROTO|CYCLE CURRENT | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 12827 | attacker cumulative net (ppm of his stake) 1203942 | first cycle with cumulative loss >= reserve of 5000 ppm: 27
+  PROTO|CYCLE R1 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -76790 | first cycle with cumulative loss >= reserve of 5000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7626 | first cycle with cumulative loss >= reserve of 5000 ppm: 0
+  PROTO|CYCLE CURRENT | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 12827 | attacker cumulative net (ppm of his stake) 1203942 | first cycle with cumulative loss >= reserve of 10000 ppm: 50
+  PROTO|CYCLE R1 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -76790 | first cycle with cumulative loss >= reserve of 10000 ppm: 0
+  PROTO|CYCLE R3 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 300 bps, replenished per cycle 100 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 0 | attacker cumulative net (ppm of his stake) -7626 | first cycle with cumulative loss >= reserve of 10000 ppm: 0
+  PROTO|CYCLE CURRENT-no-replenish-10 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 1500 bps, replenished per cycle 0 bps of vault value | cycles 10 | cumulative incumbent loss (ppm of vault value) 2284 | attacker cumulative net (ppm of his stake) 213422 | first cycle with cumulative loss >= reserve of 1 ppm: 1
+  PROTO|CYCLE CURRENT-no-replenish-60 | Pharaoh WAVAX vault pair sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX | idle paired at start 1500 bps, replenished per cycle 0 bps of vault value | cycles 60 | cumulative incumbent loss (ppm of vault value) 2284 | attacker cumulative net (ppm of his stake) 207315 | first cycle with cumulative loss >= reserve of 1 ppm: 1
+
+[FAIL: no contribution] test_31_reserve_exhaustion_table() (gas: 272822405)
+Logs:
+  PROTO|31 CURRENT Pharaoh USDC vault (USDC/USDt, deposited USDC, benchmark hold USDC) replenish 30 bps/cycle: loss per cycle (ppm of vault) 19; reserve 10bp->53 cycles; reserve 50bp->263 cycles; reserve 100bp->526 cycles; reserve 200bp->1051 cycles; reserve 500bp->2627 cycles;
+  PROTO|31 R1 Pharaoh USDC vault replenish 30 bps/cycle: cumulative incumbent loss over 100 cycles (raw units) 7 (ppm of vault 0): reserve never drawn by an accounting transfer
+  PROTO|31 CURRENT Pharaoh USDC vault (USDC/USDt, deposited USDC, benchmark hold USDC) replenish 100 bps/cycle: loss per cycle (ppm of vault) 86; reserve 10bp->12 cycles; reserve 50bp->58 cycles; reserve 100bp->116 cycles; reserve 200bp->231 cycles; reserve 500bp->576 cycles;
+  PROTO|31 R1 Pharaoh USDC vault replenish 100 bps/cycle: cumulative incumbent loss over 100 cycles (raw units) 4 (ppm of vault 0): reserve never drawn by an accounting transfer
+  PROTO|31 CURRENT Pharaoh USDC vault (USDC/USDt, deposited USDC, benchmark hold USDC) replenish 300 bps/cycle: loss per cycle (ppm of vault) 907; reserve 10bp->2 cycles; reserve 50bp->6 cycles; reserve 100bp->12 cycles; reserve 200bp->23 cycles; reserve 500bp->56 cycles;
+  PROTO|31 R1 Pharaoh USDC vault replenish 300 bps/cycle: cumulative incumbent loss over 100 cycles (raw units) 1 (ppm of vault 0): reserve never drawn by an accounting transfer
+  PROTO|31 CURRENT Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX) replenish 30 bps/cycle: loss per cycle (ppm of vault) 57; reserve 10bp->18 cycles; reserve 50bp->87 cycles; reserve 100bp->174 cycles; reserve 200bp->348 cycles; reserve 500bp->869 cycles;
+  PROTO|31 R1 Pharaoh WAVAX vault replenish 30 bps/cycle: cumulative incumbent loss over 100 cycles (raw units) 6 (ppm of vault 0): reserve never drawn by an accounting transfer
+  PROTO|31 CURRENT Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX) replenish 100 bps/cycle: loss per cycle (ppm of vault) 261; reserve 10bp->4 cycles; reserve 50bp->20 cycles; reserve 100bp->39 cycles; reserve 200bp->77 cycles; reserve 500bp->191 cycles;
+  PROTO|31 R1 Pharaoh WAVAX vault replenish 100 bps/cycle: cumulative incumbent loss over 100 cycles (raw units) 7 (ppm of vault 0): reserve never drawn by an accounting transfer
+  PROTO|31 CURRENT Pharaoh WAVAX vault (sAVAX/WAVAX, deposited WAVAX, benchmark hold WAVAX) replenish 300 bps/cycle: loss per cycle (ppm of vault) 2691; reserve 10bp->1 cycles; reserve 50bp->2 cycles; reserve 100bp->4 cycles; reserve 200bp->8 cycles; reserve 500bp->19 cycles;
+
+Suite result: FAILED. 10 passed; 4 failed; 0 skipped; finished in 3.42s (3.40s CPU time)
+
+Ran 1 test suite in 3.43s (3.42s CPU time): 10 tests passed, 4 failed, 0 skipped (14 total tests)
+
+Failing tests:
+Encountered 4 failing tests in test/AvalancheVaultSharePricingPrototype.t.sol:AvalancheVaultSharePricingPrototype
+[FAIL: EvmError: Revert] test_05_mutations_of_R1_are_caught() (gas: 1073709343)
+[FAIL: haircut cash exit identity: 70490 > 80] test_12_cashExitAtHaircutBasis_isAnExitFee_identity() (gas: 2732417)
+[FAIL: R1 round trip positive beyond rounding: 2601923260474775 > 41] test_20_roundTrips_cannot_be_positive_under_R1_R3() (gas: 373277664)
+[FAIL: no contribution] test_31_reserve_exhaustion_table() (gas: 272822405)
+
+Encountered a total of 4 failing tests, 10 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 4 failed tests

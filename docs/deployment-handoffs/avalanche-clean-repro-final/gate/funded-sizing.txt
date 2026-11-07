@@ -1,0 +1,57 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 18 tests for test/AvalancheFundedSizingFork.t.sol:AvalancheFundedSizingForkTest
+[PASS] testAcceptance_PartialSizingIndependentOfFlashLender() (gas: 6980172)
+[PASS] testAuthorization_BeginFundedLiquidation_OnlyLiquidator() (gas: 6578655)
+[PASS] testDifferential_BeginLiquidation_Long() (gas: 15603418)
+Logs:
+  states where funded != flash sizing: 4
+  liquidatable states compared: 27
+
+[PASS] testDifferential_BeginLiquidation_Short() (gas: 15360013)
+Logs:
+  states where funded != flash sizing: 4
+  liquidatable states compared: 27
+
+[PASS] testDifferential_FlashLiquidate_Long_Full() (gas: 8099815)
+[PASS] testDifferential_FlashLiquidate_Long_Partial() (gas: 8320609)
+[PASS] testDifferential_FlashLiquidate_Short_OracleOnlyRevertsIdentically() (gas: 9207203)
+[PASS] testDust_FullOnBothRoutes() (gas: 8126503)
+Logs:
+  dust case health bps (informational; rule is independent of it): 9976
+
+[PASS] testFunded_PartialIndependentOfLender_Long() (gas: 14245821)
+[PASS] testFunded_PartialIndependentOfLender_Short() (gas: 14196708)
+[PASS] testFunded_StaysPartialWhereFlashEscalates_BorrowerBoundAndConservation() (gas: 7276667)
+[PASS] testQuote_Long_FloorsBonus_NeverAboveFlash() (gas: 9173418)
+[PASS] testQuote_Short_FloorsBonus_NeverAboveFlash() (gas: 9314852)
+[PASS] testRollback_FundedCallRevertingAfterSizingLeavesNothing() (gas: 7579629)
+[PASS] testThresholds_Long_SharedAndMonotone() (gas: 46841826)
+Logs:
+  states partial/partial: 17
+  states full/full: 95
+  states funded partial where flash escalates to full: 0
+
+[PASS] testThresholds_Short_SharedAndMonotone() (gas: 45438446)
+Logs:
+  states partial/partial: 18
+  states full/full: 97
+  states funded partial where flash escalates to full: 0
+
+[PASS] testUpgrade_OrderRollbackAndStorageCompatibility() (gas: 10584078)
+[PASS] testUpgrade_PositionOpenedUnderLegacyEngineIsLiquidatableAfterUpgrade() (gas: 9910059)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 674.41ms (616.64ms CPU time)
+
+Ran 1 test suite in 678.68ms (674.41ms CPU time): 18 tests passed, 0 failed, 0 skipped (18 total tests)

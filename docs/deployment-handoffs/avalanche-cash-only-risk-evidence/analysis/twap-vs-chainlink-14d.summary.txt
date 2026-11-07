@@ -1,0 +1,21 @@
+samples: 2013 of 2016 requested (3 skipped: pool history or archive state unavailable)
+window: 14 days, step 600 s, block time estimate 0.936 s, tip block 99509285
+signed gap (TWAP vs Chainlink) bp: mean +1.0, median +0.8
+|gap| bp, p50: 15.2
+|gap| bp, p90: 44.8
+|gap| bp, p99: 115.9
+|gap| bp, p99.9: 189.9
+|gap| bp, max: 308.3
+when Chainlink itself moved >= 100 bp in the previous 30 minutes (109 samples): max |gap| 308.3 bp, p90 138.7 bp
+when Chainlink moved < 100 bp (1904 samples): max |gap| 94.1 bp, p99 66.4 bp
+largest Chainlink 30-minute move in the sample: 451.8 bp
+largest Chainlink age in the sample: 138 s
+top 8 gaps (block, UTC timestamp, gap bp, Chainlink 30m move bp):
+  98894693  2026-10-29T20:49:32Z  +308.3  -436.9
+  98895334  2026-10-29T20:58:43Z  +192.0  -451.8
+  99413796  2026-11-04T15:13:23Z  -189.9  +315.6
+  98908792  2026-10-30T00:24:51Z  +185.2  -257.4
+  98896616  2026-10-29T21:17:56Z  -182.4  +231.4
+  99504159  2026-11-05T15:11:32Z  +165.4  -261.1
+  98824838  2026-10-29T01:50:00Z  +161.2  -222.0
+  98953653  2026-10-30T12:24:09Z  +149.5  -381.5

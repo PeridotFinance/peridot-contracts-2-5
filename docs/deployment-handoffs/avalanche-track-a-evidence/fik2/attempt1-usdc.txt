@@ -1,0 +1,120 @@
+ATTEMPT 1  vault=usdc  note: first exploratory run, USDC vault, Pharaoh USDC vault deposit 10% of incumbent
+UTC start: 2026-11-03T08:35:36Z
+git HEAD: 3764e3ff16f76e8ae8292ac1b621e0d040857ebd   (working tree has UNCOMMITTED edits to the two test files below; HEAD alone does not identify the code that ran)
+sha256 of the edited files:
+    6b11882ecb5634e27c4b78fc1c30392dfaa3213137f5d38ce1165ded3053499b  test/AvalancheTrackAVaultsFork.t.sol
+    0e23c7c66f234bbc40561446c4b3e37ae3a186ead37062d43081b295ffbd0fb1  test/helpers/AvalancheTrackAVaultsBase.sol
+free disk /tmp: 64Gi
+RPC host: https://api.avax.network (no key in URL; direct, no proxy). HOME is the real home: the shared warm ~/.foundry/cache/rpc/avalanche/99216397 is used (development run, NOT the isolated-cache reproduction).
+command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_fik2 FOUNDRY_CACHE_PATH=cache_fik2 TRACKA_PIN_BLOCK=99216397 forge test --threads 1 --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip 'test/[!A]*' --skip 'test/A[!v]*' --skip 'test/Av[!a]*' --skip 'test/Avalanche[!T]*' --match-contract AvalancheTrackAUsdcVaultForkTest --match-test 'test_18_diag_ledgerLaterDeposit_pct10' -vv
+------------------------------------------------------------------------
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 2 tests for test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAUsdcVaultForkTest
+[PASS] test_18_diag_ledgerLaterDeposit_pct10() (gas: 7596590)
+Logs:
+  FIK2|SETUP USDC/USDt vault (asset USDC) live depositCap (asset units) 1 totalSupply 29850429 haircut bps 100 slippage bps 100 pool fee ppm 50
+  FIK2|SETUP incumbent Alice deposit 2000000000 shares 1988444134 spot tick -11
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|HEADER newcomer BOB deposit D 200000000 incumbent size 2000000000 (D = 1000 bp of the incumbent), minted shares 199179696 of supply before 2018294563
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|HEADER ticks: spot before -11 TWAP before -10 spot after -10; position range -109 91; pool liquidity 1681015921962 vault liquidity before/after 197868751003 223608806966
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|HEADER basis: oracle asset-per-paired 999126 pool spot 999000 -> oracle above pool by 126 ppm; pool fee ppm 50 haircut bps 100
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|SWAP direction asset->paired count 1 amountIn 71489393 amountOut 71554300 ; amountIn in asset terms 71489393 = 357446 ppm of D; tick after swap -10
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|SWAP execution cost vs pool spot before, in asset units: total 6605 (33 ppm of D) = fee 3574 (17) + price impact 3031 (15)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|SWAP oracle/pool basis on this swap: expected out at oracle 71551928 vs at pool spot 71560913 -> extra apparent cost at the oracle -8975 asset units = -44 ppm of D
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|FEE paid by the swap (amountIn x fee): 3574 token-in units = 3574 asset units (17 ppm of D); to pool protocol fees 893 (4); to the vault's own position (pending fees, shared by all holders) 314 (1); to other LPs (derived) 2367 (11)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|SWAP pool balance change in the control: token-in 71489393 token-out -71554300 (Swap event: +71489393 -71554300)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, total change of her in-kind entitlement (real deposit)| dAsset 36347873 dPaired -36661601 | @oracle -281686 (-140 ppm) | @spotBefore -277085 (-138 ppm) | @spotAfter -280194 (-140 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, (i) POOL effect: same swap by an external account, no deposit| dAsset 8267034 dPaired -8274645 | @oracle -379 (0 ppm) | @spotBefore 661 (0 ppm) | @spotAfter -41 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, (ii) SHARE effect: real deposit minus control| dAsset 28080839 dPaired -28386956 | @oracle -281307 (-140 ppm) | @spotBefore -277744 (-138 ppm) | @spotAfter -280151 (-140 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, total change with the tick restored by an external swap (real deposit)| dAsset 17824979 dPaired -18119340 | @oracle -278525 (-139 ppm) | @spotBefore -276251 (-138 ppm) | @spotAfter -277787 (-138 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, pool effect with the tick restored (control + restore)| dAsset -9741203 dPaired 9752421 | @oracle 2694 (1 ppm) | @spotBefore 1470 (0 ppm) | @spotAfter 2296 (1 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|INCUMBENT Alice, share effect with the tick restored| dAsset 27566182 dPaired -27871761 | @oracle -281219 (-140 ppm) | @spotBefore -277722 (-138 ppm) | @spotAfter -280085 (-140 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|PARITY Alice replayed redeemInKind legs before 962050856 1038646092 after 998398731 1001984492 ; oracle value change -281683 = -140 ppm of Alice's deposit (test_17 measures the same quantity)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|NEWCOMER contribution K = vault holdings after minus control holdings| dAsset 128510606 dPaired 71554300 | @oracle 200002368 (1000011 ppm) | @spotBefore 199993390 (999966 ppm) | @spotAfter 199999455 (999997 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|NEWCOMER in-kind entitlement after the deposit| dAsset 100008218 dPaired 100367399 | @oracle 200287897 (1001439 ppm) | @spotBefore 200275304 (1001376 ppm) | @spotAfter 200283812 (1001419 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|NEWCOMER share transfer T = entitlement - K (what the share price gives him beyond what he put in)| dAsset -28502388 dPaired 28813099 | @oracle 285528 (1427 ppm) | @spotBefore 281912 (1409 ppm) | @spotAfter 284355 (1421 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|NEWCOMER execution cost K - D (swap fee + price impact + basis, as valued)| dAsset -71489394 dPaired 71554300 | @oracle 2368 (11 ppm) | @spotBefore -6610 (-33 ppm) | @spotAfter -545 (-2 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|NEWCOMER net change entitlement - D| dAsset -99991782 dPaired 100367399 | @oracle 287897 (1439 ppm) | @spotBefore 275304 (1376 ppm) | @spotAfter 283812 (1419 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|UNDEPLOYED residual idle left by the deposit (ratio mismatch + liquidity floor), shared by all holders| dAsset 390490 dPaired -57071111 | @oracle -56630741 (-283153 ppm) | @spotBefore -56623581 (-283117 ppm) | @spotAfter -56628419 (-283142 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|COMPOSITION paired share of value at oracle: vault before 518923 ppm, newcomer contribution K 357454 ppm (a haircut of 100 bp on the paired leg makes unequal mixes get unequal share prices)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|CHAIN[oracle] fractions (1e18): minted 89822777058897079 exact-vault-formula 89822777264803040 spot-haircut-NAV 89823835423759964 oracle-no-haircut 89694725584337255 pool-spot-no-haircut 89695248489929174
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|CHAIN[oracle] share transfer to the newcomer T (asset units) = 285528 = 1427 ppm of D; terms: rounding (floor of mint) 0 | valuation tick/fee exclusion (vault values the position at the TWAP tick, not spot) -2359 | paired-leg haircut 287890 | oracle vs pool basis 0 ; sum of terms 285531 (1427 ppm of D)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|CHAIN[pool spot after] fractions (1e18): minted 89822777058897079 exact-vault-formula 89822777264803040 spot-haircut-NAV 89823835423759964 oracle-no-haircut 89694725584337255 pool-spot-no-haircut 89695248489929174
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|CHAIN[pool spot after] share transfer to the newcomer T (asset units) = 284355 = 1421 ppm of D; terms: rounding (floor of mint) 0 | valuation tick/fee exclusion (vault values the position at the TWAP tick, not spot) -2359 | paired-leg haircut 287884 | oracle vs pool basis -1165 ; sum of terms 284360 (1421 ppm of D)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|holder ALICE [wallet + in-kind entitlement]| dAsset 36347873 dPaired -36661601 | @oracle -281686 (-140 ppm) | @spotBefore -277085 (-138 ppm) | @spotAfter -280194 (-140 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|holder BOB [wallet + in-kind entitlement]| dAsset -99991782 dPaired 100367399 | @oracle 287897 (143 ppm) | @spotBefore 275304 (137 ppm) | @spotAfter 283812 (141 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|holder SAFE(seed) [wallet + in-kind entitlement]| dAsset 545653 dPaired -550362 | @oracle -4227 (-2 ppm) | @spotBefore -4158 (-2 ppm) | @spotAfter -4205 (-2 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|vault floor remainder (unassigned)| dAsset 1 dPaired 1 | @oracle 1 (0 ppm) | @spotBefore 1 (0 ppm) | @spotAfter 1 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|other LPs in the pool (principal + fees, derived)| dAsset 63097362 dPaired -63155437 | @oracle -2878 (-1 ppm) | @spotBefore 5047 (2 ppm) | @spotAfter -307 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|pool protocol fees accrued| dAsset 893 dPaired 0 | @oracle 893 (0 ppm) | @spotBefore 893 (0 ppm) | @spotAfter 893 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent REAL deposit|LEDGER residual (sum of all lines; 0 = every token accounted for) asset 0 paired 0
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|holder ALICE [wallet + in-kind entitlement]| dAsset 8267034 dPaired -8274645 | @oracle -379 (0 ppm) | @spotBefore 661 (0 ppm) | @spotAfter -41 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|holder SAFE(seed) [wallet + in-kind entitlement]| dAsset 124105 dPaired -124218 | @oracle -4 (0 ppm) | @spotBefore 13 (0 ppm) | @spotAfter 1 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|external swapper wallet| dAsset -71489393 dPaired 71554300 | @oracle 2369 (1 ppm) | @spotBefore -6609 (-3 ppm) | @spotAfter -544 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|other LPs in the pool (principal + fees, derived)| dAsset 63097361 dPaired -63155437 | @oracle -2879 (-1 ppm) | @spotBefore 5046 (2 ppm) | @spotAfter -308 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|pool protocol fees accrued| dAsset 893 dPaired 0 | @oracle 893 (0 ppm) | @spotBefore 893 (0 ppm) | @spotAfter 893 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent CONTROL swap-only|LEDGER residual (sum of all lines; 0 = every token accounted for) asset 0 paired 0
+  FIK2|USDC/USDt vault (asset USDC) deposit=10%-of-incumbent|IDENTITY sum(incumbents real-minus-control) + newcomer entitlement - K = asset -1 paired -1 (floor rounding only; asserted |x| <= 8)
+
+[PASS] test_18_diag_ledgerLaterDeposit_pct100() (gas: 7703516)
+Logs:
+  FIK2|SETUP USDC/USDt vault (asset USDC) live depositCap (asset units) 1 totalSupply 29850429 haircut bps 100 slippage bps 100 pool fee ppm 50
+  FIK2|SETUP incumbent Alice deposit 2000000000 shares 1988444134 spot tick -11
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|HEADER newcomer BOB deposit D 2000000000 incumbent size 2000000000 (D = 10000 bp of the incumbent), minted shares 1988774338 of supply before 2018294563
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|HEADER ticks: spot before -11 TWAP before -10 spot after -7; position range -109 91; pool liquidity 1681015921962 vault liquidity before/after 197868751003 398768335377
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|HEADER basis: oracle asset-per-paired 999126 pool spot 999000 -> oracle above pool by 126 ppm; pool fee ppm 50 haircut bps 100
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|SWAP direction asset->paired count 1 amountIn 971489393 amountOut 972167162 ; amountIn in asset terms 971489393 = 485744 ppm of D; tick after swap -7
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|SWAP execution cost vs pool spot before, in asset units: total 293861 (146 ppm of D) = fee 48573 (24) + price impact 245287 (122)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|SWAP oracle/pool basis on this swap: expected out at oracle 972339199 vs at pool spot 972461318 -> extra apparent cost at the oracle -121995 asset units = -60 ppm of D
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|FEE paid by the swap (amountIn x fee): 48574 token-in units = 48574 asset units (24 ppm of D); to pool protocol fees 12143 (6); to the vault's own position (pending fees, shared by all holders) 1368 (0); to other LPs (derived) 35063 (17)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|SWAP pool balance change in the control: token-in 971489393 token-out -972167162 (Swap event: +971489393 -972167162)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, total change of her in-kind entitlement (real deposit)| dAsset 51014080 dPaired -51202563 | @oracle -143732 (-71 ppm) | @spotBefore -137308 (-68 ppm) | @spotAfter -156190 (-78 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, (i) POOL effect: same swap by an external account, no deposit| dAsset 35962593 dPaired -35990580 | @oracle 3469 (1 ppm) | @spotBefore 7984 (3 ppm) | @spotAfter -5288 (-2 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, (ii) SHARE effect: real deposit minus control| dAsset 15051487 dPaired -15211983 | @oracle -147201 (-73 ppm) | @spotBefore -145292 (-72 ppm) | @spotAfter -150901 (-75 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, total change with the tick restored by an external swap (real deposit)| dAsset 4622026 dPaired -4768604 | @oracle -142410 (-71 ppm) | @spotBefore -141811 (-70 ppm) | @spotAfter -143570 (-71 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, pool effect with the tick restored (control + restore)| dAsset -9740164 dPaired 9753460 | @oracle 4771 (2 ppm) | @spotBefore 3547 (1 ppm) | @spotAfter 7143 (3 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|INCUMBENT Alice, share effect with the tick restored| dAsset 14362190 dPaired -14522064 | @oracle -147181 (-73 ppm) | @spotBefore -145359 (-72 ppm) | @spotAfter -150715 (-75 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|PARITY Alice replayed redeemInKind legs before 962050856 1038646092 after 1013064936 987443529 ; oracle value change -143732 = -71 ppm of Alice's deposit (test_17 measures the same quantity)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|NEWCOMER contribution K = vault holdings after minus control holdings| dAsset 1028510607 dPaired 972167162 | @oracle 1999828113 (999914 ppm) | @spotBefore 1999706136 (999853 ppm) | @spotAfter 2000064663 (1000032 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|NEWCOMER in-kind entitlement after the deposit| dAsset 1013233168 dPaired 987607505 | @oracle 1999977522 (999988 ppm) | @spotBefore 1999853608 (999926 ppm) | @spotAfter 2000217829 (1000108 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|NEWCOMER share transfer T = entitlement - K (what the share price gives him beyond what he put in)| dAsset -15277439 dPaired 15440343 | @oracle 149409 (74 ppm) | @spotBefore 147472 (73 ppm) | @spotAfter 153165 (76 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|NEWCOMER execution cost K - D (swap fee + price impact + basis, as valued)| dAsset -971489393 dPaired 972167162 | @oracle -171887 (-85 ppm) | @spotBefore -293864 (-146 ppm) | @spotAfter 64663 (32 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|NEWCOMER net change entitlement - D| dAsset -986766832 dPaired 987607505 | @oracle -22478 (-11 ppm) | @spotBefore -146392 (-73 ppm) | @spotAfter 217829 (108 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|UNDEPLOYED residual idle left by the deposit (ratio mismatch + liquidity floor), shared by all holders| dAsset -18 dPaired -3183499 | @oracle -3180734 (-1590 ppm) | @spotBefore -3180334 (-1590 ppm) | @spotAfter -3181508 (-1590 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|COMPOSITION paired share of value at oracle: vault before 518923 ppm, newcomer contribution K 485700 ppm (a haircut of 100 bp on the paired leg makes unequal mixes get unequal share prices)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|CHAIN[oracle] fractions (1e18): minted 496316481481933968 exact-vault-formula 496316481604226957 spot-haircut-NAV 496317692774791790 oracle-no-haircut 496279403576114491 pool-spot-no-haircut 496278475799132428
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|CHAIN[oracle] share transfer to the newcomer T (asset units) = 149409 = 74 ppm of D; terms: rounding (floor of mint) 0 | valuation tick/fee exclusion (vault values the position at the TWAP tick, not spot) -4880 | paired-leg haircut 154291 | oracle vs pool basis 0 ; sum of terms 149411 (74 ppm of D)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|CHAIN[pool spot after] fractions (1e18): minted 496316481481933968 exact-vault-formula 496316481604226957 spot-haircut-NAV 496317692774791790 oracle-no-haircut 496279403576114491 pool-spot-no-haircut 496278475799132428
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|CHAIN[pool spot after] share transfer to the newcomer T (asset units) = 153165 = 76 ppm of D; terms: rounding (floor of mint) 0 | valuation tick/fee exclusion (vault values the position at the TWAP tick, not spot) -4881 | paired-leg haircut 154310 | oracle vs pool basis 3739 ; sum of terms 153168 (76 ppm of D)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|holder ALICE [wallet + in-kind entitlement]| dAsset 51014080 dPaired -51202563 | @oracle -143732 (-71 ppm) | @spotBefore -137308 (-68 ppm) | @spotAfter -156190 (-78 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|holder BOB [wallet + in-kind entitlement]| dAsset -986766832 dPaired 987607505 | @oracle -22478 (-11 ppm) | @spotBefore -146392 (-73 ppm) | @spotAfter 217829 (108 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|holder SAFE(seed) [wallet + in-kind entitlement]| dAsset 765821 dPaired -768650 | @oracle -2157 (-1 ppm) | @spotBefore -2059 (-1 ppm) | @spotAfter -2343 (-1 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|vault floor remainder (unassigned)| dAsset 0 dPaired 1 | @oracle 0 (0 ppm) | @spotBefore 0 (0 ppm) | @spotAfter 0 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|other LPs in the pool (principal + fees, derived)| dAsset 934974788 dPaired -935636293 | @oracle 156224 (78 ppm) | @spotBefore 273618 (136 ppm) | @spotAfter -71438 (-35 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|pool protocol fees accrued| dAsset 12143 dPaired 0 | @oracle 12143 (6 ppm) | @spotBefore 12143 (6 ppm) | @spotAfter 12143 (6 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent REAL deposit|LEDGER residual (sum of all lines; 0 = every token accounted for) asset 0 paired 0
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|holder ALICE [wallet + in-kind entitlement]| dAsset 35962593 dPaired -35990580 | @oracle 3469 (1 ppm) | @spotBefore 7984 (3 ppm) | @spotAfter -5288 (-2 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|holder SAFE(seed) [wallet + in-kind entitlement]| dAsset 539869 dPaired -540289 | @oracle 53 (0 ppm) | @spotBefore 121 (0 ppm) | @spotAfter -78 (0 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|external swapper wallet| dAsset -971489393 dPaired 972167162 | @oracle -171887 (-85 ppm) | @spotBefore -293864 (-146 ppm) | @spotAfter 64663 (32 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|other LPs in the pool (principal + fees, derived)| dAsset 934974788 dPaired -935636293 | @oracle 156224 (78 ppm) | @spotBefore 273618 (136 ppm) | @spotAfter -71438 (-35 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|pool protocol fees accrued| dAsset 12143 dPaired 0 | @oracle 12143 (6 ppm) | @spotBefore 12143 (6 ppm) | @spotAfter 12143 (6 ppm)
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent CONTROL swap-only|LEDGER residual (sum of all lines; 0 = every token accounted for) asset 0 paired 0
+  FIK2|USDC/USDt vault (asset USDC) deposit=100%-of-incumbent|IDENTITY sum(incumbents real-minus-control) + newcomer entitlement - K = asset 0 paired -1 (floor rounding only; asserted |x| <= 8)
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.66s (1.66s CPU time)
+
+Ran 1 test suite in 3.09s (2.66s CPU time): 2 tests passed, 0 failed, 0 skipped (2 total tests)
+------------------------------------------------------------------------
+exit status above in forge summary; UTC end: 2026-11-03T08:35:43Z

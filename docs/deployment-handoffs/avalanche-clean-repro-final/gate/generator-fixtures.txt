@@ -1,0 +1,29 @@
+ok   k=5 with one attempted id is INCOMPLETE-COVERAGE, not PASS
+ok   synthetic-regime PASS yields no validated single-position margin
+ok   external-regime PASS yields a validated margin
+ok   a failing 5k blocks the passing 25k (monotone)
+ok   size 1k not tested in slice b is NOT-TESTED and blocks the cap
+ok   aggregate with a failing removal variant has no validated aggregate
+ok   aggregate passing every required variant is validated and halved by the safety factor
+ok   base-only aggregate cannot produce a validated cap (missing variants named, strict exit 2)
+ok   aggregate missing only the lag variant is still unsupported (strict exit 2)
+ok   (control) single-position PASS + complete aggregate set validates a margin and exits 0
+ok   passing single-position evidence + base-only aggregate: strict exit is non-zero
+ok   ... and EVERY validated-cap output is suppressed (single margin, safety-adjusted, aggregate)
+ok   ... and the missing variants are named in the report
+ok   ... non-strict mode still prints the SUPPRESSED report and exits 0
+ok   a manifest without any aggregate scenario cannot validate caps (strict exit non-zero)
+ok   variants at other sizes do not complete the base group
+ok   duplicated final snapshot (id 1 twice, id 2 missing) is CONFLICTING-RECORDS, not PASS
+ok   a snapshot for an id that was never opened is CONFLICTING-RECORDS
+ok   missing record of the opened ids is NOT-RUN (no evidence)
+ok   two attempts on one id do not cover two opened ids (INCOMPLETE-COVERAGE)
+ok   one NOT-RUN scenario suppresses all caps and exits 2
+ok   an unrun FALLBACK scenario suppresses the normal-scenario caps too and exits 2
+ok   a failed required test suppresses caps and exits 2
+ok   1 base unit of insurance makes it insurance-assisted, not PASS
+ok   diagnostic config PASS is labelled diagnostic and yields no cap
+ok   strict run with NOT-RUN scenarios exits 2 and flags incomplete evidence
+ok   duplicate input file does not double count
+
+all generator fixtures passed

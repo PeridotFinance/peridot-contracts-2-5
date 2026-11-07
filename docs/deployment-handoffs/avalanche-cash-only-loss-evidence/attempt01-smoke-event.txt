@@ -1,0 +1,30 @@
+# UTC: 2026-11-03T11:02:06Z
+# git HEAD: 33e1f42a4cbecb1b6bde75817bafcc2bd8fb9dd4
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_loss FOUNDRY_CACHE_PATH=cache_loss forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyLossHandlingForkTest$' --match-test 'testEvent_' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: smoke: event test only
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheCashOnlyLossHandlingFork.t.sol:AvalancheCashOnlyLossHandlingForkTest
+[PASS] testEvent_RealLiquidationShortfall_ClosedFormSeizeShareAndRates() (gas: 6219416)
+Logs:
+  LOSS|ROW|t=event|step=pre-loss|cash=422800000003|borrows=178199999997|defDebt=178199999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=event|step=post-liquidation|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|EVENT|d0=178199999997|loss=39252099936|repaid=138947900061|collAfterUsd6=149999999997|predLossUsd6=39235429571|lossUsd6=39235429569|pWavaxSeizeReserveWavax=982558418353200457815|pWavaxSeizeReserveUsd6=4199999999|pUsdcReserves=0|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.35s (1.72s CPU time)
+
+Ran 1 test suite in 4.77s (4.35s CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)
+# exit: 0

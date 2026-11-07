@@ -1,0 +1,20 @@
+R3GRID USDC-vault ORIGINAL idleLevel#0 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=13586
+R3GRID USDC-vault ORIGINAL idleLevel#2 cases=29 violations=29 depositRevertedByGuard=7 max|T|/D(ppm)=77669
+R3GRID USDC-vault ORIGINAL idleLevel#1 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=19115
+R3GRID USDC-vault ORIGINAL idleLevel#3 cases=18 violations=18 depositRevertedByGuard=18 max|T|/D(ppm)=251262
+R3GRID USDC-vault R3 idleLevel#0 cases=30 violations=0 depositRevertedByGuard=6 max|T|/D(ppm)=637
+R3GRID USDC-vault R3 idleLevel#2 cases=27 violations=0 depositRevertedByGuard=9 max|T|/D(ppm)=707
+R3GRID USDC-vault R3 idleLevel#1 cases=27 violations=0 depositRevertedByGuard=9 max|T|/D(ppm)=651
+R3GRID USDC-vault R3 idleLevel#3 cases=24 violations=0 depositRevertedByGuard=12 max|T|/D(ppm)=826
+LADDER USDC-vault ORIGINAL: 10000c:ok(715kgas) 25000c:ok(715kgas) 50000c:ok(715kgas) 100000c:ok(715kgas) 200000c:ok(807kgas) 300000c:ok(807kgas) 400000c:ok(853kgas) 440000c:ok(898kgas)
+LADDER USDC-vault R3: 10000c:ok(755kgas) 25000c:ok(755kgas) 50000c:ok(755kgas) 100000c:ok(755kgas) 200000c:ok(847kgas) 300000c:ok(892kgas) 400000c:ok(892kgas) 440000c:ok(938kgas)
+R3GRID WAVAX-vault ORIGINAL idleLevel#0 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=101910
+R3GRID WAVAX-vault ORIGINAL idleLevel#2 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=324702
+R3GRID WAVAX-vault ORIGINAL idleLevel#1 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=146457
+R3GRID WAVAX-vault ORIGINAL idleLevel#3 cases=30 violations=30 depositRevertedByGuard=6 max|T|/D(ppm)=845197
+R3GRID WAVAX-vault R3 idleLevel#0 cases=30 violations=0 depositRevertedByGuard=6 max|T|/D(ppm)=2023
+R3GRID WAVAX-vault R3 idleLevel#2 cases=27 violations=0 depositRevertedByGuard=9 max|T|/D(ppm)=2042
+R3GRID WAVAX-vault R3 idleLevel#1 cases=30 violations=0 depositRevertedByGuard=6 max|T|/D(ppm)=2190
+R3GRID WAVAX-vault R3 idleLevel#3 cases=27 violations=0 depositRevertedByGuard=9 max|T|/D(ppm)=2496
+LADDER WAVAX-vault ORIGINAL: 1000c:ok(558kgas) 3000c:ok(558kgas) 6000c:ok(558kgas) 12000c:ok(558kgas) 24000c:ok(559kgas) 36000c:ok(559kgas) 48000c:ok(559kgas) 53000c:ok(559kgas)
+LADDER WAVAX-vault R3: 1000c:ok(591kgas) 3000c:ok(591kgas) 6000c:ok(591kgas) 12000c:ok(591kgas) 24000c:ok(592kgas) 36000c:ok(592kgas) 48000c:ok(592kgas) 53000c:ok(592kgas)

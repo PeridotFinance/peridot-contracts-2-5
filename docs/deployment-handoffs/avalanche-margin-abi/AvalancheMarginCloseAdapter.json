@@ -1,0 +1,270 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [
+   {
+    "name": "executor_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "registry_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "oracle_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "quoter_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "config_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "MAX_CLOSE_FEE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_SLIPPAGE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "closeFor",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "owner",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "closeBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "oraclePriceE18_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "maxSlippageBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "adapterData",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "returnedMargin",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "config",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAvalancheOrderConfig"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "executor",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAvalancheOrderExecutor"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isActive",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isLong",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "oracle",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAvalancheOrderOracle"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "oraclePriceE18",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "priceE18",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "ok",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "positionOwner",
+  "inputs": [
+   {
+    "name": "positionId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAvalancheOrderQuoter"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "registry",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "error",
+  "name": "AdapterDataNotSupported",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidClose",
+  "inputs": [
+   {
+    "name": "code",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotRegistry",
+  "inputs": []
+ }
+]

@@ -1,0 +1,34 @@
+PASS  the Safe is 1-of-1 and its owner is the Ledger  ({"owners":["0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"],"threshold":"1"})
+PASS  USDC vault: opened under the deployed code (cap, team seed, deployIdle, one user deposit)  ({"totalAssets":"726199648","totalSupply":"725900309","tokenId":"485334"})
+PASS  WAVAX vault: opened under the deployed code (cap, team seed, deployIdle, one user deposit)  ({"totalAssets":"80727549009644782598","totalSupply":"79878653469037804117","tokenId":"485416"})
+PASS  the R3 extension refuses a base implementation with a different codehash
+PASS  USDC vault: ProxyAdmin owner is the Safe
+PASS  USDC vault: ERC-1967 implementation slot now holds the R3 extension  (0x165e1f072e7beedf94f14f732838354ca20ba45d -> 0xe37997cf7e4f09f00e309ef8b1c8c5375a874565)
+PASS  USDC vault: every parameter, role, the position and the supply are unchanged by the upgrade  ({})
+PASS  USDC vault: totalAssets is unchanged (the haircut view is untouched)  (726199648 vs 726199648)
+PASS  USDC vault: previewRedeem for the team seed and the user is identical before and after  (497403208,198933701 vs 497403208,198933701)
+PASS  USDC vault: a deposit after the upgrade works; shares minted >= previewDeposit (the preview is a lower bound)  (gas 966025; minted 99428728, preview 96459096)
+PASS  USDC vault: immediate deposit + redeem returns the exit-cost figure (>= 98%)  (99.46% back)
+PASS  WAVAX vault: ProxyAdmin owner is the Safe
+PASS  WAVAX vault: ERC-1967 implementation slot now holds the R3 extension  (0x165e1f072e7beedf94f14f732838354ca20ba45d -> 0xe37997cf7e4f09f00e309ef8b1c8c5375a874565)
+PASS  WAVAX vault: every parameter, role, the position and the supply are unchanged by the upgrade  ({})
+PASS  WAVAX vault: totalAssets is unchanged (the haircut view is untouched)  (80727549009644782598 vs 80727549009644782598)
+PASS  WAVAX vault: previewRedeem for the team seed and the user is identical before and after  (59256244027402920462,19729389952697719359 vs 59256244027402920462,19729389952697719359)
+PASS  WAVAX vault: a deposit after the upgrade works; shares minted >= previewDeposit (the preview is a lower bound)  (gas 829465; minted 9770025641273560655, preview 8887152379478653515)
+PASS  WAVAX vault: immediate deposit + redeem returns the exit-cost figure (>= 98%)  (98.73% back)
+PASS  USDC vault: rebalancer() reads back as the new wallet
+PASS  USDC vault: the Ledger (old rebalancer) is now refused  (Vault__NotRebalancer())
+PASS  USDC vault: the new rebalancer cannot pause, change the cap or change the role  (pause: OwnableUnauthorizedAccount(address); setDepositCap: OwnableUnauthorizedAccount(address); setRebalancer: OwnableUnauthorizedAccount(address))
+PASS  WAVAX vault: rebalancer() reads back as the new wallet
+PASS  WAVAX vault: the Ledger (old rebalancer) is now refused  (Vault__NotRebalancer())
+PASS  WAVAX vault: the new rebalancer cannot pause, change the cap or change the role  (pause: OwnableUnauthorizedAccount(address); setDepositCap: OwnableUnauthorizedAccount(address); setRebalancer: OwnableUnauthorizedAccount(address))
+PASS  the keystore signer's address is the rotated rebalancer
+PASS  module step 1: deployIdle executed on BOTH vaults, not halted  ([{"action":"deployIdle","lossBps":3},{"action":"deployIdle","lossBps":3}])
+PASS  USDC vault: after the module's deployIdle the idle asset is (nearly) zero  (idle 0 of 50000000)
+PASS  WAVAX vault: after the module's deployIdle the idle asset is (nearly) zero  (idle 0 of 5000000000000000000)
+PASS  module step 2: nothing to do (in range, nothing idle)  (USDC vault: in range, nothing idle | WAVAX vault: in range, nothing idle)
+PASS  a wallet that is not the rebalancer is refused by the module before any transaction  (USDC vault: the vault's rebalancer() is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B, not this wallet | WAVAX vault: the vault's rebalancer() is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B, not this wallet)
+PASS  USDC vault: rollback to the previous extension restores the implementation slot and the exit value  (previewRedeem 566081868)
+PASS  WAVAX vault: rollback to the previous extension restores the implementation slot and the exit value  (previewRedeem 66668852484489782958)
+
+32/32 checks pass

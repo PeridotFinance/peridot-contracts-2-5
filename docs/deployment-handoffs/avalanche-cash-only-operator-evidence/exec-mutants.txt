@@ -1,0 +1,28 @@
+Provenance: source mutants of operator/src/executor.ts and txkit.ts, 2026-11-06, each applied alone and run against the fork cycle suite's QUICK group (CYCLE_ONLY=quick: case 1 PW30 cap 5,000, two case 5 runs, and the discipline tests). Baseline: 10 pass, 0 fail.
+-----
+== baseline (quick group)
+ℹ pass 10;ℹ fail 0;
+== X1 close factor cap removed
+  ✖ case 1: PW30 cap 5000 gap 35%: recycling clears the account; the funding numbers are exact ;  ✖ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 30 bp, limit 100 bp -> swaps proceed ;  ✖ executor: refuses to act on a stale or a zero oracle price (accounts in shortfall are left alone) ;  ✖ executor: a competing liquidator is first -> the simulation fails, the allowance is reset, a cooldown prevents a retry storm, no halt ;  ✖ executor: the swap reverts at the min-out between simulation and send -> blocked (allowance reset, WAVAX held), not a halt ;  ✖ executor: an unexpected error while sending the swap -> allowances revoked and the executor HALTS ;ℹ pass 3;ℹ fail 7;
+== X2 min-out ignored
+  ✖ case 1: PW30 cap 5000 gap 35%: recycling clears the account; the funding numbers are exact ;  ✖ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback ;  ✖ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 30 bp, limit 100 bp -> swaps proceed ;  ✖ executor: refuses to act on a stale or a zero oracle price (accounts in shortfall are left alone) ;  ✖ executor: a pending marker at start-up or a halted state stops everything; a wrong signer is refused ;  ✖ executor: fee above the cap and AVAX below the floor -> no transaction ;  ✖ executor: a competing liquidator is first -> the simulation fails, the allowance is reset, a cooldown prevents a retry storm, no halt ;  ✖ executor: the swap reverts at the min-out between simulation and send -> blocked (allowance reset, WAVAX held), not a halt ;  ✖ executor: an unexpected error while sending the swap -> allowances revoked and the executor HALTS ;ℹ pass 0;ℹ fail 10;
+== X3 zero/stale price guard removed
+  ✖ executor: refuses to act on a stale or a zero oracle price (accounts in shortfall are left alone) ;ℹ pass 8;ℹ fail 2;
+== X4 halt flag ignored
+  ✖ executor: a pending marker at start-up or a halted state stops everything; a wrong signer is refused ;  ✖ executor: an unexpected error while sending the swap -> allowances revoked and the executor HALTS ;ℹ pass 7;ℹ fail 3;
+== X5 fee cap removed
+  ✖ executor: fee above the cap and AVAX below the floor -> no transaction ;ℹ pass 8;ℹ fail 2;
+== X6 pending marker at start-up ignored
+  ✖ executor: a pending marker at start-up or a halted state stops everything; a wrong signer is refused ;ℹ pass 8;ℹ fail 2;
+== X7 gas floor removed
+  ✖ executor: fee above the cap and AVAX below the floor -> no transaction ;ℹ pass 8;ℹ fail 2;
+== X8 allowance not reset after a blocked swap
+  ✖ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback ;  ✖ executor: the swap reverts at the min-out between simulation and send -> blocked (allowance reset, WAVAX held), not a halt ;ℹ pass 7;ℹ fail 3;
+== X9 leftover conversion never retried (partly)
+ℹ pass 10;ℹ fail 0;
+== X10 liquidation simulation result ignored
+ℹ pass 10;ℹ fail 0;
+
+X9 (re-run after adding the 'held WAVAX is converted by a later step' test, discipline group CYCLE_ONLY=e): baseline 8 pass / 0 fail; mutant: that test fails -> KILLED. (It first survived because a later liquidation also converts everything held; the test now removes the inventory so only the leftover conversion can restore it.)
+X10 (liquidation simulation error code ignored): survived, EQUIVALENT for these markets: a rejected liquidation reverts (LiquidateBorrowPeridottrollerRejection) instead of returning a non-zero code, so the following gas estimation fails in the same try block and the account is skipped identically.
+Summary: 9 of 10 executor mutants killed by tests, 1 equivalent.

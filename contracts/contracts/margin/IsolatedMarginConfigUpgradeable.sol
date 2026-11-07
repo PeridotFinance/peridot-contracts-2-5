@@ -44,6 +44,13 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
     uint32 private _feeStreamDuration;
     bool private _feeDistributionConfigured;
 
+    // Appended (storage-append only, `__gap` shrunk by one): allowlist of FUNDED in-kind liquidators that may call
+    // `IsolatedMarginLiquidatorUpgradeable.liquidateFunded`. Additions are timelocked like every other
+    // risk-increasing change; removals are immediate (risk-reducing, like `disablePair`).
+    mapping(address liquidator => bool) public fundedLiquidators;
+
+    event FundedLiquidatorSet(address indexed liquidator, bool allowed);
+
     event ActionQueued(bytes32 indexed actionId, uint256 executeAfter);
     event ActionCanceled(bytes32 indexed actionId);
     event ActionExecuted(bytes32 indexed actionId);
@@ -288,6 +295,24 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         emit ActionDelayConfigured(actionDelay_);
     }
 
+    /// @notice Queues adding a funded in-kind liquidator (same queue/delay discipline as pair risk and endpoints).
+    function queueFundedLiquidator(address liquidator_) external onlyOwner returns (bytes32) {
+        require(liquidator_ != address(0), "MarginConfig: zero liquidator");
+        return _queue(keccak256(abi.encode("fundedLiquidator", liquidator_)));
+    }
+
+    function addFundedLiquidator(address liquidator_) external onlyOwner {
+        _consume(keccak256(abi.encode("fundedLiquidator", liquidator_)));
+        fundedLiquidators[liquidator_] = true;
+        emit FundedLiquidatorSet(liquidator_, true);
+    }
+
+    /// @notice Immediate: removing authorization only reduces risk.
+    function removeFundedLiquidator(address liquidator_) external onlyOwner {
+        fundedLiquidators[liquidator_] = false;
+        emit FundedLiquidatorSet(liquidator_, false);
+    }
+
     function cancelAction(bytes32 actionId) external onlyOwner {
         require(queuedActions[actionId] != 0, "MarginConfig: not queued");
         delete queuedActions[actionId];
@@ -350,5 +375,5 @@ contract IsolatedMarginConfigUpgradeable is Initializable, OwnableUpgradeable, I
         emit ActionExecuted(actionId);
     }
 
-    uint256[39] private __gap;
+    uint256[38] private __gap;
 }
