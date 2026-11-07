@@ -142,9 +142,15 @@ own gas-only wallet.
      quoter, V4 swap routes, the isolated-margin hook on the Ramses controller, and a pair risk config.
    - Borrowing on the Ramses markets stays closed under your 2026-11-06 decision. So this is a separate product
      decision, and nothing here assumes it.
-2. **TP creation while a range order is active is not refused by the registry.** Its interface and implementation are
-   frozen for Monday and for the signing package. The adapter unwinds the band before any order closes, so the two never
-   act on the same collateral. Strict exclusivity in that direction would be a small registry upgrade later.
+2. **TP creation while a range order is active:** refused by `MarginOrderRegistryV2`, the prepared upgrade (item 3,
+   2026-11-07).
+   - V1, deployed in the ceremony, stays byte-identical. V2 is a separate file: V1 plus the rule, `initializeV2` and
+     one appended slot.
+   - Tests: 4 for the upgrade on top of V1 with live orders (storage kept; adapter re-pointed; the old order executes
+     through the new adapter; TP refused with code 7 while stop-losses stay allowed; `initializeV2` proxy-admin-only and
+     one-time; non-contracts rejected).
+   - 6/6 V2 mutants killed. The layout check against the V1 snapshot shows 1 appended, gap 43.
+   - Its timelock call is part of the production Ledger batch.
 3. **Production gaps:**
    - The removal mins are 0, because risk paths must not be blockable. Placement is single-sided out of range, and
      finalisation checks the pool against the oracle.

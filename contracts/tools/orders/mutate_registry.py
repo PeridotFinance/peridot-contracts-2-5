@@ -76,6 +76,20 @@ EQUIVALENT = [
 ]
 
 
+V2_MUTANTS = [
+    ('v2: TP check dropped', "if (kind == OrderKind.TAKE_PROFIT && range != address(0) && IRangeOrdersActive(range).isActive(positionId)) {", "if (false) {"),
+    ('v2: blocks stop-losses instead', "if (kind == OrderKind.TAKE_PROFIT && range != address(0)", "if (kind == OrderKind.STOP_LOSS && range != address(0)"),
+    ('v2: init by anyone', 'require(msg.sender == ERC1967Utils.getAdmin(), "REGISTRY_NOT_PROXY_ADMIN");', ''),
+    ('v2: init accepts non-contracts', 'require(address(adapter_).code.length != 0 && rangeOrders_.code.length != 0, "REGISTRY_CONFIG");', ''),
+    ('v2: adapter not re-pointed', '        adapter = adapter_;\n        rangeOrders = rangeOrders_;', '        rangeOrders = rangeOrders_;'),
+    ('v2: range not stored', '        rangeOrders = rangeOrders_;\n        emit', '        emit'),
+]
+if '--v2' in sys.argv:
+    SRC = Path('contracts/margin/orders/MarginOrderRegistryV2.sol')
+    TEST = 'test/orders/MarginOrderRegistryV2.t.sol'
+    MUTANTS = V2_MUTANTS
+
+
 def run_tests():
     env = dict(os.environ, FOUNDRY_PROFILE='robinhood_orders')
     r = subprocess.run(['forge', 'test', '--match-path', TEST, '--fuzz-runs', '64'], capture_output=True, text=True, env=env)

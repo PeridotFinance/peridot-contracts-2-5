@@ -94,9 +94,22 @@ are shared so the frontend uses one component on Robinhood, Avalanche and the St
   - 4: expiry in the past, 0, or too far ahead
   - 5: zero trigger
   - 6: too many open orders on the position
+  - 7: a TAKE_PROFIT while the position has an active range take-profit band (`MarginOrderRegistryV2`, the prepared
+    upgrade; implementation-optional for other chains)
 - **`OrderCancelled.reason`:** 0 owner, 1 sibling executed, 2 position inactive, 3 owner changed.
 - **`canExecute.reason`:** 0 executable, 1 not open, 2 expired, 3 position inactive, 4 owner changed,
   5 oracle unavailable, 6 trigger not reached, 7 execution paused (reference implementation).
+
+## Range take-profit exclusivity (V2, prepared upgrade)
+
+`MarginOrderRegistryV2` is V1 plus three things:
+- a TAKE_PROFIT is refused while `rangeOrders.isActive(positionId)` (`InvalidOrder(7)`);
+- `initializeV2(adapter, rangeOrders)`, a reinitializer(2) callable only by the proxy admin. It re-points the adapter to
+  the range-aware one, which removes an active band before any close;
+- one storage slot, appended from the gap.
+
+The range contract refuses a band while a TAKE_PROFIT is open, so the two are exclusive in both directions. Stop-losses
+on a position with a band stay allowed: the adapter removes the band first, then closes through the normal path.
 
 ## Reference implementation details
 
