@@ -373,15 +373,18 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
     }
 
     // ------------------------------------------------------------------ range take-profit (PROTOTYPE)
-    /// @notice One-time wiring of the range custodian, by the proxy admin inside upgradeAndCall.
-    function initializeRangeCustodian(address custodian) external reinitializer(3) {
+    /// @notice One-time range wiring, by the proxy admin inside upgradeAndCall: the custodian, and the order executor
+    /// re-pointed to the range-aware close adapter (the registry is re-pointed to the same adapter in the same batch).
+    function initializeRange(address custodian, address orderExecutor_) external reinitializer(3) {
         if (msg.sender != ERC1967Utils.getAdmin()) revert ExecutorError(58);
-        if (custodian.code.length == 0) revert ExecutorError(59);
+        if (custodian.code.length == 0 || orderExecutor_.code.length == 0) revert ExecutorError(59);
         rangeCustodian = custodian;
+        orderExecutor = orderExecutor_;
+        emit OrderExecutorSet(orderExecutor_);
     }
 
     function _onlyRangeCustodian() internal view {
-        if (msg.sender != rangeCustodian || msg.sender == address(0)) revert ExecutorError(61);
+        if (msg.sender != rangeCustodian) revert ExecutorError(61); // msg.sender is never address(0)
     }
 
     /// @notice Moves a long's stock collateral to the custodian for its band. The risk engine keeps counting it there at

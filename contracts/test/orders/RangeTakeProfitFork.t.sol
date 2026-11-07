@@ -11,6 +11,7 @@ import {IsolatedMarginLiquidatorUpgradeable} from "../../contracts/margin/Isolat
 import {IsolatedMarginTypes} from "../../contracts/margin/IsolatedMarginTypes.sol";
 import {RobinhoodMarginCloseAdapter, IRobinhoodOrderExecutor} from "../../contracts/margin/orders/RobinhoodMarginCloseAdapter.sol";
 import {MarginOrderRegistry} from "../../contracts/margin/orders/MarginOrderRegistry.sol";
+import {MarginOrderRegistryV2} from "../../contracts/margin/orders/MarginOrderRegistryV2.sol";
 import {IMarginOrderRegistry, IMarginCloseAdapter} from "../../contracts/margin/orders/IMarginOrderRegistry.sol";
 import {RangeTakeProfit} from "../../contracts/margin/orders/range/RangeTakeProfit.sol";
 import {TickMath} from "../../contracts/margin/orders/range/vendor/TickMath.sol";
@@ -109,7 +110,8 @@ contract RangeTakeProfitForkTest is Test {
     IsolatedMarginRiskEngineUpgradeable risk = IsolatedMarginRiskEngineUpgradeable(RISK);
     MarginOrderRegistry reg;
     RangeTakeProfit rtp;
-    RobinhoodMarginCloseAdapter adapter;
+    RobinhoodMarginCloseAdapter adapter; // v2, range-aware
+    RobinhoodMarginCloseAdapter adapterV1; // the ceremony's
     RtpTrader trader;
     uint256 id; // a live long
     IsolatedMarginTypes.Position p;
@@ -129,33 +131,33 @@ contract RangeTakeProfitForkTest is Test {
         require(id != 0, "no live long at this pin");
         p = IRobinhoodOrderExecutor(EXECUTOR).positions(id);
 
-        // Deploy: registry (impl, proxy), custodian, adapter; addresses predicted so each can point at the others.
+        // 1. The 15-17 Nov ceremony as prepared: registry V1 behind its proxy, close adapter v1 (no custodian), executor
+        //    upgraded with initializeOrderExecutor(adapter v1). (On this branch adapter v1 is the 6-argument adapter with
+        //    custodian 0; the ceremony artifact is the 5-argument one on feat/margin-order-interface, same behaviour.)
         uint256 n = vm.getNonce(address(this));
-        address predictedRtp = vm.computeCreateAddress(address(this), n + 2);
-        address predictedAdapter = vm.computeCreateAddress(address(this), n + 3);
+        address predictedV1 = vm.computeCreateAddress(address(this), n + 2);
         MarginOrderRegistry impl = new MarginOrderRegistry();
         reg = MarginOrderRegistry(
             address(
                 new TransparentUpgradeableProxy(
-                    address(impl), TIMELOCK, abi.encodeCall(MarginOrderRegistry.initialize, (IMarginCloseAdapter(predictedAdapter), TIMELOCK))
+                    address(impl), TIMELOCK, abi.encodeCall(MarginOrderRegistry.initialize, (IMarginCloseAdapter(predictedV1), TIMELOCK))
                 )
             )
         );
+        adapterV1 = new RobinhoodMarginCloseAdapter(EXECUTOR, address(reg), ORACLE, QUOTER, CONFIG, address(0));
+        require(address(adapterV1) == predictedV1, "PREDICT");
+        address execImpl = address(new IsolatedMarginExecutorUpgradeable());
+        _upgrade(EXECUTOR, execImpl, abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeOrderExecutor, (address(adapterV1))));
+
+        // 2. The range batch: custodian and range-aware adapter v2, then every upgrade in one timelocked batch.
         rtp = new RangeTakeProfit(EXECUTOR, RISK, NFP, POOL, GAUGE, ORACLE, CONFIG, address(reg), NVDA, USDG, address(this));
         adapter = new RobinhoodMarginCloseAdapter(EXECUTOR, address(reg), ORACLE, QUOTER, CONFIG, address(rtp));
-        require(address(rtp) == predictedRtp && address(adapter) == predictedAdapter, "PREDICT");
-
-        // Upgrade the live executor, risk engine and liquidator exactly as the timelock would (proxy admin calls).
-        _upgrade(EXECUTOR, address(new IsolatedMarginExecutorUpgradeable()),
-            abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeOrderExecutor, (address(adapter))));
-        _upgrade(EXECUTOR, _impl(EXECUTOR), abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRangeCustodian, (address(rtp))));
-        _upgrade(RISK, address(new IsolatedMarginRiskEngineUpgradeable()), "");
-        vm.prank(risk.owner());
-        risk.queueRangeCustodian(address(rtp));
-        vm.warp(block.timestamp + 3600);
-        _stamp();
-        vm.prank(risk.owner());
-        risk.applyRangeCustodian();
+        _upgrade(EXECUTOR, execImpl,
+            abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRange, (address(rtp), address(adapter))));
+        _upgrade(address(reg), address(new MarginOrderRegistryV2()),
+            abi.encodeCall(MarginOrderRegistryV2.initializeV2, (IMarginCloseAdapter(address(adapter)), address(rtp))));
+        _upgrade(RISK, address(new IsolatedMarginRiskEngineUpgradeable()),
+            abi.encodeCall(IsolatedMarginRiskEngineUpgradeable.initializeRangeCustodian, (address(rtp))));
         _upgrade(LIQUIDATOR, address(new IsolatedMarginLiquidatorUpgradeable()),
             abi.encodeCall(IsolatedMarginLiquidatorUpgradeable.initializeRangeCustodian, (address(rtp))));
 
@@ -504,6 +506,34 @@ contract RangeTakeProfitForkTest is Test {
         vm.prank(owner);
         vm.expectRevert(bytes("RiskEngine: range custodian not ready"));
         risk.applyRangeCustodian(); // consumed
+    }
+
+    /// @dev The handover: after the batch the executor accepts closes only from adapter v2, the registry uses adapter v2,
+    /// and adapter v1 can no longer close for anyone. A stop-loss through the registry then works end to end.
+    function testCeremonyThenRangeBatchHandsOverFromAdapterV1ToV2() public {
+        assertEq(ex.orderExecutor(), address(adapter));
+        assertEq(address(reg.adapter()), address(adapter));
+        assertEq(MarginOrderRegistryV2(address(reg)).rangeOrders(), address(rtp));
+        assertEq(ex.rangeCustodian(), address(rtp));
+        assertEq(risk.rangeCustodian(), address(rtp));
+        IRobinhoodOrderExecutor.CloseParams memory cp = IRobinhoodOrderExecutor.CloseParams(id, 10_000, type(uint256).max, 0, 0, "", "");
+        vm.prank(address(adapterV1));
+        vm.expectRevert(abi.encodeWithSelector(IsolatedMarginExecutorUpgradeable.ExecutorError.selector, uint8(60)));
+        IRobinhoodOrderExecutor(EXECUTOR).closePositionFor(p.owner, cp);
+        _create();
+        uint256 price = _oraclePrice();
+        vm.prank(p.owner);
+        vm.expectRevert(abi.encodeWithSelector(IMarginOrderRegistry.InvalidOrder.selector, uint8(7)));
+        reg.createOrder(id, IMarginOrderRegistry.OrderKind.TAKE_PROFIT, true, price * 2, 10_000, 100, uint64(block.timestamp + 1 days));
+        vm.prank(p.owner);
+        uint256 sl = reg.createOrder(id, IMarginOrderRegistry.OrderKind.STOP_LOSS, false, price, 10_000, 100, uint64(block.timestamp + 1 days));
+        assertTrue(reg.executeOrder(sl, ""));
+        assertEq(uint8(IRobinhoodOrderExecutor(EXECUTOR).positions(id).status), uint8(IsolatedMarginTypes.Status.CLOSED));
+        vm.prank(TIMELOCK);
+        vm.expectRevert(); // reinitializer(3) spent: the range wiring happens once
+        IRtpProxyAdmin(address(uint160(uint256(vm.load(EXECUTOR, ADMIN_SLOT))))).upgradeAndCall(
+            EXECUTOR, _impl(EXECUTOR), abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeRange, (address(rtp), address(adapterV1)))
+        );
     }
 
     function testHooksAreCustodianOnly() public {

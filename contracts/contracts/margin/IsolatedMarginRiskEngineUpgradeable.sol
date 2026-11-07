@@ -5,6 +5,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
@@ -276,6 +277,15 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
             accountConfig.status = IsolatedMarginTypes.Status.ACTIVE;
         }
         emit AccountStatusUpdated(account, accountConfig.status);
+    }
+
+    /// @notice First range wiring, by the proxy admin inside the timelocked upgradeAndCall (the timelock's delay is the
+    /// delay). Later changes go through queueRangeCustodian / applyRangeCustodian.
+    function initializeRangeCustodian(address custodian) external reinitializer(2) {
+        require(msg.sender == ERC1967Utils.getAdmin(), "RiskEngine: not proxy admin");
+        require(custodian.code.length != 0 && rangeCustodian == address(0), "RiskEngine: bad range custodian");
+        rangeCustodian = custodian;
+        emit RangeCustodianSet(custodian);
     }
 
     /// @notice Range take-profit: queue a custodian change (or removal, address 0). It applies after the margin config's
