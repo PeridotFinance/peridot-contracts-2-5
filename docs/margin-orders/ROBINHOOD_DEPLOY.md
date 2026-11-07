@@ -12,9 +12,9 @@
 `contracts/contracts/margin/orders/MarginOrderRegistry.sol` follows the deployment convention in `SPEC.md`. The
 script deploys it from its build artifact.
 
-## 0. Signing preparation (operator approved preparation 2026-11-06; timing decided Monday)
+## 0. Signing preparation (approved 2026-11-06; scheduled for the 15 to 17 Nov ceremony, operator 2026-11-07)
 
-- **When:** either in the 10 Nov recovery session or in the 15 to 17 Nov ceremony. The upgrade does not read the oracle,
+- **When:** in the 15 to 17 Nov ceremony, not in the 10 Nov recovery session (operator, 2026-11-07). The upgrade does not read the oracle,
   so market hours do not matter. It is a separate timelock operation from the SPY batch (its own salt), so the two can be
   scheduled in the same session. **Position 4 stays untouched live.**
 - **Mainnet dry run** (simulation, no broadcast) at L2 107,648,285: every precondition holds. It estimates 10,525,160 gas,
