@@ -1,10 +1,10 @@
-# Avalanche pilot: frontend handoff for listing the two lending markets (pWAVAX, pUSDC)
+# Avalanche pilot: frontend handoff for the two lending markets (pWAVAX, pUSDC) and the two Pharaoh vaults
 
-Audience: the frontend engineer who lists the two lending markets on Avalanche C-Chain mainnet. Companion to `avalanche-pilot-frontend-notes.md` (screen wording, exit-cost text, vault and margin notes: read it, it is not repeated here). Only lending is live; see section 4 for what is not.
+Audience: the frontend engineer who lists the two lending markets and the two Pharaoh vaults on Avalanche C-Chain mainnet. Companion to `avalanche-pilot-frontend-notes.md` (screen wording, exit-cost text, vault and margin notes: read it, it is not repeated here). **Lending (sections 1 to 3) and the two vaults (section 4) are live; margin 2x is not (section 4c).**
 
-Sources of truth: `avalanche-pilot-addresses.json` (status `enabled`), ABIs in `avalanche-pilot-abis/`, parameters in `contracts/ceremony/pilot-pw30.env` (CAP = 200).
+Sources of truth: `avalanche-pilot-addresses.json` (status `enabled`; the `vault` block for the vaults), ABIs in `avalanche-pilot-abis/` (`PharaohLiquidityVaultR3.json` for the vaults), parameters in `contracts/ceremony/pilot-pw30.env` (CAP = 200).
 
-**Every "current value" below was read from chain at block 99,848,578 (2026-11-09 12:12:17 UTC).** They are a snapshot for checking your reads, not constants: always read them live.
+**Every "current value" in sections 1 to 3 was read from chain at block 99,848,578 (2026-11-09 12:12:17 UTC); the vault values in section 4 at block 99,856,327 (2026-11-09 14:11:08 UTC).** They are a snapshot for checking your reads, not constants: always read them live.
 
 ## 1. Network and addresses
 
@@ -19,7 +19,7 @@ Sources of truth: `avalanche-pilot-addresses.json` (status `enabled`), ABIs in `
 | WAVAX (underlying of pWAVAX) | `0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7`, **18 decimals** (standard ERC-20; wrap AVAX with `deposit()` first: native AVAX is not accepted) |
 | USDC (underlying of pUSDC) | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E`, **6 decimals** (native USDC) |
 
-ABI files (bare JSON arrays): `PeridottrollerAvalanche.json` (controller), `PErc20Delegator.json` (both pTokens; the proxy exposes the full pToken interface, `PErc20Delegate.json` is the implementation ABI and adds nothing the UI needs), `GuardedAvalanchePriceOracle.json` (`getUnderlyingPrice(address pToken)`), `Unitroller.json` (proxy admin only, not for the UI). Plain ERC-20 `approve/allowance/balanceOf/decimals` for the underlyings: use a generic ERC-20 ABI.
+ABI files (bare JSON arrays): `PeridottrollerAvalanche.json` (controller), `PharaohLiquidityVaultR3.json` (both Pharaoh vaults, section 4), `PErc20Delegator.json` (both pTokens; the proxy exposes the full pToken interface, `PErc20Delegate.json` is the implementation ABI and adds nothing the UI needs), `GuardedAvalanchePriceOracle.json` (`getUnderlyingPrice(address pToken)`), `Unitroller.json` (proxy admin only, not for the UI). Plain ERC-20 `approve/allowance/balanceOf/decimals` for the underlyings: use a generic ERC-20 ABI.
 
 Reward token: **none** (`getPeridotAddress()` = zero address, `peridotRate()` = 0). The controller ABI contains `claimPeridot`; **do not show a claim button or a rewards column.**
 
@@ -135,23 +135,178 @@ Number formats: all amounts are raw integers in the **underlying** decimals (USD
 - Liquidity is read with an oracle price that can be 0 (stale feed): disable borrow and withdraw-with-debt actions and show "price unavailable".
 - Refresh after every transaction and on a timer: interest accrues per block (about 0.94 s).
 
-## 4. NOT live yet: do not list
+## 4. Pharaoh vaults: LIVE, open for deposits at a small cap
 
-- Pharaoh vaults (USDC and WAVAX): **deposit caps are closed** (`depositCap` 1). No vault addresses are in the JSON (`vault.usdcVault` / `vault.wavaxVault` are `null`). Vault deposits come with a later handoff.
-- Margin 2x: **not deployed** (all `margin.*` addresses are `null`). Margin comes with a later handoff.
-- Everything under `margin` and `vault` in the addresses JSON is null: do not render those sections.
+Both Pharaoh vaults are **open and on the R3 code** (verified on chain 9 Nov 2026; the opening and the two upgrades are at blocks 99,856,007 and 99,856,067, as recorded in the addresses JSON). They are ERC-4626 vaults that hold a concentrated-liquidity position on the Pharaoh pool. The team seeds are already in and deployed. The vault values in this section were read at **block 99,856,327 (2026-11-09 14:11:08 UTC)**; the lending values above are from an earlier block. Screen wording for the exit cost, gas and the price guards is in `avalanche-pilot-frontend-notes.md` section 1; this section gives the exact calls, units and error mapping and does not repeat that text.
+
+### 4.1 Addresses and ABI
+
+| Item | USDC vault | WAVAX vault |
+|---|---|---|
+| Vault (call this; it is the proxy) | `0x855bF832f26a294d28500db59eE941dE3d654129` | `0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8` |
+| Share token | the vault itself (ERC-20), symbol `pPHAR-USDC`, **6 decimals** | the vault itself, symbol `pPHAR-WAVAX`, **18 decimals** |
+| Name on chain | "Peridot Pharaoh USDC/USDt Vault" | "Peridot Pharaoh sAVAX/WAVAX Vault" |
+| Asset the user deposits | USDC `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` (6 dec) | WAVAX `0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7` (18 dec; wrap AVAX first) |
+| Pool partner token (not user-facing) | `0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7` (USDt) | `0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE` (sAVAX) |
+| Deposit cap | 200,000,000 raw = **200 USDC** | 25,040,864,280,322,299,010 raw = **25.0409 WAVAX** |
+
+Shared: Safe (vault owner, the only party that can pause or change the cap) `0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12`; current implementation (R3 extension, read from the proxy's implementation slot) `0x92bBeec3e2F95A64494e92638420654400467F4a`; both proxies point at it. The addresses are also in `avalanche-pilot-addresses.json` under `vault` (`usdcVault.proxy`, `wavaxVault.proxy`, `safe`, `r3Extension`). The `rebalancer()` of both vaults is still the Ledger (`0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD`) until the rotation to the rebalancer wallet; that does not change anything for users. Users never call `deployIdle`, `rebalance` or any owner function.
+
+**ABI: `avalanche-pilot-abis/PharaohLiquidityVaultR3.json`** (bare JSON array, 107 entries, exported with `forge inspect` from `contracts/vault-r3`, `PharaohLiquidityVaultR3`; the proxy's extension forwards every user call to this implementation, whose code hash `0x62c312ec...d535` was checked on chain). Use it on **both** vaults. It contains the ERC-4626 functions, the ERC-20 share functions and **all** the custom errors (`Vault__*`, `ERC4626Exceeded*`, `EnforcedPause`, ...), so unlike the lending ABI it needs no extra error fragments. Use a generic ERC-20 ABI for the asset (`approve`, `allowance`, `balanceOf`). Calls the ABI lists that the UI must **not** use: `mint` (disabled: `maxMint` is 0), `withdraw` (exact-assets exit; use `redeem`), `initialize*`, `setDepositCap`, `setRebalancer`, `pause`, `unpause`, `emergencyExit`, `deployIdle`, `rebalance` and the ownership functions. The extension's own `harvestRewards` is owner-only and is not in this file.
+
+### 4.2 Per-vault reads (exact calls and units)
+
+Let `V` be the vault address; `A` its asset; all are `view`. Raw integers; shares use the asset's decimals (6 for the USDC vault, 18 for the WAVAX vault).
+
+| What | Call | Unit and handling |
+|---|---|---|
+| Asset | `V.asset()` | address of USDC / WAVAX (check it equals the table above) |
+| Decimals | `V.decimals()` | 6 (USDC vault), 18 (WAVAX vault); same for shares and asset |
+| Total assets | `V.totalAssets()` | asset raw. A **conservative (haircut) valuation** of everything the vault holds, in the asset |
+| Total shares | `V.totalSupply()` | share raw |
+| Deposit cap | `V.depositCap()` | asset raw. `0` would mean no cap (not the case) |
+| **Room** | `room = depositCap - totalAssets` (floor at 0) | asset raw. `maxDeposit(receiver)` returns the same figure on chain today but **may overstate the room by a few units** (fees are collected inside `deposit`, and the cap binds on the haircut valuation): cap the input box at **99.99% of room**, `room * 9999 / 10000`, and keep `maxDeposit` only as an upper cross-check |
+| Share price | `V.convertToAssets(10**decimals)` | asset raw per one whole share. USDC vault `convertToAssets(1000000)`, WAVAX vault `convertToAssets(1000000000000000000)` |
+| Preview deposit | `V.previewDeposit(assets)` | share raw. A **lower bound** of the shares the deposit mints (the transaction reverts with `Vault__InsufficientShares` if it would mint fewer); the real mint is higher. Show it as "at least". It is **not** the entry cost: see the next note |
+| Preview redeem | `V.previewRedeem(shares)` | asset raw a `redeem` of those shares pays: for a partial redeem the contract pays exactly `convertToAssets(shares)` (floor), which is what `previewRedeem` returns (verified in the source and on chain: both read 1,000,279 for 1,000,000 shares); fees collected at the start of the call can only make it slightly higher. Use `previewRedeem(balanceOf(user))` as "you would receive about". Only when the redeemer holds **all** the shares does the payout come from the realized swap of the whole position instead. The entry cost is already inside the share count (a deposit mints about 99.4% of the fair shares in the USDC vault) and the haircut valuation, so an immediate deposit-then-redeem returns less than the deposit by the exit cost: show that cost on the deposit screen (frontend notes section 1), not on the redeem preview |
+| User shares | `V.balanceOf(user)` | share raw. Also `V.maxRedeem(user)` (equal to the balance; use it as the redeem maximum) |
+| Paused | `V.paused()` | bool. `true`: `deposit` reverts (`EnforcedPause`) and `maxDeposit` returns 0; `redeem` is **not** blocked by the pause flag |
+| Waiting to be deployed (idle) | `A.balanceOf(V)` (the ERC-20 balance of the **asset token held by the vault**; there is no `idle()` function in the ABI) | asset raw. See 4.5 |
+
+Two facts the screens must respect. **`previewDeposit` is pessimistic on purpose and cannot be used as a cost:** at block 99,856,327 `previewDeposit(100 USDC)` = 96.473507 shares (the fair figure is 99.972) and `previewDeposit(1 WAVAX)` = 0.890344 shares (the fair figure is 0.991). The vault checks the real mint against this floor; the real mint is higher (R3 document section 6: 99.43M minted vs a 96.46M preview for 100 USDC, about 99.4% of the fair figure; the WAVAX mint was not measured separately, only its round trip of about 98.7% to 98.8%). Show "minimum shares" from the preview and show the exit cost separately (frontend notes). **The vault's name says USDC/USDt and sAVAX/WAVAX** because the position is in those pools; the user deposits and withdraws only USDC (USDC vault) or WAVAX (WAVAX vault).
+
+### 4.3 Current values (block 99,856,327, 2026-11-09 14:11:08 UTC; re-read live)
+
+| | USDC vault | WAVAX vault |
+|---|---|---|
+| `totalAssets` | 39,807,124 = **39.807124 USDC** | 2,974,984,605,497,027,291 = **2.974985 WAVAX** |
+| `totalSupply` | 39,795,988 shares (39.795988) | 2,948,443,108,249,258,408 shares (2.948443) |
+| `depositCap` | 200,000,000 = 200 USDC | 25,040,864,280,322,299,010 = 25.040864 WAVAX |
+| Room (`cap - totalAssets`) | 160,192,876 = **160.192876 USDC** (`maxDeposit` returns the same) | 22,065,879,674,825,271,719 = **22.065880 WAVAX** (`maxDeposit` returns the same) |
+| 99.99% of room (input maximum) | 160.176856 USDC (160,176,856 raw) | 22.063673 WAVAX (22,063,673,086,857,789,191 raw) |
+| Share price `convertToAssets(10**decimals)` | 1,000,279 = **1.000279 USDC** per share | 1,009,001,868,536,486,304 = **1.009002 WAVAX** per share |
+| `previewDeposit` | 100 USDC -> 96,473,507 | 1 WAVAX -> 890,344,233,794,140,324 |
+| `previewRedeem` | 1 share (1,000,000) -> 1,000,279 | 1 share (1e18) -> 1,009,001,868,536,486,304 |
+| `paused` | false | false |
+| Idle asset in the vault (`A.balanceOf(V)`) | 2,193 = 0.002193 USDC | 0 |
+| `rebalancer()` | the Ledger | the Ledger |
+
+(The 4b share prices quoted before the R3 upgrade, 0.999663 and 1.007711, are superseded by the table: R3 changed the mint rule, not the position.)
+
+### 4.4 User actions, in order, with explicit gas limits
+
+| Action | Transactions, in order |
+|---|---|
+| **Deposit** | 1) `A.approve(V, assets)` (skip if `allowance(user, V) >= assets`); 2) `V.deposit(assets, receiver)` with `receiver = user`, **gas limit 4,000,000**. `assets` in asset raw. The user receives shares |
+| **Withdraw (redeem)** | `V.redeem(shares, receiver, owner)` with `receiver = owner = user`, **gas limit 4,000,000**. No approval is needed when the user redeems their own shares. "Withdraw all": `redeem(balanceOf(user), user, user)` (the last holder of all shares also gets any paired-token dust). The payout is in the vault's asset only |
+| Fallback exit | `V.redeemInKind(shares, receiver, owner)` (ABI file): burns shares for **both pool tokens** (USDC + USDt, or WAVAX + sAVAX) without swaps or price checks. It exists as a liveness escape hatch. Offer it only as a secondary "advanced: withdraw in kind" action when `redeem` keeps failing with a price or swap error, with a plain warning that the user receives two tokens |
+
+Never use `withdraw(assets, ...)` or `mint(...)`: `mint` is disabled and `withdraw` rounds against the user and leaves a share behind for the last holder.
+
+**Gas limits, with the reason.** Send **every** vault transaction with an explicit gas limit of **4,000,000** (deposit and redeem), and a 120,000 limit is enough for the approval. Measured at CAP 200 on a fork of the live head: a deposit into the existing position uses about **0.8 to 0.95 million** gas (0.93M USDC vault, 0.83M WAVAX vault); the **first deposit into a position** (the team seeds in the rehearsal: the code path that mints a new position NFT inside `deposit` is `tokenId == 0`, and it adds the position creation on top) uses about **2.3 million** (2.31M and 2.28M); the live positions already exist, so ordinary user deposits are the smaller figure, and the 4,000,000 limit covers both. (The frontend notes say 4,000,000 for a first deposit and 2,000,000 for the others; this handoff deliberately uses one 4,000,000 limit for everything, which is safe because only the gas used is charged). A `redeem` was not measured separately; it frees liquidity and may swap, so give it the same 4,000,000. The limit is a ceiling: the user pays only the gas used. **Never send with the raw gas estimate:** the estimate is taken at one block, the vault reads the oracle and TWAP and collects fees, and when the transaction is mined a block later it can use a few percent more gas than estimated, so it is mined and reverts **out of gas** (reproduced; `avalanche-pilot-frontend-notes.md` section 1 and `avalanche-pilot-vault-opening.md` section 4). ethers v5 and viem do not add a margin. Set `gasLimit: 4_000_000` (ethers) / `gas: 4_000_000n` (viem) on the send, and also in the pre-flight simulation (`callStatic` / `simulateContract`), so the simulation uses the same limit. Wallets that pad the estimate are less exposed but not immune; a wallet that lowers a dapp-supplied limit must be tested.
+
+### 4.5 What the deposit screen must show
+
+- **Exit cost, before the user confirms** (text and source: `avalanche-pilot-frontend-notes.md` section 1): an immediate deposit-and-withdraw returns about **99.5% of the USDC (cost about 0.5%)** and about **98.8% of the WAVAX (cost about 1.2%)** at the CAP-200 rehearsal (52 and 122 basis points; the R3 rehearsal gave 0.54% and 1.27%). It is not a fee to Peridot and it is not earned back by waiting a short time. It is a measurement at one moment: label it "about" and re-measure after real flows.
+- **Cap and room** (4.2): "room" and a used / cap bar from `totalAssets` and `depositCap`.
+- **Minimum shares** from `previewDeposit` (4.2 note), the **share price**, and the current **realized return** (4b).
+- **"Waiting to be deployed"**: read `A.balanceOf(V)`. Asset that sits idle in the vault **earns nothing until the rebalancer calls `deployIdle()`**: the Ledger by hand today, the rebalancer module after the rotation (it deploys when the idle balance is above 1 USDC or 0.1 WAVAX). Show a line "X USDC waiting to be deployed, earning nothing until it is deployed" **when the idle balance is above those thresholds**, and nothing when it is dust (today 0.002 USDC and 0). Note that a normal user deposit is not idle for long: while a position exists the vault swaps and adds liquidity **inside the deposit transaction** (what does not fit stays idle), so the idle balance is mainly the part of a deposit that did not fit, fees and donations. If the pool price has moved outside the position's range, the deposit is **refused** (`Vault__PositionNeedsRebalance`) until the rebalancer moves the position; it is not accepted into idle.
+- A **paused** vault: disable the deposit button, show "deposits paused", keep redeem enabled.
+
+### 4.6 Custom errors the UI must map
+
+All are in `PharaohLiquidityVaultR3.json`. Decode the revert data with the ABI (selector in parentheses) and show the message in the right column; for anything else show the generic message. Run `callStatic` / `simulateContract` with the 4,000,000 gas limit before the wallet prompt so the user sees the reason first.
+
+| Error (selector) | When | Show the user |
+|---|---|---|
+| `Vault__DepositCapExceeded(cap, attemptedTotal)` (`0xabd45647`) | the deposit would take `totalAssets` over the cap (checked on chain, verified on the live proxy) | "This vault is full for now. Room left: X. Try a smaller amount." (recompute the room; the cap is the limit) |
+| `Vault__PriceDeviation(spotTick, twapTick)` (`0x1848c1c0`) | the pool price is more than the allowed distance from its 30-minute average (30 ticks, about 0.3%, on the USDC vault; 100 ticks, about 1%, on the WAVAX vault). Hits `deposit` **and** `redeem` | "The market is moving fast. Deposits and withdrawals pause for a short while to protect you. Try again in a few minutes." |
+| `Vault__OracleDeviation(poolQuote, oracleQuote)` (`0x3bfe35e3`) | the pool's average price differs from the oracle price by more than 0.3% (USDC vault) / 1% (WAVAX vault). Hits `deposit` and `redeem` | same message as price deviation ("try again later"), not a generic error |
+| `Vault__InvalidOracle()` (`0x618cf4df`) | the oracle returned no price | "Price data is unavailable right now. Try again later." |
+| `EnforcedPause()` (`0xd93c0665`) | the owner paused the vault; `deposit` only | "Deposits are paused. You can still withdraw." |
+| `Vault__PositionNeedsRebalance()` (`0x192d4e0c`) | the pool price left the vault's position range; `deposit` refused | "The vault is rebalancing its position. Try again shortly." |
+| `Vault__InsufficientShares(actual, minimum)` (`0x944c71be`) | the deposit would mint fewer shares than `previewDeposit` (price moved between simulation and mining) | "The price moved while you confirmed. Please try again." |
+| `Vault__InsufficientAssets(available, required)` (`0x52223b3d`) | a withdrawal cannot raise enough of the asset (not enough pool depth or paired token) | "The vault could not free this amount right now. Try a smaller amount or try again later." |
+| `Vault__ZeroAmount()` (`0x3a5cf6ab`) | zero assets or zero shares | disable the button at 0 instead |
+| `ERC4626ExceededMaxRedeem(owner, shares, max)` (`0xb94abeec`) | redeem asked for more shares than the owner holds | "You cannot withdraw more than you hold." (cap the input at `balanceOf`) |
+| `ERC4626ExceededMaxWithdraw(owner, assets, max)` (`0xfe9cceec`) | only from `withdraw`, which the UI does not call | not needed |
+| `ERC20InsufficientBalance`, `ERC20InsufficientAllowance`, `SafeERC20FailedOperation(token)` | the share token's own checks and the asset transfer failing | check balance and allowance before sending; otherwise "Not enough balance or approval." |
+| `ReentrancyGuardReentrantCall()` (`0x3ee5aeb5`) | not reachable by a normal user | generic message |
+
+Not user-reachable (owner or rebalancer only; do not map them): `Vault__NotRebalancer`, `Vault__ExcessiveLoss`, `OwnableUnauthorizedAccount`, `OwnableInvalidOwner`, `Vault__ZeroAddress`, `Vault__InvalidAsset`, `Vault__InvalidPool`, `Vault__InvalidConfiguration`, `InvalidInitialization`, `NotInitializing`, `ExpectedPause`, `LiquidityOverflow`, `TickOutOfBounds`, `ERC4626ExceededMaxDeposit`, `ERC4626ExceededMaxMint`.
+
+**Reverts that are plain strings or empty, not ABI errors** (the asset token or the Pharaoh router raises them): the USDC token reverts a deposit without allowance with the string `"ERC20: transfer amount exceeds allowance"` (seen on the live proxy); the router raises `"Too little received"` when a large deposit's swap leg is too big for the pool (the vault's own slippage bound; the R3 document section 6: large deposits revert). Map `"Too little received"` or any other unrecognised revert on a deposit to "This amount is too large for the pool right now. Try a smaller amount." and anything else to "The transaction would fail. Nothing was sent." (because the simulation failed). Never show raw hex.
+
+### 4.7 Minimal code (ethers v5, deposit and redeem)
+
+```ts
+import { ethers } from "ethers"; // v5
+import addresses from "./avalanche-pilot-addresses.json";
+import vaultAbi from "./avalanche-pilot-abis/PharaohLiquidityVaultR3.json"; // includes the custom errors
+
+const V = addresses.vault;                     // V.usdcVault.proxy, V.wavaxVault.proxy
+const GAS_LIMIT = 4_000_000;                   // never the raw estimate, see 4.4
+const ERC20_ABI = [
+  "function approve(address,uint256) returns (bool)",
+  "function allowance(address,address) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+];
+
+export async function readVault(provider: ethers.providers.Provider, proxy: string) {
+  const v = new ethers.Contract(proxy, vaultAbi, provider);
+  const [asset, dec] = await Promise.all([v.asset(), v.decimals()]);
+  const unit = ethers.BigNumber.from(10).pow(dec);
+  const [totalAssets, totalSupply, cap, price, paused, idle] = await Promise.all([
+    v.totalAssets(), v.totalSupply(), v.depositCap(), v.convertToAssets(unit), v.paused(),
+    new ethers.Contract(asset, ERC20_ABI, provider).balanceOf(proxy),   // idle = asset held by the vault
+  ]);
+  const room = cap.gt(totalAssets) ? cap.sub(totalAssets) : ethers.constants.Zero;
+  const maxInput = room.mul(9999).div(10000);                           // 99.99% of the room
+  return { asset, dec, totalAssets, totalSupply, cap, room, maxInput, sharePrice: price, paused, idle };
+}
+
+export async function depositToVault(signer: ethers.Signer, proxy: string, assetRaw: ethers.BigNumber) {
+  const user = await signer.getAddress();
+  const v = new ethers.Contract(proxy, vaultAbi, signer);
+  const asset = new ethers.Contract(await v.asset(), ERC20_ABI, signer);
+  if ((await asset.allowance(user, proxy)).lt(assetRaw)) {
+    await (await asset.approve(proxy, assetRaw, { gasLimit: 120_000 })).wait();
+  }
+  await v.callStatic.deposit(assetRaw, user, { gasLimit: GAS_LIMIT }); // throws a decoded Vault__* error
+  return (await v.deposit(assetRaw, user, { gasLimit: GAS_LIMIT })).wait();
+}
+
+export async function redeemFromVault(signer: ethers.Signer, proxy: string, sharesRaw: ethers.BigNumber) {
+  const user = await signer.getAddress();
+  const v = new ethers.Contract(proxy, vaultAbi, signer);
+  await v.callStatic.redeem(sharesRaw, user, user, { gasLimit: GAS_LIMIT });
+  return (await v.redeem(sharesRaw, user, user, { gasLimit: GAS_LIMIT })).wait();
+}
+```
+
+With viem: `readContract` for the reads in 4.2 with the same ABI file, `simulateContract({ ..., gas: 4_000_000n })` then `writeContract(request)`; the request carries the gas limit.
 
 ## 4b. Vault yield on the screen: show a REALIZED number, never a forecast
 
-**There is no measured vault APY today, so there is nothing true to show yet.** The two Pharaoh vaults earn swap fees (and possibly PHAR emissions) on a concentrated liquidity position; that depends on pool volume, the price range and the rebalancer, none of which has run on mainnet with real deposits. The only "APR" figure anywhere in the repo is a 20% **assumption** in a design tool (`avalanche-vault-phar-evidence/tools/variant_econ.py`, labelled "not measured"): **do not show it.**
+**There is no measured vault APY, so there is nothing true to show yet.** The two vaults earn swap fees (and possibly PHAR emissions) on a concentrated liquidity position; that depends on pool volume, the price range and the rebalancer, none of which has run on mainnet with real deposits. The only "APR" figure anywhere in the repo is a 20% **assumption** in a design tool (`avalanche-vault-phar-evidence/tools/variant_econ.py`, labelled "not measured"): **do not show it.**
 
 What the screen may show, from chain data only (ERC-4626, both vaults):
-- **Share price** = `convertToAssets(10**decimals)` (USDC vault: `convertToAssets(1000000)`, WAVAX vault: `convertToAssets(10**18)`). At block 99,850,426: USDC vault 0.999663 USDC per share, WAVAX vault 1.007711 WAVAX per share. The share price is conservative (a haircut valuation that includes the cost of entering and leaving the position), so it moves by the entry cost when deposits happen and is NOT a clean yield measure for the first days.
-- **Realized return** = (share price now / share price N days ago) - 1, annualised **only after at least 7 days** of history, with the label "realized over the last N days, not a promise". The frontend has to store the share price itself (for example once an hour); the chain history needs an archive node, which the pilot does not have. Until 7 days exist show "new vault, no track record yet", not 0%.
-- Show the **cap and room** (`depositCap`, `totalAssets`) and the **exit cost** from section 1 of `avalanche-pilot-frontend-notes.md`.
-- Deposits earn nothing until the rebalancer calls `deployIdle()`; until R3 automates it the Ledger does it by hand, so "waiting to be deployed" must be visible (see the frontend notes).
+- **Share price** = `convertToAssets(10**decimals)` (USDC vault `convertToAssets(1000000)`, WAVAX vault `convertToAssets(10**18)`). At block 99,856,327: USDC vault **1.000279** USDC per share, WAVAX vault **1.009002** WAVAX per share. The share price is conservative (a haircut valuation that includes the cost of entering and leaving the position), so it moves by the entry cost when deposits happen and is **not** a clean yield measure for the first days.
+- **Realized return** = (share price now / share price N days ago) - 1, annualised **only after at least 7 days** of history, with the label "realized over the last N days, not a promise". The frontend has to store the share price itself (for example once an hour); the chain history needs an archive node, which the pilot does not have. Until 7 days exist show "new vault, no track record yet", not 0%. A negative realized number is shown as it is.
+- **Cap and room** (`depositCap`, `totalAssets`, 4.2) and the **exit cost** (4.5).
+- Idle deposits and "waiting to be deployed" as in 4.5.
 
-Both vaults currently have `depositCap = 1` (closed): nothing is listed for deposit until the opening ceremony.
+## 4c. NOT live yet: do not list
+
+- **Margin 2x: not deployed** (all `margin.*` addresses in the JSON are `null`). Margin comes with a later handoff; do not render a margin section.
+- No other vault than the two above. `addresses.vault.rebalancerWalletPlanned` is a plan, not a contract to call.
+
+## 4d. What must NOT be built
+
+- **No vault APY, APR or "projected earnings" of any kind**, not even a range or an estimate from the pool's fee tier or volume. Only the realized return of 4b, after 7 days, labelled as past.
+- **The cap is the limit, not the password.** The frontend is password-gated for the pilot, but the vault contracts are public: anyone can call `deposit` on the proxy directly with any wallet. The deposit cap on chain (200 USDC / 25.04 WAVAX) is the only thing that actually limits deposits. The screens must **display** the cap and the room and fail gracefully on `Vault__DepositCapExceeded`; they must not pretend that the gate enforces anything, and must not hide the cap or promise a vault "has space".
+- No deposit button that sends with the raw gas estimate; no "mint" or exact-withdraw flow; no owner or rebalancer actions in the user app (`pause`, `setDepositCap`, `deployIdle`, `rebalance`).
+- No guarantee wording (the vault can lose value, the contracts are not audited, see `avalanche-pilot-frontend-notes.md` section 4), and no cost computed from `previewDeposit` / `previewRedeem`.
 
 ## 5. Minimal code
 
@@ -323,3 +478,5 @@ Collateral flow (WAVAX) uses the same pattern: `approve` on WAVAX, `mint` on pWA
 ## 6. Quick verification commands (read-only)
 
 `export ETH_RPC_URL=<your RPC>` in your shell, then for example: `cast call 0x0f7849CD9E54ffb027aacaEec82007cca9470098 "getCash()(uint256)"`; `cast call 0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A "borrowGuardianPaused(address)(bool)" 0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1` (expect `true`); `cast call 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0 "getUnderlyingPrice(address)(uint256)" 0x0f7849CD9E54ffb027aacaEec82007cca9470098`.
+
+Vaults (section 4), same environment: `V=0x855bF832f26a294d28500db59eE941dE3d654129` (USDC vault) or `0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8` (WAVAX vault); `cast call $V "totalAssets()(uint256)"`, `"depositCap()(uint256)"`, `"convertToAssets(uint256)(uint256)" 1000000` (USDC vault; use `1000000000000000000` for the WAVAX vault), `"previewDeposit(uint256)(uint256)" 100000000`, `"paused()(bool)"` (expect `false`), `"decimals()(uint8)"`, `"asset()(address)"`; idle: `cast call <asset> "balanceOf(address)(uint256)" $V` with the asset from the table in 4.1; the implementation: `cast storage $V 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc` (expect `0x...92bbeec3e2f95a64494e92638420654400467f4a`). Expect `Vault__DepositCapExceeded` (`0xabd45647`) from `cast call $V "deposit(uint256,address)" 999999999999 <any address>`.
