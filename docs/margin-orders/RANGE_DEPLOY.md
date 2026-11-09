@@ -83,7 +83,21 @@ journal.
 ## Open before signing
 
 - **Fee recipients (operator, 2026-11-09):**
-  - **Protocol share:** still unconfirmed: the Robinhood Safe or the Ledger. The operator will confirm which.
+  - **Protocol share: the Robinhood Safe** `0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12` (operator, 2026-11-09).
+    - **Read-back** on Robinhood Chain at L2 109,925,694: code 0 bytes, nonce 0, ETH 0, USDG 0. The Safe is
+      **not deployed**.
+    - The Safe v1.4.1 contracts it would be deployed from are present on the chain: SafeProxyFactory
+      `0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67` (3,054 bytes), Safe `0x41675C099F32341bf84BFc5382aF534df5C7461a`
+      (23,579 bytes) and SafeL2 `0x29fcB43b46531BcA003ddC8FCB67FFE91900C762` (24,421 bytes).
+    - `DeployRangeTakeProfit.s.sol` now refuses a protocol recipient with no code, unless it is the Ledger (commit
+      d65fe587; check with `git log -3 --oneline`).
+    - Fees sent to an undeployed Safe address could not be moved until it is deployed with exactly the configuration
+      that produced that address.
+    - Before the range batch, either deploy the Safe and confirm its owners and threshold on chain, or use the Ledger.
+    - Read-back commands:
+      - `cast codesize 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12 --rpc-url https://rpc.mainnet.chain.robinhood.com`
+      - Once deployed: `cast call <safe> 'getOwners()(address[])' --rpc-url https://rpc.mainnet.chain.robinhood.com`
+      - Once deployed: `cast call <safe> 'getThreshold()(uint256)' --rpc-url https://rpc.mainnet.chain.robinhood.com`
   - **Reserve share (decided):** to the NVDA/USDG pair's loss reserve `0x806b182B050f7EcF908758dD6bBF91DB8B2212aF`,
     credited through its `deposit(pairId, token, amount)` for pair id
     `0xe2050352f4346597cc69d2776d99ae60c9440dfc28f9406ce66be0bbe3fb6b06`.
