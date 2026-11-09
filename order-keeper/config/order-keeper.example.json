@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "chainId": 43114,
+  "label": "UNSET",
+  "registry": "UNSET",
+  "closeAdapter": "UNSET",
+  "marginExecutor": "UNSET",
+  "marginVault": "UNSET",
+  "keeper": {
+    "address": "UNSET",
+    "keystorePath": "/data/keystore/order-keeper.json",
+    "passwordEnv": "ORDER_KEEPER_KEYSTORE_PASSWORD"
+  },
+  "limits": {
+    "maxFeeGwei": 100,
+    "minGasWei": "40000000000000000",
+    "maxGasLimit": 4000000,
+    "maxSendsPerCycle": 3,
+    "maxSendsPerDay": 60,
+    "maxMinedRevertsPerDay": 3,
+    "sweep": true,
+    "maxIdsPerCycle": 500,
+    "retryCooldownSeconds": 30,
+    "retryCooldownMaxSeconds": 300,
+    "unknownRevertCooldownSeconds": 900,
+    "unfilledAlertSeconds": 600
+  },
+  "logs": {
+    "enabled": true,
+    "chunkBlocks": 10,
+    "maxChunksPerCycle": 10,
+    "minIntervalMs": 300,
+    "reorgMarginBlocks": 10,
+    "behindWarnBlocks": 600
+  },
+  "monitor": {
+    "pollSeconds": 15,
+    "maxBlockLagSeconds": 60,
+    "statePath": "/data/state/order-keeper.json"
+  },
+  "alerts": { "channel": "UNSET" },
+  "escalationSeconds": [3600, 14400, 86400]
+}

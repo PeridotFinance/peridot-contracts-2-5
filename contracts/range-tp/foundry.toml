@@ -1,0 +1,32 @@
+# Isolated project for the Pharaoh RANGE TAKE-PROFIT port (PR #7 design, WAVAX/USDC on Pharaoh). PROTOTYPE: fork-tested, NOT deployed.
+# Compiler settings = the margin engine's `debt_accounting` profile (the profile the margin stack is built and size-checked with), so the
+# sizes printed by `forge build --sizes` are those the real executor / risk engine / liquidator would have.
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+cache_path = "cache"
+libs = ["lib"]
+solc_version = "0.8.35"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1
+via_ir = true
+bytecode_hash = "none"
+use_literal_content = true
+ignored_error_codes = [3628, 2072, 5667, 2018]
+# the existing margin sources and deploy script are READ from the parent project (never modified)
+allow_paths = ["../"]
+fs_permissions = [{ access = "read-write", path = "./fixtures" }]
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "@chainlink/contracts/=../node_modules/@chainlink/contracts/",
+  "@peridot/=../contracts/",
+  "@script/=../script/",
+]
+
+# the endpoint is an ENVIRONMENT REFERENCE, never a value in this file
+[rpc_endpoints]
+avalanche = "${AVALANCHE_MAINNET_RPC_URL}"

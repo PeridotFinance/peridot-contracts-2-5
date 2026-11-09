@@ -1,0 +1,18 @@
+# TEMPLATE (not installed by anything in this repository). Same shape as the unit that operator/deploy/stage-host.sh writes for the pilot roles,
+# for a separate Droplet role "orderkeeper": its own Droplet, its own volume at /mnt/pilot_orderkeeper_data, its own keystore, its own env file.
+# /etc/pilot/orderkeeper.env (root, mode 600) holds AVALANCHE_MAINNET_RPC_URL=, AVALANCHE_LOGS_RPC_URL= and ORDER_KEEPER_KEYSTORE_PASSWORD= (and the alert
+# credentials when the channel is telegram / webhook). Install it NOT enabled; starting is the explicit step that lets the process sign.
+[Unit]
+Description=pilot order keeper
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker rm -f order-keeper
+ExecStart=/usr/bin/docker run --name order-keeper --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --env-file /etc/pilot/orderkeeper.env -e KEYSTORE_PATH=/data/keystore/order-keeper.json -e ORDER_KEEPER_CONFIG=/data/config/host.json -v /mnt/pilot_orderkeeper_data:/data pilot-order-keeper:local run
+ExecStop=/usr/bin/docker stop -t 60 order-keeper
+
+[Install]
+WantedBy=multi-user.target

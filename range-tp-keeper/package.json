@@ -1,0 +1,18 @@
+{
+  "name": "range-tp-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Finalisation keeper for the Pharaoh range take-profit (PROTOTYPE, fork-tested, not deployed). Gas-only wallet, no role; never unwinds.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "test:fork": "npm run build && node --test --test-concurrency=1 --test-timeout=300000 dist/test/fork/*.test.js",
+    "check": "node dist/src/main.js check",
+    "once": "node dist/src/main.js once",
+    "run": "node dist/src/main.js run"
+  },
+  "dependencies": { "ethers": "5.8.0" },
+  "devDependencies": { "@types/node": "22.9.0", "typescript": "5.6.3" }
+}

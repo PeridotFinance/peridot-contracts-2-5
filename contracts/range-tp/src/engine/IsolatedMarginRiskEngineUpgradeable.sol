@@ -1,0 +1,585 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+
+import {IERC3156FlashLender} from "@peridot/PTokenInterfaces.sol";
+import {PErc20} from "@peridot/PErc20.sol";
+import {IsolatedMarginMath} from "@peridot/margin/IsolatedMarginMath.sol";
+import {IsolatedMarginTypes} from "@peridot/margin/IsolatedMarginTypes.sol";
+import {IIsolatedMarginConfig} from "@peridot/margin/interfaces/IIsolatedMarginConfig.sol";
+import {IIsolatedMarginRiskHook} from "@peridot/margin/interfaces/IIsolatedMarginRiskHook.sol";
+
+/// @dev Range take-profit custodian (prototype): a position's stock that sits in a band, valued at the oracle.
+interface IRangeHoldings {
+    function holdings(address account) external view returns (uint256 stockAmount, uint256 usdgAmount);
+    function activeOrders() external view returns (uint256);
+}
+
+interface IConfigActionDelay {
+    function actionDelay() external view returns (uint256);
+}
+import {IMarginPriceOracle} from "@peridot/margin/interfaces/IMarginPriceOracle.sol";
+
+interface IIsolatedMarginControllerRegistry {
+    function registerIsolatedMarginAccount(address account) external;
+}
+
+contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeable, IIsolatedMarginRiskHook {
+    uint256 public constant BPS = 10_000;
+    uint256 public constant DUST_DEBT_VALUE_USD = 10e18;
+
+    struct AccountConfig {
+        uint256 positionId;
+        address owner;
+        address marginPToken;
+        address positionPToken;
+        address debtPToken;
+        IsolatedMarginTypes.Side side;
+        IsolatedMarginTypes.Status status;
+    }
+
+    struct MovementAuthorization {
+        uint256 remainingAmount;
+        uint64 blockNumber;
+    }
+
+    IIsolatedMarginConfig public config;
+    IMarginPriceOracle public oracle;
+    address public controller;
+    address public executor;
+    address public liquidator;
+
+    mapping(address account => AccountConfig) public accounts;
+    mapping(address account => bool) public override isIsolatedMarginAccount;
+    mapping(address account => mapping(address pToken => MovementAuthorization)) public movementAuthorizations;
+
+    event OperatorsConfigured(address indexed executor, address indexed liquidator);
+    event AccountRegistered(
+        uint256 indexed positionId,
+        address indexed account,
+        address indexed owner,
+        address marginPToken,
+        address positionPToken,
+        address debtPToken,
+        IsolatedMarginTypes.Side side
+    );
+    event AccountStatusUpdated(address indexed account, IsolatedMarginTypes.Status status);
+    event MovementAuthorized(address indexed account, address indexed pToken, uint256 amount);
+
+    event RangeCustodianSet(address indexed custodian);
+    event RangeCustodianQueued(address indexed custodian, uint64 eta);
+
+    error PriceUnavailable(address asset);
+
+    constructor() {
+        _disableInitializers();
+    }
+
+    modifier onlyController() {
+        require(msg.sender == controller, "RiskEngine: not controller");
+        _;
+    }
+
+    modifier onlyExecutor() {
+        require(msg.sender == executor, "RiskEngine: not executor");
+        _;
+    }
+
+    modifier onlyLiquidator() {
+        require(msg.sender == liquidator, "RiskEngine: not liquidator");
+        _;
+    }
+
+    modifier onlyOperator() {
+        require(msg.sender == executor || msg.sender == liquidator, "RiskEngine: not operator");
+        _;
+    }
+
+    function initialize(address owner_, address config_, address oracle_, address controller_) external initializer {
+        require(owner_ != address(0), "RiskEngine: zero owner");
+        require(config_.code.length > 0, "RiskEngine: invalid config");
+        require(oracle_.code.length > 0, "RiskEngine: invalid oracle");
+        require(controller_.code.length > 0, "RiskEngine: invalid controller");
+        __Ownable_init(owner_);
+        config = IIsolatedMarginConfig(config_);
+        oracle = IMarginPriceOracle(oracle_);
+        controller = controller_;
+    }
+
+    function setOperators(address executor_, address liquidator_) external onlyOwner {
+        require(executor_.code.length > 0, "RiskEngine: invalid executor");
+        require(liquidator_ == address(0) || liquidator_.code.length > 0, "RiskEngine: invalid liquidator");
+        executor = executor_;
+        liquidator = liquidator_;
+        emit OperatorsConfigured(executor_, liquidator_);
+    }
+
+    function registerAccount(
+        uint256 positionId,
+        address account,
+        address owner_,
+        address marginPToken,
+        address positionPToken,
+        address debtPToken,
+        IsolatedMarginTypes.Side side
+    ) external onlyExecutor {
+        require(positionId != 0, "RiskEngine: zero position");
+        require(account.code.length > 0 && owner_ != address(0), "RiskEngine: invalid account");
+        require(!isIsolatedMarginAccount[account], "RiskEngine: already registered");
+        require(oracle.marketAsset(marginPToken) != address(0), "RiskEngine: margin market missing");
+        require(oracle.marketAsset(positionPToken) != address(0), "RiskEngine: position market missing");
+        require(oracle.marketAsset(debtPToken) != address(0), "RiskEngine: debt market missing");
+
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk =
+            config.getPairRisk(marginPToken, positionPToken, debtPToken);
+        require(pairRisk.enabled, "RiskEngine: pair disabled");
+
+        accounts[account] = AccountConfig({
+            positionId: positionId,
+            owner: owner_,
+            marginPToken: marginPToken,
+            positionPToken: positionPToken,
+            debtPToken: debtPToken,
+            side: side,
+            status: IsolatedMarginTypes.Status.OPENING
+        });
+        isIsolatedMarginAccount[account] = true;
+        IIsolatedMarginControllerRegistry(controller).registerIsolatedMarginAccount(account);
+
+        emit AccountRegistered(positionId, account, owner_, marginPToken, positionPToken, debtPToken, side);
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.OPENING);
+    }
+
+    function activateAccount(address account) external onlyExecutor {
+        AccountConfig storage accountConfig = accounts[account];
+        require(
+            accountConfig.status == IsolatedMarginTypes.Status.OPENING
+                || accountConfig.status == IsolatedMarginTypes.Status.CLOSING,
+            "RiskEngine: invalid activation"
+        );
+        if (accountConfig.status == IsolatedMarginTypes.Status.OPENING) {
+            IsolatedMarginTypes.AccountMetrics memory currentMetrics = _metrics(account, 0);
+            IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+            IsolatedMarginMath.validateOpen(currentMetrics, pairRisk);
+        }
+        accountConfig.status = IsolatedMarginTypes.Status.ACTIVE;
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.ACTIVE);
+    }
+
+    function beginClose(address account) external onlyExecutor returns (uint256 healthFactorBps) {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        healthFactorBps = _metrics(account, 0).healthFactorBps;
+        accountConfig.status = IsolatedMarginTypes.Status.CLOSING;
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.CLOSING);
+    }
+
+    /// @notice Starts an in-kind recovery exit without consulting price feeds.
+    /// @dev The executor must accrue the debt market first. Only raw-zero-debt accounts qualify.
+    function beginDebtFreeClose(address account) external onlyExecutor {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
+        _requireNoRangeBands(account);
+        accountConfig.status = IsolatedMarginTypes.Status.CLOSING;
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.CLOSING);
+    }
+
+    /// @dev RANGE TAKE-PROFIT PORT (not in PR #7; needed by the ladder): a position may not be CLOSED while a band still holds its collateral,
+    /// or `finalize` / `unwind` could never return it (the executor refuses a non-ACTIVE position). The custodian's own final settlement and
+    /// every unwind-first path (liquidator, close adapter) reach here with no active band. A custodian view that has nothing for the account
+    /// returns (0, 0) without reading the oracle.
+    function _requireNoRangeBands(address account) internal view {
+        address custodian = rangeCustodian;
+        if (custodian == address(0)) return;
+        (uint256 bandCollateral, uint256 bandQuote) = IRangeHoldings(custodian).holdings(account);
+        require(bandCollateral == 0 && bandQuote == 0, "RiskEngine: range order active");
+    }
+
+    function finishClose(address account, uint256 previousHealthFactorBps, bool fullyClosed)
+        external
+        onlyExecutor
+        returns (IsolatedMarginTypes.AccountMetrics memory currentMetrics)
+    {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.CLOSING, "RiskEngine: not closing");
+        if (fullyClosed) {
+            require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
+            _requireNoRangeBands(account);
+            accountConfig.status = IsolatedMarginTypes.Status.CLOSED;
+        } else {
+            currentMetrics = _metrics(account, 0);
+            require(currentMetrics.equityUsd > 0, "RiskEngine: negative equity");
+            require(currentMetrics.healthFactorBps >= previousHealthFactorBps, "RiskEngine: close worsened health");
+            accountConfig.status = IsolatedMarginTypes.Status.ACTIVE;
+        }
+        emit AccountStatusUpdated(account, accountConfig.status);
+    }
+
+    /// @notice Flash-route liquidation start. Behaviour is unchanged by the funded-sizing work: it sizes through
+    ///         `_liquidationQuote` (flash fee + swap-slippage gross-up) exactly as before.
+    function beginLiquidation(address account)
+        external
+        onlyLiquidator
+        returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
+    {
+        return _beginLiquidation(account, false);
+    }
+
+    /// @notice Funded in-kind liquidation start (used by `liquidateFunded`). Identical to `beginLiquidation` (same health checks,
+    ///         dust and full/partial thresholds, `maxLiquidationBps`, improvement test, status transition) except that the
+    ///         partial-repay seizure requirement is `_fundedQuote`: no flash lender is read, no flash fee and no swap-slippage
+    ///         gross-up is charged, because that route neither borrows nor swaps.
+    function beginFundedLiquidation(address account)
+        external
+        onlyLiquidator
+        returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
+    {
+        return _beginLiquidation(account, true);
+    }
+
+    function _beginLiquidation(address account, bool funded)
+        internal
+        returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
+    {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        IsolatedMarginTypes.AccountMetrics memory currentMetrics = _metrics(account, 0);
+        require(IsolatedMarginMath.isLiquidatable(currentMetrics), "RiskEngine: healthy");
+
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        uint256 debt = PErc20(accountConfig.debtPToken).borrowBalanceStored(account);
+        if (
+            currentMetrics.healthFactorBps <= pairRisk.fullLiquidationHealthBps
+                || currentMetrics.debtValueUsd <= DUST_DEBT_VALUE_USD
+        ) {
+            maxRepayUnderlying = debt;
+        } else {
+            maxRepayUnderlying = Math.mulDiv(debt, pairRisk.maxLiquidationBps, BPS);
+            uint256 requiredSeizeValueUsd;
+            if (funded) {
+                requiredSeizeValueUsd = _fundedQuote(accountConfig, maxRepayUnderlying);
+            } else {
+                (requiredSeizeValueUsd,) = _liquidationQuote(accountConfig, maxRepayUnderlying);
+            }
+            uint256 requiredPositionPTokens =
+                _pTokenForUsd(accountConfig.positionPToken, requiredSeizeValueUsd, Math.Rounding.Ceil);
+            uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, maxRepayUnderlying);
+            uint256 projectedGrossAssetValueUsd = currentMetrics.grossAssetValueUsd > requiredSeizeValueUsd
+                ? currentMetrics.grossAssetValueUsd - requiredSeizeValueUsd
+                : 0;
+            uint256 projectedDebtValueUsd =
+                currentMetrics.debtValueUsd > repayValueUsd ? currentMetrics.debtValueUsd - repayValueUsd : 0;
+            IsolatedMarginTypes.AccountMetrics memory projectedMetrics = IsolatedMarginMath.calculateMetrics(
+                projectedGrossAssetValueUsd,
+                projectedDebtValueUsd,
+                pairRisk.initialMarginBps,
+                pairRisk.maintenanceMarginBps
+            );
+            bool partialWouldNotImprove = projectedMetrics.healthFactorBps < pairRisk.liquidationTargetBps
+                && projectedMetrics.healthFactorBps <= currentMetrics.healthFactorBps;
+            if (
+                requiredSeizeValueUsd >= currentMetrics.grossAssetValueUsd || partialWouldNotImprove
+                    || requiredPositionPTokens >= PErc20(accountConfig.positionPToken).balanceOf(account)
+            ) {
+                maxRepayUnderlying = debt;
+            }
+        }
+        previousHealthFactorBps = currentMetrics.healthFactorBps;
+        accountConfig.status = IsolatedMarginTypes.Status.LIQUIDATING;
+        emit AccountStatusUpdated(account, IsolatedMarginTypes.Status.LIQUIDATING);
+    }
+
+    function finishLiquidation(address account, bool fullyLiquidated, uint256 previousHealthFactorBps)
+        external
+        onlyLiquidator
+        returns (IsolatedMarginTypes.AccountMetrics memory currentMetrics)
+    {
+        AccountConfig storage accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.LIQUIDATING, "RiskEngine: not liquidating");
+        if (fullyLiquidated) {
+            require(PErc20(accountConfig.debtPToken).borrowBalanceStored(account) == 0, "RiskEngine: debt remains");
+            accountConfig.status = IsolatedMarginTypes.Status.LIQUIDATED;
+        } else {
+            currentMetrics = _metrics(account, 0);
+            IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+            require(
+                currentMetrics.healthFactorBps >= pairRisk.liquidationTargetBps
+                    || currentMetrics.healthFactorBps > previousHealthFactorBps,
+                "RiskEngine: health not improved"
+            );
+            accountConfig.status = IsolatedMarginTypes.Status.ACTIVE;
+        }
+        emit AccountStatusUpdated(account, accountConfig.status);
+    }
+
+    /// @notice First range wiring, by the proxy admin inside the timelocked upgradeAndCall (the timelock's delay is the
+    /// delay). Later changes go through queueRangeCustodian / applyRangeCustodian.
+    function initializeRangeCustodian(address custodian) external reinitializer(2) {
+        require(msg.sender == ERC1967Utils.getAdmin(), "RiskEngine: not proxy admin");
+        require(custodian.code.length != 0 && rangeCustodian == address(0), "RiskEngine: bad range custodian");
+        rangeCustodian = custodian;
+        emit RangeCustodianSet(custodian);
+    }
+
+    /// @notice Range take-profit: queue a custodian change (or removal, address 0). It applies after the margin config's
+    /// action delay (at least 1 h), like every other margin risk change.
+    function queueRangeCustodian(address custodian) external onlyOwner {
+        uint256 delay = IConfigActionDelay(address(config)).actionDelay();
+        if (delay < 1 hours) delay = 1 hours;
+        pendingRangeCustodian = custodian;
+        pendingRangeCustodianEta = uint64(block.timestamp + delay);
+        emit RangeCustodianQueued(custodian, pendingRangeCustodianEta);
+    }
+
+    function cancelRangeCustodian() external onlyOwner {
+        emit RangeCustodianQueued(address(0), 0);
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+    }
+
+    /// @notice Applies the queued change. Refused while the current custodian holds active bands: dropping their
+    /// valuation would make healthy positions liquidatable at once. Unwind or finalise them first.
+    function applyRangeCustodian() external onlyOwner {
+        uint64 eta = pendingRangeCustodianEta;
+        require(eta != 0 && block.timestamp >= eta, "RiskEngine: range custodian not ready");
+        address current = rangeCustodian;
+        address next = pendingRangeCustodian;
+        require(current == address(0) || IRangeHoldings(current).activeOrders() == 0, "RiskEngine: active range orders");
+        rangeCustodian = next;
+        delete pendingRangeCustodian;
+        delete pendingRangeCustodianEta;
+        emit RangeCustodianSet(next);
+    }
+
+    /// @notice PROTOTYPE: lets the executor move position collateral of an ACTIVE account into its range order. The
+    /// custodian then holds it as a band, which `_metrics` keeps counting at the oracle price.
+    function authorizeRangeRelease(address account, uint256 amount) external onlyExecutor {
+        AccountConfig memory accountConfig = accounts[account];
+        require(accountConfig.status == IsolatedMarginTypes.Status.ACTIVE, "RiskEngine: not active");
+        require(rangeCustodian != address(0) && amount > 0, "RiskEngine: no range release");
+        movementAuthorizations[account][accountConfig.positionPToken] =
+            MovementAuthorization({remainingAmount: amount, blockNumber: uint64(block.number)});
+        emit MovementAuthorized(account, accountConfig.positionPToken, amount);
+    }
+
+    function authorizeMovement(address account, address pToken, uint256 amount) external onlyOperator {
+        AccountConfig memory accountConfig = accounts[account];
+        bool debtRepayMovement = msg.sender == executor && pToken == accountConfig.debtPToken
+            && accountConfig.status == IsolatedMarginTypes.Status.ACTIVE;
+        require(
+            accountConfig.status == IsolatedMarginTypes.Status.CLOSING
+                || accountConfig.status == IsolatedMarginTypes.Status.LIQUIDATING || debtRepayMovement,
+            "RiskEngine: movement not allowed"
+        );
+        require(
+            pToken == accountConfig.positionPToken || pToken == accountConfig.marginPToken
+                || (msg.sender == executor && pToken == accountConfig.debtPToken),
+            "RiskEngine: wrong collateral"
+        );
+        require(amount > 0, "RiskEngine: zero movement");
+        movementAuthorizations[account][pToken] =
+            MovementAuthorization({remainingAmount: amount, blockNumber: uint64(block.number)});
+        emit MovementAuthorized(account, pToken, amount);
+    }
+
+    function borrowAllowed(address account, address debtPToken, uint256 borrowAmount)
+        external
+        override
+        onlyController
+        returns (bool)
+    {
+        AccountConfig memory accountConfig = accounts[account];
+        if (
+            accountConfig.status != IsolatedMarginTypes.Status.OPENING || debtPToken != accountConfig.debtPToken
+                || borrowAmount == 0
+        ) return false;
+
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        if (!pairRisk.enabled) return false;
+
+        IsolatedMarginTypes.AccountMetrics memory projected = _metrics(account, borrowAmount);
+        if (projected.equityUsd <= 0 || uint256(projected.equityUsd) < projected.initialRequirementUsd) {
+            return false;
+        }
+        if (projected.leverageX100 > pairRisk.maxLeverageX100) return false;
+        if (pairRisk.maxPositionValueUsd != 0 && projected.grossAssetValueUsd > pairRisk.maxPositionValueUsd) {
+            return false;
+        }
+        if (pairRisk.maxDebtValueUsd != 0 && projected.debtValueUsd > pairRisk.maxDebtValueUsd) return false;
+        return true;
+    }
+
+    function redeemAllowed(address account, address collateralPToken, uint256 redeemTokens)
+        external
+        override
+        onlyController
+        returns (bool)
+    {
+        return _consumeMovement(account, collateralPToken, redeemTokens);
+    }
+
+    function transferAllowed(address account, address collateralPToken, uint256 transferTokens)
+        external
+        override
+        onlyController
+        returns (bool)
+    {
+        return _consumeMovement(account, collateralPToken, transferTokens);
+    }
+
+    function getMetrics(address account) external view returns (IsolatedMarginTypes.AccountMetrics memory) {
+        require(isIsolatedMarginAccount[account], "RiskEngine: unknown account");
+        return _metrics(account, 0);
+    }
+
+    function isLiquidatable(address account) external view returns (bool) {
+        if (!isIsolatedMarginAccount[account]) return false;
+        return IsolatedMarginMath.isLiquidatable(_metrics(account, 0));
+    }
+
+    function pTokenValueUsd(address pToken, uint256 pTokenAmount) public view returns (uint256) {
+        if (pTokenAmount == 0) return 0;
+        address asset = oracle.marketAsset(pToken);
+        if (asset == address(0)) revert PriceUnavailable(asset);
+        uint256 priceUsd = oracle.getPrice(asset);
+        if (priceUsd == 0) revert PriceUnavailable(asset);
+        uint256 underlyingAmount =
+            IsolatedMarginMath.underlyingFromPToken(pTokenAmount, PErc20(pToken).exchangeRateStored());
+        return IsolatedMarginMath.valueUsd(underlyingAmount, IERC20Metadata(asset).decimals(), priceUsd);
+    }
+
+    function underlyingValueUsd(address pToken, uint256 underlyingAmount) public view returns (uint256) {
+        address asset = oracle.marketAsset(pToken);
+        if (asset == address(0)) revert PriceUnavailable(asset);
+        uint256 priceUsd = oracle.getPrice(asset);
+        if (priceUsd == 0) revert PriceUnavailable(asset);
+        return IsolatedMarginMath.valueUsd(underlyingAmount, IERC20Metadata(asset).decimals(), priceUsd);
+    }
+
+    function getLiquidationQuote(address account, uint256 repayUnderlying)
+        external
+        view
+        returns (uint256 seizeValueUsd, uint256 flashFeeUnderlying)
+    {
+        require(isIsolatedMarginAccount[account] && repayUnderlying > 0, "RiskEngine: invalid quote");
+        return _liquidationQuote(accounts[account], repayUnderlying);
+    }
+
+    /// @notice Seizure value the FUNDED route needs for `repayUnderlying`: repaid value plus the liquidation bonus, with the bonus
+    ///         FLOORED. This is exactly the cap `IsolatedMarginLiquidatorUpgradeable.liquidateFunded` enforces on what the funder may
+    ///         take (`capUsd`), so sizing and seizure use one formula and the borrower's seizure bound is unchanged. (The flash quote
+    ///         ceils the bonus; the funded route never has, and this does not change that.) Reads no lender.
+    function getFundedLiquidationQuote(address account, uint256 repayUnderlying) external view returns (uint256 seizeValueUsd) {
+        require(isIsolatedMarginAccount[account] && repayUnderlying > 0, "RiskEngine: invalid quote");
+        return _fundedQuote(accounts[account], repayUnderlying);
+    }
+
+    function _fundedQuote(AccountConfig memory accountConfig, uint256 repayUnderlying)
+        internal
+        view
+        returns (uint256 seizeValueUsd)
+    {
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, repayUnderlying);
+        seizeValueUsd = repayValueUsd + Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS);
+    }
+
+    function _liquidationQuote(AccountConfig memory accountConfig, uint256 repayUnderlying)
+        internal
+        view
+        returns (uint256 seizeValueUsd, uint256 flashFeeUnderlying)
+    {
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        address debtAsset = oracle.marketAsset(accountConfig.debtPToken);
+        address positionAsset = oracle.marketAsset(accountConfig.positionPToken);
+        address lender = config.flashLoanProvider();
+        require(debtAsset != address(0) && positionAsset != address(0), "RiskEngine: market missing");
+        require(lender.code.length > 0, "RiskEngine: lender unavailable");
+
+        flashFeeUnderlying = IERC3156FlashLender(lender).flashFee(debtAsset, repayUnderlying);
+        uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, repayUnderlying);
+        uint256 flashFeeValueUsd = underlyingValueUsd(accountConfig.debtPToken, flashFeeUnderlying);
+        uint256 bonusValueUsd = Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS, Math.Rounding.Ceil);
+        seizeValueUsd = repayValueUsd + flashFeeValueUsd + bonusValueUsd;
+
+        // The seized collateral is sold into the debt asset. Reserve enough input
+        // to repay at the worst output permitted by the pair's swap bound.
+        if (positionAsset != debtAsset) {
+            seizeValueUsd = Math.mulDiv(seizeValueUsd, BPS, BPS - pairRisk.maxSlippageBps, Math.Rounding.Ceil);
+        }
+    }
+
+    function _pTokenForUsd(address pToken, uint256 valueUsd, Math.Rounding rounding) internal view returns (uint256) {
+        address asset = oracle.marketAsset(pToken);
+        if (asset == address(0)) revert PriceUnavailable(asset);
+        uint256 priceUsd = oracle.getPrice(asset);
+        if (priceUsd == 0) revert PriceUnavailable(asset);
+        return IsolatedMarginMath.pTokenForUsd(
+            valueUsd, IERC20Metadata(asset).decimals(), priceUsd, PErc20(pToken).exchangeRateStored(), rounding
+        );
+    }
+
+    function _metrics(address account, uint256 additionalBorrow)
+        internal
+        view
+        returns (IsolatedMarginTypes.AccountMetrics memory)
+    {
+        AccountConfig memory accountConfig = accounts[account];
+        uint256 grossAssetValueUsd =
+            pTokenValueUsd(accountConfig.positionPToken, PErc20(accountConfig.positionPToken).balanceOf(account));
+        if (accountConfig.marginPToken != accountConfig.positionPToken) {
+            grossAssetValueUsd += pTokenValueUsd(
+                accountConfig.marginPToken, PErc20(accountConfig.marginPToken).balanceOf(account)
+            );
+        }
+
+        address custodian = rangeCustodian;
+        if (custodian != address(0)) {
+            (uint256 bandStock, uint256 bandUsdg) = IRangeHoldings(custodian).holdings(account);
+            if (bandStock != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.positionPToken, bandStock);
+            if (bandUsdg != 0) grossAssetValueUsd += underlyingValueUsd(accountConfig.debtPToken, bandUsdg);
+        }
+
+        uint256 debt = PErc20(accountConfig.debtPToken).borrowBalanceStored(account) + additionalBorrow;
+        uint256 debtValueUsd = underlyingValueUsd(accountConfig.debtPToken, debt);
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        return IsolatedMarginMath.calculateMetrics(
+            grossAssetValueUsd, debtValueUsd, pairRisk.initialMarginBps, pairRisk.maintenanceMarginBps
+        );
+    }
+
+    function _pairRisk(AccountConfig memory accountConfig)
+        internal
+        view
+        returns (IsolatedMarginTypes.PairRiskConfig memory)
+    {
+        return config.getPairRisk(accountConfig.marginPToken, accountConfig.positionPToken, accountConfig.debtPToken);
+    }
+
+    function _consumeMovement(address account, address pToken, uint256 amount) internal returns (bool) {
+        if (!isIsolatedMarginAccount[account]) return false;
+
+        if (PErc20(accounts[account].debtPToken).borrowBalanceStored(account) == 0) return true;
+
+        MovementAuthorization storage authorization = movementAuthorizations[account][pToken];
+        if (authorization.blockNumber != block.number || amount == 0 || amount > authorization.remainingAmount) {
+            return false;
+        }
+        authorization.remainingAmount -= amount;
+        if (authorization.remainingAmount == 0) delete movementAuthorizations[account][pToken];
+        return true;
+    }
+
+    /// @dev Appended (range take-profit); taken from the gap so the layout is unchanged.
+    address public rangeCustodian;
+    address public pendingRangeCustodian; // packed with the eta below
+    uint64 public pendingRangeCustodianEta;
+
+    uint256[38] private __gap;
+}

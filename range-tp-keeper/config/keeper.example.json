@@ -1,0 +1,13 @@
+{
+  "chainId": 43114,
+  "custodian": "0x0000000000000000000000000000000000000000",
+  "rpcEnv": "AVALANCHE_MAINNET_RPC_URL",
+  "logRpcEnv": "AVALANCHE_LOGS_RPC_URL",
+  "keystore": { "path": "/etc/range-keeper/keystore.json", "passwordEnv": "RANGE_KEEPER_KEYSTORE_PASSWORD" },
+  "statePath": "/var/lib/range-keeper/state.json",
+  "pollSeconds": 20,
+  "maxFeeGwei": 60,
+  "logChunkBlocks": 100,
+  "logMinIntervalMs": 300,
+  "limits": { "minGasWei": "40000000000000000", "maxSendsPerStep": 3, "cooldownSeconds": 300, "gasMarginPct": 130, "maxReadsPerStep": 200 }
+}
