@@ -72,6 +72,10 @@ def main():
             c["keeper"].update(enabled=True, keystorePath=ks)
         else:
             c["rebalancer"].update(enabled=True, keystorePath=ks)
+        if role == "keeper":  # operator decision 9 Nov 2026: the keeper's chain-event scans (borrower index, 24 h spend) use the PUBLIC log endpoint: 100-block chunks
+            c["monitor"]["logChunkBlocks"] = 100
+            c["monitor"]["logs"]["chunkBlocks"] = 100
+            c["monitor"]["logs"]["maxChunksPerCycle"] = 20
         c["monitor"]["pollSeconds"] = {"op1": POLL_SECONDS, "op2": POLL_SECONDS, "keeper": 60, "rebalancer": 120}[role]  # free-tier request budget: the executors stay at 30 s, the keeper and the hourly rebalancer poll less often
         json.dump(c, open(os.path.join(outdir, f"{role}.json"), "w"), indent=2)
         open(os.path.join(outdir, f"{role}.json"), "a").write("\n")

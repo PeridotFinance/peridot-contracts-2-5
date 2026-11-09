@@ -92,3 +92,24 @@ test("every contract function the keeper encodes or decodes is in the ABI it use
   }
   for (const ev of ["RepayBorrow"]) assert.doesNotThrow(() => pIface.getEvent(ev));
 });
+
+test("keeper pays NOTHING while the borrower index (log scan) is behind or failing, and its confirmations restart", async () => {
+  const { keeperStep, emptyKeeperState } = await import("../src/keeper");
+  const cfg = decidedConfig();
+  cfg.keeper.enabled = true;
+  const sent: string[] = [];
+  const signer: any = { getAddress: async () => cfg.treasury.address, sendTransaction: async () => { sent.push("tx"); throw new Error("must not send"); } };
+  const mk = (behind: number, err?: string): any => ({
+    blockNumber: 100, blockTimestamp: 1_000, blind: false, indexBehindBlocks: behind, indexError: err, counts: {}, findings: [], alertsSent: [],
+    reference: { status: "ok", detail: "" }, expectedTreasuryCall: "0", unrecoverableDebt: { usd: "0", rawUsd: "0", reservesUsd: "0", complete: true }, margin: { classified: 0, unknownFlags: [], positions: [] },
+    accounts: [{ account: "0x" + "ab".repeat(20), verdictCode: 3, debtUnits: "1000000" }],
+  });
+  const state0 = { ...emptyKeeperState(), seen: { x: { count: 5, firstAt: 1, lastAt: 2, lastBlock: 3 } } as any };
+  for (const r of [mk(250), mk(0, "rate limited")]) {
+    const o = await keeperStep({ ctx: { cfg } as any, signer, alerts: { raise: async () => {} } as any, persist: () => {} } as any, state0, r);
+    assert.equal(o.paid.length, 0);
+    assert.deepEqual(o.state.seen, {}, "the confirmation counters restart");
+    assert.match(o.skipped[0]!.reason, /no payment while the borrower index is incomplete/);
+  }
+  assert.equal(sent.length, 0);
+});

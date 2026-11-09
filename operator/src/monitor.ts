@@ -53,6 +53,9 @@ export interface CycleReport {
   blockNumber: number;
   blockTimestamp: number;
   blind: boolean;
+  /** blocks of pUSDC history the borrower index has NOT scanned yet (0 = complete) and the scan error, if any. The treasury keeper pays NOTHING while this is not complete (operator decision 9 Nov 2026). */
+  indexBehindBlocks: number;
+  indexError?: string;
   accounts: AccountReport[];
   /** verdict name -> count */
   counts: Record<string, number>;
@@ -201,6 +204,8 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
       blockNumber: snap.blockNumber,
       blockTimestamp: snap.blockTimestamp,
       blind,
+      indexBehindBlocks: scan.behindBlocks,
+      indexError: scan.error,
       accounts: accountReports,
       counts,
       findings,

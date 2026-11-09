@@ -154,6 +154,12 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, report: C
     out.state = { ...state, seen: {} };
     return out;
   }
+  // the borrower index (chain events from the log endpoint) must be COMPLETE: while the scan is behind or failing the keeper pays nothing and its confirmations restart
+  if ((report.indexBehindBlocks ?? 0) > 0 || report.indexError) {
+    out.state = { ...state, seen: {} };
+    out.skipped.push({ account: "*", reason: `the log scan is behind by ${report.indexBehindBlocks} blocks${report.indexError ? ` (${report.indexError.slice(0, 80)})` : ""}: no payment while the borrower index is incomplete` });
+    return out;
+  }
   const defaults = report.accounts.filter((a) => a.verdictCode === Verdict.DEFAULT_EXHAUSTED).sort((x, y) => (BigInt(y.debtUnits) > BigInt(x.debtUnits) ? 1 : -1));
   let st: KeeperState = { ...state, seen: updateConfirmations(state.seen, defaults.map((d) => d.account), report.blockNumber, report.blockTimestamp) };
   deps.persist(st);
