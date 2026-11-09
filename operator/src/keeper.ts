@@ -94,7 +94,7 @@ export function checkBudget(args: { debt: bigint; keeperUsdc: bigint; spent24h: 
 /**
  * The AUTHORITATIVE 24 h spend: every RepayBorrow on pUSDC whose payer is the keeper wallet, read from the chain. The state file's ledger can be
  * lost (an ephemeral container filesystem, a restored backup, an operator deleting it); the daily cap must not depend on it. Looks back
- * `lookbackBlocks` (0.5 s per block is assumed, a conservative bound for Avalanche, so 24 h = 172,800 blocks) and filters by block time.
+ * `lookbackBlocks` (0.8 s per block is assumed, a conservative bound against the measured 0.94 s, so 24 h = 108,000 blocks; 53 requests at 2,048 blocks) and filters by block time.
  */
 export async function spentOnChain(provider: providers.Provider, pUsdc: string, keeper: string, nowSeconds: number, chunkBlocks: number, notBefore: number, windowSeconds = 86_400, minBlockSeconds = 0.5): Promise<{ spent: bigint; payments: KeeperPayment[] }> {
   const head = await provider.getBlockNumber();
@@ -227,10 +227,10 @@ async function payOne(deps: KeeperDeps, st: KeeperState, account: string): Promi
   // the daily cap uses the larger of the state ledger and the chain's own record of this wallet's repayments (the ledger file may have been lost)
   let onChain: { spent: bigint };
   try {
-    onChain = await spentOnChain(provider, cfg.deployment.pUsdc, keeper, nowS(), cfg.monitor.logChunkBlocks, cfg.deployment.deploymentBlock);
+    onChain = await spentOnChain(ctx.logProvider ?? provider, cfg.deployment.pUsdc, keeper, nowS(), cfg.monitor.logs?.chunkBlocks ?? cfg.monitor.logChunkBlocks, cfg.deployment.deploymentBlock, 86_400, 0.8);
   } catch (e) {
     // the cap cannot be verified (typically an RPC plan that limits eth_getLogs ranges): FAIL CLOSED, no payment, a human is told why
-    return { kind: "skip", reason: `the 24 h spend cannot be verified from the chain (eth_getLogs failed: ${safeError(e)}); no payment without a verifiable daily cap. Use an endpoint that allows eth_getLogs over monitor.logChunkBlocks blocks` };
+    return { kind: "skip", reason: `the 24 h spend cannot be verified from the chain (eth_getLogs failed: ${safeError(e)}); no payment without a verifiable daily cap. The log endpoint (AVALANCHE_LOGS_RPC_URL, default the Avalanche public RPC) must allow eth_getLogs over the configured chunk` };
   }
   const spent24h = (() => { const a = spentInWindow(st.payments, nowS()); return a > onChain.spent ? a : onChain.spent; })();
   const budget = checkBudget({ debt, keeperUsdc: BigInt(usdcBal.toString()), spent24h, capUnits: BigInt(cfg.keeper.dailySpendCapUsdc) * 1_000_000n, marginBp: cfg.keeper.allowanceMarginBp });

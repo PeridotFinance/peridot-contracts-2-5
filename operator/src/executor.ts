@@ -142,16 +142,16 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
   const { provider } = ctx;
   const operator = await deps.signer.getAddress();
   if (operator.toLowerCase() !== operatorEntry(cfg).address.toLowerCase()) return halt("signer address differs from the configured operator address");
-  const blk = await latestBlock(provider);
+  let blk = await latestBlock(provider);
   tr(`block ${blk.number}`);
-  const snap = await readBlockSnapshot(ctx, blk.number);
+  let snap = await readBlockSnapshot(ctx, blk.number);
   tr("snapshot read");
   const dep = cfg.deployment;
   const wIdx = snap.markets.findIndex((m) => m.pToken.toLowerCase() === dep.pWavax.toLowerCase());
   const uIdx = snap.markets.findIndex((m) => m.pToken.toLowerCase() === dep.pUsdc.toLowerCase());
   if (wIdx < 0 || uIdx < 0) return halt("pWAVAX or pUSDC is not a listed market of the controller");
-  const pW = snap.oraclePrices[wIdx]!;
-  const pU = snap.oraclePrices[uIdx]!;
+  let pW = snap.oraclePrices[wIdx]!;
+  let pU = snap.oraclePrices[uIdx]!;
   if (pW === 0n || pU === 0n) {
     out.skipped.push("oracle price unavailable (stale, zero or unreadable): no action");
     await alerts.raise({ key: `executor:price:${opName}`, severity: "warn", message: `operator ${opName}: the oracle returns no usable price; the executor does nothing until it does`, audience: "monitor-operator" }, nowS());
@@ -177,7 +177,21 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
     st = { ...st, pending: stage ? { stage, borrower, at: nowS() } : null };
     deps.persist(st); // BEFORE the first transaction of the stage
   };
-  const bal = async (token: string, who: string, block?: number): Promise<bigint> => BigInt(erc20.decodeFunctionResult("balanceOf", await provider.call({ to: token, data: erc20.encodeFunctionData("balanceOf", [who]) }, block))[0].toString());
+  const bal = async (token: string, who: string, block?: number): Promise<bigint> => {
+    const read = async (b?: number): Promise<bigint> => BigInt(erc20.decodeFunctionResult("balanceOf", await provider.call({ to: token, data: erc20.encodeFunctionData("balanceOf", [who]) }, b))[0].toString());
+    if (block === undefined) return read();
+    try {
+      return await read(block);
+    } catch {
+      // a load-balanced node that has not reached the receipt's block yet ("header not found"): once more after a second, then the latest state
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        return await read(block);
+      } catch {
+        return read();
+      }
+    }
+  };
   const allowance = async (token: string, spender: string): Promise<bigint> => BigInt(erc20.decodeFunctionResult("allowance", await provider.call({ to: token, data: erc20.encodeFunctionData("allowance", [operator, spender]) }))[0].toString());
   const approve = (token: string, spender: string, amount: bigint) => send(token, erc20.encodeFunctionData("approve", [spender, amount.toString()]), BigNumber.from(120_000));
 
@@ -186,6 +200,15 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
     if (cfg.executor.convertToUsdc) {
       const r = await finishConversion(null);
       if (r.halt) return halt(r.halt);
+      // transactions may have been sent and waited on: a non-archive node serves state for about the last 128 blocks, so the snapshot is re-read at a fresh block
+      blk = await latestBlock(provider);
+      snap = await readBlockSnapshot(ctx, blk.number);
+      pW = snap.oraclePrices[wIdx]!;
+      pU = snap.oraclePrices[uIdx]!;
+      if (pW === 0n || pU === 0n) {
+        out.skipped.push("oracle price unavailable after the conversion step: no further action this cycle");
+        return out;
+      }
     }
     // 2. choose an account in shortfall
     // 1b. isolated margin: funded liquidation of margin positions (this operator's own inventory), before the lending accounts

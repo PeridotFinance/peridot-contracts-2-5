@@ -3,6 +3,7 @@
 import { BigNumber, providers, utils } from "ethers";
 import type { ExternalSigner, TxRequest } from "./signer";
 
+export const TX_WAIT_TIMEOUT_MS = 180_000;
 export class TxReverted extends Error {
   constructor(public readonly hash: string) {
     super(`transaction ${hash} was mined and reverted`);
@@ -29,7 +30,8 @@ export function makeSender(signer: ExternalSigner, fees: Fees): (to: string, dat
     const sent = await signer.sendTransaction(tx);
     let mined;
     try {
-      mined = await sent.wait();
+      // a stalled wait must not hang the process between transactions: the caller treats the timeout as unexpected, keeps the pending marker and halts
+      mined = await Promise.race([sent.wait(), new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`transaction ${sent.hash} was not mined within ${TX_WAIT_TIMEOUT_MS / 1000} s`)), TX_WAIT_TIMEOUT_MS))]);
     } catch (e) {
       // ethers v5 rejects wait() with CALL_EXCEPTION when the transaction was mined with status 0
       if ((e as { code?: string }).code === "CALL_EXCEPTION") throw new TxReverted(sent.hash);

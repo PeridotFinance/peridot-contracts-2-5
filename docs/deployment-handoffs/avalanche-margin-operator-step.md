@@ -74,7 +74,7 @@ On a fork of the live head (block ~99.67M), real PW30 and margin stacks deployed
 1. **A full liquidation could never go through.** `maxRepayUnderlying` was the debt read *before* the call; interest accrues over the blocks before it lands, so the contract's repayment came out a few units higher and was refused (LiquidationError 28). The debt bound now carries a **10 bp margin** (the keeper's own `allowanceMarginBp`). Unit test pins it.
 2. A first mutation run counted crashed scenarios as "detected". Now a crashed scenario is **inconclusive and fails the rehearsal**.
 3. The per-call bound mutation was masked by the daily cap binding first (both were 100); the scenario now isolates each bound.
-4. The fork's first log scan went upstream (free-tier `eth_getLogs` limit); the rehearsal scans local blocks only (this does **not** apply to mainnet once the plan is upgraded; `main` still probes `eth_getLogs` at start).
+4. The fork's first log scan went upstream (free-tier `eth_getLogs` limit); the rehearsal scans local blocks only (on mainnet the live processes read logs from a SEPARATE log endpoint, default the Avalanche public RPC with 2,048 blocks per request; the start-up probe of that endpoint is a warning, not a refusal).
 5. Behaviour kept as designed and worth knowing: with the oracle moved but the TWAP not, the treasury rule says PRICE_DIVERGENCE for lending accounts (nothing is paid); the liquidator executor is not gated by it.
 
 ## 6. Limits

@@ -32,6 +32,7 @@ const BORROWER = "0x00000000000000000000000000000000000B0A01";
 const PW = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"; // WAVAX
 const erc = ["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"];
 const U6 = (n: number): bigint => BigInt(Math.round(n * 1e6));
+const ci = (x: number): number => Math.max(1, Math.floor(x)); // whole USD for the configuration
 
 interface Check {
   scenario: string;
@@ -87,8 +88,11 @@ interface Mut {
     const forkHead: number = b.report.forkHead;
     report.forkHead = forkHead;
     for (const a of addr) await chain.setBalance(a, utils.parseEther("1000"));
-    for (const a of addr) await chain.setErc20Balance(USDC, a, BigNumber.from(U6(3750).toString()));
     const M = b.deployed;
+    const CAP = b.capUsd; // the pilot's one sizing number: every amount below is a ratio of it (0.89 operator inventory, 0.5 margin, 0.3 / 0.5 caps)
+    report.capUsd = CAP;
+    const avaxUsd = Number(b.realAvax.toString()) / 1e8;
+    for (const a of addr) await chain.setErc20Balance(USDC, a, BigNumber.from(U6(CAP * 0.89).toString())); // operator inventory 0.89 x CAP
     const usdcC = new Contract(USDC, erc, chain.provider);
     const pUsdcC: any = new Contract(b.pw.pUsdc, ["function borrowBalanceStored(address) view returns (uint256)", "function balanceOf(address) view returns (uint256)", "function mint(uint256) returns (uint256)", "function borrow(uint256) returns (uint256)"], chain.provider);
     const pWavaxC: any = new Contract(b.pw.pWavax, ["function balanceOf(address) view returns (uint256)", "function mint(uint256) returns (uint256)"], chain.provider);
@@ -106,7 +110,7 @@ interface Mut {
     await setAvaxBps(10_000);
 
     // ---- the standing state: one 2x position for ALICE, one lending borrower (collateral WAVAX at 30%, borrows 500 USDC: healthy at every price used below; a second, fragile one is made in S6)
-    const pos1 = await openLong(chain, b, "0x000000000000000000000000000000000000A11C", U6(2500));
+    const pos1 = await openLong(chain, b, "0x000000000000000000000000000000000000A11C", U6(CAP * 0.5)); // margin = half the position cap
     const acct1 = pos1.account.toLowerCase();
     await chain.setBalance(BORROWER, utils.parseEther("1000"));
     await chain.setErc20Balance(PW, BORROWER, BigNumber.from("1000000000000000000000"));
@@ -114,7 +118,7 @@ interface Mut {
     await okTx(new Contract(PW, erc, bs).approve(b.pw.pWavax, BigNumber.from("1000000000000000000000")));
     await okTx(pWavaxC.connect(bs).mint(BigNumber.from("1000000000000000000000")));
     await okTx(ctrlC.connect(bs).enterMarkets([b.pw.pWavax]));
-    await okTx(pUsdcC.connect(bs).borrow(BigNumber.from(U6(500).toString())));
+    await okTx(pUsdcC.connect(bs).borrow(BigNumber.from(U6(CAP * 0.1).toString())));
     report.position = pos1;
 
     // ---- configuration
@@ -127,7 +131,7 @@ interface Mut {
       c.monitor.logChunkBlocks = 2000;
       c.margin = {
         enabled: true, executor: M.M_EXECUTOR, liquidator: M.M_LIQUIDATOR, riskEngine: M.M_RISK_ENGINE, config: M.M_CONFIG, watchHealthBps: 13000,
-        liquidation: { enabled: true, dailyRepayCapUsdc: 2500, maxRepayPerCallUsdc: 1500, minRepayUsdc: 1, retryCooldownSeconds: 30, insolventCooldownSeconds: 600 },
+        liquidation: { enabled: true, dailyRepayCapUsdc: ci(CAP * 0.5), maxRepayPerCallUsdc: ci(CAP * 0.3), minRepayUsdc: 1, retryCooldownSeconds: 30, insolventCooldownSeconds: 600 },
       };
       over(c);
       return requireValidConfig(c);
@@ -227,7 +231,7 @@ interface Mut {
       check("the operator's allowance to the liquidator is back to 0", (await allowanceTo(0)) === 0n);
       check("the operator holds no pWAVAX and no WAVAX (redeemed and converted)", BigInt((await pWavaxC.balanceOf(addr[0]!)).toString()) === 0n && BigInt((await wavaxC.balanceOf(addr[0]!)).toString()) === 0n);
       check("USDC inventory is not lower than before (oracle-only shock: the pool pays the real price)", inv1 >= inv0, `inventory ${inv0} -> ${inv1}`);
-      check("repayment is within the per-call bound", s1Repaid <= U6(1500), `${s1Repaid}`);
+      check("repayment is within the per-call bound (0.3 x CAP)", s1Repaid <= U6(ci(CAP * 0.3)), `${s1Repaid}`);
       check("state: one margin round recorded, nothing pending, not halted", (ex.state.marginRounds?.length ?? 0) === 1 && ex.state.pending === null && ex.state.halted === null);
       check("an action alert was sent", sink.messages.some((x) => x.kind === "action" && /LIQUIDATED margin position 1/.test(x.text)));
       report.s1 = { repaid: s1Repaid.toString(), seizedPTokens: round?.seizedPTokens, usdcOut: round?.usdcOut, txs: (await nonce(0)) - n0 };
@@ -241,7 +245,7 @@ interface Mut {
     await scenario("S1 -35%: funded liquidation by op-a", S1);
 
     // =========================================================== S2: -55%: insolvent, declined, nothing is paid
-    const big = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = 2500; c.margin.liquidation.maxRepayPerCallUsdc = 2500; }); // caps above the repayment the engine wants: only the floor can stop it
+    const big = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = ci(CAP * 0.5); c.margin.liquidation.maxRepayPerCallUsdc = ci(CAP * 0.5); }); // caps above the repayment the engine wants: only the floor can stop it
     const S2 = async (m: Mut): Promise<void> => {
       await setAvaxBps(4_500);
       const mon = await monitor(big);
@@ -291,13 +295,13 @@ interface Mut {
     // =========================================================== S3: the allowance bound and the daily cap
     const S3a = async (m: Mut): Promise<void> => {
       await setAvaxBps(6_500);
-      const small = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = 2500; c.margin.liquidation.maxRepayPerCallUsdc = 100; });
+      const small = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = ci(CAP * 0.5); c.margin.liquidation.maxRepayPerCallUsdc = ci(CAP * 0.02); });
       const mon = await monitor(small);
       const debt0 = await debtOf(acct1);
       const sink = new MemorySink();
       const ex = await execStep(small, 0, mon.state.index.borrowers, emptyExecutorState(), m, sink);
       const debt1 = await debtOf(acct1);
-      check("per-call bound 100 USDC: the contract refuses the larger repayment (debt untouched)", near(debt1, debt0) && !ex.o.round, `debt ${debt0} -> ${debt1}; ${ex.o.skipped.join(" | ")}`);
+      check(`per-call bound ${ci(CAP * 0.02)} USDC (0.02 x CAP): the contract refuses the larger repayment (debt untouched)`, near(debt1, debt0) && !ex.o.round, `debt ${debt0} -> ${debt1}; ${ex.o.skipped.join(" | ")}`);
       check("allowance reset to 0", (await allowanceTo(0)) === 0n);
       if (!m.noAllowanceBound) check("an alert says the bound is too low for this position", sink.messages.some((x) => /needs a larger repayment|cannot liquidate margin/.test(x.text)));
     };
@@ -305,18 +309,18 @@ interface Mut {
 
     const S3b = async (m: Mut): Promise<void> => {
       await setAvaxBps(6_500);
-      const cap = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = 1300; c.margin.liquidation.maxRepayPerCallUsdc = 1300; });
+      const cap = mkCfg((c) => { c.margin.liquidation.dailyRepayCapUsdc = ci(CAP * 0.26); c.margin.liquidation.maxRepayPerCallUsdc = ci(CAP * 0.26); });
       const mon = await monitor(cap);
       const sink = new MemorySink();
       const ex1 = await execStep(cap, 0, mon.state.index.borrowers, emptyExecutorState(), m, sink);
       const repaid1 = ex1.o.round ? BigInt(ex1.o.round.repay) : 0n;
-      check("first round within the daily cap", repaid1 > 0n && repaid1 <= U6(1300), `${repaid1}`);
+      check("first round within the daily cap", repaid1 > 0n && repaid1 <= U6(ci(CAP * 0.26)), `${repaid1}`);
       await setAvaxBps(5_200); // the position falls below maintenance again
       const mon2 = await monitor(cap);
       const debt0 = await debtOf(acct1);
       const ex2 = await execStep(cap, 0, mon2.state.index.borrowers, ex1.state, m, sink);
       const repaid2 = ex2.o.round ? BigInt(ex2.o.round.repay) : 0n;
-      check("the second attempt cannot exceed the daily cap (total repaid <= 1,300 USDC)", repaid1 + repaid2 <= U6(1300), `first ${repaid1}, second ${repaid2}, debt ${debt0} -> ${await debtOf(acct1)}`);
+      check(`the second attempt cannot exceed the daily cap (total repaid <= ${ci(CAP * 0.26)} USDC)`, repaid1 + repaid2 <= U6(ci(CAP * 0.26)), `first ${repaid1}, second ${repaid2}, debt ${debt0} -> ${await debtOf(acct1)}`);
       check("allowance reset to 0 after both", (await allowanceTo(0)) === 0n);
     };
     await scenario("S3b daily cap", () => S3b({}));
@@ -352,15 +356,15 @@ interface Mut {
 
     // =========================================================== S6: the lending path still works next to a margin position
     await scenario("S6 lending liquidation is unchanged next to a margin position", async () => {
-      // a second, fragile lending borrower: 100 WAVAX at 30% borrows 200 USDC (power about 240 at the head price, about 160 at -35%)
+      // a second, fragile lending borrower: collateral 0.1 x CAP in WAVAX at 30% (power 0.03 x CAP) borrows 0.025 x CAP (power about 0.0195 x CAP at -35%)
       const B2 = "0x00000000000000000000000000000000000B0A02";
       await chain.setBalance(B2, utils.parseEther("1000"));
-      await chain.setErc20Balance(PW, B2, BigNumber.from("100000000000000000000"));
+      await chain.setErc20Balance(PW, B2, utils.parseEther(String((CAP * 0.1) / avaxUsd)));
       const b2s = chain.signer(B2);
-      await okTx(new Contract(PW, erc, b2s).approve(b.pw.pWavax, BigNumber.from("100000000000000000000")));
-      await okTx(pWavaxC.connect(b2s).mint(BigNumber.from("100000000000000000000")));
+      await okTx(new Contract(PW, erc, b2s).approve(b.pw.pWavax, utils.parseEther(String((CAP * 0.1) / avaxUsd))));
+      await okTx(pWavaxC.connect(b2s).mint(utils.parseEther(String((CAP * 0.1) / avaxUsd))));
       await okTx(ctrlC.connect(b2s).enterMarkets([b.pw.pWavax]));
-      await okTx(pUsdcC.connect(b2s).borrow(BigNumber.from(U6(200).toString())));
+      await okTx(pUsdcC.connect(b2s).borrow(BigNumber.from(U6(CAP * 0.025).toString())));
       await setAvaxBps(6_500);
       const mon = await monitor(cfg);
       // the treasury rule fails closed on an oracle/TWAP divergence (the shock moved the oracle only): PRICE_DIVERGENCE is the designed verdict here, and the executor is not gated by it

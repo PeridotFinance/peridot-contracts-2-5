@@ -9,7 +9,7 @@ import type { BlockSnapshot, Ctx } from "./chain";
 import type { MonitorConfig } from "./config";
 import { evaluateRule, Verdict, VERDICT_NAMES } from "./detect";
 import type { RuleResult, RuleTestHooks } from "./detect";
-import { emptyIndex, updateIndex } from "./borrowers";
+import { emptyIndex, updateIndexBounded } from "./borrowers";
 import type { IndexState } from "./borrowers";
 import { emptyHealthState, marketFindings, operatorFindings, oracleFindings, treasuryFindings, treasuryOutflowFinding } from "./health";
 import type { Finding, HealthState } from "./health";
@@ -83,10 +83,15 @@ export interface CycleOptions {
 
 export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManager, opts: CycleOptions = {}): Promise<{ report: CycleReport; state: MonitorState }> {
   const cfg = ctx.cfg;
+  // 1. borrower index, from the LOG endpoint (small range limit): bounded per cycle and resumable. It NEVER makes the cycle fail: a lagging or failing
+  //    log endpoint is a finding below, the cursor keeps its progress. The snapshot block is chosen AFTER the scan so that it is fresh (a non-archive node
+  //    serves state only for about the last 128 blocks, and a long catch-up must not push the snapshot out of that window).
+  const head0 = await latestBlock(ctx.provider);
+  const scan = await updateIndexBounded(ctx.logProvider ?? ctx.provider, cfg.deployment.pUsdc, state.index, head0.number, cfg.monitor.logs?.chunkBlocks ?? cfg.monitor.logChunkBlocks, cfg.monitor.reorgMarginBlocks, cfg.monitor.logs?.maxChunksPerCycle ?? 1_000_000);
+  const index = scan.state;
   const blk = await latestBlock(ctx.provider);
   const now = opts.nowSeconds ?? blk.timestamp;
-  // 1. borrower index
-  const index = await updateIndex(ctx.provider, cfg.deployment.pUsdc, state.index, blk.number, cfg.monitor.logChunkBlocks, cfg.monitor.reorgMarginBlocks);
+  const indexComplete0 = scan.behindBlocks === 0 && !scan.error;
   const accounts = [...new Set([...index.borrowers, ...(opts.extraAccounts ?? []).map((a) => a.toLowerCase())])].sort();
   // 2. everything at ONE block
   const snap = await readBlockSnapshot(ctx, blk.number);
@@ -126,10 +131,15 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   const lag = now - snap.blockTimestamp;
   const blind = lag > cfg.monitor.maxBlockLagSeconds;
   if (blind) findings.push({ key: "monitor:blind", severity: "crit", message: `latest block is ${lag}s old (limit ${cfg.monitor.maxBlockLagSeconds}s): the RPC is stale and nothing below can be trusted`, audience: "monitor-operator" });
+  if (!indexComplete0) {
+    const crit = scan.behindBlocks >= (cfg.monitor.logs?.behindCritBlocks ?? 3900);
+    const warn = scan.behindBlocks >= (cfg.monitor.logs?.behindWarnBlocks ?? 600);
+    if (warn || scan.error) findings.push({ key: "index:behind", severity: crit ? "crit" : "warn", message: `the borrower index is ${scan.behindBlocks} blocks behind the head (about ${Math.round(scan.behindBlocks * 0.94)} s): ${scan.error ?? "catching up"}. Accounts that borrowed since the cursor are not yet known to the monitor and the executor; the log endpoint (AVALANCHE_LOGS_RPC_URL, default the Avalanche public RPC) may be down or rate-limited`, audience: "monitor-operator" });
+  }
   findings.push(...oracleFindings(snap, cfg));
   findings.push(...marginFindings(marginEvals, marginExtra));
   if (!cfg.margin?.enabled && cls.margin.size > 0) findings.push({ key: "margin:unconfigured", severity: "warn", message: `${cls.margin.size} isolated margin account(s) exist but the margin block of the configuration is not enabled: they are excluded from the lending checks and NOT monitored as margin positions`, audience: "monitor-operator" });
-  const mk = marketFindings(snap, cfg, state.health, sharesSum, true);
+  const mk = marketFindings(snap, cfg, state.health, sharesSum, indexComplete0);
   findings.push(...mk.findings);
   const op = operatorFindings(snap, cfg, state.health);
   findings.push(...op.findings);

@@ -42,6 +42,45 @@ export async function updateIndex(provider: providers.Provider, pUsdc: string, s
   return { lastScannedBlock: toBlock, borrowers: [...all].sort() };
 }
 
+export interface BoundedScan {
+  state: IndexState;
+  /** blocks between the head asked for and the new cursor (0 = caught up) */
+  behindBlocks: number;
+  /** set when a chunk failed or the per-cycle bound stopped the scan; the cursor never moves past a chunk that failed */
+  error?: string;
+  chunksScanned: number;
+}
+
+/**
+ * Resumable, bounded incremental update for a LOG endpoint with a small range limit (the Avalanche public RPC allows 2,048 blocks per request).
+ * The cursor advances after EVERY successful chunk, so a failure (or the per-cycle bound) keeps the progress; the next cycle resumes there. Never throws:
+ * a failing endpoint is reported through `error` and `behindBlocks`, and the caller decides what that means (alert, keep running).
+ */
+export async function updateIndexBounded(provider: providers.Provider, pUsdc: string, state: IndexState, toBlock: number, chunk: number, reorgMargin: number, maxChunks: number): Promise<BoundedScan> {
+  const from = Math.max(state.lastScannedBlock - reorgMargin + 1, 1);
+  if (toBlock < from) return { state, behindBlocks: 0, chunksScanned: 0 };
+  const known = new Set(state.borrowers);
+  let cursor = state.lastScannedBlock;
+  let n = 0;
+  let error: string | undefined;
+  for (let s = from; s <= toBlock; s += chunk) {
+    if (n >= maxChunks) {
+      error = `bounded: ${maxChunks} chunks per cycle`;
+      break;
+    }
+    const e = Math.min(toBlock, s + chunk - 1);
+    try {
+      for (const a of await scanBorrowers(provider, pUsdc, s, e, chunk)) known.add(a);
+    } catch (err) {
+      error = String((err as Error)?.message ?? err).slice(0, 200);
+      break;
+    }
+    cursor = Math.max(cursor, e);
+    n++;
+  }
+  return { state: { lastScannedBlock: cursor, borrowers: [...known].sort() }, behindBlocks: Math.max(0, toBlock - cursor), error, chunksScanned: n };
+}
+
 /** Full re-scan from the deployment block; returns accounts present in one index but not the other (cross-check of the incremental index). */
 export async function crossCheckIndex(provider: providers.Provider, pUsdc: string, state: IndexState, deploymentBlock: number, toBlock: number, chunk: number): Promise<{ missingFromIndex: string[]; extraInIndex: string[] }> {
   const full = await scanBorrowers(provider, pUsdc, deploymentBlock, toBlock, chunk);

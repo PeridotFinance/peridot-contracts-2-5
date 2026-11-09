@@ -54,6 +54,7 @@ struct MarginParams {
     address pWavax;
     address pUsdc;
     uint256 actionDelay;
+    uint256 capUsd; // whole USD: the pair's position cap; the debt cap is half of it
     address treasury;
     uint256 flashSeedUsdc;
     uint256 insuranceSeedUsdc;
@@ -93,7 +94,8 @@ abstract contract MarginChecks is Script {
     uint256 internal constant MIN_DELAY = 1 hours;
 
     /// @dev The pair as proposed in the scope document. 2x, 25% maintenance, position cap USD 5,000, debt cap USD 2,500.
-    function pairRisk() public pure returns (IsolatedMarginTypes.PairRiskConfig memory) {
+    /// @param capUsd the position cap in whole USD (the pilot's one sizing number); the debt cap is half of it. Everything else is a constant.
+    function pairRisk(uint256 capUsd) public pure returns (IsolatedMarginTypes.PairRiskConfig memory) {
         return IsolatedMarginTypes.PairRiskConfig({
             enabled: true,
             maxLeverageX100: 200,
@@ -105,8 +107,8 @@ abstract contract MarginChecks is Script {
             liquidationBonusBps: 500,
             maxSlippageBps: 100,
             oracleDeviationBps: 100,
-            maxPositionValueUsd: uint128(5_000e18),
-            maxDebtValueUsd: uint128(2_500e18)
+            maxPositionValueUsd: uint128(capUsd * 1e18),
+            maxDebtValueUsd: uint128(capUsd * 1e18 / 2)
         });
     }
 
@@ -128,6 +130,8 @@ abstract contract MarginChecks is Script {
         require(p.deployer != p.ledger, "Margin: the deployer must not be the Ledger");
         require(p.actionDelay >= MIN_DELAY, "Margin: delay below the contract minimum");
         require(p.flashSeedUsdc > 0 && p.insuranceSeedUsdc > 0, "Margin: seeds must be positive");
+        require(p.capUsd >= 100 && p.capUsd <= 5_000, "Margin: cap must be USD 100..5,000 (the pilot cap decision)");
+        require(p.flashSeedUsdc >= p.capUsd * 1e6 / 2, "Margin: the flash vault must cover the debt cap (cap / 2)");
         require(p.funders.length >= 1, "Margin: no funded liquidators");
         for (uint256 i; i < p.funders.length; ++i) {
             require(p.funders[i] != address(0) && p.funders[i] != p.ledger && p.funders[i] != p.deployer, "Margin: bad funder");
@@ -150,7 +154,7 @@ abstract contract MarginChecks is Script {
         require(IMarginPriceOracle(oracle).marketAsset(p.pWavax) == WAVAX, "Margin: oracle does not know pWAVAX");
         require(IMarginPriceOracle(oracle).marketAsset(p.pUsdc) == USDC, "Margin: oracle does not know pUSDC");
         require(IMarginPriceOracle(oracle).getPrice(WAVAX) > 0 && IMarginPriceOracle(oracle).getPrice(USDC) > 0, "Margin: no fresh price");
-        IsolatedMarginMath.validateRiskConfig(pairRisk());
+        IsolatedMarginMath.validateRiskConfig(pairRisk(p.capUsd));
         require(PHARAOH_POOL.code.length > 0 && PHARAOH_ROUTER.code.length > 0 && PHARAOH_FACTORY.code.length > 0, "Margin: Pharaoh");
     }
 
@@ -210,7 +214,7 @@ abstract contract MarginChecks is Script {
             require(PToken(p.pUsdc).balanceOf(d.insuranceFund) > 0, "verify: insurance fund unseeded");
         }
         if (stage >= 3) {
-            IsolatedMarginTypes.PairRiskConfig memory want = pairRisk();
+            IsolatedMarginTypes.PairRiskConfig memory want = pairRisk(p.capUsd);
             IsolatedMarginTypes.PairRiskConfig memory got = cfg.getPairRisk(p.pUsdc, p.pWavax, p.pUsdc);
             require(keccak256(abi.encode(want)) == keccak256(abi.encode(got)), "verify: pair risk differs from the proposed constants");
             for (uint256 i; i < p.funders.length; ++i) {
@@ -247,6 +251,7 @@ contract DeployAvalancheMarginMainnet is MarginChecks {
         p.pUsdc = vm.envAddress("PUSDC");
         p.actionDelay = vm.envOr("MARGIN_ACTION_DELAY", uint256(24 hours));
         p.treasury = vm.envOr("MARGIN_TREASURY", p.ledger);
+        p.capUsd = vm.envUint("MARGIN_CAP_USD");
         p.flashSeedUsdc = vm.envUint("MARGIN_FLASH_SEED_USDC");
         p.insuranceSeedUsdc = vm.envUint("MARGIN_INSURANCE_SEED_USDC");
         p.funders = vm.envAddress("MARGIN_FUNDERS", ",");
@@ -388,6 +393,7 @@ contract OperateAvalancheMarginMainnet is MarginChecks {
         p.pUsdc = vm.envAddress("PUSDC");
         p.actionDelay = vm.envOr("MARGIN_ACTION_DELAY", uint256(24 hours));
         p.treasury = vm.envOr("MARGIN_TREASURY", p.ledger);
+        p.capUsd = vm.envUint("MARGIN_CAP_USD");
         p.flashSeedUsdc = vm.envUint("MARGIN_FLASH_SEED_USDC");
         p.insuranceSeedUsdc = vm.envUint("MARGIN_INSURANCE_SEED_USDC");
         p.funders = vm.envAddress("MARGIN_FUNDERS", ",");
@@ -445,7 +451,7 @@ contract OperateAvalancheMarginMainnet is MarginChecks {
 
         // queue every timelocked action (24 h by default): the clock starts now
         IsolatedMarginConfigUpgradeable cfg = IsolatedMarginConfigUpgradeable(d.config);
-        cfg.queuePairRisk(p.pUsdc, p.pWavax, p.pUsdc, pairRisk());
+        cfg.queuePairRisk(p.pUsdc, p.pWavax, p.pUsdc, pairRisk(p.capUsd));
         for (uint256 i; i < p.funders.length; ++i) {
             cfg.queueFundedLiquidator(p.funders[i]);
         }
@@ -464,7 +470,7 @@ contract OperateAvalancheMarginMainnet is MarginChecks {
         _checkParams(p);
         IsolatedMarginConfigUpgradeable cfg = IsolatedMarginConfigUpgradeable(d.config);
         vm.startBroadcast(p.ledger);
-        cfg.setPairRisk(p.pUsdc, p.pWavax, p.pUsdc, pairRisk());
+        cfg.setPairRisk(p.pUsdc, p.pWavax, p.pUsdc, pairRisk(p.capUsd));
         for (uint256 i; i < p.funders.length; ++i) {
             cfg.addFundedLiquidator(p.funders[i]);
         }

@@ -158,6 +158,7 @@ contract AvalancheMarginMainnetRehearsalForkTest is Test {
         mp.pWavax = address(pWavax);
         mp.pUsdc = address(pUsdc);
         mp.actionDelay = 24 hours;
+        mp.capUsd = 5_000;
         mp.treasury = LEDGER;
         mp.flashSeedUsdc = FLASH_SEED;
         mp.insuranceSeedUsdc = INS_SEED;
@@ -436,6 +437,32 @@ contract AvalancheMarginMainnetRehearsalForkTest is Test {
         assertFalse(mConfig.fundedLiquidators(STRANGER));
         assertFalse(mConfig.fundedLiquidators(LEDGER), "the Ledger is not an operator");
         assertTrue(controller.borrowGuardianPaused(address(pWavax)), "long only: WAVAX borrowing stays paused");
+    }
+
+    // One sizing number: the pair's caps follow MARGIN_CAP_USD (position cap = cap, debt cap = cap / 2) and nothing else in the pair risk moves.
+    function test_02d_pairRisk_followsTheCap_andTheCapIsBounded() public {
+        IsolatedMarginTypes.PairRiskConfig memory a = deployScript.pairRisk(5_000);
+        IsolatedMarginTypes.PairRiskConfig memory b = deployScript.pairRisk(750);
+        assertEq(uint256(b.maxPositionValueUsd), 750e18);
+        assertEq(uint256(b.maxDebtValueUsd), 375e18);
+        assertEq(uint256(a.maxPositionValueUsd), 5_000e18);
+        assertEq(uint256(a.maxDebtValueUsd), 2_500e18);
+        a.maxPositionValueUsd = b.maxPositionValueUsd;
+        a.maxDebtValueUsd = b.maxDebtValueUsd;
+        assertEq(keccak256(abi.encode(a)), keccak256(abi.encode(b)), "only the two caps depend on the cap");
+        MarginParams memory q = mp;
+        q.capUsd = 99;
+        vm.expectRevert(bytes("Margin: cap must be USD 100..5,000 (the pilot cap decision)"));
+        deployScript.deploy(q);
+        q = mp;
+        q.capUsd = 5_001;
+        vm.expectRevert(bytes("Margin: cap must be USD 100..5,000 (the pilot cap decision)"));
+        deployScript.deploy(q);
+        q = mp;
+        q.capUsd = 1_000;
+        q.flashSeedUsdc = 499e6; // below the debt cap of 500
+        vm.expectRevert(bytes("Margin: the flash vault must cover the debt cap (cap / 2)"));
+        deployScript.deploy(q);
     }
 
     function test_03_lifecycle_open_caps_close() public {

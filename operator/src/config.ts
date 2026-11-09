@@ -104,6 +104,8 @@ export interface MonitorConfig {
     maxBlockLagSeconds: number;
     reorgMarginBlocks: number;
     logChunkBlocks: number;
+    /** log endpoint scanning (borrower index, daily cap): chunk size and the bound on chunks per cycle (a catch-up must not make the snapshot block stale); optional */
+    logs?: { chunkBlocks: number; maxChunksPerCycle: number; behindWarnBlocks: number; behindCritBlocks: number };
     statePath: string;
     dustUsd1e18: string;
     avaxFeedWarnRatio: number; // alert when the age exceeds this fraction of the guard (0.5 = 600 s of 1,200 s)
@@ -293,6 +295,13 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
   int(problems, "monitor.maxBlockLagSeconds", m.maxBlockLagSeconds, 1, 3600);
   int(problems, "monitor.reorgMarginBlocks", m.reorgMarginBlocks, 0, 1000);
   int(problems, "monitor.logChunkBlocks", m.logChunkBlocks, 1, 100_000);
+  if (m.logs !== undefined) {
+    int(problems, "monitor.logs.chunkBlocks", m.logs?.chunkBlocks, 1, 2048);
+    int(problems, "monitor.logs.maxChunksPerCycle", m.logs?.maxChunksPerCycle, 1, 500);
+    int(problems, "monitor.logs.behindWarnBlocks", m.logs?.behindWarnBlocks, 1, 1_000_000);
+    int(problems, "monitor.logs.behindCritBlocks", m.logs?.behindCritBlocks, 1, 10_000_000);
+    if (typeof m.logs?.behindWarnBlocks === "number" && typeof m.logs?.behindCritBlocks === "number" && m.logs.behindWarnBlocks >= m.logs.behindCritBlocks) problems.push({ path: "monitor.logs.behindWarnBlocks", problem: "must be below behindCritBlocks" });
+  }
   if (isUnsetString(m.statePath)) problems.push({ path: "monitor.statePath", problem: "unset (placeholder)" });
   bigintString(problems, "monitor.dustUsd1e18", m.dustUsd1e18, true);
   for (const k of ["avaxFeedWarnRatio", "avaxFeedCritRatio", "usdcFeedWarnRatio", "usdcFeedCritRatio"]) num(problems, `monitor.${k}`, m[k], 0.01, 0.99);

@@ -57,6 +57,12 @@
     "maxBlockLagSeconds": 60,
     "reorgMarginBlocks": 10,
     "logChunkBlocks": 2000,
+    "logs": {
+      "chunkBlocks": 2048,
+      "maxChunksPerCycle": 40,
+      "behindWarnBlocks": 600,
+      "behindCritBlocks": 3900
+    },
     "statePath": "state/monitor-state.json",
     "dustUsd1e18": "10000000000000000",
     "avaxFeedWarnRatio": 0.5,

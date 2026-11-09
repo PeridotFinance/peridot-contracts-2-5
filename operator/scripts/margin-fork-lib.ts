@@ -63,6 +63,8 @@ export interface BringUpOptions {
   onStep?: (name: string, output: string) => void;
 }
 export interface BroughtUp {
+  /** the pilot's one sizing number (USD): LENDING_USDC_BORROW_CAP of ceremony/pilot-pw30.env; every amount below scales with it */
+  capUsd: number;
   report: Record<string, any>;
   pw: { controller: string; oracle: string; pWavax: string; pUsdc: string };
   deployed: Record<string, string>;
@@ -81,9 +83,14 @@ export async function bringUpMarginFork(chain: ForkChain, opts: BringUpOptions =
     report.forkHead = await chain.provider.getBlockNumber();
     report.rpcLocal = chain.url;
     const pw30 = readEnvFile(path.join(CONTRACTS, "ceremony", "pilot-pw30.env"));
+    const capUsd = Number(BigInt(pw30.LENDING_USDC_BORROW_CAP!) / 1_000_000n);
+    const U = (x: number): bigint => BigInt(Math.round(x * 1e6)); // USDC units of a USD amount
+    const flashSeed = U(capUsd * 0.5);
+    const insSeed = U(capUsd * 0.05);
+    report.capUsd = capUsd;
     for (const a of [LEDGER, THROWAWAY, f1, f2, ALICE, TEAM]) await chain.setBalance(a, utils.parseEther("1000"));
     await chain.setErc20Balance(WAVAX, LEDGER, BigNumber.from(pw30.LENDING_WAVAX_SEED_AMOUNT));
-    await chain.setErc20Balance(USDC, LEDGER, BigNumber.from(pw30.LENDING_USDC_SEED_AMOUNT).add(2_500_000_000).add(250_000_000));
+    await chain.setErc20Balance(USDC, LEDGER, BigNumber.from(pw30.LENDING_USDC_SEED_AMOUNT).add(flashSeed.toString()).add(insSeed.toString()));
 
     // ---- 1. PW30
     const env30 = { ...pw30, RPC_LOCAL: chain.url };
@@ -100,16 +107,17 @@ export async function bringUpMarginFork(chain: ForkChain, opts: BringUpOptions =
     const led = chain.signer(LEDGER);
     const ctrl: any = new Contract(pw.controller, ["function _setCollateralFactor(address,uint256) returns (uint256)", "function _setBorrowPaused(address,bool) returns (bool)"], led);
     await okTx(ctrl._setCollateralFactor(pw.pWavax, utils.parseEther("0.30")));
-    await chain.setErc20Balance(USDC, TEAM, BigNumber.from(6_250_000_000));
-    await okTx(new Contract(USDC, erc, chain.signer(TEAM)).approve(pw.pUsdc, BigNumber.from(6_250_000_000)));
-    await okTx(new Contract(pw.pUsdc, ["function mint(uint256) returns (uint256)"], chain.signer(TEAM)).mint(BigNumber.from(6_250_000_000)));
+    const teamSupply = BigNumber.from(U(capUsd * 1.25).toString()); // team supply: 1.25 x CAP
+    await chain.setErc20Balance(USDC, TEAM, teamSupply);
+    await okTx(new Contract(USDC, erc, chain.signer(TEAM)).approve(pw.pUsdc, teamSupply));
+    await okTx(new Contract(pw.pUsdc, ["function mint(uint256) returns (uint256)"], chain.signer(TEAM)).mint(teamSupply));
     await okTx(ctrl._setBorrowPaused(pw.pUsdc, false));
 
     // ---- 2. margin stages
     const addrFile = path.join(CONTRACTS, "ceremony", "margin-addresses.rehearsal.env");
     const menv: Record<string, string> = {
       MARGIN_DEPLOYER: THROWAWAY, MARGIN_OWNER: LEDGER, CONTROLLER: pw.controller, PWAVAX: pw.pWavax, PUSDC: pw.pUsdc,
-      MARGIN_FLASH_SEED_USDC: "2500000000", MARGIN_INSURANCE_SEED_USDC: "250000000", MARGIN_FUNDERS: `${f1},${f2}`,
+      MARGIN_CAP_USD: String(capUsd), MARGIN_FLASH_SEED_USDC: flashSeed.toString(), MARGIN_INSURANCE_SEED_USDC: insSeed.toString(), MARGIN_FUNDERS: `${f1},${f2}`,
       MARGIN_ACTION_DELAY: "86400", MARGIN_ADDRESSES_FILE: addrFile, RPC_LOCAL: chain.url,
     };
     const M = "tools/avalanche-margin-ceremony.sh";
@@ -148,8 +156,8 @@ export async function bringUpMarginFork(chain: ForkChain, opts: BringUpOptions =
     report.accounts = { ledger: LEDGER, operator1: f1, operator2: f2, alice: ALICE, team: TEAM, throwawayDeployer: THROWAWAY, note: "impersonated on the fork: send from any of them without a key" };
 
     // ---- 3. an open position for ALICE
-    const brought: BroughtUp = { report, pw, deployed, setFeeds, mocks, realAvax: realAvax[1], realUsdc: realUsdc[1] };
-    if (demo) report.demoPosition = await openLong(chain, brought, ALICE, 2_500_000_000n);
+    const brought: BroughtUp = { capUsd, report, pw, deployed, setFeeds, mocks, realAvax: realAvax[1], realUsdc: realUsdc[1] };
+    if (demo) report.demoPosition = await openLong(chain, brought, ALICE, U(capUsd * 0.5)); // margin = half the position cap (2x)
     return brought;
   }
 }

@@ -18,6 +18,8 @@ export const mcIface = new utils.Interface(MULTICALL3_ABI);
 
 export interface Ctx {
   provider: providers.Provider;
+  /** SEPARATE endpoint for eth_getLogs (the Avalanche public RPC: 2,048 blocks per request); absent = the state provider serves logs too (local forks) */
+  logProvider?: providers.Provider;
   cfg: MonitorConfig;
   /** result of the start-up / daily factory check of the pool; false fails the reference closed */
   poolIdentityOk: boolean;

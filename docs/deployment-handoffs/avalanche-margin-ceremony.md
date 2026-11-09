@@ -7,7 +7,7 @@ Status: **PREPARED, NOT EXECUTED.** The assistant signs and broadcasts nothing. 
 - On top of PW30 (controller, guarded oracle, pWAVAX, pUSDC). **The PW30 guarded oracle is reused** (the risk engine, the quoter, the close adapter and the controller read the same prices); no second oracle, no emergency price.
 - 17 contracts: insurance fund, config, fee distributor, vault, risk engine (proxies); quoter, swap module, account factory; executor, liquidator (proxies); flash vault; Pharaoh CL router adapter (pool `0xf01449C0…9534`, tick spacing 10); order registry (proxy) and the Avalanche close adapter.
 - **Owner of everything = the Ledger from the first instruction** (every `initialize` takes it; every proxy admin is owned by it; the account factory's configurator and the flash vault owner are the Ledger). The deployer holds no role at any time. The script checks this at every stage (`verify`): no owner, no proxy-admin owner, no funded-liquidator right, no pToken, no allowance names the deployer.
-- **Risk numbers are constants in the script** (not environment variables): 2x, initial margin 50%, maintenance **25%**, liquidation bonus 5%, max slippage 100 bp, oracle deviation 100 bp, **position cap USD 5,000, debt cap USD 2,500**. Fees 0. Opens start **paused**.
+- **Risk numbers are constants in the script** (not environment variables), except the cap, which is the one public input `MARGIN_CAP_USD`: 2x, initial margin 50%, maintenance **25%**, liquidation bonus 5%, max slippage 100 bp, oracle deviation 100 bp, **position cap = `MARGIN_CAP_USD` and debt cap = `MARGIN_CAP_USD`/2** (the script takes 100 to 5,000 and derives both; research size 5,000 and 2,500). Fees 0. Opens start **paused**.
 - Preconditions the script checks before it deploys: chain 43114; the Ledger is the controller admin; **WAVAX borrowing is paused** (this is what makes the product long-only); both markets are priced by the controller's oracle; the deployer is not the Ledger and is not a funder; the two funders are distinct, non-zero and not the Ledger.
 
 ## 1. Inputs (public values; `contracts/ceremony/margin-pw30.env` once the addresses exist)
@@ -16,13 +16,14 @@ Status: **PREPARED, NOT EXECUTED.** The assistant signs and broadcasts nothing. 
 | --- | --- |
 | `MARGIN_OWNER` | the Ledger |
 | `MARGIN_DEPLOYER` | public address of the throwaway deployer; keystore name in `MARGIN_DEPLOYER_ACCOUNT` (live) |
-| `CONTROLLER`, `PWAVAX`, `PUSDC` | the five PW30 addresses (11 Nov) |
+| `CONTROLLER`, `PWAVAX`, `PUSDC` | the five PW30 addresses (from the PW30 ceremony) |
+| `MARGIN_CAP_USD` | the pilot's CAP in USD, 100..5,000 (public value, from `contracts/ceremony/margin-sizing.env`, written by `contracts/tools/pilot-sizing.py`); the pair's position cap = CAP, debt cap = CAP/2. CAP is not yet known (to be confirmed with the operator before anything is signed); research size 5,000 |
 | `MARGIN_FUNDERS` | the two operator addresses, comma separated |
-| `MARGIN_FLASH_SEED_USDC` | `2500000000` (decision D5) |
-| `MARGIN_INSURANCE_SEED_USDC` | `250000000` (decision D6) |
+| `MARGIN_FLASH_SEED_USDC` | 0.5 x CAP, at least CAP/2 (decision D5; `2500000000` at CAP = 5,000; in `margin-sizing.env`) |
+| `MARGIN_INSURANCE_SEED_USDC` | 5% of CAP (decision D6; `250000000` at CAP = 5,000; in `margin-sizing.env`) |
 | `MARGIN_ACTION_DELAY` | `86400` (24 h, decision D1) |
 
-Balances before stage 2: the Ledger holds **2,750 USDC** (2,500 for the flash vault, 250 for the insurance seed) and AVAX for the 28 transactions (0.3 AVAX is ample). The deployer holds AVAX for the 22 stage-1 transactions: 31.9M gas used and a 41.5M gas-limit sum, i.e. **about 0.8 AVAX at 25 gwei and 1.6 AVAX at 50 gwei**. **Fund the deployer with 2.5 AVAX**; whatever is left goes back to you. The Ledger's AVAX for stages 2 to 4 is 1.8M gas (about 0.1 AVAX at 50 gwei) plus the flash and insurance seeds in USDC.
+Balances before stage 2: the Ledger holds **0.55 x CAP in USDC** (0.5 x CAP for the flash vault, 5% of CAP for the insurance seed; 2,750 at CAP = 5,000) and AVAX for the 28 transactions. **Deployer gas:** the throwaway deployer needs the measured gas times 1.5. Stage 1 is 22 transactions and 31.9M gas used; at the current 2.5 gwei floor that is **0.08 AVAX measured and 0.12 AVAX with the 50% margin** (this replaces the earlier 2.5 AVAX); fund the deployer with **0.12 AVAX**, whatever is left goes back to you. Ledger gas measured: the PW30 ceremony is 30 transactions and 20.0M gas; margin stages 2 to 4 are 24 + 3 + 1 transactions and 1.77M gas.
 
 ## 2. Stages
 
@@ -40,7 +41,7 @@ Balances before stage 2: the Ledger holds **2,750 USDC** (2,500 for the flash va
 
 **Counts measured in the rehearsal broadcast** (`contracts/broadcast/DeployAvalancheMarginMainnet.s.sol/`): stage 1 is **22 transactions by the throwaway deployer** (31.9M gas used, 41.5M gas-limit sum); stage 2 is **24 Ledger signatures** (1.53M gas); stage 3 is **3** (0.20M); stage 4 is **1** (0.05M): **28 Ledger signatures in all**. Stage 1 needs the Ledger for nothing.
 
-**Order in the calendar:** stage 1 and 2 any day after the PW30 deployment (inert while paused); stage 3 the next day; stage 4 only after the monitor and operators are running with the margin step (14 Nov build) and `verify 3` passed. Latest dates: stage 2 on 16 Nov, stage 3 on 17 Nov, stage 4 on 18 Nov.
+**Order:** no calendar dependency. Stage 1 and 2 any time after the PW30 deployment (inert while paused); stage 3 at least 24 h after stage 2 (the timelock); stage 4 only after verify 3 and the operators run with the margin block enabled.
 
 ## 3. If a stage stops half-way
 
@@ -61,11 +62,11 @@ Do not re-run `wire` blindly: the queues revert with "already queued" and some c
 - hooks: `controller.isolatedMarginRiskHook() == riskEngine == isolatedMarginRegistrar()`;
 - `executor.orderExecutor() == closeAdapter`; `registry.adapter() == closeAdapter`; `closeAdapter.registry() == registry`;
 - `config.opensPaused() == false`; pair risk equals the constants; both operators `fundedLiquidators == true`;
-- flash vault: USDC allowed, WAVAX not, fee 0, balance >= 2,500 USDC; insurance fund holds pUSDC;
+- flash vault: USDC allowed, WAVAX not, fee 0, balance >= 0.5 x CAP in USDC; insurance fund holds pUSDC;
 - every owner and proxy-admin owner is the Ledger; the deployer is none of them.
 
 ## 6. Operator side (before stage 4)
 
-- The two operator wallets keep their USDC inventory (at least USD 3,750 each) and approve the **liquidator proxy** for the exact need only (the margin step of the operator does it; see the host-setup addition).
-- Pilot operating rule (decision D2): team lending borrows stay at or under 2,000 USDC while margin is open, so about 2,450 of margin debt fits inside the USD 5,000 cap and the 1,250 cash floor. Raising the cap to 7,500 later needs a Ledger transaction and 2,500 USDC more supply.
+- The two operator wallets keep their USDC inventory (at least 0.75 x CAP each; 3,750 at CAP = 5,000) and approve the **liquidator proxy** for the exact need only (the margin step of the operator does it; see the host-setup addition).
+- Pilot operating rule (decision D2): team lending borrows stay at or under 0.4 x CAP while margin is open, so about 0.49 x CAP of margin debt fits inside the CAP borrow cap and the cash floor (20% of supply). At CAP = 5,000 that is 2,000 and about 2,450. Caps are raised later by a parameter change (a Ledger transaction plus the extra supply).
 - Monitor and executor (built 8 Nov): margin accounts are classified by the controller's own flag (`isolatedMarginAccounts`) and removed from the lending verdicts, the treasury figures, the keeper's input and the lending executor's candidates; they are reported as `margin.positions`. The operator's margin step liquidates only through `liquidateFunded`, break-even floor fixed at 10,000 bp, bounded allowance, daily cap, insolvent positions declined. Details and the host configuration: `avalanche-pilot-host-setup.md` section 6. Rehearsal evidence: `avalanche-margin-evidence/rehearse-margin-pipeline-run6.txt`.

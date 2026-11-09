@@ -15,3 +15,7 @@ export const TWAP_WINDOW_SECONDS = 1800;
 export const LIQUIDATION_DUST_USD = 10n ** 16n; // USD 0.01 in 1e18
 /** Uniswap V3 SwapRouter02 on Avalanche (cycle document section 1: factory() and WETH9() checked on chain) and the pool fee used for the conversion. */
 export const UNIV3_SWAP_ROUTER02 = "0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE";
+/** Default LOG endpoint (public, no key): eth_getLogs up to 2,048 blocks per request. Override with the environment variable AVALANCHE_LOGS_RPC_URL (never in a file). */
+export const DEFAULT_LOGS_RPC_URL = "https://api.avax.network/ext/bc/C/rpc";
+/** Measured Avalanche C-Chain block time (14-day measurement 0.936 s); used for look-back windows. */
+export const BLOCK_SECONDS = 0.94;

@@ -49,7 +49,7 @@ positions(uint256) view returns (Position)     // id, owner, account, marginPTok
 - Decide with `canExecute`; simulate; send `executeOrder(orderId, "0x")`. `TriggerNotReached` and `OracleUnavailable` are normal waits, not errors.
 - Sweep orders with `canExecute` reason 2, 3 or 4 so dead orders free their slots.
 - Show the stop-loss clamp (100 bp) and that liquidation (at about -33% for a 2x long) is the backstop.
-- **Fill depth varies a lot.** The pool's sell-side depth fell by 60-70% between two heads two days apart (USD to sell for -10%: 777k, then 231k; see the frontend notes). A stop-loss that cannot be filled within the 1% floor reverts and the order stays OPEN: treat that as normal, retry on the next price move, never loosen the floor.
+- **Fill depth varies a lot.** The pool's sell-side depth fell by 60-70% between two heads two days apart (USD to sell for -10%: 777k, then 231k; see the frontend notes). A stop-loss that cannot be filled within the 1% floor reverts and the order stays OPEN: treat that as normal, retry on the next price move, never loosen the floor. Wording for the screens and the deck: stop-loss fills depend on pool depth at the hour; funded liquidation is the mechanism.
 - Position cap USD 5,000, margin up to about 2,500, one pair.
 
 ## 4. The 9 Nov package (compiled, ABIs, fork recipe)

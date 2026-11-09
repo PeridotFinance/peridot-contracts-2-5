@@ -22,7 +22,7 @@ import { KeystoreSigner } from "./signer";
 import type { ExternalSigner } from "./signer";
 import type { MonitorState } from "./monitor";
 import { mask, safeError } from "./mask";
-import { CHAIN_ID, MULTICALL3 } from "./constants";
+import { CHAIN_ID, DEFAULT_LOGS_RPC_URL, MULTICALL3 } from "./constants";
 import { MULTICALL3_ABI } from "./abi";
 
 const EX_CONFIG = 78;
@@ -50,16 +50,22 @@ async function buildContext(cfg: MonitorConfig) {
   if (parseInt(net, 16) !== CHAIN_ID) throw new Error(`RPC chain id ${parseInt(net, 16)} is not ${CHAIN_ID}`);
   if ((await provider.getCode(MULTICALL3)) === "0x") throw new Error("Multicall3 not deployed at the expected address");
   void MULTICALL3_ABI;
-  // eth_getLogs range probe: the borrower index and the keeper's on-chain daily-cap check scan events in chunks of monitor.logChunkBlocks.
-  // Some plans allow only a handful of blocks per request (a free tier allowed 10): refuse to start rather than fail later, mid-incident.
+  // LOG endpoint: eth_getLogs goes to a SEPARATE endpoint (default the Avalanche public RPC, 2,048 blocks per request; override with the environment
+  // variable AVALANCHE_LOGS_RPC_URL, never in a file), so the state endpoint can be any free-tier node: nothing live reads archive state.
+  const logUrl = process.env.AVALANCHE_LOGS_RPC_URL || DEFAULT_LOGS_RPC_URL;
+  const logProvider = new providers.StaticJsonRpcProvider(logUrl, { chainId: CHAIN_ID, name: "avalanche-logs" });
+  // The range probe is NOT fatal: a log endpoint that is down or limited at start must not stop a liquidator (the lending and margin liquidations
+  // need no logs of their own); the borrower index then runs behind and the monitor says so (finding index:behind).
+  let logProbeProblem: string | null = null;
   try {
-    const head = await provider.getBlockNumber();
-    await provider.getLogs({ address: cfg.deployment.pUsdc, fromBlock: Math.max(1, head - cfg.monitor.logChunkBlocks + 1), toBlock: head });
+    const head = await logProvider.getBlockNumber();
+    const chunk = cfg.monitor.logs?.chunkBlocks ?? cfg.monitor.logChunkBlocks;
+    await logProvider.getLogs({ address: cfg.deployment.pUsdc, fromBlock: Math.max(1, head - chunk + 1), toBlock: head });
   } catch (e) {
-    throw new Error(`the RPC endpoint does not serve eth_getLogs over monitor.logChunkBlocks (${cfg.monitor.logChunkBlocks}) blocks: ${safeError(e)}. Upgrade the plan or lower logChunkBlocks to the endpoint's limit (a free tier allowed 10)`);
+    logProbeProblem = safeError(e);
   }
   const identity = await checkPoolIdentity(provider);
-  return { provider, cfg, poolIdentityOk: identity === null, identityProblem: identity };
+  return { provider, logProvider, cfg, poolIdentityOk: identity === null, identityProblem: identity, logProbeProblem };
 }
 
 async function main(): Promise<number> {
@@ -143,17 +149,11 @@ async function main(): Promise<number> {
   const state0: MonitorState = { ...emptyMonitorState(cfg), ...loaded, keeper: { ...emptyMonitorState(cfg).keeper, ...(loaded.keeper ?? {}) }, executor: { ...emptyMonitorState(cfg).executor, ...(loaded.executor ?? {}) } };
   const alerts = new AlertManager(sink, cfg.monitor.escalationSeconds, state0.alerts);
   let state = state0;
+  if (ctx.logProbeProblem) await alerts.raise({ key: "logs:probe", severity: "warn", message: `the log endpoint did not serve eth_getLogs at start (${ctx.logProbeProblem}): the process runs, the borrower index catches up when it answers (finding index:behind). Set AVALANCHE_LOGS_RPC_URL to another endpoint if it persists`, audience: "monitor-operator" }, Math.floor(Date.now() / 1000));
   const once = async (): Promise<number> => {
     try {
       const out = await runCycle(ctx, state, alerts);
       state = out.state;
-      // daily full re-scan of the events from the deployment block against the incremental index
-      const nowS = out.report.blockTimestamp;
-      if (nowS - state.lastIndexCrossCheckAt >= 86_400) {
-        const diff = await crossCheckIndex(ctx.provider, cfg.deployment.pUsdc, state.index, cfg.deployment.deploymentBlock, out.report.blockNumber, cfg.monitor.logChunkBlocks);
-        if (diff.missingFromIndex.length > 0) await alerts.raise({ key: "index:incomplete", severity: "crit", message: `the borrower index misses ${diff.missingFromIndex.length} account(s) found by the full re-scan: ${diff.missingFromIndex.slice(0, 5).join(", ")}`, audience: "monitor-operator" }, nowS);
-        state = { ...state, lastIndexCrossCheckAt: nowS, index: { ...state.index, borrowers: [...new Set([...state.index.borrowers, ...diff.missingFromIndex])].sort() } };
-      }
       saveState(cfg.monitor.statePath, state);
       if (signer) {
         const k = await keeperStep(
@@ -173,6 +173,23 @@ async function main(): Promise<number> {
         state = { ...state, executor: x.state, alerts: alerts.toJson() };
         saveState(cfg.monitor.statePath, state);
         if (x.round || x.skipped.length || x.halted) console.log(mask(JSON.stringify({ executor: { round: x.round, skipped: x.skipped, unfunded: x.unfunded, swapBlocked: x.swapBlocked, halted: x.halted } })));
+      }
+      // daily full re-scan of the events from the deployment block against the incremental index. It runs AFTER the keeper and the executor (it can be
+      // long on a public log endpoint and must never starve them), never throws, and always advances its clock so that a failing endpoint is retried
+      // tomorrow rather than every cycle.
+      {
+        const nowS = out.report.blockTimestamp;
+        if (nowS - state.lastIndexCrossCheckAt >= 86_400) {
+          state = { ...state, lastIndexCrossCheckAt: nowS };
+          try {
+            const diff = await crossCheckIndex(ctx.logProvider ?? ctx.provider, cfg.deployment.pUsdc, state.index, cfg.deployment.deploymentBlock, out.report.blockNumber, cfg.monitor.logs?.chunkBlocks ?? cfg.monitor.logChunkBlocks);
+            if (diff.missingFromIndex.length > 0) await alerts.raise({ key: "index:incomplete", severity: "crit", message: `the borrower index misses ${diff.missingFromIndex.length} account(s) found by the full re-scan: ${diff.missingFromIndex.slice(0, 5).join(", ")}`, audience: "monitor-operator" }, nowS);
+            state = { ...state, index: { ...state.index, borrowers: [...new Set([...state.index.borrowers, ...diff.missingFromIndex])].sort() } };
+          } catch (e) {
+            await alerts.raise({ key: "index:crosscheck-failed", severity: "warn", message: `the daily full re-scan of the borrower index failed (${safeError(e)}); retried in 24 h`, audience: "monitor-operator" }, nowS);
+          }
+          saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() });
+        }
       }
       console.log(mask(JSON.stringify(out.report, null, 2)));
       return out.report.findings.some((f) => f.severity === "crit") ? 1 : 0;
