@@ -56,10 +56,10 @@
     "pollSeconds": 120,
     "maxBlockLagSeconds": 60,
     "reorgMarginBlocks": 10,
-    "logChunkBlocks": 10,
+    "logChunkBlocks": 1000,
     "logs": {
-      "chunkBlocks": 10,
-      "maxChunksPerCycle": 100,
+      "chunkBlocks": 1000,
+      "maxChunksPerCycle": 20,
       "behindWarnBlocks": 600,
       "behindCritBlocks": 3900
     },

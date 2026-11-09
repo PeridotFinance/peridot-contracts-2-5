@@ -31,7 +31,7 @@ REFERENCE = {
         "method": "50% of the median of pool.liquidity() sampled every 3600 s over 7 days (block time 0.975 s); min 1025890592826714279, max 5593890921320581419; 0 failed samples",
     },
 }
-LOG_CHUNK = 10  # the state endpoint (Alchemy free tier) serves getLogs over at most 10 blocks (measured 9 Nov 2026); the Avalanche public RPC answered 429 (1015) from BOTH my Mac and the Droplet after a short burst
+LOG_CHUNK = 1000  # PAID Alchemy app (operator decision 9 Nov 2026, IP-allowlisted to the four Droplets): measured 10,000-block getLogs ok, 3/3 identical counts; 1,000 per request keeps responses small. The old Free-tier app allowed 10 blocks; the Avalanche public RPC 100 blocks and answered 429 (1015) under bursts
 POLL_SECONDS = 30  # free-tier state endpoint: fewer reads per hour than the 15 s of the template
 
 
@@ -55,7 +55,7 @@ def main():
     # MEASURED 9 Nov 2026: the Avalanche public RPC refuses eth_getLogs over 100 blocks (not the 2,048 assumed); the free Alchemy app 10 blocks
     base["monitor"]["logChunkBlocks"] = LOG_CHUNK
     base["monitor"]["logs"]["chunkBlocks"] = LOG_CHUNK
-    base["monitor"]["logs"]["maxChunksPerCycle"] = 100  # with 300 ms between requests (src/logpace.ts): one cycle scans up to 1,000 blocks in about 30 s; a catch-up of 10,000 blocks takes about 10 cycles
+    base["monitor"]["logs"]["maxChunksPerCycle"] = 20  # up to 20,000 blocks per cycle (about 7 s with 300 ms between requests, src/logpace.ts)
     base["monitor"]["minOperatorGasWei"] = floor
     base["executor"].update(enabled=False, operator="UNSET", keystorePath="UNSET", minGasWei=floor)
     base["rebalancer"].update(enabled=False, keystorePath="UNSET", minGasWei=floor)
