@@ -61,7 +61,9 @@ up $LIQ $(create contracts/margin/IsolatedMarginLiquidatorUpgradeable.sol:Isolat
 for args in "1 true 100 200" "2 true 300 200" "3 true 490 200"; do cast send $RTP 'setPreset(uint8,bool,int24,int24)' $args --from $D --unlocked --rpc-url $F --json | st "preset $args"; done
 cast send $RTP 'setFeeSplit(uint16,uint16,uint16,address,address,bytes32)' 7000 2000 1000 0x0000000000000000000000000000000000BeEF01 0x806b182B050f7EcF908758dD6bBF91DB8B2212aF 0xe2050352f4346597cc69d2776d99ae60c9440dfc28f9406ce66be0bbe3fb6b06 --from $D --unlocked --rpc-url $F --json | st "fee split 70/20/10"
 cast send $RTP 'setUnwinders(address,address)' $LIQ $AD --from $D --unlocked --rpc-url $F --json | st "unwinders"
-cast send $USDG 'transfer(address,uint256)' $TR 20000000000 --from $POOL --unlocked --rpc-url $F >/dev/null
+# The pool's own USDG balance drifts (11,345 USDG on 2026-11-09, below a fixed 20,000): take at most 90% of it.
+PB=$(cast call $USDG 'balanceOf(address)(uint256)' $POOL --rpc-url $F | cut -d' ' -f1)
+cast send $USDG 'transfer(address,uint256)' $TR $(python3 -c "print(min(20000000000, $PB * 9 // 10))") --from $POOL --unlocked --rpc-url $F --json | st "trader funded with USDG"
 cast send $NVDA 'transfer(address,uint256)' $TR 50000000000000000000 --from $POOL --unlocked --rpc-url $F >/dev/null
 
 J=$TMP/range-keeper-journal.json; S=$TMP/range-keeper-state.json
