@@ -141,6 +141,18 @@ Number formats: all amounts are raw integers in the **underlying** decimals (USD
 - Margin 2x: **not deployed** (all `margin.*` addresses are `null`). Margin comes with a later handoff.
 - Everything under `margin` and `vault` in the addresses JSON is null: do not render those sections.
 
+## 4b. Vault yield on the screen: show a REALIZED number, never a forecast
+
+**There is no measured vault APY today, so there is nothing true to show yet.** The two Pharaoh vaults earn swap fees (and possibly PHAR emissions) on a concentrated liquidity position; that depends on pool volume, the price range and the rebalancer, none of which has run on mainnet with real deposits. The only "APR" figure anywhere in the repo is a 20% **assumption** in a design tool (`avalanche-vault-phar-evidence/tools/variant_econ.py`, labelled "not measured"): **do not show it.**
+
+What the screen may show, from chain data only (ERC-4626, both vaults):
+- **Share price** = `convertToAssets(10**decimals)` (USDC vault: `convertToAssets(1000000)`, WAVAX vault: `convertToAssets(10**18)`). At block 99,850,426: USDC vault 0.999663 USDC per share, WAVAX vault 1.007711 WAVAX per share. The share price is conservative (a haircut valuation that includes the cost of entering and leaving the position), so it moves by the entry cost when deposits happen and is NOT a clean yield measure for the first days.
+- **Realized return** = (share price now / share price N days ago) - 1, annualised **only after at least 7 days** of history, with the label "realized over the last N days, not a promise". The frontend has to store the share price itself (for example once an hour); the chain history needs an archive node, which the pilot does not have. Until 7 days exist show "new vault, no track record yet", not 0%.
+- Show the **cap and room** (`depositCap`, `totalAssets`) and the **exit cost** from section 1 of `avalanche-pilot-frontend-notes.md`.
+- Deposits earn nothing until the rebalancer calls `deployIdle()`; until R3 automates it the Ledger does it by hand, so "waiting to be deployed" must be visible (see the frontend notes).
+
+Both vaults currently have `depositCap = 1` (closed): nothing is listed for deposit until the opening ceremony.
+
 ## 5. Minimal code
 
 Both snippets read the addresses from `avalanche-pilot-addresses.json` and the ABIs from `avalanche-pilot-abis/`; they take the provider/client from the app (no endpoint or key in code). Custom errors are added to the ABI so failures decode. Note: ethers v5 prints a harmless `Duplicate definition of ActionPaused` warning when loading the controller ABI (two overloads in the JSON); ignore it. Never use `BigNumber.toNumber()` on 1e18-scaled values (it throws on overflow); use `formatUnits`.
