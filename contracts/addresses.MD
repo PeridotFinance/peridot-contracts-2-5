@@ -293,3 +293,19 @@ gMon(18 decimals): 0x8498312A6B3CbD158bf0c93AbdCF29E6e4F55081
 AUSD(6 decimals): 0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a
 MON Sentinel: 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
 WMON(18 decimals): 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A
+
+
+Avalanche C-Chain mainnet (chain 43114), cash-only lending pilot PW30, deployed 9 Nov 2026 (block 99846691), admin and signer: the Ledger 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD. Machine-readable copy with ABIs: docs/deployment-handoffs/avalanche-pilot-addresses.json (margin and vault addresses are added there when they are deployed).
+
+Unitroller (Proxy USE THIS): 0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A
+PeridottrollerAvalanche (Implementation): 0x4419aD340b3a4cf71303C7247dDA3AfF9BF41Ad6
+GuardedAvalanchePriceOracle: 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+AvalanchePriceOracle (inner source): 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+ConfigurableJumpRateModelV2: 0xe5a82bF40b493cf37C06851A934370F3f0896263
+PErc20Delegator pWAVAX (Proxy use this): 0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1
+PErc20Delegator pUSDC (Proxy use this): 0x0f7849CD9E54ffb027aacaEec82007cca9470098
+PErc20Delegate (Implementation, both markets): 0xAB5a72E10eE33e19b7fE119C6771886141624f11
+AvalancheMarketBootstrapper (single use, done): 0xf8541dfef0E5A5aA4C158196EB8Db318ef77DD4C
+
+WAVAX (18 decimals): 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+USDC (6 decimals, native): 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E
