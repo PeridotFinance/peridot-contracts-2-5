@@ -53,13 +53,13 @@
     "address": "0xaF0FAcd12A02b5b030eC7C3bf5dE0726C828935D"
   },
   "monitor": {
-    "pollSeconds": 30,
+    "pollSeconds": 60,
     "maxBlockLagSeconds": 60,
     "reorgMarginBlocks": 10,
-    "logChunkBlocks": 100,
+    "logChunkBlocks": 10,
     "logs": {
-      "chunkBlocks": 100,
-      "maxChunksPerCycle": 10,
+      "chunkBlocks": 10,
+      "maxChunksPerCycle": 100,
       "behindWarnBlocks": 600,
       "behindCritBlocks": 3900
     },

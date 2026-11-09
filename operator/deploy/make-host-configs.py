@@ -31,7 +31,7 @@ REFERENCE = {
         "method": "50% of the median of pool.liquidity() sampled every 3600 s over 7 days (block time 0.975 s); min 1025890592826714279, max 5593890921320581419; 0 failed samples",
     },
 }
-LOG_CHUNK = 100
+LOG_CHUNK = 10  # the state endpoint (Alchemy free tier) serves getLogs over at most 10 blocks (measured 9 Nov 2026); the Avalanche public RPC answered 429 (1015) from BOTH my Mac and the Droplet after a short burst
 POLL_SECONDS = 30  # free-tier state endpoint: fewer reads per hour than the 15 s of the template
 
 
@@ -52,10 +52,10 @@ def main():
     base["treasury"] = dict(address=HOSTS["keeper"])
     base["monitor"]["pollSeconds"] = POLL_SECONDS
     base["monitor"]["statePath"] = "/data/state/state.json"
-    # MEASURED 9 Nov 2026: the Avalanche public RPC refuses eth_getLogs over 100 blocks (101 fails with "maximum of 100 blocks"), not the 2,048 assumed
+    # MEASURED 9 Nov 2026: the Avalanche public RPC refuses eth_getLogs over 100 blocks (not the 2,048 assumed); the free Alchemy app 10 blocks
     base["monitor"]["logChunkBlocks"] = LOG_CHUNK
     base["monitor"]["logs"]["chunkBlocks"] = LOG_CHUNK
-    base["monitor"]["logs"]["maxChunksPerCycle"] = 10  # with 300 ms between requests (src/logpace.ts): a catch-up of 10,000 blocks takes about 10 cycles, a burst never trips the public endpoint's 429
+    base["monitor"]["logs"]["maxChunksPerCycle"] = 100  # with 300 ms between requests (src/logpace.ts): one cycle scans up to 1,000 blocks in about 30 s; a catch-up of 10,000 blocks takes about 10 cycles
     base["monitor"]["minOperatorGasWei"] = floor
     base["executor"].update(enabled=False, operator="UNSET", keystorePath="UNSET", minGasWei=floor)
     base["rebalancer"].update(enabled=False, keystorePath="UNSET", minGasWei=floor)
@@ -72,6 +72,7 @@ def main():
             c["keeper"].update(enabled=True, keystorePath=ks)
         else:
             c["rebalancer"].update(enabled=True, keystorePath=ks)
+        c["monitor"]["pollSeconds"] = {"op1": POLL_SECONDS, "op2": POLL_SECONDS, "keeper": 60, "rebalancer": 120}[role]  # free-tier request budget: the executors stay at 30 s, the keeper and the hourly rebalancer poll less often
         json.dump(c, open(os.path.join(outdir, f"{role}.json"), "w"), indent=2)
         open(os.path.join(outdir, f"{role}.json"), "a").write("\n")
         print("wrote", os.path.join("operator/config/hosts", f"{role}.json"))
