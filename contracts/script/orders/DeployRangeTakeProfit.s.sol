@@ -349,6 +349,6 @@ contract DeployRangeTakeProfit is Script {
                 address(0xbad), uint256(1), uint16(10_000), uint256(0), uint256(0), uint256(0), bytes(""), bytes("")));
             require(!ok && keccak256(ret) == keccak256(abi.encodeWithSignature("ExecutorError(uint8)", uint8(60))), "CLOSE_FOR_OPEN");
         }
-        console2.log("verified: executor v3 (orderExecutor = adapter v2), registry V2, risk engine and liquidator wired, presets 1/3/5%, fee split 70/20/10, unwinders");
+        console2.log("verified: executor v3 (orderExecutor = adapter v2), registry V2, risk engine and liquidator wired, presets 1/3/5%, fee split 70/20/10 (reserve share deposited to the pair loss reserve 0x806b), unwinders");
     }
 }
