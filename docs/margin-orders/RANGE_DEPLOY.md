@@ -82,8 +82,17 @@ journal.
 
 ## Open before signing
 
-- **Fee recipients:** protocol and reserve addresses are undecided. The margin config's treasury still points at the old
-  key; do not reuse it.
+- **Fee recipients (operator, 2026-11-09):**
+  - **Protocol share:** to the Robinhood Safe or the Ledger. The operator will confirm which.
+  - **Reserve share:** to the pNVDA reserve. Two contracts could be meant:
+    1. The pNVDA market's own reserves (`_addReserves`). That takes NVDA only, while most of a band's fees arrive in
+       USDG, so it would need a custodian change.
+    2. The NVDA/USDG pair's loss reserve `0x806b...12aF`. Its `deposit(pair, token, amount)` is open to anyone and takes
+       both tokens.
+  - The margin config's treasury still points at the old key. Do not reuse it.
+- **Decided 2026-11-09:** the custodian setting stays inside the timelock batch (2 Ledger signatures). Every ceremony
+  that touches the executor is gated on the sequence-replay tests: `testCeremonyThenRangeBatchHandsOverFromAdapterV1ToV2`
+  and `RangeTakeProfitDeployFork`.
 - **The range keeper's host and wallet:** the same process as the order keeper (see `RANGE_TAKE_PROFIT.md`).
 - **A fidelity note:** on this branch the replayed ceremony uses this branch's 6-argument adapter with custodian 0 as
   adapter v1. The ceremony's real artifact is the 5-argument adapter on `feat/margin-order-interface`, which behaves the
