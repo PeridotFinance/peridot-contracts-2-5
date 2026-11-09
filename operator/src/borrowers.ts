@@ -2,6 +2,7 @@
 // (Borrow, RepayBorrow, LiquidateBorrow) from the deployment block, with a persisted cursor, a reorg margin, and a periodic full re-scan.
 // The index only says WHO MAY HAVE DEBT; whether they do is always re-read from chain at the evaluation block.
 import { providers, utils } from "ethers";
+import { pacedGetLogs } from "./logpace";
 import fs from "node:fs";
 import path from "node:path";
 import { PTOKEN_ABI } from "./abi";
@@ -22,7 +23,7 @@ export async function scanBorrowers(provider: providers.Provider, pUsdc: string,
   const found = new Set<string>();
   for (let s = from; s <= to; s += chunk) {
     const e = Math.min(to, s + chunk - 1);
-    const logs = await provider.getLogs({ address: pUsdc, fromBlock: s, toBlock: e, topics: [TOPICS] });
+    const logs = await pacedGetLogs(provider, { address: pUsdc, fromBlock: s, toBlock: e, topics: [TOPICS] });
     for (const l of logs) {
       const p = iface.parseLog(l);
       const who = (p.name === "Borrow" ? p.args.borrower : p.args.borrower) as string; // all three events name the borrower

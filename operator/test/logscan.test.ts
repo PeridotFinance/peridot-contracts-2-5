@@ -1,11 +1,13 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { utils } from "ethers";
 import { updateIndexBounded } from "../src/borrowers";
+import { configureLogPace } from "../src/logpace";
 import { PTOKEN_ABI } from "../src/abi";
 import { validateConfig } from "../src/config";
 import { decidedConfig, A } from "./fixtures";
 
+beforeEach(() => configureLogPace({ minIntervalMs: 0, now: () => Date.now() })); // the back-off state is module-level: a test that provokes a rate limit must not leak into the next
 const iface = new utils.Interface(PTOKEN_ABI);
 const PUSDC = A(0x12);
 /** a fake log endpoint with a hard range limit, a list of borrowers per block and optional failures */
@@ -53,7 +55,7 @@ test("log scan: the per-cycle bound keeps progress and says how far behind it is
 test("log scan: a failing endpoint never throws, never moves the cursor past the failed chunk, and keeps what it found", async () => {
   const f = fake({ limit: 2048, borrowAt: { 1500: A(0xb1), 9000: A(0xb2) }, failFrom: 5000 });
   const r = await updateIndexBounded(f.provider, PUSDC, st0, 12_000, 2048, 10, 100);
-  assert.match(r.error ?? "", /rate limited/);
+  assert.match(r.error ?? "", /rate.?limit/i);
   assert.ok(r.state.lastScannedBlock < 5000 + 2048);
   assert.ok(r.state.borrowers.includes(A(0xb1)) && !r.state.borrowers.includes(A(0xb2)), "found before the failure kept, after it not invented");
   assert.ok(r.behindBlocks > 0);

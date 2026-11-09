@@ -13,6 +13,7 @@
 //   6. HALT on anything unexpected after a transaction was sent (revert, read-back mismatch, unknown error): no further payment until a human
 //      clears `keeper.halted` in the state file; every payment and every halt is alerted.
 import { BigNumber, providers, utils } from "ethers";
+import { pacedGetLogs } from "./logpace";
 import type { AlertManager } from "./alerts";
 import { ERC20_ABI } from "./abi";
 import { CONTROLLER_ABI } from "./abi";
@@ -103,7 +104,7 @@ export async function spentOnChain(provider: providers.Provider, pUsdc: string, 
   const payments: KeeperPayment[] = [];
   const tsCache = new Map<number, number>();
   for (let s = from; s <= head; s += chunkBlocks) {
-    const logs = await provider.getLogs({ address: pUsdc, fromBlock: s, toBlock: Math.min(head, s + chunkBlocks - 1), topics: [topic] });
+    const logs = await pacedGetLogs(provider, { address: pUsdc, fromBlock: s, toBlock: Math.min(head, s + chunkBlocks - 1), topics: [topic] });
     for (const l of logs) {
       const ev = pIface.parseLog(l);
       if ((ev.args.payer as string).toLowerCase() !== keeper.toLowerCase()) continue;

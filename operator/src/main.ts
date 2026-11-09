@@ -5,6 +5,7 @@
 // endpoint / alert credentials are missing from the ENVIRONMENT. Exit codes: 0 ok, 1 critical finding present (check), 2 usage, 78 config.
 // Everything printed is passed through mask(). No key is read, accepted or stored here.
 import fs from "node:fs";
+import { configureLogPace, pacedGetLogs } from "./logpace";
 import { providers } from "ethers";
 import { AlertManager, MemorySink, createSink } from "./alerts";
 import { checkPoolIdentity } from "./reference";
@@ -53,14 +54,15 @@ async function buildContext(cfg: MonitorConfig) {
   // LOG endpoint: eth_getLogs goes to a SEPARATE endpoint (default the Avalanche public RPC, 2,048 blocks per request; override with the environment
   // variable AVALANCHE_LOGS_RPC_URL, never in a file), so the state endpoint can be any free-tier node: nothing live reads archive state.
   const logUrl = process.env.AVALANCHE_LOGS_RPC_URL || DEFAULT_LOGS_RPC_URL;
-  const logProvider = new providers.StaticJsonRpcProvider(logUrl, { chainId: CHAIN_ID, name: "avalanche-logs" });
+  const logProvider = new providers.StaticJsonRpcProvider({ url: logUrl, timeout: 20_000, throttleLimit: 1 }, { chainId: CHAIN_ID, name: "avalanche-logs" }); // throttleLimit 1: a 429 is returned at once, src/logpace.ts spaces and backs off
+  configureLogPace({ minIntervalMs: 300 });
   // The range probe is NOT fatal: a log endpoint that is down or limited at start must not stop a liquidator (the lending and margin liquidations
   // need no logs of their own); the borrower index then runs behind and the monitor says so (finding index:behind).
   let logProbeProblem: string | null = null;
   try {
     const head = await logProvider.getBlockNumber();
     const chunk = cfg.monitor.logs?.chunkBlocks ?? cfg.monitor.logChunkBlocks;
-    await logProvider.getLogs({ address: cfg.deployment.pUsdc, fromBlock: Math.max(1, head - chunk + 1), toBlock: head });
+    await pacedGetLogs(logProvider, { address: cfg.deployment.pUsdc, fromBlock: Math.max(1, head - chunk + 1), toBlock: head });
   } catch (e) {
     logProbeProblem = safeError(e);
   }
