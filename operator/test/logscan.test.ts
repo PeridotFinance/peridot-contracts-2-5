@@ -73,7 +73,7 @@ test("log scan: nothing to do when the cursor is at the head", async () => {
 test("config: the log block is optional, bounded by the public endpoint's 2,048 blocks, and ordered", () => {
   const c = decidedConfig();
   assert.equal(validateConfig(c).problems.length, 0);
-  assert.equal(c.monitor.logs.chunkBlocks, 2048, "the template ships the 2,048 block setting");
+  assert.equal(c.monitor.logs.chunkBlocks, 100, "the template ships the MEASURED 100-block limit of the public endpoint (9 Nov 2026), not the 2,048 once assumed");
   delete c.monitor.logs;
   assert.equal(validateConfig(c).problems.length, 0, "old configurations still load");
   const bad = (x: any) => validateConfig({ ...decidedConfig(), monitor: { ...decidedConfig().monitor, logs: x } }).problems.map((p) => p.path);
