@@ -110,7 +110,7 @@ interface Mut {
     await setAvaxBps(10_000);
 
     // ---- the standing state: one 2x position for ALICE, one lending borrower (collateral WAVAX at 30%, borrows 500 USDC: healthy at every price used below; a second, fragile one is made in S6)
-    const pos1 = await openLong(chain, b, "0x000000000000000000000000000000000000A11C", U6(CAP * 0.5)); // margin = half the position cap
+    const pos1 = await openLong(chain, b, "0x000000000000000000000000000000000000A11C", U6(process.env.REHEARSE_POSITION_MARGIN_USDC ? Number(process.env.REHEARSE_POSITION_MARGIN_USDC) : CAP * 0.5)); // margin = half the position cap (REHEARSE_POSITION_MARGIN_USDC overrides it, to try pilot-size positions)
     const acct1 = pos1.account.toLowerCase();
     await chain.setBalance(BORROWER, utils.parseEther("1000"));
     await chain.setErc20Balance(PW, BORROWER, BigNumber.from("1000000000000000000000"));
