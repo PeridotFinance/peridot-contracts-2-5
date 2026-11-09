@@ -14,6 +14,10 @@ export const CONTROLLER_ABI = [
   "function mintGuardianPaused(address) view returns (bool)",
   "function borrowGuardianPaused(address) view returns (bool)",
   "function markets(address) view returns (bool isListed, uint256 collateralFactorMantissa, bool isPeridoted)",
+  // isolated margin: the controller's own registry of margin accounts (the flag it uses to refuse liquidateBorrow/seize for them)
+  "function isolatedMarginAccounts(address) view returns (bool)",
+  "function isolatedMarginRiskHook() view returns (address)",
+  "function isolatedMarginRegistrar() view returns (address)",
 ];
 export const PTOKEN_ABI = [
   "function accrueInterest() returns (uint256)",
@@ -65,4 +69,30 @@ export const MULTICALL3_ABI = [
 export const SAFE_ABI = ["function nonce() view returns (uint256)", "function getThreshold() view returns (uint256)", "function getOwners() view returns (address[])"];
 export const SWAP_ROUTER02_ABI = [
   "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+];
+
+// ---- isolated margin (read layer and the funded-liquidation step); the same signatures as docs/deployment-handoffs/avalanche-margin-abi/
+export const MARGIN_EXECUTOR_ABI = [
+  "function nextPositionId() view returns (uint256)",
+  "function positions(uint256) view returns (uint256 id, address owner, address account, address marginPToken, address positionPToken, address debtPToken, uint256 lockedMarginPTokens, uint256 initialNotionalUsd, uint256 borrowedPrincipal, uint16 requestedLeverageX100, uint8 side, uint8 status)",
+  "function riskEngine() view returns (address)",
+];
+export const MARGIN_RISK_ENGINE_ABI = [
+  "function getMetrics(address) view returns (tuple(uint256 grossAssetValueUsd, uint256 debtValueUsd, int256 equityUsd, uint256 initialRequirementUsd, uint256 maintenanceRequirementUsd, uint256 healthFactorBps, uint256 leverageX100))",
+  "function isLiquidatable(address) view returns (bool)",
+  "function isIsolatedMarginAccount(address) view returns (bool)",
+  "function config() view returns (address)",
+];
+export const MARGIN_LIQUIDATOR_ABI = [
+  "function liquidateFunded(tuple(uint256 positionId, address recipient, uint256 maxRepayUnderlying, uint256 minPositionPTokens, uint256 minMarginPTokens, uint256 minSeizeValueBps) params)",
+  "function config() view returns (address)",
+  "function riskEngine() view returns (address)",
+  "function executor() view returns (address)",
+  "error LiquidationError(uint8 code)",
+  "event FundedPositionLiquidated(uint256 indexed positionId, address indexed funder, address indexed recipient, uint256 debtRepaid, uint256 positionPTokensSeized, uint256 marginPTokensSeized, uint256 positionPTokensReturnedToOwner, uint256 marginPTokensReturnedToVault, uint256 lockedMarginReduction, bool fullyLiquidated)",
+];
+export const MARGIN_CONFIG_ABI = [
+  "function fundedLiquidators(address) view returns (bool)",
+  "function opensPaused() view returns (bool)",
+  "function getPairRisk(address marginPToken, address positionPToken, address debtPToken) view returns (tuple(bool enabled, uint16 maxLeverageX100, uint16 initialMarginBps, uint16 maintenanceMarginBps, uint16 liquidationTargetBps, uint16 fullLiquidationHealthBps, uint16 maxLiquidationBps, uint16 liquidationBonusBps, uint16 maxSlippageBps, uint16 oracleDeviationBps, uint128 maxPositionValueUsd, uint128 maxDebtValueUsd))",
 ];

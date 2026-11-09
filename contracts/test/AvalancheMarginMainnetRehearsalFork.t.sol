@@ -411,6 +411,33 @@ contract AvalancheMarginMainnetRehearsalForkTest is Test {
     }
 
     // ===================================================================== R-A 3: lifecycle at the caps
+    // The numbers below are the DECISIONS of the user (pair risk as proposed, accepted 2026-11-07), pinned as literals so that a change of the
+    // script's constants cannot pass unnoticed (the script's own `verify` compares the chain with the same constants, so it cannot catch that).
+    function test_02c_pairRisk_onChainEqualsTheDecisions() public {
+        _executeAndEnable();
+        IsolatedMarginTypes.PairRiskConfig memory r = mConfig.getPairRisk(address(pUsdc), address(pWavax), address(pUsdc));
+        assertTrue(r.enabled);
+        assertEq(r.maxLeverageX100, 200, "2x");
+        assertEq(r.initialMarginBps, 5_000);
+        assertEq(r.maintenanceMarginBps, 2_500, "25% maintenance");
+        assertEq(r.liquidationTargetBps, 12_500);
+        assertEq(r.fullLiquidationHealthBps, 5_000);
+        assertEq(r.maxLiquidationBps, 5_000);
+        assertEq(r.liquidationBonusBps, 500, "5% bonus");
+        assertEq(r.maxSlippageBps, 100, "slippage floor 100 bp");
+        assertEq(r.oracleDeviationBps, 100);
+        assertEq(uint256(r.maxPositionValueUsd), 5_000e18, "position cap USD 5,000");
+        assertEq(uint256(r.maxDebtValueUsd), 2_500e18, "debt cap USD 2,500");
+        assertEq(mConfig.actionDelay(), 24 hours, "timelock 24 h");
+        assertEq(mConfig.openFeeBps(), 0);
+        assertEq(mConfig.closeFeeBps(), 0);
+        assertTrue(mConfig.fundedLiquidators(OP1));
+        assertTrue(mConfig.fundedLiquidators(OP2));
+        assertFalse(mConfig.fundedLiquidators(STRANGER));
+        assertFalse(mConfig.fundedLiquidators(LEDGER), "the Ledger is not an operator");
+        assertTrue(controller.borrowGuardianPaused(address(pWavax)), "long only: WAVAX borrowing stays paused");
+    }
+
     function test_03_lifecycle_open_caps_close() public {
         _executeAndEnable();
         // 2,500 margin at 2x => position about 5,000, debt about 2,450
@@ -710,13 +737,22 @@ contract AvalancheMarginMainnetRehearsalForkTest is Test {
         (bool ok,) = address(registry).call(abi.encodeWithSelector(IMarginOrderRegistry.executeOrder.selector, sl, bytes("")));
         assertFalse(ok, "the stop-loss cannot fill with the pool 3% below the oracle: it stays open");
         assertEq(uint8(registry.getOrder(sl).status), uint8(IMarginOrderRegistry.OrderStatus.OPEN));
-        // once the oracle follows the pool the same order fills
+        // once the oracle follows the pool the same order fills IF THE POOL CAN TAKE THE SALE. That depends on the pool's depth at the head the
+        // suite runs on, which moves a lot (measured 7 Nov vs 9 Nov: USD to sell to reach -10% went from 777k to 231k): the test asserts the
+        // invariant (filled and the sibling cancelled, OR still open) and logs which one happened.
         _setPrices(pool8, usdcAnswer);
         vm.prank(STRANGER);
-        assertTrue(registry.executeOrder(sl, ""));
-        assertEq(uint8(_pos(id).status), uint8(IsolatedMarginTypes.Status.CLOSED));
-        // the sibling take-profit was cancelled in the same transaction
-        assertEq(uint8(registry.getOrder(tp).status), uint8(IMarginOrderRegistry.OrderStatus.CANCELLED));
+        (bool filled,) = address(registry).call(abi.encodeWithSelector(IMarginOrderRegistry.executeOrder.selector, sl, bytes("")));
+        if (filled) {
+            emit log_string("stop-loss FILLED once the oracle followed the pool");
+            assertEq(uint8(_pos(id).status), uint8(IsolatedMarginTypes.Status.CLOSED));
+            // the sibling take-profit was cancelled in the same transaction
+            assertEq(uint8(registry.getOrder(tp).status), uint8(IMarginOrderRegistry.OrderStatus.CANCELLED));
+        } else {
+            emit log_string("DEPTH WALL: the pool cannot take the stop-loss sale within the 1% floor at this head; the order stays open (liquidation is the backstop)");
+            assertEq(uint8(registry.getOrder(sl).status), uint8(IMarginOrderRegistry.OrderStatus.OPEN));
+            assertEq(uint8(_pos(id).status), uint8(IsolatedMarginTypes.Status.ACTIVE));
+        }
     }
 
     function test_06c_orders_liquidationCancelsOrders_andOwnerCloseCancels() public {
@@ -751,6 +787,120 @@ contract AvalancheMarginMainnetRehearsalForkTest is Test {
         vm.prank(STRANGER);
         assertFalse(registry.executeOrder(oid2, ""));
         assertEq(uint8(registry.getOrder(oid2).status), uint8(IMarginOrderRegistry.OrderStatus.CANCELLED));
+    }
+
+    // ===================================================================== R-C: the adapter's own guards, called DIRECTLY as the registry
+    // The registry only ever passes consistent inputs, so these guards are defence in depth that no order-level test can reach. Each assertion
+    // below is the one that a mutation of the matching line of AvalancheMarginCloseAdapter must break (see the R-C mutation table).
+    function test_06e_adapterGuards_directCalls() public {
+        _executeAndEnable();
+        uint256 id = _open(ALICE, 2_500e6);
+        uint256 price = _entryPrice(id);
+        address reg = md.registry;
+        vm.prank(STRANGER);
+        vm.expectRevert(AvalancheMarginCloseAdapter.NotRegistry.selector);
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 100, "");
+        vm.prank(reg);
+        vm.expectRevert(AvalancheMarginCloseAdapter.AdapterDataNotSupported.selector);
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 100, hex"01");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(1)));
+        closeAdapter.closeFor(id, ALICE, 0, price, 100, "");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(1)));
+        closeAdapter.closeFor(id, ALICE, 10_001, price, 100, "");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(2)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 0, "");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(2)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 301, "");
+        // the owner must be the position's owner
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(3)));
+        closeAdapter.closeFor(id, STRANGER, 10_000, price, 100, "");
+        // the price must be EXACTLY the one the registry's trigger check used
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(6)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price + 1, 100, "");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(6)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price - 1, 100, "");
+
+        // long only: a position that reports side SHORT is inactive, has no price and cannot be closed through the adapter
+        IsolatedMarginTypes.Position memory p = _pos(id);
+        p.side = IsolatedMarginTypes.Side.SHORT;
+        vm.mockCall(address(executor), abi.encodeWithSelector(executor.positions.selector, id), abi.encode(p));
+        assertFalse(closeAdapter.isActive(id), "a short is inactive");
+        assertFalse(closeAdapter.isLong(id));
+        (uint256 px, bool okPx) = closeAdapter.oraclePriceE18(id);
+        assertFalse(okPx);
+        assertEq(px, 0);
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(7)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 100, "");
+        vm.clearMockedCalls(); // this also clears the suite's mocked Chainlink rounds: put them back
+        _setPrices(avaxAnswer, usdcAnswer);
+        assertTrue(closeAdapter.isActive(id), "the real position is an active long again");
+
+        // an inactive (closed) position cannot be closed again
+        (bool okClose,) = _close(ALICE, id, 10_000);
+        assertTrue(okClose, "owner close");
+        vm.prank(reg);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheMarginCloseAdapter.InvalidClose.selector, uint8(4)));
+        closeAdapter.closeFor(id, ALICE, 10_000, price, 100, "");
+    }
+
+    // The minimum the adapter hands to the close path: max( oracle value x (1 - min(order slippage, pair slippage)), debt + flash fee ).
+    function test_06f_adapterMinimum_clampAndDebtFloor() public {
+        _executeAndEnable();
+        uint256 id = _open(ALICE, 2_500e6);
+        address acct = _pos(id).account;
+        uint256 price = _entryPrice(id);
+        address reg = md.registry;
+        pUsdc.accrueInterest();
+        pWavax.exchangeRateCurrent();
+        uint256 assets = pWavax.balanceOf(acct) * pWavax.exchangeRateStored() / 1e18;
+        uint256 debt = pUsdc.borrowBalanceStored(acct);
+        uint256 quoted = quoter.expectedOut(WAVAX, USDC, assets);
+        assertGt(quoted * 9_900 / 10_000, debt, "at the entry price the slippage floor is the binding one");
+
+        // A. an order that allows 300 bp is CLAMPED to the pair's 100 bp
+        uint256 want = quoted * 9_900 / 10_000;
+        vm.expectCall(
+            address(executor),
+            abi.encodeWithSelector(
+                IsolatedMarginExecutorUpgradeable.closePositionFor.selector,
+                ALICE,
+                IsolatedMarginExecutorUpgradeable.CloseParams(id, 10_000, type(uint256).max, want, 0, "", "")
+            )
+        );
+        vm.prank(reg);
+        (bool ok,) = address(closeAdapter).call(abi.encodeWithSelector(AvalancheMarginCloseAdapter.closeFor.selector, id, ALICE, uint16(10_000), price, uint16(300), bytes("")));
+        assertTrue(ok, "a 300 bp order executes with the 100 bp floor at the entry price");
+    }
+
+    function test_06g_adapterMinimum_debtFloorBinds() public {
+        _executeAndEnable();
+        uint256 id = _open(ALICE, 2_500e6);
+        address acct = _pos(id).account;
+        uint256 price = _entryPrice(id);
+        address reg = md.registry;
+        pUsdc.accrueInterest();
+        pWavax.exchangeRateCurrent();
+        uint256 debt = pUsdc.borrowBalanceStored(acct);
+        // the oracle value of the assets is mocked BELOW the debt: the minimum must then be the debt (plus the flash fee, 0 in the pilot)
+        vm.mockCall(address(quoter), abi.encodeWithSelector(IsolatedMarginQuoter.expectedOut.selector), abi.encode(debt / 2));
+        vm.expectCall(
+            address(executor),
+            abi.encodeWithSelector(
+                IsolatedMarginExecutorUpgradeable.closePositionFor.selector,
+                ALICE,
+                IsolatedMarginExecutorUpgradeable.CloseParams(id, 10_000, type(uint256).max, debt, 0, "", "")
+            )
+        );
+        vm.prank(reg);
+        address(closeAdapter).call(abi.encodeWithSelector(AvalancheMarginCloseAdapter.closeFor.selector, id, ALICE, uint16(10_000), price, uint16(100), bytes("")));
     }
 
     function test_06d_registryPause_stopsOnlyExecution() public {

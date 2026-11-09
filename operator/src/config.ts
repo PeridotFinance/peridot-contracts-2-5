@@ -66,6 +66,27 @@ export interface MonitorConfig {
     maxFeeGwei: number;
     minGasWei: string;
   };
+  /**
+   * ISOLATED MARGIN (long WAVAX / USDC). Optional: absent or `enabled: false` = the monitor still CLASSIFIES margin accounts (it needs no configuration:
+   * the controller flags them) but does not read positions and the executor does no margin step. `liquidation.enabled` makes THIS operator's
+   * executor liquidate margin positions through the funded route (the operator must be on the funded-liquidator allowlist).
+   */
+  margin?: {
+    enabled: boolean;
+    executor: string;
+    liquidator: string;
+    riskEngine: string;
+    config: string;
+    watchHealthBps: number; // warn when a position's health factor (equity / maintenance requirement, bp) falls below this
+    liquidation: {
+      enabled: boolean;
+      dailyRepayCapUsdc: number; // rolling 24 h, this operator
+      maxRepayPerCallUsdc: number; // the on-chain bound of one call (the contract refuses a larger repayment)
+      minRepayUsdc: number;
+      retryCooldownSeconds: number; // after a revert (another operator first, or the position recovered)
+      insolventCooldownSeconds: number; // between re-checks of a position the break-even floor declines
+    };
+  };
   keeper: {
     enabled: boolean;
     keystorePath: string; // Foundry keystore file (encrypted); the password comes from the environment variable named by passwordEnv
@@ -230,6 +251,26 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
       int(problems, "rebalancer.maxFeeGwei", x.maxFeeGwei, 1, 5000);
       bigintString(problems, "rebalancer.minGasWei", x.minGasWei, true);
       if (c.keeper?.enabled === true || c.executor?.enabled === true) problems.push({ path: "rebalancer.enabled", problem: "the rebalancer is its own process with its own keystore: do not enable it together with the keeper or the executor" });
+    }
+  }
+  if (c.margin !== undefined) {
+    const x = c.margin;
+    if (typeof x?.enabled !== "boolean") problems.push({ path: "margin.enabled", problem: "must be a boolean" });
+    else if (x.enabled) {
+      for (const k of ["executor", "liquidator", "riskEngine", "config"]) addr(problems, `margin.${k}`, x[k]);
+      int(problems, "margin.watchHealthBps", x.watchHealthBps, 10_001, 100_000);
+      const l = x.liquidation;
+      if (typeof l?.enabled !== "boolean") problems.push({ path: "margin.liquidation.enabled", problem: "must be a boolean" });
+      else if (l.enabled) {
+        if (c.executor?.enabled !== true) problems.push({ path: "margin.liquidation.enabled", problem: "the margin step runs inside the liquidator executor: executor.enabled must be true" });
+        int(problems, "margin.liquidation.dailyRepayCapUsdc", l.dailyRepayCapUsdc, 1, 1_000_000);
+        int(problems, "margin.liquidation.maxRepayPerCallUsdc", l.maxRepayPerCallUsdc, 1, 1_000_000);
+        int(problems, "margin.liquidation.minRepayUsdc", l.minRepayUsdc, 1, 1_000_000);
+        int(problems, "margin.liquidation.retryCooldownSeconds", l.retryCooldownSeconds, 1, 86_400);
+        int(problems, "margin.liquidation.insolventCooldownSeconds", l.insolventCooldownSeconds, 1, 86_400);
+        if (typeof l.maxRepayPerCallUsdc === "number" && typeof l.dailyRepayCapUsdc === "number" && l.maxRepayPerCallUsdc > l.dailyRepayCapUsdc) problems.push({ path: "margin.liquidation.maxRepayPerCallUsdc", problem: "must not exceed dailyRepayCapUsdc" });
+        if (typeof l.minRepayUsdc === "number" && typeof l.maxRepayPerCallUsdc === "number" && l.minRepayUsdc > l.maxRepayPerCallUsdc) problems.push({ path: "margin.liquidation.minRepayUsdc", problem: "must not exceed maxRepayPerCallUsdc" });
+      }
     }
   }
   {

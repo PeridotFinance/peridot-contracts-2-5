@@ -22,6 +22,9 @@ import type { ExecutorState } from "./executor";
 import type { KeeperState } from "./keeper";
 import type { BackingResult } from "./backing";
 import { USDC } from "./constants";
+import { classifyMargin, evaluateMarginPositions, marginFindings, marginConfigIface, marginUnrecoverableUsd, readMarginPositions, readPairBonusBps } from "./margin";
+import type { MarginEval } from "./margin";
+import { ctrlIface } from "./chain";
 
 export interface MonitorState {
   index: IndexState;
@@ -59,6 +62,14 @@ export interface CycleReport {
   expectedTreasuryCall: string;
   /** unrecoverable debt (src/backing.ts): sum of max(0, debt - collateral/LI) over borrowers, minus pUSDC reserves, clipped at 0; 1e18 USD */
   unrecoverableDebt: { usd: string; rawUsd: string; reservesUsd: string; complete: boolean };
+  /** isolated margin: accounts the controller flags are REMOVED from `accounts` (they are not lending borrowers: nothing above or in the keeper applies to them) */
+  margin: {
+    classified: number;
+    unknownFlags: string[];
+    enabled: boolean;
+    positions: Array<{ id: string; account: string; owner: string; status: number; verdict: string; debtUsd: string; assetsUsd: string; equityUsd: string; healthBps: string }>;
+    counts: Record<string, number>;
+  };
 }
 
 export interface CycleOptions {
@@ -79,10 +90,35 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   const accounts = [...new Set([...index.borrowers, ...(opts.extraAccounts ?? []).map((a) => a.toLowerCase())])].sort();
   // 2. everything at ONE block
   const snap = await readBlockSnapshot(ctx, blk.number);
-  const inputs = await readAccountInputs(ctx, snap, accounts);
+  // 2a. isolated margin accounts are NOT lending borrowers (the controller's own flag decides): they leave every lending rule, the treasury figures and
+  //     the keeper's input. An account whose flag cannot be read is excluded too (fail closed) and reported. They stay in the borrow-shares sum below.
+  const cls = opts.hooks?.noClassifier ? { margin: new Set<string>(), unknown: [] as string[] } : await classifyMargin(ctx, cfg.deployment.controller, accounts, blk.number);
+  const lendingAccounts = accounts.filter((a) => !cls.margin.has(a) && !cls.unknown.includes(a));
+  const inputs = await readAccountInputs(ctx, snap, lendingAccounts);
   const params = { liquidationIncentive: snap.liquidationIncentive, dustUsd: BigInt(cfg.monitor.dustUsd1e18), toleranceBp: BigInt(cfg.reference.toleranceBp) };
   const results = new Map<string, RuleResult>();
-  for (const a of accounts) results.set(a, evaluateRule(inputs.get(a)!, params, opts.hooks));
+  for (const a of lendingAccounts) results.set(a, evaluateRule(inputs.get(a)!, params, opts.hooks));
+  // 2b. margin positions (read only; the risk engine's own metrics)
+  let marginEvals: MarginEval[] = [];
+  let marginExtra = { unknownFlags: cls.unknown, accountsNotFlagged: [] as string[], hookOk: true, operatorsNotFunders: [] as string[] };
+  if (cfg.margin?.enabled) {
+    const m = cfg.margin;
+    const positions = await readMarginPositions(ctx, m.executor, blk.number);
+    const bonus = await readPairBonusBps(ctx, m.config, positions.find((p) => p.status === 2), blk.number);
+    marginEvals = await evaluateMarginPositions(ctx, m.riskEngine, positions, blk.number, m.watchHealthBps, bonus);
+    const hook = ctrlIface.decodeFunctionResult("isolatedMarginRiskHook", await ctx.provider.call({ to: cfg.deployment.controller, data: ctrlIface.encodeFunctionData("isolatedMarginRiskHook") }, blk.number))[0] as string;
+    const flagged = new Set<string>();
+    const live = marginEvals.filter((e) => e.position.status === 2).map((e) => e.position.account);
+    const direct = await classifyMargin(ctx, cfg.deployment.controller, live, blk.number);
+    for (const a of direct.margin) flagged.add(a);
+    const fundedRes = await Promise.all(cfg.operators.map(async (o) => marginConfigIface.decodeFunctionResult("fundedLiquidators", await ctx.provider.call({ to: m.config, data: marginConfigIface.encodeFunctionData("fundedLiquidators", [o.address]) }, blk.number))[0] as boolean));
+    marginExtra = {
+      unknownFlags: cls.unknown,
+      accountsNotFlagged: live.filter((a) => !flagged.has(a)),
+      hookOk: hook.toLowerCase() === m.riskEngine.toLowerCase(),
+      operatorsNotFunders: cfg.operators.filter((_, i) => !fundedRes[i]).map((o) => o.name),
+    };
+  }
   // 3. shares consistency (sum over indexed borrowers)
   const sharesSum = await sumBorrowShares(ctx.provider, cfg.deployment.pUsdc, accounts, snap.blockNumber, ctx.multicallAddress);
   // 4. findings
@@ -91,6 +127,8 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   const blind = lag > cfg.monitor.maxBlockLagSeconds;
   if (blind) findings.push({ key: "monitor:blind", severity: "crit", message: `latest block is ${lag}s old (limit ${cfg.monitor.maxBlockLagSeconds}s): the RPC is stale and nothing below can be trusted`, audience: "monitor-operator" });
   findings.push(...oracleFindings(snap, cfg));
+  findings.push(...marginFindings(marginEvals, marginExtra));
+  if (!cfg.margin?.enabled && cls.margin.size > 0) findings.push({ key: "margin:unconfigured", severity: "warn", message: `${cls.margin.size} isolated margin account(s) exist but the margin block of the configuration is not enabled: they are excluded from the lending checks and NOT monitored as margin positions`, audience: "monitor-operator" });
   const mk = marketFindings(snap, cfg, state.health, sharesSum, true);
   findings.push(...mk.findings);
   const op = operatorFindings(snap, cfg, state.health);
@@ -121,7 +159,9 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   } else unknownPriceSince = null;
   const usdcIdx = snap.markets.findIndex((m) => m.underlying.toLowerCase() === USDC.toLowerCase());
   const reservesUsd = usdcIdx >= 0 ? (snap.markets[usdcIdx]!.totalReserves * snap.oraclePrices[usdcIdx]!) / 10n ** 18n : 0n;
-  const backing: BackingResult = unrecoverableDebt(results.values(), snap.liquidationIncentive, reservesUsd);
+  const marginRaw = marginEvals.reduce((a, e) => a + marginUnrecoverableUsd(e), 0n);
+  const marginComplete = marginEvals.every((e) => e.verdict !== "UNPRICED" && e.verdict !== "STUCK");
+  const backing: BackingResult = unrecoverableDebt(results.values(), snap.liquidationIncentive, reservesUsd, { rawUsd: marginRaw, complete: marginComplete });
   if (backing.unrecoverableUsd > 0n) findings.push({ key: "market:unrecoverable-debt", severity: "crit", message: `unrecoverable debt USD ${fmt18(backing.unrecoverableUsd)} (debt beyond what liquidating the remaining collateral can recover, minus reserves USD ${fmt18(reservesUsd)}${backing.complete ? "" : "; INCOMPLETE: some accounts could not be valued"}): suppliers are not fully backed once this is realised`, audience: "treasury-signers" });
   else if (!backing.complete) findings.push({ key: "market:unrecoverable-debt-incomplete", severity: "warn", message: "unrecoverable debt cannot be stated: at least one indebted account could not be valued (stale/zero price, no reference or divergence)", audience: "monitor-operator" });
   findings.push(...treasuryFindings(snap, cfg, expectedTreasuryCall));
@@ -158,6 +198,13 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
       reference: snap.reference.status === "ok" ? { status: "ok", detail: `tick ${snap.reference.tick}` } : { status: "none", detail: snap.reference.reason },
       expectedTreasuryCall: expectedTreasuryCall.toString(),
       unrecoverableDebt: { usd: backing.unrecoverableUsd.toString(), rawUsd: backing.rawUsd.toString(), reservesUsd: reservesUsd.toString(), complete: backing.complete },
+      margin: {
+        classified: cls.margin.size,
+        unknownFlags: cls.unknown,
+        enabled: !!cfg.margin?.enabled,
+        positions: marginEvals.map((e) => ({ id: e.position.id.toString(), account: e.position.account, owner: e.position.owner, status: e.position.status, verdict: e.verdict, debtUsd: (e.metrics?.debtValueUsd ?? 0n).toString(), assetsUsd: (e.metrics?.grossAssetValueUsd ?? 0n).toString(), equityUsd: (e.metrics?.equityUsd ?? 0n).toString(), healthBps: (e.metrics?.healthFactorBps ?? 0n).toString() })),
+        counts: marginEvals.reduce((c: Record<string, number>, e) => ((c[e.verdict] = (c[e.verdict] ?? 0) + 1), c), {}),
+      },
     },
     state: next,
   };

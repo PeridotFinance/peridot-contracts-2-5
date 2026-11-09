@@ -22,7 +22,7 @@ Status: **PREPARED, NOT EXECUTED.** The assistant signs and broadcasts nothing. 
 | `MARGIN_INSURANCE_SEED_USDC` | `250000000` (decision D6) |
 | `MARGIN_ACTION_DELAY` | `86400` (24 h, decision D1) |
 
-Balances before stage 2: the Ledger holds **2,750 USDC** (2,500 for the flash vault, 250 for the insurance seed) and AVAX for about 30 transactions. The deployer holds AVAX for 17 deployments (estimate from the rehearsal broadcast: see the evidence; fund about 1.5x).
+Balances before stage 2: the Ledger holds **2,750 USDC** (2,500 for the flash vault, 250 for the insurance seed) and AVAX for the 28 transactions (0.3 AVAX is ample). The deployer holds AVAX for the 22 stage-1 transactions: 31.9M gas used and a 41.5M gas-limit sum, i.e. **about 0.8 AVAX at 25 gwei and 1.6 AVAX at 50 gwei**. **Fund the deployer with 2.5 AVAX**; whatever is left goes back to you. The Ledger's AVAX for stages 2 to 4 is 1.8M gas (about 0.1 AVAX at 50 gwei) plus the flash and insurance seeds in USDC.
 
 ## 2. Stages
 
@@ -38,7 +38,7 @@ Balances before stage 2: the Ledger holds **2,750 USDC** (2,500 for the flash va
 | 4 enable | Ledger | `... enable live` | re-checks prices, flash liquidity, insurance, WAVAX borrowing still paused; executes the queued unpause |
 | verify 4 | none | `STAGE=4 ... verify live` | opens live |
 
-Stage 2 is about 22 Ledger signatures, stage 3 about 3, stage 4 one. Stage 1 needs the Ledger for nothing.
+**Counts measured in the rehearsal broadcast** (`contracts/broadcast/DeployAvalancheMarginMainnet.s.sol/`): stage 1 is **22 transactions by the throwaway deployer** (31.9M gas used, 41.5M gas-limit sum); stage 2 is **24 Ledger signatures** (1.53M gas); stage 3 is **3** (0.20M); stage 4 is **1** (0.05M): **28 Ledger signatures in all**. Stage 1 needs the Ledger for nothing.
 
 **Order in the calendar:** stage 1 and 2 any day after the PW30 deployment (inert while paused); stage 3 the next day; stage 4 only after the monitor and operators are running with the margin step (14 Nov build) and `verify 3` passed. Latest dates: stage 2 on 16 Nov, stage 3 on 17 Nov, stage 4 on 18 Nov.
 
@@ -68,4 +68,4 @@ Do not re-run `wire` blindly: the queues revert with "already queued" and some c
 
 - The two operator wallets keep their USDC inventory (at least USD 3,750 each) and approve the **liquidator proxy** for the exact need only (the margin step of the operator does it; see the host-setup addition).
 - Pilot operating rule (decision D2): team lending borrows stay at or under 2,000 USDC while margin is open, so about 2,450 of margin debt fits inside the USD 5,000 cap and the 1,250 cash floor. Raising the cap to 7,500 later needs a Ledger transaction and 2,500 USDC more supply.
-- Monitor: margin accounts must be classified before the margin step goes live (14 Nov build); until then the lending executor must not be started with margin open.
+- Monitor and executor (built 8 Nov): margin accounts are classified by the controller's own flag (`isolatedMarginAccounts`) and removed from the lending verdicts, the treasury figures, the keeper's input and the lending executor's candidates; they are reported as `margin.positions`. The operator's margin step liquidates only through `liquidateFunded`, break-even floor fixed at 10,000 bp, bounded allowance, daily cap, insolvent positions declined. Details and the host configuration: `avalanche-pilot-host-setup.md` section 6. Rehearsal evidence: `avalanche-margin-evidence/rehearse-margin-pipeline-run6.txt`.

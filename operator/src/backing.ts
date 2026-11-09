@@ -24,9 +24,10 @@ export interface BackingResult {
 const valued = (v: number): boolean =>
   v === Verdict.HEALTHY || v === Verdict.LIQUIDATABLE_RECOVERABLE || v === Verdict.UNRECOVERABLE_LIQUIDATE_FIRST || v === Verdict.DEFAULT_EXHAUSTED;
 
-export function unrecoverableDebt(results: Iterable<RuleResult>, liquidationIncentive: bigint, reservesUsd: bigint): BackingResult {
-  let raw = 0n;
-  let complete = true;
+/** `margin`: the isolated-margin positions' contribution (they are NOT lending accounts and are removed from `results`): their own unrecoverable value, and whether any could not be valued. */
+export function unrecoverableDebt(results: Iterable<RuleResult>, liquidationIncentive: bigint, reservesUsd: bigint, margin: { rawUsd: bigint; complete: boolean } = { rawUsd: 0n, complete: true }): BackingResult {
+  let raw = margin.rawUsd;
+  let complete = margin.complete;
   let counted = 0;
   for (const r of results) {
     if (r.verdict === Verdict.NO_DEBT) continue;

@@ -23,6 +23,8 @@ import type { MonitorConfig } from "./config";
 import { UNIV3_FEE, UNIV3_SWAP_ROUTER02, USDC, WAVAX } from "./constants";
 import type { ExternalSigner } from "./signer";
 import { feesWithin, makeSender, TxReverted } from "./txkit";
+import { classifyMargin, evaluateMarginPositions, liquidationErrorCode, LIQ_NOT_FUNDER, LIQ_REPAY_ABOVE_MAX, LIQ_VALUE_FLOOR, marginConfigIface, marginLiquidatorIface, MIN_SEIZE_VALUE_BPS, planMarginRepay, readMarginPositions, readPairBonusBps, repaidInWindow } from "./margin";
+import type { MarginRound } from "./margin";
 import { safeError } from "./mask";
 
 const erc20 = new utils.Interface(ERC20_ABI);
@@ -40,8 +42,10 @@ export interface RoundRecord {
   wavaxIn?: string;
   usdcOut?: string;
   swapBlocked?: string;
+  /** set for a funded margin liquidation (`borrower` then names the position's margin account) */
+  marginPositionId?: string;
 }
-export type Stage = "liquidate" | "redeem" | "swap";
+export type Stage = "liquidate" | "redeem" | "swap" | "margin";
 export interface ExecutorState {
   halted: null | { reason: string; at: number };
   /** set (and persisted) BEFORE the first transaction of a stage; found set at start-up = interrupted = HALT */
@@ -49,6 +53,8 @@ export interface ExecutorState {
   rounds: RoundRecord[];
   /** per-borrower retry-not-before (unix s) after a liquidation that reverted (another liquidator was first) */
   cooldown: Record<string, number>;
+  /** funded margin liquidations (rolling 24 h cap, read-back history); optional so that a state file from before the margin step still loads */
+  marginRounds?: MarginRound[];
 }
 export const emptyExecutorState = (): ExecutorState => ({ halted: null, pending: null, rounds: [], cooldown: {} });
 export const LIQUIDATION_RETRY_COOLDOWN_SECONDS = 30;
@@ -98,6 +104,8 @@ export interface ExecutorDeps {
   now?: () => number;
   /** optional progress trace (debugging); never carries secrets */
   trace?: (msg: string) => void;
+  /** mutation-testing hooks (R-C); `main` never passes them */
+  testHooks?: { noMarginClassifier?: boolean; noAllowanceBound?: boolean; noDailyCap?: boolean; skipMarginReadBack?: boolean; minSeizeValueBps?: number; noInsolventPrefilter?: boolean };
 }
 
 export function operatorEntry(cfg: MonitorConfig): { name: string; address: string } {
@@ -180,8 +188,23 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
       if (r.halt) return halt(r.halt);
     }
     // 2. choose an account in shortfall
+    // 1b. isolated margin: funded liquidation of margin positions (this operator's own inventory), before the lending accounts
+    if (cfg.margin?.enabled && cfg.margin.liquidation.enabled) {
+      const mr = await marginStep();
+      if (mr === "halt") return { ...out, state: st, halted: true };
+      if (mr) {
+        out.round = mr;
+        st = { ...st, rounds: [...st.rounds, mr] };
+        deps.persist(st);
+        out.state = st;
+        return out; // one liquidation round per step
+      }
+    }
     tr("choosing an account");
-    const accounts = await deps.accounts();
+    // isolated margin accounts are NOT lending borrowers: the controller refuses liquidateBorrow for them, so trying would cost an approve/reset pair per cycle
+    const allAccounts = await deps.accounts();
+    const cls = deps.testHooks?.noMarginClassifier ? { margin: new Set<string>(), unknown: [] as string[] } : await classifyMargin(ctx, dep.controller, allAccounts.map((a) => a.toLowerCase()), blk.number);
+    const accounts = allAccounts.filter((a) => !cls.margin.has(a.toLowerCase()) && !cls.unknown.includes(a.toLowerCase()));
     const inputs = await readAccountInputs(ctx, snap, accounts.map((a) => a.toLowerCase()));
     const cands = accounts
       .map((a) => ({ a: a.toLowerCase(), i: inputs.get(a.toLowerCase())! }))
@@ -217,7 +240,7 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
     return out;
   } catch (e) {
     // best effort: never leave an allowance behind when stopping (each is bounded to one round's need anyway)
-    for (const [token, spender] of [[USDC, dep.pUsdc], [WAVAX, UNIV3_SWAP_ROUTER02]] as const) {
+    for (const [token, spender] of [[USDC, dep.pUsdc], [WAVAX, UNIV3_SWAP_ROUTER02], ...(cfg.margin?.enabled ? ([[USDC, cfg.margin.liquidator]] as const) : [])] as const) {
       try {
         if ((await allowance(token, spender)) > 0n) await approve(token, spender, 0n);
       } catch {
@@ -225,6 +248,174 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
       }
     }
     return halt(`unexpected error: ${safeError(e)}`);
+  }
+
+  // ---------------------------------------------------------------- isolated margin: one FUNDED liquidation (+ the shared redeem + conversion)
+  // The operator repays from its own USDC and receives the position pTokens (bonus <= 5%). The repayment is chosen by the risk engine, not by the
+  // operator, so the allowance is BOUNDED, not exact: maxRepayUnderlying = min(inventory, daily-cap remaining, per-call cap, debt), approved to the
+  // liquidator proxy and refused on chain above that (LiquidationError 28). minSeizeValueBps is FIXED at 10,000 (break-even): an insolvent position
+  // is declined (LiquidationError 32), the debt stays in the market and the monitor alerts (decision D3). The allowance is reset to 0 in every outcome.
+  async function marginStep(): Promise<RoundRecord | "halt" | undefined> {
+    const m = cfg.margin!;
+    const lq = m.liquidation;
+    const wantMin = deps.testHooks?.minSeizeValueBps ?? MIN_SEIZE_VALUE_BPS;
+    // drift checks: the liquidator must be wired to the configured engine and config (a swapped proxy must not receive an allowance)
+    const mi = marginLiquidatorIface;
+    const readAddr = async (to: string, iface: utils.Interface, fn: string): Promise<string> => (iface.decodeFunctionResult(fn, await provider.call({ to, data: iface.encodeFunctionData(fn) }))[0] as string).toLowerCase();
+    if ((await readAddr(m.liquidator, mi, "riskEngine")) !== m.riskEngine.toLowerCase() || (await readAddr(m.liquidator, mi, "config")) !== m.config.toLowerCase()) return halt("the margin liquidator's riskEngine()/config() differ from the configured addresses (configuration drift): no allowance is given").then(() => "halt" as const);
+    const isFunder = marginConfigIface.decodeFunctionResult("fundedLiquidators", await provider.call({ to: m.config, data: marginConfigIface.encodeFunctionData("fundedLiquidators", [operator]) }))[0] as boolean;
+    if (!isFunder) {
+      out.skipped.push("margin: this operator is not on the funded-liquidator allowlist");
+      await alerts.raise({ key: `executor:margin-not-funder:${opName}`, severity: "warn", message: `operator ${opName} is not a funded liquidator: it cannot liquidate margin positions`, audience: "liquidators" }, nowS());
+      return undefined;
+    }
+    await alerts.clear(`executor:margin-not-funder:${opName}`, nowS());
+    const positions = await readMarginPositions(ctx, m.executor, blk.number);
+    const bonus = await readPairBonusBps(ctx, m.config, positions.find((p) => p.status === 2), blk.number);
+    const evals = (await evaluateMarginPositions(ctx, m.riskEngine, positions, blk.number, m.watchHealthBps, bonus)).filter((e) => e.verdict === "LIQUIDATABLE" || e.verdict === "INSOLVENT");
+    evals.sort((a, b) => (b.metrics!.debtValueUsd > a.metrics!.debtValueUsd ? 1 : -1));
+    for (const e of evals) {
+      const p = e.position;
+      const ckey = `margin:${p.id}`;
+      if ((st.cooldown[ckey] ?? 0) > nowS()) {
+        out.skipped.push(`margin position ${p.id}: cooling down`);
+        continue;
+      }
+      if (e.verdict === "INSOLVENT" && !deps.testHooks?.noInsolventPrefilter) {
+        // declined without sending anything: the break-even floor would refuse it; the monitor raises the human-decision alert
+        out.skipped.push(`margin position ${p.id}: insolvent (equity <= 0), declined at the break-even floor; the debt stays in the market`);
+        await alerts.raise({ key: `executor:margin-declined:${opName}:${p.id}`, severity: "crit", message: `operator ${opName} DECLINES margin position ${p.id}: collateral no longer covers the debt, the break-even floor would refuse it. The debt stays in the pUSDC market. Human decision needed`, audience: "treasury-signers" }, nowS());
+        st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.insolventCooldownSeconds } };
+        deps.persist(st);
+        continue;
+      }
+      await alerts.clear(`executor:margin-declined:${opName}:${p.id}`, nowS());
+      const debt = BigInt(utils.defaultAbiCoder.decode(["uint256"], await provider.call({ to: p.debtPToken, data: pIface.encodeFunctionData("borrowBalanceStored", [p.account]) }))[0].toString());
+      const inventory = await bal(USDC, operator);
+      const rounds = st.marginRounds ?? [];
+      const plan = planMarginRepay({
+        debt,
+        inventory,
+        dailyCap: deps.testHooks?.noDailyCap ? 10n ** 15n : BigInt(lq.dailyRepayCapUsdc) * 1_000_000n,
+        repaidToday: repaidInWindow(rounds, nowS()),
+        perCallCap: deps.testHooks?.noAllowanceBound ? 10n ** 15n : BigInt(lq.maxRepayPerCallUsdc) * 1_000_000n,
+        minRepay: BigInt(lq.minRepayUsdc) * 1_000_000n,
+      });
+      if (plan.maxRepay === 0n) {
+        out.skipped.push(`margin position ${p.id}: ${plan.reason}`);
+        if (plan.bound === "inventory") out.unfunded = true;
+        await alerts.raise({ key: `executor:margin-bounded:${opName}`, severity: plan.bound === "daily-cap" ? "crit" : "warn", message: `operator ${opName} cannot liquidate margin position ${p.id}: ${plan.reason}${plan.bound === "inventory" ? ". Top the USDC inventory up" : plan.bound === "daily-cap" ? ". The daily repayment cap is used up; raise it deliberately (config) or let the other operator act" : ""}`, audience: "liquidators" }, nowS());
+        continue;
+      }
+      await alerts.clear(`executor:margin-bounded:${opName}`, nowS());
+      const params = [p.id.toString(), operator, plan.maxRepay.toString(), "0", "0", String(wantMin)];
+      const data = marginLiquidatorIface.encodeFunctionData("liquidateFunded", [params]);
+      const usdcBefore = await bal(USDC, operator);
+      const pBefore = await bal(p.positionPToken, operator);
+      const mBefore = p.marginPToken === p.positionPToken ? pBefore : await bal(p.marginPToken, operator);
+      setPending("margin", p.account);
+      tr(`margin: approve <= ${plan.maxRepay} USDC for position ${p.id} (bound: ${plan.bound})`);
+      await approve(USDC, m.liquidator, plan.maxRepay);
+      const reset = async (): Promise<void> => {
+        if ((await allowance(USDC, m.liquidator)) > 0n) await approve(USDC, m.liquidator, 0n);
+      };
+      let gasLimit: BigNumber;
+      try {
+        await provider.call({ from: operator, to: m.liquidator, data });
+        gasLimit = (await provider.estimateGas({ from: operator, to: m.liquidator, data })).mul(13).div(10);
+      } catch (err) {
+        await reset();
+        setPending(null);
+        const code = liquidationErrorCode(err);
+        if (code === LIQ_VALUE_FLOOR) {
+          out.skipped.push(`margin position ${p.id}: declined by the break-even floor (LiquidationError 32); allowance reset`);
+          await alerts.raise({ key: `executor:margin-declined:${opName}:${p.id}`, severity: "crit", message: `operator ${opName} DECLINES margin position ${p.id}: the value received would be below the value repaid (break-even floor, LiquidationError 32). The debt stays in the pUSDC market. Human decision needed`, audience: "treasury-signers" }, nowS());
+          st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.insolventCooldownSeconds } };
+        } else if (code === LIQ_REPAY_ABOVE_MAX) {
+          out.skipped.push(`margin position ${p.id}: the repayment the risk engine wants exceeds the bound ${plan.maxRepay} (${plan.bound}); allowance reset`);
+          if (plan.bound === "inventory") out.unfunded = true;
+          await alerts.raise({ key: `executor:margin-bounded:${opName}`, severity: "crit", message: `operator ${opName}: margin position ${p.id} needs a larger repayment than the ${plan.bound} bound allows (${plan.maxRepay} USDC units). ${plan.bound === "inventory" ? "Top the inventory up" : "Raise the cap deliberately in the configuration"}; the other operator may act`, audience: "liquidators" }, nowS());
+          st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.retryCooldownSeconds } };
+        } else if (code === LIQ_NOT_FUNDER) {
+          out.skipped.push(`margin position ${p.id}: LiquidationError 27 (not a funded liquidator); allowance reset`);
+          st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.retryCooldownSeconds } };
+        } else {
+          out.skipped.push(`margin position ${p.id}: funded liquidation simulation failed (${code !== undefined ? `LiquidationError ${code}` : safeError(err)}); allowance reset`);
+          st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.retryCooldownSeconds } };
+        }
+        deps.persist(st);
+        continue;
+      }
+      let tx;
+      try {
+        tr(`margin: send funded liquidation of position ${p.id}`);
+        tx = await send(m.liquidator, data, gasLimit);
+      } catch (err) {
+        if (err instanceof TxReverted) {
+          await reset();
+          setPending(null);
+          st = { ...st, cooldown: { ...st.cooldown, [ckey]: nowS() + lq.retryCooldownSeconds } };
+          deps.persist(st);
+          out.skipped.push(`margin position ${p.id}: funded liquidation reverted after a passing simulation (${err.hash}); allowance reset`);
+          continue;
+        }
+        throw err;
+      }
+      // read-back from the receipt: the event names this operator as funder AND recipient; USDC left == debtRepaid <= the bound; the seized pTokens arrived
+      const receipt = await provider.getTransactionReceipt(tx.hash);
+      const usdcAfter = await bal(USDC, operator, receipt.blockNumber);
+      const pAfter = await bal(p.positionPToken, operator, receipt.blockNumber);
+      const mAfter = p.marginPToken === p.positionPToken ? pAfter : await bal(p.marginPToken, operator, receipt.blockNumber);
+      const ev = receipt.logs.filter((l) => l.address.toLowerCase() === m.liquidator.toLowerCase()).map((l) => { try { return marginLiquidatorIface.parseLog(l); } catch { return undefined; } }).find((x) => x?.name === "FundedPositionLiquidated");
+      const problems: string[] = [];
+      const spent = usdcBefore - usdcAfter;
+      if (!ev) problems.push("no FundedPositionLiquidated event");
+      else {
+        if (ev.args.positionId.toString() !== p.id.toString()) problems.push("event names a different position");
+        if ((ev.args.funder as string).toLowerCase() !== operator.toLowerCase() || (ev.args.recipient as string).toLowerCase() !== operator.toLowerCase()) problems.push("event names a different funder or recipient");
+        if (BigInt(ev.args.debtRepaid.toString()) !== spent) problems.push(`USDC delta ${spent} != debtRepaid ${ev.args.debtRepaid.toString()}`);
+        if (p.marginPToken === p.positionPToken ? BigInt(ev.args.positionPTokensSeized.toString()) + BigInt(ev.args.marginPTokensSeized.toString()) !== pAfter - pBefore : BigInt(ev.args.positionPTokensSeized.toString()) !== pAfter - pBefore || BigInt(ev.args.marginPTokensSeized.toString()) !== mAfter - mBefore) problems.push("pToken delta differs from the event's seized amounts");
+      }
+      if (spent > plan.maxRepay) problems.push(`USDC delta ${spent} exceeds the allowance bound ${plan.maxRepay}`);
+      if (spent <= 0n) problems.push("no USDC was repaid");
+      if (pAfter <= pBefore && mAfter <= mBefore) problems.push("no pTokens received");
+      if (deps.testHooks?.skipMarginReadBack) problems.length = 0;
+      await reset();
+      const round: RoundRecord = { ts: nowS(), borrower: p.account, repay: spent.toString(), seizedPTokens: (pAfter - pBefore).toString(), liquidateTx: tx.hash, marginPositionId: p.id.toString() };
+      st = { ...st, marginRounds: [...(st.marginRounds ?? []).filter((r) => r.ts > nowS() - 7 * 86_400), { ts: round.ts, positionId: p.id.toString(), repay: spent.toString() }] };
+      deps.persist(st);
+      await alerts.notify({ kind: "action", key: `executor:margin-liquidation:${opName}`, severity: "warn", audience: "liquidators", text: `operator ${opName} LIQUIDATED margin position ${p.id}: repaid ${spent} USDC units, received ${pAfter - pBefore} position pTokens${mAfter > mBefore && p.marginPToken !== p.positionPToken ? ` and ${mAfter - mBefore} margin pTokens` : ""} (${tx.hash}, block ${receipt.blockNumber})${problems.length ? `. READ-BACK PROBLEMS: ${problems.join("; ")}` : ""}` });
+      if (problems.length) {
+        st = { ...st, rounds: [...st.rounds, round] };
+        await halt(`margin liquidation ${tx.hash} mined but read-back failed: ${problems.join("; ")}`);
+        return "halt";
+      }
+      // margin pTokens (pUSDC) seized by the funded route are redeemed to USDC here (exactly what arrived, never the wallet's whole balance)
+      const marginGot = p.marginPToken === p.positionPToken ? 0n : mAfter - mBefore;
+      if (marginGot > 0n && cfg.executor.convertToUsdc) {
+        try {
+          const rd = pIface.encodeFunctionData("redeem", [marginGot.toString()]);
+          const code = pIface.decodeFunctionResult("redeem", await provider.call({ from: operator, to: p.marginPToken, data: rd }))[0] as BigNumber;
+          if (!code.eq(0)) throw new Error(`redeem simulation returned error code ${code.toString()}`);
+          await send(p.marginPToken, rd, (await provider.estimateGas({ from: operator, to: p.marginPToken, data: rd })).mul(13).div(10));
+        } catch (err) {
+          out.skipped.push(`margin: the seized margin pTokens stay in the wallet (${safeError(err)})`);
+        }
+      }
+      if (!cfg.executor.convertToUsdc) {
+        setPending(null);
+        return round;
+      }
+      const f = await finishConversion(round);
+      if (f.halt) {
+        st = { ...st, rounds: [...st.rounds, round] };
+        await halt(f.halt);
+        return "halt";
+      }
+      setPending(null);
+      return round;
+    }
+    return undefined;
   }
 
   // ---------------------------------------------------------------- one liquidation round (+ redeem + conversion)

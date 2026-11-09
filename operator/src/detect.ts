@@ -62,6 +62,8 @@ export interface RuleResult {
 /** Test hook for mutation testing only: 1 = fire on shortfall alone, 3 = no divergence gate. `main` never passes it. */
 export interface RuleTestHooks {
   mutation?: 0 | 1 | 3;
+  /** mutation testing of the margin classifier: pretend no account is an isolated margin account (the pre-R-B behaviour). `main` never passes it. */
+  noClassifier?: boolean;
 }
 
 export function evaluateRule(input: AccountInput, params: RuleParams, hooks: RuleTestHooks = {}): RuleResult {

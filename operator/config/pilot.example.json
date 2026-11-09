@@ -107,6 +107,22 @@
     "maxFeeGwei": 100,
     "minGasWei": "500000000000000000"
   },
+  "margin": {
+    "enabled": false,
+    "executor": "UNSET",
+    "liquidator": "UNSET",
+    "riskEngine": "UNSET",
+    "config": "UNSET",
+    "watchHealthBps": 13000,
+    "liquidation": {
+      "enabled": false,
+      "dailyRepayCapUsdc": 2500,
+      "maxRepayPerCallUsdc": 1500,
+      "minRepayUsdc": 1,
+      "retryCooldownSeconds": 30,
+      "insolventCooldownSeconds": 600
+    }
+  },
   "keeper": {
     "enabled": true,
     "keystorePath": "UNSET",
