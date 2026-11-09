@@ -1,0 +1,86 @@
+{
+  "chainId": 43114,
+  "network": "avalanche-c-chain-mainnet",
+  "status": "deployed-not-enabled",
+  "statusNote": "Deployed; collateral factors 0, borrowing paused (both markets), flash loans paused, USDC supply not yet made. Source of the addresses: the broadcast record, addresses cross-checked on chain by the operator.",
+  "commit": "4bfb1549",
+  "deployBlock": 99846691,
+  "lastDeployBlock": 99846919,
+  "deployTimestampMs": 1794224707511,
+  "broadcastRecord": "contracts/broadcast/DeployAvalancheCashOnlyLending.s.sol/43114/run-latest.json",
+  "deployer": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "admin": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "pauseGuardian": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "capUsd": 200,
+  "lending": {
+    "controller": "0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A",
+    "controllerNote": "Unitroller proxy; call the controller ABI (PeridottrollerAvalanche) on this address",
+    "controllerImplementation": "0x4419aD340b3a4cf71303C7247dDA3AfF9BF41Ad6",
+    "oracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+    "oracleNote": "GuardedAvalanchePriceOracle; the controller's oracle",
+    "sourceOracle": "0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f",
+    "sourceOracleNote": "AvalanchePriceOracle (Chainlink feeds), owner = admin",
+    "interestRateModel": "0xe5a82bF40b493cf37C06851A934370F3f0896263",
+    "pTokenDelegate": "0xAB5a72E10eE33e19b7fE119C6771886141624f11",
+    "bootstrapper": "0xf8541dfef0E5A5aA4C158196EB8Db318ef77DD4C",
+    "markets": {
+      "pWAVAX": {
+        "address": "0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1",
+        "underlying": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+        "underlyingSymbol": "WAVAX",
+        "underlyingDecimals": 18
+      },
+      "pUSDC": {
+        "address": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+        "underlying": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+        "underlyingSymbol": "USDC",
+        "underlyingDecimals": 6
+      }
+    },
+    "chainlinkFeeds": {
+      "AVAX_USD": "0x0A77230d17318075983913bC2145DB16C7366156",
+      "USDC_USD": "0xF096872672F44d6EBA71458D74fe67F9a77a23B9"
+    }
+  },
+  "margin": {
+    "config": null,
+    "riskEngine": null,
+    "vault": null,
+    "executor": null,
+    "liquidator": null,
+    "quoter": null,
+    "orderRegistry": null,
+    "closeAdapter": null,
+    "flashLoanVault": null
+  },
+  "vault": {
+    "usdcVault": null,
+    "wavaxVault": null
+  },
+  "pilotParameters": {
+    "source": "contracts/ceremony/pilot-pw30.env (public values only; amounts are raw units: WAVAX 18 decimals, USDC 6 decimals, mantissas 1e18)",
+    "values": {
+      "DEPLOYER": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "PERIDOT_TOKEN": "0x0000000000000000000000000000000000000000",
+      "LENDING_ALLOW_NO_REWARD_TOKEN": "true",
+      "PAUSE_GUARDIAN": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "LENDING_WAVAX_SEED_AMOUNT": "1252043214016114950",
+      "LENDING_USDC_SEED_AMOUNT": "10000000",
+      "LENDING_WAVAX_BORROW_CAP": "5008172856064459802",
+      "LENDING_USDC_BORROW_CAP": "200000000",
+      "LENDING_RESERVE_FACTOR": "100000000000000000",
+      "LENDING_CLOSE_FACTOR": "500000000000000000",
+      "LENDING_LIQUIDATION_INCENTIVE": "1080000000000000000",
+      "LENDING_BLOCKS_PER_YEAR": "33500000",
+      "LENDING_BASE_RATE_PER_YEAR": "20000000000000000",
+      "LENDING_MULTIPLIER_PER_YEAR": "100000000000000000",
+      "LENDING_JUMP_MULTIPLIER_PER_YEAR": "1000000000000000000",
+      "LENDING_KINK": "800000000000000000",
+      "AVAX_FEED_MAX_AGE": "1200",
+      "USDC_FEED_MAX_AGE": "90000",
+      "LENDING_WAVAX_BORROW_CASH_FLOOR": "0",
+      "LENDING_USDC_BORROW_CASH_FLOOR": "50000000"
+    }
+  },
+  "abis": "docs/deployment-handoffs/avalanche-pilot-abis/"
+}
