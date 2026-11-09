@@ -26,7 +26,7 @@ cast send $T $(jq -r .executeCalldata $OJ) --from $L --unlocked --gas-limit 1000
 
 echo "== DeployRangeTakeProfit (throwaway key)"
 B0=$(cast balance $D2 --rpc-url $F)
-RANGE_PUBLIC_SENDER=$D2 RANGE_JOURNAL=$RJ ORDERS_JOURNAL=$OJ RANGE_PROTOCOL_RECIPIENT=0x0000000000000000000000000000000000BeEF01 \
+RANGE_PUBLIC_SENDER=$D2 RANGE_JOURNAL=$RJ ORDERS_JOURNAL=$OJ RANGE_PROTOCOL_RECIPIENT=$L \
 RANGE_SOURCE_COMMIT=$(git rev-parse HEAD) \
   forge script script/orders/DeployRangeTakeProfit.s.sol:DeployRangeTakeProfit --rpc-url $F --sender $D2 --unlocked --broadcast --slow \
   > $TMP/range-deploy.log 2>&1

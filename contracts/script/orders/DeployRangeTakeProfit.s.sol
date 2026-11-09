@@ -139,10 +139,13 @@ contract DeployRangeTakeProfit is Script {
     }
 
     function _protocolRecipient() internal view returns (address protocolTo) {
-        // The Robinhood Safe or the Ledger, to be confirmed by the operator: no default, never zero or the compromised key.
+        // The Robinhood Safe (operator 2026-11-09): no default, never zero or the compromised key.
         protocolTo = vm.envAddress("RANGE_PROTOCOL_RECIPIENT");
         require(protocolTo != address(0), "PROTOCOL_RECIPIENT_UNSET");
         require(protocolTo != OLD_SIGNER, "RECIPIENT_IS_THE_OLD_KEY");
+        // Operator 2026-11-09: the Robinhood Safe. Refuse an address with no code (an undeployed Safe would receive fees
+        // nobody can move until it is deployed with the same configuration), except the Ledger itself.
+        require(protocolTo == LEDGER || protocolTo.code.length > 0, "PROTOCOL_RECIPIENT_HAS_NO_CODE");
     }
 
     function _deploy(address creator, Ceremony memory c, address protocolTo)
