@@ -83,12 +83,12 @@ journal.
 ## Open before signing
 
 - **Fee recipients (operator, 2026-11-09):**
-  - **Protocol share:** to the Robinhood Safe or the Ledger. The operator will confirm which.
-  - **Reserve share:** to the pNVDA reserve. Two contracts could be meant:
-    1. The pNVDA market's own reserves (`_addReserves`). That takes NVDA only, while most of a band's fees arrive in
-       USDG, so it would need a custodian change.
-    2. The NVDA/USDG pair's loss reserve `0x806b...12aF`. Its `deposit(pair, token, amount)` is open to anyone and takes
-       both tokens.
+  - **Protocol share:** still unconfirmed: the Robinhood Safe or the Ledger. The operator will confirm which.
+  - **Reserve share (decided):** to the NVDA/USDG pair's loss reserve `0x806b182B050f7EcF908758dD6bBF91DB8B2212aF`,
+    credited through its `deposit(pairId, token, amount)` for pair id
+    `0xe2050352f4346597cc69d2776d99ae60c9440dfc28f9406ce66be0bbe3fb6b06`.
+    - A plain token transfer would not be credited to the pair.
+    - The custodian change that deposits instead of transferring is being built separately.
   - The margin config's treasury still points at the old key. Do not reuse it.
 - **Decided 2026-11-09:** the custodian setting stays inside the timelock batch (2 Ledger signatures). Every ceremony
   that touches the executor is gated on the sequence-replay tests: `testCeremonyThenRangeBatchHandsOverFromAdapterV1ToV2`
