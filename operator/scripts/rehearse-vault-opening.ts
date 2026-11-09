@@ -3,6 +3,7 @@
 // The Ledger is IMPERSONATED on the fork; nothing real is signed. The calldata printed here is what the Ledger signs on the day.
 //   AVALANCHE_MAINNET_RPC_URL=... node dist/scripts/rehearse-vault-opening.js [--out report.json]
 import fs from "node:fs";
+import path from "node:path";
 import { BigNumber, Contract, utils } from "ethers";
 import { ForkChain } from "../test/fork/harness";
 import { safeError } from "../src/mask";
@@ -11,9 +12,12 @@ const LEDGER = "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD";
 const SAFE = "0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12";
 const USDC = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E";
 const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
+// Sizes come from the ONE-INPUT sizing (contracts/ceremony/pilot-sizing.json, written by contracts/tools/pilot-sizing.py): cap, team seed per vault; the test deposit is 2% of the cap.
+const SIZING = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "contracts", "ceremony", "pilot-sizing.json"), "utf8"));
+const USDC_CAP = BigNumber.from(String(SIZING.vaults.usdc_deposit_cap_units)), WAVAX_CAP = BigNumber.from(String(SIZING.vaults.wavax_deposit_cap_units));
 const VAULTS = [
-  { name: "USDC vault", address: "0x855bF832f26a294d28500db59eE941dE3d654129", asset: USDC, cap: BigNumber.from("5000000000"), test: BigNumber.from("100000000"), decimals: 6, seed: BigNumber.from("500000000") },
-  { name: "WAVAX vault", address: "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8", asset: WAVAX, cap: utils.parseEther("595"), test: utils.parseEther("2"), decimals: 18, seed: utils.parseEther("60") },
+  { name: "USDC vault", address: "0x855bF832f26a294d28500db59eE941dE3d654129", asset: USDC, cap: USDC_CAP, test: USDC_CAP.mul(2).div(100), decimals: 6, seed: BigNumber.from(String(SIZING.vaults.usdc_team_seed_units)) },
+  { name: "WAVAX vault", address: "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8", asset: WAVAX, cap: WAVAX_CAP, test: WAVAX_CAP.mul(2).div(100), decimals: 18, seed: BigNumber.from(String(SIZING.vaults.wavax_team_seed_units)) },
 ];
 const safeIface = new utils.Interface(["function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)", "function nonce() view returns (uint256)", "function getOwners() view returns (address[])", "function getThreshold() view returns (uint256)"]);
 const vaultAbi = ["function setDepositCap(uint256)", "function depositCap() view returns (uint256)", "function totalAssets() view returns (uint256)", "function totalSupply() view returns (uint256)", "function maxDeposit(address) view returns (uint256)", "function deposit(uint256,address) returns (uint256)", "function redeem(uint256,address,address) returns (uint256)", "function balanceOf(address) view returns (uint256)", "function previewRedeem(uint256) view returns (uint256)", "function owner() view returns (address)", "function paused() view returns (bool)", "function rebalancer() view returns (address)", "function deployIdle()", "function convertToAssets(uint256) view returns (uint256)"];
