@@ -43,6 +43,28 @@ Balances before stage 2: the Ledger holds **0.55 x CAP in USDC** (0.5 x CAP for 
 
 **Order:** no calendar dependency. Stage 1 and 2 any time after the PW30 deployment (inert while paused); stage 3 at least 24 h after stage 2 (the timelock); stage 4 only after verify 3 and the operators run with the margin block enabled.
 
+### Last step of the margin sweep: delete the throwaway deployer keystore and its password from `pilot-keeper`
+
+**Do NOT delete the deployer keystore before stage 1 is fully verified (`STAGE=1 ... verify live` passed, all 22 transactions landed) and its leftover AVAX has been swept back to the Ledger.** Until then the keystore is the only way to finish or repair stage 1 and to move the AVAX. This is the last step, after verify 4 (or any time after stage 1 is verified and swept, if you want the key gone earlier). The deployer holds no role at any time (`verify` asserts it), so this removes a secret, not a permission.
+
+Deployer address `0x7413c1C72BAAfFc640C00Ba759BF14826b12C8C7`; host `pilot-keeper` `68.183.219.154`; files `/mnt/pilot_keeper_data/deployer/` (the keystore `deployer.json`, and anything else in that directory) and `/root/deployer.password`. `ETH_RPC_URL` must already be set in your shell environment (never typed on a command line, never printed).
+
+1. Check that the deployer has swept its AVAX back to the Ledger (read-only; expect `0`, or dust below the cost of one transaction, about 0.0001 AVAX; anything larger must be swept first, while the keystore still exists):
+```
+cast balance 0x7413c1C72BAAfFc640C00Ba759BF14826b12C8C7 --ether
+```
+2. Delete the keystore files and the password file on `pilot-keeper` (`shred -u` overwrites then unlinks; shred is best effort on a journaling file system and a volume, which is acceptable because the keystore is scrypt-encrypted and its password is deleted in the same command):
+```
+ssh -i ~/.ssh/peridot-pilot_ed25519 root@68.183.219.154 'find /mnt/pilot_keeper_data/deployer -type f -exec shred -u {} + && rmdir /mnt/pilot_keeper_data/deployer && shred -u /root/deployer.password'
+```
+3. Check that they are gone (both lines must say `No such file or directory`; the keeper's own keystore under `/mnt/pilot_keeper_data/keystore/` and `/etc/pilot/keeper.env` must NOT be touched and must still exist):
+```
+ssh -i ~/.ssh/peridot-pilot_ed25519 root@68.183.219.154 'ls -la /mnt/pilot_keeper_data/deployer /root/deployer.password; ls /mnt/pilot_keeper_data/keystore /etc/pilot/keeper.env'
+```
+4. On your own machine, also delete the copy you imported for stage 1 (the Foundry keystore named in `MARGIN_DEPLOYER_ACCOUNT`, and any downloaded `deployer.json`); `avalanche-pilot-hosts.md` says to delete both after use.
+
+Not run by the assistant; you run it.
+
 ## 3. If a stage stops half-way
 
 Do not re-run `wire` blindly: the queues revert with "already queued" and some calls already happened. Run `verify` at the last stage that passed, read the Ledger's nonce, and list which transactions landed (`cast tx`/the broadcast file under `contracts/broadcast/`). Every unfinished action is a separate call that can be sent by hand from the printed script; report the state to me. Nothing is live until stage 4, so a stopped ceremony costs time and gas, never exposure.

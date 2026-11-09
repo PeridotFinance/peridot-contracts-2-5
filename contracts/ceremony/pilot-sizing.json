@@ -1,21 +1,21 @@
 {
-  "cap_usd": 5000,
-  "avax_usd": "8.37",
+  "cap_usd": 200,
+  "avax_usd": "7.98694477",
   "operator_config": {
-    "usdcBorrowCapUsd": 5000,
-    "protectionCapitalUsd": 1200,
-    "operatorInventoryMinUsd": 3750,
-    "operatorInventoryTargetUsd": 4450,
+    "usdcBorrowCapUsd": 200,
+    "protectionCapitalUsd": 48,
+    "operatorInventoryMinUsd": 150,
+    "operatorInventoryTargetUsd": 178,
     "cashFloorBp": 2000,
-    "keeperDailySpendCapUsdc": 1200,
-    "marginDailyRepayCapUsdc": 2500,
-    "marginMaxRepayPerCallUsdc": 1500
+    "keeperDailySpendCapUsdc": 48,
+    "marginDailyRepayCapUsdc": 100,
+    "marginMaxRepayPerCallUsdc": 60
   },
   "vaults": {
-    "usdc_deposit_cap_units": 5000000000,
-    "wavax_deposit_cap_units": "597371565113500597371",
-    "usdc_team_seed_units": 250000000,
-    "wavax_team_seed_units": "29868578255675029868"
+    "usdc_deposit_cap_units": 200000000,
+    "wavax_deposit_cap_units": "25040864280322299010",
+    "usdc_team_seed_units": 10000000,
+    "wavax_team_seed_units": "1252043214016114950"
   },
-  "process_gas_floor_wei": "100000000000000000"
+  "process_gas_floor_wei": "40000000000000000"
 }
