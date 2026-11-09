@@ -24,9 +24,13 @@ const Z = "0x0000000000000000000000000000000000000000";
 const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const OUTSIDER = "0x00000000000000000000000000000000000D3905";
 const PW = "rehearsal-only-password-5e1c"; // protects THROWAWAY keystores that exist only for this local-fork run
+// Sizes come from the ONE-INPUT sizing (contracts/ceremony/pilot-sizing.json): cap and team seed per vault; the second depositor is 4% of the cap, the donation 1%, the third deposit 2%.
+const SIZING = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "contracts", "ceremony", "pilot-sizing.json"), "utf8"));
+const UCAP = BigNumber.from(String(SIZING.vaults.usdc_deposit_cap_units)), WCAP = BigNumber.from(String(SIZING.vaults.wavax_deposit_cap_units));
+const pct = (x: BigNumber, n: number) => x.mul(n).div(100);
 const VAULTS = [
-  { name: "USDC vault", address: "0x855bF832f26a294d28500db59eE941dE3d654129", admin: "0x2DD4191B2944396B5853f4219E829f01636F65cf", asset: USDC, cap: BigNumber.from("5000000000"), seed: BigNumber.from("500000000"), second: BigNumber.from("200000000"), donate: BigNumber.from("50000000"), third: BigNumber.from("100000000") },
-  { name: "WAVAX vault", address: "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8", admin: "0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC", asset: WAVAX, cap: utils.parseEther("595"), seed: utils.parseEther("60"), second: utils.parseEther("20"), donate: utils.parseEther("5"), third: utils.parseEther("10") },
+  { name: "USDC vault", address: "0x855bF832f26a294d28500db59eE941dE3d654129", admin: "0x2DD4191B2944396B5853f4219E829f01636F65cf", asset: USDC, cap: UCAP, seed: BigNumber.from(String(SIZING.vaults.usdc_team_seed_units)), second: pct(UCAP, 4), donate: pct(UCAP, 1), third: pct(UCAP, 2) },
+  { name: "WAVAX vault", address: "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8", admin: "0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC", asset: WAVAX, cap: WCAP, seed: BigNumber.from(String(SIZING.vaults.wavax_team_seed_units)), second: pct(WCAP, 4), donate: pct(WCAP, 1), third: pct(WCAP, 2) },
 ];
 const safeIface = new utils.Interface(["function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)", "function nonce() view returns (uint256)", "function getOwners() view returns (address[])", "function getThreshold() view returns (uint256)"]);
 const adminIface = new utils.Interface(["function upgradeAndCall(address proxy, address implementation, bytes data)", "function owner() view returns (address)"]);
@@ -207,7 +211,9 @@ async function keystore(dir: string, name: string): Promise<{ file: string; addr
     check("module step 1: deployIdle executed on BOTH vaults, not halted", o1.done.length === 2 && o1.done.every((d) => d.action === "deployIdle") && !o1.halted, JSON.stringify(o1.done.map((d) => ({ action: d.action, lossBps: d.lossBps }))));
     for (const v of VAULTS) {
       const idle: BigNumber = await new Contract(v.asset, erc, chain.provider).balanceOf(v.address);
-      check(`${v.name}: after the module's deployIdle the idle asset is (nearly) zero`, idle.lt(v.donate.div(100)), `idle ${idle.toString()} of ${v.donate.toString()}`);
+      // the invariant is: nothing left that the module would act on again. Position-ratio rounding leaves a few cents of dust whatever the size (0.036 USDC at CAP 200), so the bound is the module's own deployIdle threshold (1 USDC / 0.1 WAVAX), not a percentage of the donation
+      const moduleThreshold = v.asset === USDC ? BigNumber.from(1_000_000) : utils.parseEther("0.1");
+      check(`${v.name}: after the module's deployIdle the idle asset is below the module's own threshold`, idle.lt(moduleThreshold) && idle.lt(v.donate.div(10)), `idle ${idle.toString()} of ${v.donate.toString()} (threshold ${moduleThreshold.toString()})`);
     }
     const o2 = await rebalancerStep({ provider: chain.provider, cfg, signer: sgn, alerts, persist, now }, st);
     st = o2.state;
