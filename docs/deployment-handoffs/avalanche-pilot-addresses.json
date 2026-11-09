@@ -1,8 +1,8 @@
 {
   "chainId": 43114,
   "network": "avalanche-c-chain-mainnet",
-  "status": "deployed-not-enabled",
-  "statusNote": "Deployed; collateral factors 0, borrowing paused (both markets), flash loans paused, USDC supply not yet made. Source of the addresses: the broadcast record, addresses cross-checked on chain by the operator.",
+  "status": "enabled",
+  "statusNote": "Lending enabled and read back on chain at block 99,848,206 (9 Nov 2026): pWAVAX collateral factor 0.3, pUSDC collateral factor 0, USDC borrowing enabled, WAVAX borrowing paused, USDC supplied 250 + seed 10 = 260 USDC cash, borrow cap 200 USDC, cash floor 50 USDC. Margin and vault addresses are not deployed yet.",
   "commit": "4bfb1549",
   "deployBlock": 99846691,
   "lastDeployBlock": 99846919,
