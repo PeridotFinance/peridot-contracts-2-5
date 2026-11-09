@@ -24,7 +24,6 @@ interface IDeployRtpTimelock {
 contract RangeTakeProfitDeployForkTest is DeployRangeTakeProfit, StdAssertions {
     address constant FEED = 0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15;
     address constant PROTOCOL_TO = address(0xBEEF01);
-    address constant RESERVE_TO = address(0xBEEF02);
     string constant ORDERS_J = "deployments/range-fork-orders-journal.json";
     string constant RANGE_J = "deployments/range-fork-range-journal.json";
     Ceremony c;
@@ -62,7 +61,7 @@ contract RangeTakeProfitDeployForkTest is DeployRangeTakeProfit, StdAssertions {
 
     function _deployRange() internal {
         _preconditions(c);
-        r = _deploy(address(this), c, PROTOCOL_TO, RESERVE_TO);
+        r = _deploy(address(this), c, PROTOCOL_TO);
         _postconditions(c, r, address(this));
         _writeJournal(RANGE_J, c, r);
     }

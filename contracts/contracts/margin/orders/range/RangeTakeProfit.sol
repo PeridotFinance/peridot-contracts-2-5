@@ -83,6 +83,11 @@ interface IRangeNfp {
     function getReward(uint256, address[] calldata) external;
 }
 
+/// @dev The pair's in-kind loss reserve (StrategyLossReserve): `deposit` credits the pair; a plain transfer would not.
+interface IRangeLossReserve {
+    function deposit(bytes32 pairId, address token, uint256 amount) external returns (uint256 received);
+}
+
 interface IRangeGauge {
     function getRewardTokens() external view returns (address[] memory);
 }
@@ -169,7 +174,10 @@ contract RangeTakeProfit is Initializable, ReentrancyGuardUpgradeable, IERC721Re
     mapping(address => uint256) public positionOfAccount;
     /// @notice Bands currently placed. The risk engine refuses to drop this custodian while any exist.
     uint256 public activeOrders;
-    uint256[30] private __gap;
+    /// @notice Appended: when set, the reserve share is deposited into `reserveRecipient` (the pair's loss reserve) for
+    /// this pair id, so it is credited to the pair. Zero = plain transfer to `reserveRecipient`.
+    bytes32 public reservePairId;
+    uint256[29] private __gap;
 
     struct InitParams {
         address executor;
@@ -204,6 +212,8 @@ contract RangeTakeProfit is Initializable, ReentrancyGuardUpgradeable, IERC721Re
         uint256 indexed positionId, uint256 stockOut, uint256 usdgOut, uint256 stockFees, uint256 usdgFees
     );
     event RangeOrderSettled(uint256 indexed positionId, uint256 repaid, uint256 remainingDebt, bool positionClosed);
+    event ReserveCredited(bytes32 indexed pairId, address indexed token, uint256 amount);
+    event ReserveDepositFailed(bytes32 indexed pairId, address indexed token, uint256 amount);
     event RangeOrderUnwound(uint256 indexed positionId, address indexed by, uint256 repaid);
 
     error NotAdmin();
@@ -261,16 +271,23 @@ contract RangeTakeProfit is Initializable, ReentrancyGuardUpgradeable, IERC721Re
         emit PresetSet(id, enabled, distanceTicks, widthTicks);
     }
 
-    function setFeeSplit(uint16 userBps, uint16 protocolBps, uint16 reserveBps, address protocolTo, address reserveTo)
-        external
-        onlyAdmin
-    {
+    /// @param reserveTo the reserve share's destination; with `reservePairId_` set, a loss reserve credited via deposit.
+    function setFeeSplit(
+        uint16 userBps,
+        uint16 protocolBps,
+        uint16 reserveBps,
+        address protocolTo,
+        address reserveTo,
+        bytes32 reservePairId_
+    ) external onlyAdmin {
         if (uint256(userBps) + protocolBps + reserveBps != BPS) revert InvalidFeeSplit();
         if ((protocolBps != 0 && protocolTo == address(0)) || (reserveBps != 0 && reserveTo == address(0))) {
             revert InvalidFeeSplit();
         }
+        if (reservePairId_ != bytes32(0) && reserveTo.code.length == 0) revert InvalidFeeSplit();
         (userFeeBps, protocolFeeBps, reserveFeeBps, protocolRecipient, reserveRecipient) =
             (userBps, protocolBps, reserveBps, protocolTo, reserveTo);
+        reservePairId = reservePairId_;
         emit FeeSplitSet(userBps, protocolBps, reserveBps, protocolTo, reserveTo);
     }
 
@@ -484,8 +501,29 @@ contract RangeTakeProfit is Initializable, ReentrancyGuardUpgradeable, IERC721Re
         uint256 toProtocol = Math.mulDiv(fees, o.protocolFeeBps, BPS);
         uint256 toReserve = Math.mulDiv(fees, o.reserveFeeBps, BPS);
         if (toProtocol != 0) IERC20(token).safeTransfer(protocolRecipient, toProtocol);
-        if (toReserve != 0) IERC20(token).safeTransfer(reserveRecipient, toReserve);
+        if (toReserve != 0) toReserve = _toReserve(o, token, toReserve);
         return toProtocol + toReserve;
+    }
+
+    /// @dev Credits the pair's loss reserve through `deposit`. A failing deposit must never block a risk path (unwind,
+    /// liquidation, stop-loss): the share then stays in the owner's proceeds and the event records it. Returns what left.
+    function _toReserve(Order storage, address token, uint256 amount) private returns (uint256) {
+        address to = reserveRecipient;
+        bytes32 pairId = reservePairId;
+        if (pairId == bytes32(0)) {
+            IERC20(token).safeTransfer(to, amount);
+            return amount;
+        }
+        IERC20(token).forceApprove(to, amount);
+        try IRangeLossReserve(to).deposit(pairId, token, amount) returns (uint256 received) {
+            IERC20(token).forceApprove(to, 0);
+            emit ReserveCredited(pairId, token, received);
+            return amount;
+        } catch {
+            IERC20(token).forceApprove(to, 0);
+            emit ReserveDepositFailed(pairId, token, amount);
+            return 0;
+        }
     }
 
     /// @dev Gauge rewards (RAM) on an active band accrue to the order owner and are paid out whole when the band is removed

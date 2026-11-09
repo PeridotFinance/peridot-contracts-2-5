@@ -104,7 +104,8 @@ contract RangeTakeProfitForkTest is Test {
     address constant USDG = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168;
     bytes32 constant ADMIN_SLOT = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
     address constant PROTOCOL = address(0xBEEF01);
-    address constant RESERVE = address(0xBEEF02);
+    address constant RESERVE = 0x806b182B050f7EcF908758dD6bBF91DB8B2212aF; // the NVDA/USDG pair's loss reserve (live)
+    bytes32 constant NVDA_PAIR = 0xe2050352f4346597cc69d2776d99ae60c9440dfc28f9406ce66be0bbe3fb6b06;
 
     IsolatedMarginExecutorUpgradeable ex = IsolatedMarginExecutorUpgradeable(EXECUTOR);
     IsolatedMarginRiskEngineUpgradeable risk = IsolatedMarginRiskEngineUpgradeable(RISK);
@@ -177,7 +178,7 @@ contract RangeTakeProfitForkTest is Test {
         rtp.setPreset(1, true, 100, 200);
         rtp.setPreset(2, true, 300, 200);
         rtp.setPreset(3, true, 490, 200);
-        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE); // pilot fee split
+        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE, NVDA_PAIR); // pilot split; reserve share credited to the pair
         rtp.setUnwinders(LIQUIDATOR, address(adapter));
 
         trader = new RtpTrader(IRtpPool(POOL), IERC20(USDG), IERC20(NVDA));
@@ -224,6 +225,13 @@ contract RangeTakeProfitForkTest is Test {
         trader.moveTo(s);
         uint256 price = Math.mulDiv(1e30, uint256(1) << 192, uint256(s) * uint256(s));
         vm.mockCall(ORACLE, abi.encodeWithSignature("getPrice(address)", NVDA), abi.encode(price));
+    }
+
+    function _reserveAvailable() internal view returns (uint256) {
+        (bool ok, bytes memory r) =
+            RESERVE.staticcall(abi.encodeWithSignature("available(bytes32,address)", NVDA_PAIR, USDG));
+        require(ok);
+        return abi.decode(r, (uint256));
     }
 
     function _health() internal view returns (uint256) {
@@ -319,6 +327,7 @@ contract RangeTakeProfitForkTest is Test {
     function testFullFillThenKeeperFinalisesRepaysDebtAndReturnsEquity() public {
         (int24 lo,) = _create();
         uint256 freeBefore = IRtpVault(VAULT).freeBalance(p.owner, p.marginPToken);
+        uint256 reserveBefore = _reserveAvailable();
         _marketTo(lo - 20); // traded through the whole band
         uint256 debtBefore = IRtpMarket(p.debtPToken).borrowBalanceStored(p.account);
         assertGt(debtBefore, 0);
@@ -330,7 +339,8 @@ contract RangeTakeProfitForkTest is Test {
         uint256 credited = IRtpVault(VAULT).freeBalance(p.owner, p.marginPToken) - freeBefore;
         emit log_named_uint("equity credited to the owner (pUSDG units)", credited);
         emit log_named_uint("protocol fee share (USDG raw)", IERC20(USDG).balanceOf(PROTOCOL));
-        emit log_named_uint("reserve fee share (USDG raw)", IERC20(USDG).balanceOf(RESERVE));
+        emit log_named_uint("reserve fee share credited to the pair (USDG raw)", _reserveAvailable() - reserveBefore);
+        assertGt(_reserveAvailable(), reserveBefore, "reserve share credited to the pair's loss reserve, not just sent");
         assertGt(credited, 0);
         assertEq(IERC20(USDG).balanceOf(address(rtp)), 0, "custodian keeps nothing");
         assertEq(IERC20(NVDA).balanceOf(address(rtp)), 0);
@@ -453,7 +463,9 @@ contract RangeTakeProfitForkTest is Test {
         vm.expectRevert(RangeTakeProfit.NotAdmin.selector);
         rtp.setPreset(4, true, 100, 200);
         vm.expectRevert(RangeTakeProfit.InvalidFeeSplit.selector);
-        rtp.setFeeSplit(7000, 2000, 2000, PROTOCOL, RESERVE);
+        rtp.setFeeSplit(7000, 2000, 2000, PROTOCOL, RESERVE, NVDA_PAIR);
+        vm.expectRevert(RangeTakeProfit.InvalidFeeSplit.selector);
+        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, address(0xBEEF02), NVDA_PAIR); // a deposit target must be a contract
     }
 
     function testStaleOracleAndIssuerPauseRefuseCreation() public {

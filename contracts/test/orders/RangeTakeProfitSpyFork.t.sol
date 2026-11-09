@@ -180,7 +180,7 @@ contract RangeTakeProfitSpyForkTest is Test {
         spacing = ISpyPool(POOL).tickSpacing();
         // ~1% above the market and ~2% wide, rounded up to the pool's own tick spacing (read, not assumed)
         rtp.setPreset(1, true, (100 + spacing - 1) / spacing * spacing, (200 + spacing - 1) / spacing * spacing);
-        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE);
+        rtp.setFeeSplit(7000, 2000, 1000, PROTOCOL, RESERVE, bytes32(0)); // no SPY loss reserve on the fork: plain transfer
         trader = new SpyTrader(ISpyPool(POOL), IERC20(SPY), IERC20(USDG));
         deal(SPY, address(trader), 10_000e18);
         deal(USDG, address(trader), 10_000_000e6);

@@ -57,7 +57,8 @@ interface IRtpCustodianView {
 ///   3. risk engine  upgradeAndCall(impl, initializeRangeCustodian(custodian))    bands counted at the oracle
 ///   4. liquidator   upgradeAndCall(impl, initializeRangeCustodian(custodian))    bands removed before seizure
 ///   5-7. custodian  setPreset(1, 2, 3): 1%, 3%, 5% above the market, each 2% wide (operator 2026-11-07)
-///   8. custodian    setFeeSplit(7000, 2000, 1000, protocol, reserve)             pilot split, recipients from env
+///   8. custodian    setFeeSplit(7000, 2000, 1000, protocol, loss reserve, pair)  pilot split; reserve share credited
+///                   to the NVDA/USDG pair's loss reserve via deposit (operator 2026-11-09); protocol from env
 ///   9. custodian    setUnwinders(liquidator, adapter v2)
 /// Steps 1 and 2 must be in the same batch: closePositionFor accepts only the executor's orderExecutor, so a split would
 /// leave every TP/SL reverting. The risk engine's first wiring is a proxy-admin reinitializer inside the batch, so the
@@ -81,6 +82,8 @@ contract DeployRangeTakeProfit is Script {
     address constant NVDA = 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC;
     address constant USDG = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168;
     uint256 constant DELAY = 3600;
+    address constant LOSS_RESERVE = 0x806b182B050f7EcF908758dD6bBF91DB8B2212aF; // the pair's StrategyLossReserve
+    bytes32 constant NVDA_PAIR = 0xe2050352f4346597cc69d2776d99ae60c9440dfc28f9406ce66be0bbe3fb6b06;
     bytes32 constant SALT = keccak256("peridot-range-take-profit-v1");
     bytes32 constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
     bytes32 constant ADMIN_SLOT = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
@@ -119,10 +122,10 @@ contract DeployRangeTakeProfit is Script {
         require(!vm.exists(journal), "JOURNAL_EXISTS");
         require(sender != LEDGER && sender != TIMELOCK && sender != OLD_SIGNER, "SENDER");
         Ceremony memory c = readCeremony(vm.envString("ORDERS_JOURNAL"));
-        (address protocolTo, address reserveTo) = _recipients();
+        address protocolTo = _protocolRecipient();
         _preconditions(c);
         vm.startBroadcast(sender);
-        Range memory r = _deploy(sender, c, protocolTo, reserveTo);
+        Range memory r = _deploy(sender, c, protocolTo);
         vm.stopBroadcast();
         _postconditions(c, r, sender);
         _writeJournal(journal, c, r);
@@ -135,20 +138,19 @@ contract DeployRangeTakeProfit is Script {
         c.executorImplementation = j.readAddress(".executorImplementation");
     }
 
-    function _recipients() internal view returns (address protocolTo, address reserveTo) {
-        // Undecided by the operator: no defaults. Both must be set, distinct from zero and from the compromised key.
+    function _protocolRecipient() internal view returns (address protocolTo) {
+        // The Robinhood Safe or the Ledger, to be confirmed by the operator: no default, never zero or the compromised key.
         protocolTo = vm.envAddress("RANGE_PROTOCOL_RECIPIENT");
-        reserveTo = vm.envAddress("RANGE_RESERVE_RECIPIENT");
-        require(protocolTo != address(0) && reserveTo != address(0), "RECIPIENTS_UNSET");
-        require(protocolTo != OLD_SIGNER && reserveTo != OLD_SIGNER, "RECIPIENT_IS_THE_OLD_KEY");
+        require(protocolTo != address(0), "PROTOCOL_RECIPIENT_UNSET");
+        require(protocolTo != OLD_SIGNER, "RECIPIENT_IS_THE_OLD_KEY");
     }
 
-    function _deploy(address creator, Ceremony memory c, address protocolTo, address reserveTo)
+    function _deploy(address creator, Ceremony memory c, address protocolTo)
         internal
         returns (Range memory r)
     {
         r.protocolRecipient = protocolTo;
-        r.reserveRecipient = reserveTo;
+        r.reserveRecipient = LOSS_RESERVE;
         r.custodianImplementation = _create(vm.getCode(CUSTODIAN_ARTIFACT));
         bytes memory init = abi.encodeCall(
             RangeTakeProfit.initialize,
@@ -240,7 +242,9 @@ contract DeployRangeTakeProfit is Script {
             payloads[4 + i] = abi.encodeCall(RangeTakeProfit.setPreset, (uint8(i + 1), true, distance[i], int24(200)));
         }
         targets[7] = r.custodian;
-        payloads[7] = abi.encodeCall(RangeTakeProfit.setFeeSplit, (7000, 2000, 1000, r.protocolRecipient, r.reserveRecipient));
+        payloads[7] = abi.encodeCall(
+            RangeTakeProfit.setFeeSplit, (7000, 2000, 1000, r.protocolRecipient, r.reserveRecipient, NVDA_PAIR)
+        );
         targets[8] = r.custodian;
         payloads[8] = abi.encodeCall(RangeTakeProfit.setUnwinders, (LIQUIDATOR, r.adapterV2));
     }
@@ -332,7 +336,8 @@ contract DeployRangeTakeProfit is Script {
             require(on && d == distance[i] && w == 200, "PRESETS");
         }
         require(cust.userFeeBps() == 7000 && cust.protocolFeeBps() == 2000 && cust.reserveFeeBps() == 1000
-            && cust.protocolRecipient() == r.protocolRecipient && cust.reserveRecipient() == r.reserveRecipient, "FEE_SPLIT");
+            && cust.protocolRecipient() == r.protocolRecipient && cust.reserveRecipient() == LOSS_RESERVE
+            && cust.reservePairId() == NVDA_PAIR, "FEE_SPLIT");
         require(cust.liquidator() == LIQUIDATOR && cust.orderAdapter() == r.adapterV2, "UNWINDERS");
         require(e.nextPositionId() >= j.readUint(".nextPositionIdAtDeploy"), "POSITIONS");
         // Only adapter v2 may close for an owner now; adapter v1 and strangers are refused (simulated).
