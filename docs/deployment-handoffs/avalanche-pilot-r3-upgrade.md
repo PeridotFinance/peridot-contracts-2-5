@@ -57,8 +57,9 @@ python3 -c "import json;print(json.load(open('out/PharaohLiquidityVaultR3.sol/Ph
 forge create src/r3/PharaohLiquidityVaultR3.sol:PharaohLiquidityVaultR3 --ledger --from $LEDGER --gas-limit 8000000 --broadcast
 BASE=<the "Deployed to" address>
 cast keccak $(cast code $BASE)                       # must print the same hash (read-back)
-forge create src/r3/PharaohRewardExtensionR3.sol:PharaohRewardExtensionR3 --constructor-args $BASE 0x62c312eca7879a53f56bb56d232150b16f45a53c84a5f94c85878f5bdc58d535 \
-   --ledger --from $LEDGER --gas-limit 3000000 --broadcast
+forge create src/r3/PharaohRewardExtensionR3.sol:PharaohRewardExtensionR3 --ledger --from $LEDGER --gas-limit 3000000 --broadcast \
+   --constructor-args $BASE 0x62c312eca7879a53f56bb56d232150b16f45a53c84a5f94c85878f5bdc58d535
+#  --constructor-args MUST be the LAST option: it takes every following word as an argument (forge 1.7: "expected 2 but got 8" otherwise)
 EXT=<the "Deployed to" address>
 ```
 (About 5.4M gas for the base, 0.6M for the extension. The extension constructor reverts if `$BASE` has any other codehash.)
