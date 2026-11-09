@@ -54,8 +54,24 @@
     "flashLoanVault": null
   },
   "vault": {
-    "usdcVault": null,
-    "wavaxVault": null
+    "status": "open at CAP 200, R3 live (9 Nov 2026, blocks 99,856,007 and 99,856,067); rebalancer role still the Ledger until the rebalancer process runs",
+    "safe": "0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12",
+    "usdcVault": {
+      "proxy": "0x855bF832f26a294d28500db59eE941dE3d654129",
+      "proxyAdmin": "0x2DD4191B2944396B5853f4219E829f01636F65cf",
+      "depositCapUnits": "200000000",
+      "positionTokenId": "485334"
+    },
+    "wavaxVault": {
+      "proxy": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+      "proxyAdmin": "0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC",
+      "depositCapUnits": "25040864280322299010",
+      "positionTokenId": "485416"
+    },
+    "r3Base": "0x8f6632E2Db9f333466E83d5fEBDE54EBff81D60a",
+    "r3Extension": "0x92bBeec3e2F95A64494e92638420654400467F4a",
+    "previousExtension": "0x165E1f072e7bEeDf94f14F732838354cA20bA45d",
+    "rebalancerWalletPlanned": "0x70f341B85222cF2E590E40d596DdBD7bF0a3ddB9"
   },
   "pilotParameters": {
     "source": "contracts/ceremony/pilot-pw30.env (public values only; amounts are raw units: WAVAX 18 decimals, USDC 6 decimals, mantissas 1e18)",

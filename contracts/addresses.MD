@@ -309,3 +309,11 @@ AvalancheMarketBootstrapper (single use, done): 0xf8541dfef0E5A5aA4C158196EB8Db3
 
 WAVAX (18 decimals): 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
 USDC (6 decimals, native): 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E
+
+Avalanche Pharaoh vaults (existing proxies, opened 9 Nov 2026 at USD 200 per vault; R3 share-pricing implementation live, see docs/deployment-handoffs/avalanche-pilot-addresses.json):
+USDC vault (proxy): 0x855bF832f26a294d28500db59eE941dE3d654129
+WAVAX vault (proxy): 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8
+Safe (owner, 1 of 1 = the Ledger): 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+PharaohRewardExtensionR3 (current implementation of both): 0x92bBeec3e2F95A64494e92638420654400467F4a
+PharaohLiquidityVaultR3 (its base): 0x8f6632E2Db9f333466E83d5fEBDE54EBff81D60a
+Previous implementation (rollback): 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
