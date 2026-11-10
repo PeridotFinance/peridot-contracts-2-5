@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # The exact commands of the mainnet MARGIN 2x ceremony (long WAVAX / USDC on top of PW30) as ONE wrapper, so that the rehearsal on a fork and the live run
 # differ only in the signers and the endpoint.
-#   usage: tools/avalanche-margin-ceremony.sh <check-env|deploy|wire|execute|enable|verify> <rehearsal|live>
+#   usage: tools/avalanche-margin-ceremony.sh <check-env|deploy|deploy-resume|wire|execute|enable|verify> <rehearsal|live>
 #
 #   STAGE 1  deploy   signer: the THROWAWAY DEPLOYER (an unprivileged key; live: a Foundry keystore named by MARGIN_DEPLOYER_ACCOUNT, password prompted by forge)
+#            deploy-resume: ONLY after a deploy that stopped half-way (e.g. the deployer ran out of gas): broadcasts the transactions of the saved run
+#            (broadcast/DeployAvalancheMarginMainnet.s.sol/<chain>/run-latest.json) that were NOT sent; it does not simulate again and redeploys nothing.
 #   STAGE 2  wire     signer: the LEDGER   (role grants, hooks, seeds, queues every timelocked action)
 #   STAGE 3  execute  signer: the LEDGER   (>= MARGIN_ACTION_DELAY after wire: pair risk + funded liquidators; opens stay paused)
 #   STAGE 4  enable   signer: the LEDGER   (only after `verify` at STAGE=3 passes; executes the queued unpause)
@@ -21,7 +23,7 @@ DEPLOYED=(M_ORACLE M_INSURANCE_FUND M_CONFIG M_FEE_DISTRIBUTOR M_VAULT M_RISK_EN
 LABELS=("oracle \(PW30 guarded, reused\)" insuranceFund config feeDistributor vault riskEngine quoter swapModule accountFactory executorImpl executor liquidator flashVault clAdapter registryImpl registry closeAdapter)
 SKIP=(--skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol)
 SCRIPT=script/DeployAvalancheMarginMainnet.s.sol
-usage() { echo "usage: $0 <check-env|deploy|wire|execute|enable|verify> <rehearsal|live>" >&2; exit 2; }
+usage() { echo "usage: $0 <check-env|deploy|deploy-resume|wire|execute|enable|verify> <rehearsal|live>" >&2; exit 2; }
 [ -n "$STEP" ] && [ -n "$MODE" ] || usage
 case "$MODE" in rehearsal|live) ;; *) usage ;; esac
 
@@ -72,6 +74,11 @@ case "$STEP" in
       done; } > "$FILE"
     echo "addresses written to $FILE"; grep -c "=0x" "$FILE" | sed 's/^/addresses found: /'
     exit $RC ;;
+  deploy-resume)
+    check_env
+    echo "== STAGE 1 RESUME ($MODE): signer = the throwaway deployer ${MARGIN_DEPLOYER}; sends only the saved transactions that were not sent"
+    FS DeployAvalancheMarginMainnet "${DEPLOYER_SIGN[@]}" --broadcast --resume --slow --timeout 300 --retries 10 -vvv
+    exit $? ;;
   wire)    check_env; echo "== STAGE 2 wire ($MODE): signer = the Ledger"; FS OperateAvalancheMarginMainnet --sig 'wire()' "${LEDGER_SIGN[@]}" --broadcast --slow --timeout 300 --retries 10 -vvv ;;
   execute) check_env; echo "== STAGE 3 execute ($MODE): signer = the Ledger"; FS OperateAvalancheMarginMainnet --sig 'execute()' "${LEDGER_SIGN[@]}" --broadcast --slow --timeout 300 --retries 10 -vvv ;;
   enable)  check_env; echo "== STAGE 4 enable ($MODE): signer = the Ledger (verify STAGE=3 first)"; FS OperateAvalancheMarginMainnet --sig 'enable()' "${LEDGER_SIGN[@]}" --broadcast --slow --timeout 300 --retries 10 -vvv ;;

@@ -67,6 +67,8 @@ Not run by the assistant; you run it.
 
 ## 3. If a stage stops half-way
 
+**Stage 1 stopped half-way (happened 10 Nov 2026: the deployer ran out of gas after 8 of 22 transactions).** The cause was the gas price: the budget assumed the 2.5 gwei floor, forge estimated 17.8 gwei (base fee 7.5 gwei at the time). Budget stage 1 at **0.8 AVAX** for the deployer, not 0.12 (31.9M gas x 25 gwei). Do NOT run `deploy live` again: it would start at the deployer's current nonce and redeploy all 22 contracts. Run `tools/avalanche-margin-ceremony.sh deploy-resume live` instead: it broadcasts only the transactions of the saved run that were not sent (`--resume`, no new simulation). `--resume` sends to the endpoint **saved in `cache_forge/DeployAvalancheMarginMainnet.s.sol/<chain>/run-latest.json`** (each saved transaction carries its `rpc`), not to the current `--rpc-url`: that file therefore holds the endpoint URL; it is git-ignored, delete it after the ceremony. Rehearsed on a mainnet fork (broadcast with 8 receipts, deployer nonce 8): nonce 22, all 16 predicted addresses have code, `STAGE=1 verify` passes.
+
 Do not re-run `wire` blindly: the queues revert with "already queued" and some calls already happened. Run `verify` at the last stage that passed, read the Ledger's nonce, and list which transactions landed (`cast tx`/the broadcast file under `contracts/broadcast/`). Every unfinished action is a separate call that can be sent by hand from the printed script; report the state to me. Nothing is live until stage 4, so a stopped ceremony costs time and gas, never exposure.
 
 ## 4. Brakes after enable (all Ledger, all immediate)
