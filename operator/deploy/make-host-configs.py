@@ -3,7 +3,9 @@
 Sources: docs/deployment-handoffs/avalanche-pilot-addresses.json, contracts/ceremony/pilot-sizing.json, operator/config/pilot.example.json (template),
 the four public Droplet addresses below, and the reference-pool floor recorded by operator/scripts/compute-min-pool-liquidity.ts.
 Output: operator/config/hosts/{op1,op2,keeper,rebalancer}.json. No key, no endpoint, no password.
-Usage: python3 operator/deploy/make-host-configs.py [--margin margin-addresses.json]   (the margin block is written only with that file)
+Usage: python3 operator/deploy/make-host-configs.py [--margin contracts/ceremony/margin-addresses.env] [--out DIR]
+   --margin : writes the enabled margin block (addresses from the stage-1 file, caps from pilot-sizing.json); op1/op2 also get margin.liquidation.enabled. Use it ONLY after stage 3 has passed.
+   --out    : output directory (default operator/config/hosts)
 """
 import copy
 import json
@@ -35,6 +37,21 @@ LOG_CHUNK = 1000  # PAID Alchemy app (operator decision 9 Nov 2026, IP-allowlist
 POLL_SECONDS = 30  # free-tier state endpoint: fewer reads per hour than the 15 s of the template
 
 
+def arg(name):
+    a = sys.argv[1:]
+    return a[a.index(name) + 1] if name in a else None
+
+
+def read_env(path):
+    out = {}
+    for line in open(path):
+        line = line.strip()
+        if line.startswith("export ") and "=" in line:
+            k, v = line[7:].split("=", 1)
+            out[k.strip()] = v.strip().strip('"')
+    return out
+
+
 def main():
     addrs = json.load(open(os.path.join(ROOT, "docs/deployment-handoffs/avalanche-pilot-addresses.json")))
     sizing = json.load(open(os.path.join(ROOT, "contracts/ceremony/pilot-sizing.json")))
@@ -61,7 +78,16 @@ def main():
     base["rebalancer"].update(enabled=False, keystorePath="UNSET", minGasWei=floor)
     base["keeper"].update(enabled=False, keystorePath="UNSET", dailySpendCapUsdc=int(oc["keeperDailySpendCapUsdc"]), minGasWei=floor)
     base.pop("margin", None)  # the margin block is added with the margin addresses (stage 4), see avalanche-margin-operator-step.md
-    outdir = os.path.join(OP, "config", "hosts")
+    margin_file = arg("--margin")
+    margin = None
+    if margin_file:
+        m = read_env(margin_file if os.path.isabs(margin_file) else os.path.join(ROOT, margin_file))
+        for k in ("M_EXECUTOR", "M_LIQUIDATOR", "M_RISK_ENGINE", "M_CONFIG"):
+            assert m.get(k, "").startswith("0x") and len(m[k]) == 42, f"{k} missing in {margin_file}"
+        margin = dict(enabled=True, executor=m["M_EXECUTOR"], liquidator=m["M_LIQUIDATOR"], riskEngine=m["M_RISK_ENGINE"], config=m["M_CONFIG"], watchHealthBps=13000,
+                      liquidation=dict(enabled=False, dailyRepayCapUsdc=int(oc["marginDailyRepayCapUsdc"]), maxRepayPerCallUsdc=int(oc["marginMaxRepayPerCallUsdc"]), minRepayUsdc=1,
+                                       retryCooldownSeconds=30, insolventCooldownSeconds=600))
+    outdir = arg("--out") or os.path.join(OP, "config", "hosts")
     os.makedirs(outdir, exist_ok=True)
     for role in HOSTS:
         c = copy.deepcopy(base)
@@ -77,9 +103,12 @@ def main():
             c["monitor"]["logs"]["chunkBlocks"] = 100
             c["monitor"]["logs"]["maxChunksPerCycle"] = 20
         c["monitor"]["pollSeconds"] = {"op1": POLL_SECONDS, "op2": POLL_SECONDS, "keeper": 60, "rebalancer": 120}[role]  # free-tier request budget: the executors stay at 30 s, the keeper and the hourly rebalancer poll less often
+        if margin:
+            c["margin"] = copy.deepcopy(margin)
+            c["margin"]["liquidation"]["enabled"] = role in ("op1", "op2")  # the keeper and the rebalancer never liquidate
         json.dump(c, open(os.path.join(outdir, f"{role}.json"), "w"), indent=2)
         open(os.path.join(outdir, f"{role}.json"), "a").write("\n")
-        print("wrote", os.path.join("operator/config/hosts", f"{role}.json"))
+        print("wrote", os.path.join(outdir, f"{role}.json"))
 
 
 if __name__ == "__main__":
