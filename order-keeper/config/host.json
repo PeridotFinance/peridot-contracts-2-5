@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "chainId": 43114,
+  "label": "pilot-avalanche-margin",
+  "registry": "0x4676C8Cf50CEd18683d255faEC4DaA882cbef440",
+  "closeAdapter": "0x669715b4fcb5731554fF79C67931DC4f821A9de8",
+  "marginExecutor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+  "marginVault": "0x64DD15BD97aA41AAb46B963AFcBd2120f54fe0Ce",
+  "keeper": {
+    "address": "0xccE2E97840b3Db6F03422b3e43aE78aBE6E7A61D",
+    "keystorePath": "/data/keystore/order-keeper.json",
+    "passwordEnv": "ORDER_KEEPER_KEYSTORE_PASSWORD"
+  },
+  "limits": {
+    "maxFeeGwei": 100,
+    "minGasWei": "40000000000000000",
+    "maxGasLimit": 4000000,
+    "maxSendsPerCycle": 3,
+    "maxSendsPerDay": 60,
+    "maxMinedRevertsPerDay": 3,
+    "sweep": true,
+    "maxIdsPerCycle": 500,
+    "retryCooldownSeconds": 30,
+    "retryCooldownMaxSeconds": 300,
+    "unknownRevertCooldownSeconds": 900,
+    "unfilledAlertSeconds": 600
+  },
+  "logs": {
+    "enabled": true,
+    "chunkBlocks": 100,
+    "maxChunksPerCycle": 10,
+    "minIntervalMs": 300,
+    "reorgMarginBlocks": 10,
+    "behindWarnBlocks": 600
+  },
+  "monitor": {
+    "pollSeconds": 15,
+    "maxBlockLagSeconds": 60,
+    "statePath": "/data/state/order-keeper.json"
+  },
+  "alerts": {
+    "channel": "log"
+  },
+  "escalationSeconds": [
+    3600,
+    14400,
+    86400
+  ]
+}
