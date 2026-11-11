@@ -123,5 +123,21 @@
     "allowanceMarginBp": 10,
     "maxFeeGwei": 100,
     "minGasWei": "40000000000000000"
+  },
+  "margin": {
+    "enabled": true,
+    "executor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+    "liquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+    "riskEngine": "0xE022c90DB98ea8B1615c5B422Cbf46878B76a470",
+    "config": "0x5d59C647CC4bD6C05b4E9205c23062d490699631",
+    "watchHealthBps": 13000,
+    "liquidation": {
+      "enabled": false,
+      "dailyRepayCapUsdc": 100,
+      "maxRepayPerCallUsdc": 60,
+      "minRepayUsdc": 1,
+      "retryCooldownSeconds": 30,
+      "insolventCooldownSeconds": 600
+    }
   }
 }
