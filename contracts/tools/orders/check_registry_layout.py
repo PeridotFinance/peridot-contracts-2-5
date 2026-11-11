@@ -13,11 +13,16 @@ from pathlib import Path
 
 SNAPSHOT = Path('tools/orders/registry-layout.json')
 TARGET = 'contracts/margin/orders/MarginOrderRegistry.sol:MarginOrderRegistry'
+if '--target' in sys.argv:  # e.g. the prepared V2: contracts/margin/orders/MarginOrderRegistryV2.sol:MarginOrderRegistryV2
+    TARGET = sys.argv[sys.argv.index('--target') + 1]
+if 'RangeTakeProfit' in TARGET:  # each proxied contract has its own snapshot
+    SNAPSHOT = Path('tools/orders/range-layout.json')
 TOTAL_SLOTS = 50  # the contract's own variables plus __gap always cover slots 0..49
 
 
 def current():
     env = dict(os.environ, FOUNDRY_PROFILE='robinhood_orders')
+    subprocess.run(['forge', 'build', '--extra-output', 'storageLayout'], capture_output=True, text=True, env=env, check=True)
     out = subprocess.run(['forge', 'inspect', TARGET, 'storageLayout', '--json'], capture_output=True, text=True,
                          env=env, check=True).stdout
     layout = json.loads(out[out.index('{'):])
@@ -31,7 +36,7 @@ def current():
     for t in sorted(types):
         members = types[t].get('members')
         if members:
-            name = re.sub(r'\)\d+', ')', types[t]['label'])
+            name = re.sub(r'\)\d+', ')', types[t]['label']).replace('MarginOrderRegistryV2', 'MarginOrderRegistry')
             for m in members:
                 rows.append({'struct': name, 'label': m['label'], 'slot': int(m['slot']), 'offset': m['offset'],
                              'type': re.sub(r'\)\d+', ')', types[m['type']]['label'])})
@@ -64,8 +69,9 @@ def main():
                 sys.exit(f'FAIL: recorded variable changed: {a} -> {b}')
     appended = rows[len(kept):-1]
     size = int(re.search(r'\[(\d+)\]', gap_new['type']).group(1))
-    if gap_new['slot'] + size != TOTAL_SLOTS:
-        sys.exit(f'FAIL: __gap ends at slot {gap_new["slot"] + size}, expected {TOTAL_SLOTS}')
+    total = gap_old['slot'] + int(re.search(r'\[(\d+)\]', gap_old['type']).group(1))  # the recorded end of the layout
+    if gap_new['slot'] + size != total:
+        sys.exit(f'FAIL: __gap ends at slot {gap_new["slot"] + size}, expected {total}')
     print(f'ok: {len(kept)} recorded variables unchanged, {len(appended)} appended, __gap {size} slots from slot {gap_new["slot"]}')
     return 0
 

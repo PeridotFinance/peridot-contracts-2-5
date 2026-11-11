@@ -1,0 +1,8 @@
+{
+  "address": "0xFa7D8ce8572FBf09f3122B5721FBDADFcD66464B",
+  "chainId": 4663,
+  "purpose": "TP/SL order execution and range take-profit finalisation: gas only, no roles.",
+  "keystorePath": "/Users/joshua/Peridot/.orders-keeper-signer/keystore",
+  "passwordPath": "/Users/joshua/Peridot/.orders-keeper-signer/password",
+  "fundingTargetWei": "3000000000000000"
+}

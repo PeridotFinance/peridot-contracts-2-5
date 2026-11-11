@@ -127,3 +127,89 @@ class Tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RangeChain(FakeChain):
+    """Adds a range custodian: bands maps positionId -> (active, finalize_error_or_None, status)."""
+
+    def __init__(self, bands, **kw):
+        super().__init__({}, **kw)
+        self.bands = bands
+        self.finalized = []
+
+    def __call__(self, args, capture_output=True, text=True):
+        real = subprocess.run
+        out = lambda s, rc=0, err='': subprocess.CompletedProcess(args, rc, s, err)
+        if args[:2] == ['cast', 'call'] and args[3].startswith('nextPositionId'):
+            return out('%d\n' % (max(self.bands, default=0) + 1))
+        if args[:2] == ['cast', 'call'] and args[3].startswith('isActive'):
+            return out('true\n' if self.bands[int(args[4])][0] else 'false\n')
+        if args[:2] == ['cast', 'call'] and args[3].startswith('getOrder'):
+            st = self.bands[int(args[4])][2]
+            return out('(0x%s, 0x%s, %d, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n' % ('aa' * 20, 'bb' * 20, st))
+        if args[:2] == ['cast', 'call'] and args[3].startswith('finalize'):
+            err = self.bands[int(args[4])][1]
+            if err:
+                sel = real(['cast', 'sig', err], capture_output=True, text=True).stdout.strip()
+                return out('', 1, 'execution reverted, data: "' + sel + '"')
+            return out('0x\n')
+        if args[:2] == ['cast', 'send'] and args[3].startswith('finalize'):
+            pid = int(args[4])
+            self.finalized.append(pid)
+            self.bands[pid] = (False, None, 2)
+            return out(json.dumps({'status': '0x1', 'transactionHash': '0x' + 'cd' * 32, 'gasUsed': '0x20'}))
+        return super().__call__(args, capture_output, text)
+
+
+def range_keeper(chain):
+    d = tempfile.mkdtemp()
+    j = Path(d) / 'journal.json'
+    j.write_text(json.dumps({'registry': '0x' + '11' * 20, 'rangeCustodian': '0x' + '44' * 20, 'executor': '0x' + '55' * 20}))
+    return ok.Keeper(j, '0x' + '33' * 20, ['--unlocked'], Path(d) / 's.json', rpc='http://x', runner=chain)
+
+
+class RangeTests(unittest.TestCase):
+    def test_fully_converted_band_is_finalised_only_with_execute(self):
+        chain = RangeChain({1: (True, None, 1)})
+        lines, _ = range_keeper(chain).step(False)
+        self.assertEqual(lines[-1]['action'], 'finalise due (dry run)')
+        self.assertEqual(chain.finalized, [])
+        k = range_keeper(chain)
+        lines, rc = k.step(True)
+        self.assertEqual(chain.finalized, [1])
+        self.assertEqual(rc, 0)
+        lines, _ = k.step(True)
+        self.assertEqual(lines[-1]['action'], 'none (finalised)')
+
+    def test_partial_fill_reversal_stale_oracle_and_pool_deviation_wait(self):
+        chain = RangeChain({1: (True, 'BandNotFullyConverted()', 1), 2: (True, 'OracleUnavailable()', 1),
+                            3: (True, 'PoolOracleDeviation(uint256,uint256)', 1)})
+        lines, rc = range_keeper(chain).step(True)
+        self.assertEqual([l['action'] for l in lines], ['wait', 'wait', 'wait'])
+        self.assertEqual(chain.finalized, [])
+        self.assertEqual(rc, 0)
+
+    def test_unknown_refusal_needs_a_person(self):
+        chain = RangeChain({1: (True, 'Panic(uint256)', 1)})
+        lines, rc = range_keeper(chain).step(True)
+        self.assertEqual(lines[-1]['action'], 'ATTENTION')
+        self.assertEqual(rc, 2)
+
+    def test_band_removed_by_a_risk_path_is_recorded_once_and_never_touched(self):
+        chain = RangeChain({1: (True, 'BandNotFullyConverted()', 1)})
+        k = range_keeper(chain)
+        k.step(True)
+        chain.bands[1] = (False, None, 3)  # liquidator, stop-loss or owner unwound it
+        lines, _ = k.step(True)
+        self.assertEqual(lines, [{'range': 1, 'status': 'unwound',
+                                  'action': 'none (removed by a risk path (liquidation, stop-loss or owner))'}])
+        lines, _ = k.step(True)
+        self.assertEqual(lines, [])
+        self.assertEqual(chain.finalized, [])
+        self.assertNotIn('send', [c for c in chain.sent])
+
+    def test_gas_cap_blocks_finalisation(self):
+        chain = RangeChain({1: (True, None, 1)}, gas_price=10**12)
+        lines, _ = range_keeper(chain).step(True)
+        self.assertEqual(lines[-1]['action'], 'wait (gas price above cap)')
+        self.assertEqual(chain.finalized, [])

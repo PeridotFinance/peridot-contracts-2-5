@@ -69,7 +69,7 @@ contract RobinhoodOrderCloseForkTest is Test {
 
     function _upgrade() internal {
         IsolatedMarginExecutorUpgradeable impl = new IsolatedMarginExecutorUpgradeable();
-        adapter = new RobinhoodMarginCloseAdapter(EXECUTOR, address(this), ORACLE, QUOTER, CONFIG);
+        adapter = new RobinhoodMarginCloseAdapter(EXECUTOR, address(this), ORACLE, QUOTER, CONFIG, address(0));
         vm.prank(TIMELOCK);
         IOrdersProxyAdmin(PROXY_ADMIN).upgradeAndCall(
             EXECUTOR, address(impl), abi.encodeCall(IsolatedMarginExecutorUpgradeable.initializeOrderExecutor, (address(adapter)))

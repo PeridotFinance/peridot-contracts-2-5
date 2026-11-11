@@ -1,0 +1,6 @@
+{
+  "id": "fa6d099d-98f2-4706-b4d3-840787453776",
+  "name": "peridot-orders-keeper",
+  "context": "peridot-keeper-database2",
+  "branch": "proto/range-take-profit"
+}

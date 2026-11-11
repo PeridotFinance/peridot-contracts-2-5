@@ -46,6 +46,10 @@ interface IRobinhoodOrderConfig {
         returns (IsolatedMarginTypes.PairRiskConfig memory);
 }
 
+interface IRangeUnwindForOrders {
+    function unwind(uint256 positionId) external returns (bool);
+}
+
 /// @title Robinhood close path for the chain-agnostic TP/SL registry.
 /// @notice Turns an executed order into `IsolatedMarginExecutorUpgradeable.closePositionFor`. It holds no funds and no
 /// approvals. The minimums it passes are derived from the margin engine's own oracle and quoter, so a keeper can choose
@@ -60,12 +64,14 @@ contract RobinhoodMarginCloseAdapter is IMarginCloseAdapter {
     IRobinhoodOrderOracle public immutable oracle;
     IRobinhoodOrderQuoter public immutable quoter;
     IRobinhoodOrderConfig public immutable config;
+    /// @dev PROTOTYPE: range take-profit custodian, or address(0). An active band is removed before any order closes.
+    address public immutable rangeCustodian;
 
     error NotRegistry();
     error AdapterDataNotSupported();
     error InvalidClose(uint8 code); // 1 closeBps, 2 slippage, 3 owner, 4 inactive, 5 close fee too high, 6 price moved
 
-    constructor(address executor_, address registry_, address oracle_, address quoter_, address config_) {
+    constructor(address executor_, address registry_, address oracle_, address quoter_, address config_, address rangeCustodian_) {
         require(
             executor_.code.length > 0 && registry_ != address(0) && oracle_.code.length > 0 && quoter_.code.length > 0
                 && config_.code.length > 0,
@@ -76,6 +82,7 @@ contract RobinhoodMarginCloseAdapter is IMarginCloseAdapter {
         oracle = IRobinhoodOrderOracle(oracle_);
         quoter = IRobinhoodOrderQuoter(quoter_);
         config = IRobinhoodOrderConfig(config_);
+        rangeCustodian = rangeCustodian_;
     }
 
     function positionOwner(uint256 positionId) external view returns (address) {
@@ -117,6 +124,8 @@ contract RobinhoodMarginCloseAdapter is IMarginCloseAdapter {
         if (config.closeFeeBps() > MAX_CLOSE_FEE_BPS) revert InvalidClose(5);
         (uint256 price, bool ok) = oraclePriceE18(positionId);
         if (!ok || price != oraclePriceE18_) revert InvalidClose(6); // the registry's trigger check used this exact price
+        // A stop-loss (or any order) first removes an active range band, so the close path sees all the collateral.
+        if (rangeCustodian != address(0)) IRangeUnwindForOrders(rangeCustodian).unwind(positionId);
 
         uint256 minDebt = _minimumDebt(p, closeBps, maxSlippageBps);
         // Second leg: zero selects the close path's runtime protocol floor; the first-leg minimum already bounds the result.

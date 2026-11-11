@@ -1,0 +1,56 @@
+name: Order keeper alarm
+on:
+  schedule:
+    - cron: '17,37,57 * * * *'  # best effort: GitHub delays these, and disables them after 60 days of repo inactivity
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: Page without reading anything, to test delivery
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - contracts/tools/orders/orders_alarm.py
+      - contracts/tools/orders/test_orders_alarm.py
+      - contracts/tools/orders/orders_keeper.py
+      - contracts/tools/orders/test_orders_keeper.py
+      - .github/workflows/orders-alarm.yml
+permissions: {}
+concurrency:
+  group: orders-alarm
+  cancel-in-progress: false
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s contracts/tools/orders -p 'test_orders_alarm.py'
+  alarm:
+    # Chain reads only (no DigitalOcean token: none is stored in GitHub after the breach). Idle until the mainnet journal
+    # exists, i.e. after the 15-17 Nov ceremony.
+    if: github.event_name != 'pull_request' && github.repository == 'PeridotFinance/peridot-contracts-2-5'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      ORDERS_KEEPER: ${{ vars.ORDERS_KEEPER_ADDRESS }}  # public address, not a secret
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install cast
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf  # v1 (resolved 2026-11-07)
+      - name: Alarm
+        run: |
+          J=contracts/deployments/orders-mainnet.json
+          if [ ! -f "$J" ]; then echo "::notice::no mainnet orders journal yet; nothing to watch"; exit 0; fi
+          DRILL=""; [ "${{ inputs.drill }}" = "true" ] && DRILL="--drill"
+          python3 contracts/tools/orders/orders_alarm.py --journal "$J" --notify $DRILL
