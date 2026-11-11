@@ -1,0 +1,1400 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "DEFAULT_FEE_IMMEDIATE_SHARE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "DEFAULT_FEE_STREAM_DURATION",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_CLOSE_FEE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_FEE_IMMEDIATE_SHARE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_FEE_STREAM_DURATION",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_OPEN_FEE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MIN_ACTION_DELAY",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MIN_FEE_IMMEDIATE_SHARE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MIN_FEE_STREAM_DURATION",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "actionDelay",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "addFundedLiquidator",
+  "inputs": [
+   {
+    "name": "liquidator_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "cancelAction",
+  "inputs": [
+   {
+    "name": "actionId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "closeFeeBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "depositorShareBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "disableExecutionEndpoints",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "disablePair",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "feeImmediateShareBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "feeStreamDuration",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "flashLoanProvider",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "fundedLiquidators",
+  "inputs": [
+   {
+    "name": "liquidator",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "getPairRisk",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "tuple",
+    "internalType": "struct IsolatedMarginTypes.PairRiskConfig",
+    "components": [
+     {
+      "name": "enabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "maxLeverageX100",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "initialMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maintenanceMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationTargetBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "fullLiquidationHealthBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxLiquidationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationBonusBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxSlippageBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "oracleDeviationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxPositionValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     },
+     {
+      "name": "maxDebtValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     }
+    ]
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "initialize",
+  "inputs": [
+   {
+    "name": "owner_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "actionDelay_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "routerAdapter_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "flashLoanProvider_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "insuranceFund_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "treasury_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "insuranceFund",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "insuranceShareBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "openFeeBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "opensPaused",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "owner",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "pairKey",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "pure"
+ },
+ {
+  "type": "function",
+  "name": "pauseOpens",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueActionDelay",
+  "inputs": [
+   {
+    "name": "actionDelay_",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueExecutionEndpoints",
+  "inputs": [
+   {
+    "name": "routerAdapter_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "flashLoanProvider_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueFeeDistribution",
+  "inputs": [
+   {
+    "name": "immediateShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "streamDuration_",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueFeeRecipients",
+  "inputs": [
+   {
+    "name": "insuranceFund_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "treasury_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueFees",
+  "inputs": [
+   {
+    "name": "openFeeBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "closeFeeBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "depositorShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "insuranceShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "treasuryShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueFundedLiquidator",
+  "inputs": [
+   {
+    "name": "liquidator_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queuePairRisk",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "config",
+    "type": "tuple",
+    "internalType": "struct IsolatedMarginTypes.PairRiskConfig",
+    "components": [
+     {
+      "name": "enabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "maxLeverageX100",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "initialMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maintenanceMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationTargetBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "fullLiquidationHealthBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxLiquidationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationBonusBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxSlippageBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "oracleDeviationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxPositionValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     },
+     {
+      "name": "maxDebtValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     }
+    ]
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queueUnpauseOpens",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "queuedActions",
+  "inputs": [
+   {
+    "name": "actionId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "executeAfter",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "removeFundedLiquidator",
+  "inputs": [
+   {
+    "name": "liquidator_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "renounceOwnership",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "routerAdapter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "setActionDelay",
+  "inputs": [
+   {
+    "name": "actionDelay_",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setExecutionEndpoints",
+  "inputs": [
+   {
+    "name": "routerAdapter_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "flashLoanProvider_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setFeeDistribution",
+  "inputs": [
+   {
+    "name": "immediateShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "streamDuration_",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setFeeRecipients",
+  "inputs": [
+   {
+    "name": "insuranceFund_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "treasury_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setFees",
+  "inputs": [
+   {
+    "name": "openFeeBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "closeFeeBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "depositorShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "insuranceShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "treasuryShareBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setPairRisk",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "config",
+    "type": "tuple",
+    "internalType": "struct IsolatedMarginTypes.PairRiskConfig",
+    "components": [
+     {
+      "name": "enabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "maxLeverageX100",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "initialMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maintenanceMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationTargetBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "fullLiquidationHealthBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxLiquidationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationBonusBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxSlippageBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "oracleDeviationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxPositionValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     },
+     {
+      "name": "maxDebtValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     }
+    ]
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "transferOwnership",
+  "inputs": [
+   {
+    "name": "newOwner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "treasury",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "treasuryShareBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "unpauseOpens",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "event",
+  "name": "ActionCanceled",
+  "inputs": [
+   {
+    "name": "actionId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "ActionDelayConfigured",
+  "inputs": [
+   {
+    "name": "actionDelay",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "ActionExecuted",
+  "inputs": [
+   {
+    "name": "actionId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "ActionQueued",
+  "inputs": [
+   {
+    "name": "actionId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "executeAfter",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "ExecutionEndpointsConfigured",
+  "inputs": [
+   {
+    "name": "routerAdapter",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "flashLoanProvider",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "FeeDistributionConfigured",
+  "inputs": [
+   {
+    "name": "immediateShareBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "streamDuration",
+    "type": "uint32",
+    "indexed": false,
+    "internalType": "uint32"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "FeeRecipientsConfigured",
+  "inputs": [
+   {
+    "name": "insuranceFund",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "treasury",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "FeesConfigured",
+  "inputs": [
+   {
+    "name": "openFeeBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "closeFeeBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "depositorShareBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "insuranceShareBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "treasuryShareBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "FundedLiquidatorSet",
+  "inputs": [
+   {
+    "name": "liquidator",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "allowed",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Initialized",
+  "inputs": [
+   {
+    "name": "version",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OpensPaused",
+  "inputs": [
+   {
+    "name": "paused",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OwnershipTransferred",
+  "inputs": [
+   {
+    "name": "previousOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "newOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PairRiskConfigured",
+  "inputs": [
+   {
+    "name": "pair",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "config",
+    "type": "tuple",
+    "indexed": false,
+    "internalType": "struct IsolatedMarginTypes.PairRiskConfig",
+    "components": [
+     {
+      "name": "enabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "maxLeverageX100",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "initialMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maintenanceMarginBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationTargetBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "fullLiquidationHealthBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxLiquidationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "liquidationBonusBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxSlippageBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "oracleDeviationBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "maxPositionValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     },
+     {
+      "name": "maxDebtValueUsd",
+      "type": "uint128",
+      "internalType": "uint128"
+     }
+    ]
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "InvalidInitialization",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidRiskParameters",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotInitializing",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "OwnableInvalidOwner",
+  "inputs": [
+   {
+    "name": "owner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "OwnableUnauthorizedAccount",
+  "inputs": [
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ }
+]
