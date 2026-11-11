@@ -72,8 +72,9 @@ orders)
   echo "price $P  TP trigger $TP (above, +$TP_PCT%)  SL trigger $SL (below, -$SL_PCT%)  closeBps 10000  maxSlippage 100  expiry $EXP (29 days)"
   echo "simulation TP id: $(cast call $REG "$SIG" "$PID" 0 true "$TP" 10000 100 "$EXP" --from $L | num)   SL id: $(cast call $REG "$SIG" "$PID" 1 false "$SL" 10000 100 "$EXP" --from $L | num)"
   [ "$SEND" = "--send" ] || { echo "no --send: nothing signed"; exit 0; }
-  send $REG "$SIG" "$PID" 0 true "$TP" 10000 100 "$EXP"
+  # stop-loss FIRST: a take-profit that is already reachable is executed by the keeper within seconds, which would close the position before a later SL could be created
   send $REG "$SIG" "$PID" 1 false "$SL" 10000 100 "$EXP"
+  send $REG "$SIG" "$PID" 0 true "$TP" 10000 100 "$EXP"
   echo "open orders: $(cast call $REG 'openOrdersOf(uint256)(uint256[])' "$PID")"
   ;;
 status)
