@@ -1,0 +1,130 @@
+{
+ "bh_wbtc_btcb": {
+  "up": {
+   "1": {
+    "usd": 8739.555249362957,
+    "reachable": true
+   },
+   "5": {
+    "usd": 8742.148675761417,
+    "reachable": true
+   },
+   "10": {
+    "usd": 8742.697887838529,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  },
+  "down": {
+   "1": {
+    "usd": 2405.5084736866065,
+    "reachable": true
+   },
+   "5": {
+    "usd": 2407.9975358641623,
+    "reachable": true
+   },
+   "10": {
+    "usd": 2408.3237640941206,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  }
+ },
+ "bh_ausd_usdc": {
+  "up": {
+   "1": {
+    "usd": 362.4544692292191,
+    "reachable": true
+   },
+   "5": {
+    "usd": 364.6253479541369,
+    "reachable": true
+   },
+   "10": {
+    "usd": 367.2815973624924,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  },
+  "down": {
+   "1": {
+    "usd": 19424.59704576292,
+    "reachable": true
+   },
+   "5": {
+    "usd": 19426.768087571858,
+    "reachable": true
+   },
+   "10": {
+    "usd": 19429.42453652698,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  }
+ },
+ "ph_usdc_usdt": {
+  "up": {
+   "1": {
+    "usd": 1137.022695917136,
+    "reachable": true
+   },
+   "5": {
+    "usd": 1137.506451742305,
+    "reachable": false
+   },
+   "10": {
+    "usd": 1137.506451742305,
+    "reachable": false
+   },
+   "dry_at_pct": 1.1264121816077832
+  },
+  "down": {
+   "1": {
+    "usd": 173.7124253916434,
+    "reachable": false
+   },
+   "5": {
+    "usd": 173.7124253916434,
+    "reachable": false
+   },
+   "10": {
+    "usd": 173.7124253916434,
+    "reachable": false
+   },
+   "dry_at_pct": 0.9848969139409913
+  }
+ },
+ "ph_savax_wavax": {
+  "up": {
+   "1": {
+    "usd": 41029.239689255104,
+    "reachable": true
+   },
+   "5": {
+    "usd": 41037.72090369794,
+    "reachable": true
+   },
+   "10": {
+    "usd": 41037.72101354378,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  },
+  "down": {
+   "1": {
+    "usd": 57984.35691546842,
+    "reachable": true
+   },
+   "5": {
+    "usd": 59223.18189438821,
+    "reachable": true
+   },
+   "10": {
+    "usd": 59228.27263141511,
+    "reachable": true
+   },
+   "dry_at_pct": null
+  }
+ }
+}
