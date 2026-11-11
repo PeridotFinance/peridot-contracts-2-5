@@ -25,3 +25,12 @@ cast call $SAFE 'nonce()(uint256)'                   # = 19
 
 ## Re-open or change
 Same form with another argument: `cast calldata 'setDepositCap(uint256)' <units>` (USDC has 6 decimals). Closed sentinel: argument `1`.
+
+## Decision 11 Nov 2026 and the one-line form
+The operator chose the **closed sentinel `1`**. One command (simulates, then asks the Ledger once; the long `execTransaction` line lives in the script, so nothing wraps in a terminal):
+```
+cd ~/Peridot/peridot-contracts-2-5/contracts
+export ETH_RPC_URL=https://api.avax.network/ext/bc/C/rpc
+tools/safe-set-deposit-cap.sh 0x855bF832f26a294d28500db59eE941dE3d654129 1 --send
+```
+Without `--send` it only simulates and prints the calldata (`0x8665120300...01`). Read-backs are printed after the send: `depositCap = 1`, `maxDeposit = 0`, Safe nonce 19.
