@@ -1,0 +1,24 @@
+done M0 unmutated
+done M1 same-period settlement ignores the account's J checkpoint (double counts earlier exposure)
+done M2 window guard boundary: blocks only while elapsed < threshold+margin (off by one)
+done M3 gauge debt cascade dropped: earlier periods forfeit only up to the debt amount
+done M4 harvest books forfeited tokens as funded (loss hidden as income)
+done M5 finality ignores the outstanding amount (period final as soon as recorded)
+done M6 continuing multi-period segment keeps the first period's J checkpoint
+done M7 entitlement divides by non-zero-supply exposure only (zero-supply share redistributed)
+done M8 gauge sets lastModified BEFORE the auto-claim (claim always inside its own window)
+done M9 gauge window comparison < instead of <= (boundary)
+done M10 gauge does not decrement the forfeit debt as it is realised
+
+baseline (unmutated) failing vault histories: [229, 635, 750] of 1500; gauge-only failures: 0; original tests exit code: 0
+mutation                                                                                             vault D  strict   gauge G  tests T 
+M1 same-period settlement ignores the account's J checkpoint (double counts earlier exposure)        CAUGHT   CAUGHT   missed   CAUGHT   (+266 histories)
+M2 window guard boundary: blocks only while elapsed < threshold+margin (off by one)                  CAUGHT   CAUGHT   missed   CAUGHT   (+57 histories)
+M3 gauge debt cascade dropped: earlier periods forfeit only up to the debt amount                    missed   missed   CAUGHT   missed  
+M4 harvest books forfeited tokens as funded (loss hidden as income)                                  missed   CAUGHT   missed   CAUGHT  
+M5 finality ignores the outstanding amount (period final as soon as recorded)                        CAUGHT   CAUGHT   missed   CAUGHT   (+949 histories)
+M6 continuing multi-period segment keeps the first period's J checkpoint                             CAUGHT   CAUGHT   missed   CAUGHT   (+553 histories)
+M7 entitlement divides by non-zero-supply exposure only (zero-supply share redistributed)            CAUGHT   CAUGHT   missed   CAUGHT   (+203 histories)
+M8 gauge sets lastModified BEFORE the auto-claim (claim always inside its own window)                CAUGHT   CAUGHT   CAUGHT   CAUGHT   (+739 histories)
+M9 gauge window comparison < instead of <= (boundary)                                                missed   missed   CAUGHT   missed  
+M10 gauge does not decrement the forfeit debt as it is realised                                      missed   missed   CAUGHT   missed  

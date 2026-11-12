@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.forge-out/
+.forge-cache/
+state/
+*.log

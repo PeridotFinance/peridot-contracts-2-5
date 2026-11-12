@@ -1,0 +1,26 @@
+{
+ "bh_wbtc_btcb": {
+  "name": "WBTC / BTC.b 0.01%",
+  "reserve_in_usd": "11471.1212",
+  "volume_h24": "19.6851095566",
+  "volume_h6": "0.0"
+ },
+ "bh_ausd_usdc": {
+  "name": "AUSD / USDC 0.008%",
+  "reserve_in_usd": "20303.4553",
+  "volume_h24": "8.0540646093",
+  "volume_h6": "0.0"
+ },
+ "ph_usdc_usdt": {
+  "name": "USDt / USDC 0.005%",
+  "reserve_in_usd": "1325.4054",
+  "volume_h24": "1950.3976864951",
+  "volume_h6": "194.7869655677"
+ },
+ "ph_savax_wavax": {
+  "name": "sAVAX / WAVAX 0.01%",
+  "reserve_in_usd": "100548.8381",
+  "volume_h24": "128536.731224104",
+  "volume_h6": "13722.8169259908"
+ }
+}

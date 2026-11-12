@@ -1,0 +1,26 @@
+# Isolated project for the Pharaoh vault R3 work. Settings are those of the VERIFIED deployed base (solc 0.8.35, optimizer 200 runs, EVM osaka,
+# via-IR; the byte-for-byte reproduction of the deployed code is checked in docs/deployment-handoffs/avalanche-pilot-r3-upgrade.md), so that the original source reproduces the deployed bytecode and the R3 diff is explicit. OpenZeppelin 5.3.0 from ../lib (same as the verified build).
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+cache_path = "cache"
+libs = ["lib"]
+solc_version = "0.8.35"
+evm_version = "osaka"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+cbor_metadata = true
+use_literal_content = true
+ignored_error_codes = [3628, 2072, 5667, 2018]
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+]
+
+# the endpoint is an ENVIRONMENT REFERENCE, never a value in this file
+[rpc_endpoints]
+avalanche = "${AVALANCHE_MAINNET_RPC_URL}"

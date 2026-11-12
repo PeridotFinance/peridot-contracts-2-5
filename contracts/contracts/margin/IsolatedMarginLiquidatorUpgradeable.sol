@@ -4,12 +4,14 @@ pragma solidity ^0.8.20;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IERC3156FlashBorrower, IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
 import {IsolatedMarginAccount} from "./IsolatedMarginAccount.sol";
+import {IsolatedMarginMath} from "./IsolatedMarginMath.sol";
 import {IsolatedMarginQuoter} from "./IsolatedMarginQuoter.sol";
 import {IsolatedMarginRiskEngineUpgradeable} from "./IsolatedMarginRiskEngineUpgradeable.sol";
 import {IsolatedMarginSwapModule} from "./IsolatedMarginSwapModule.sol";
@@ -17,6 +19,12 @@ import {IsolatedMarginTypes} from "./IsolatedMarginTypes.sol";
 import {IsolatedMarginVaultUpgradeable} from "./IsolatedMarginVaultUpgradeable.sol";
 import {MarginInsuranceFundUpgradeable} from "./MarginInsuranceFundUpgradeable.sol";
 import {IIsolatedMarginConfig} from "./interfaces/IIsolatedMarginConfig.sol";
+import {IMarginPriceOracle} from "./interfaces/IMarginPriceOracle.sol";
+
+/// @dev Allowlist of funded in-kind liquidators, kept in the (owner + timelock) config contract.
+interface IFundedLiquidatorRegistry {
+    function fundedLiquidators(address liquidator) external view returns (bool);
+}
 
 interface IIsolatedMarginPositionRegistry {
     function positions(uint256 positionId)
@@ -61,6 +69,30 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         bytes debtToMarginSwapData;
     }
 
+    /// @dev Funded in-kind fallback (handoff 00 s10). The caller pays the ACTUAL debt asset and receives position
+    ///      pTokens in kind; it names no price and no seize amount. The max/min fields are only the caller's protection.
+    struct FundedLiquidationParams {
+        uint256 positionId;
+        address recipient; // receives the seized pTokens
+        uint256 maxRepayUnderlying; // spend cap on the debt asset (risk engine decides the real repay amount)
+        uint256 minPositionPTokens; // minimum seized position pTokens
+        uint256 minMarginPTokens; // minimum seized margin pTokens (only nonzero when margin != position pToken)
+        uint256 minSeizeValueBps; // minimum seized value / repaid value in bps (10_000 = break-even; 0 = no floor)
+    }
+
+    struct FundedPlan {
+        uint256 repay;
+        uint256 previousHealthFactorBps;
+        uint256 repayUsd; // value of the repaid debt (floored)
+        uint256 capUsd; // repaid value x (1 + bonus), rounded against the liquidator
+        uint256 positionSeized;
+        uint256 marginSeized;
+        uint256 positionLeft; // full liquidation: position pTokens (non-margin asset) returned to the owner
+        uint256 marginLeft; // full liquidation: margin pTokens returned through the vault release accounting
+        uint256 lockedReduction;
+        bool full;
+    }
+
     struct PendingLiquidation {
         uint256 positionId;
         address caller;
@@ -99,6 +131,18 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
         uint256 lockedMarginReduction,
         uint256 returnedMarginPTokens,
         uint256 liquidatorReward,
+        bool fullyLiquidated
+    );
+    event FundedPositionLiquidated(
+        uint256 indexed positionId,
+        address indexed funder,
+        address indexed recipient,
+        uint256 debtRepaid,
+        uint256 positionPTokensSeized,
+        uint256 marginPTokensSeized,
+        uint256 positionPTokensReturnedToOwner,
+        uint256 marginPTokensReturnedToVault,
+        uint256 lockedMarginReduction,
         bool fullyLiquidated
     );
     event InsuranceExcessReturned(address indexed pToken, uint256 underlyingAmount, uint256 pTokenAmount);
@@ -226,6 +270,170 @@ contract IsolatedMarginLiquidatorUpgradeable is Initializable, ReentrancyGuardUp
             completed.rewardUnderlying,
             fullyLiquidated
         );
+    }
+
+    /**
+     * @notice Funded in-kind forced liquidation. The allowlisted caller supplies the ACTUAL debt asset; the margin
+     *         account's debt is repaid and the permitted position pTokens are moved to `recipient` in ONE call.
+     * @dev No flash loan, no swap, no redemption: works with zero collateral-market cash and a dead swap route.
+     *      The repay amount is exactly what `riskEngine.beginFundedLiquidation` allows (partial or full; sized without the flash lender or swap slippage), prices come
+     *      only from the risk engine's oracle (a zero sentinel reverts `PriceUnavailable`), seized value is
+     *      capped at repaid value x (1 + pair liquidationBonusBps) with every rounding against the liquidator,
+     *      and the state machine ends in `finishLiquidation` (health must improve, or debt must be zero).
+     *      Anything above the bonus stays with the borrower. No insurance-fund draw: if collateral value is
+     *      below the debt the funder simply absorbs the shortfall (or does not call; use the min* bounds).
+     */
+    function liquidateFunded(FundedLiquidationParams calldata params) external nonReentrant {
+        if (!IFundedLiquidatorRegistry(address(config)).fundedLiquidators(msg.sender)) revert LiquidationError(27);
+        IsolatedMarginTypes.Position memory position = _getPosition(params.positionId);
+        if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert LiquidationError(8);
+        // The seized pTokens must not land in an isolated margin account (outside its locked-margin tracking).
+        if (params.recipient == address(0) || riskEngine.isIsolatedMarginAccount(params.recipient)) {
+            revert LiquidationError(9);
+        }
+
+        PErc20(position.positionPToken).exchangeRateCurrent();
+        if (position.marginPToken != position.positionPToken) PErc20(position.marginPToken).exchangeRateCurrent();
+        uint256 currentDebt = PErc20(position.debtPToken).borrowBalanceCurrent(position.account);
+        if (currentDebt == 0) revert LiquidationError(10);
+
+        FundedPlan memory plan;
+        // First price-touching call: an unavailable price reverts here with PriceUnavailable.
+        (plan.repay, plan.previousHealthFactorBps) = riskEngine.beginFundedLiquidation(position.account);
+        if (plan.repay == 0 || plan.repay > currentDebt) revert LiquidationError(11);
+        if (plan.repay > params.maxRepayUnderlying) revert LiquidationError(28);
+        plan.full = plan.repay == currentDebt;
+        _planFundedSeizure(position, plan);
+        if (plan.positionSeized < params.minPositionPTokens || plan.marginSeized < params.minMarginPTokens) {
+            revert LiquidationError(30);
+        }
+        // Funder's loss protection (for insolvent or fast-moving positions): value received vs value paid.
+        if (_seizedValueUsd(position, plan) * BPS < plan.repayUsd * params.minSeizeValueBps) {
+            revert LiquidationError(32);
+        }
+
+        // 1. Funds in and debt repaid (atomic with everything below; any revert unwinds the whole call).
+        _pullAndRepay(position, plan.repay);
+
+        // 2. Seizure in kind, and on full liquidation the borrower's surplus.
+        address account = position.account;
+        _moveFromAccount(account, position.positionPToken, plan.positionSeized, params.recipient);
+        _moveFromAccount(account, position.marginPToken, plan.marginSeized, params.recipient);
+        if (plan.full) {
+            _moveFromAccount(account, position.positionPToken, plan.positionLeft, position.owner);
+            _moveFromAccount(account, position.marginPToken, plan.marginLeft, address(this));
+        }
+
+        // 3. Same state machine as the flash path.
+        riskEngine.finishLiquidation(account, plan.full, plan.previousHealthFactorBps);
+        if (plan.marginLeft > 0) IERC20(position.marginPToken).forceApprove(address(vault), plan.marginLeft);
+        vault.releaseFromLiquidation(params.positionId, plan.lockedReduction, plan.marginLeft);
+        if (plan.marginLeft > 0) IERC20(position.marginPToken).forceApprove(address(vault), 0);
+        executor.recordLiquidation(params.positionId, plan.lockedReduction, plan.full);
+
+        emit FundedPositionLiquidated(
+            params.positionId,
+            msg.sender,
+            params.recipient,
+            plan.repay,
+            plan.positionSeized,
+            plan.marginSeized,
+            plan.positionLeft,
+            plan.marginLeft,
+            plan.lockedReduction,
+            plan.full
+        );
+    }
+
+    /// @dev Decides how many pTokens the funder gets. Pure accounting, no state change.
+    function _planFundedSeizure(IsolatedMarginTypes.Position memory position, FundedPlan memory plan) internal view {
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk =
+            config.getPairRisk(position.marginPToken, position.positionPToken, position.debtPToken);
+        // Rounding against the liquidator: repaid value floors, bonus floors.
+        plan.repayUsd = riskEngine.underlyingValueUsd(position.debtPToken, plan.repay);
+        plan.capUsd = plan.repayUsd + Math.mulDiv(plan.repayUsd, pairRisk.liquidationBonusBps, BPS);
+
+        uint256 positionBalance = PErc20(position.positionPToken).balanceOf(position.account);
+        if (positionBalance == 0) revert LiquidationError(12);
+        uint256 capPTokens = _pTokensForUsdFloor(position.positionPToken, plan.capUsd);
+        plan.positionSeized = capPTokens < positionBalance ? capPTokens : positionBalance;
+        bool sameToken = position.marginPToken == position.positionPToken;
+
+        if (!plan.full) {
+            // Same proportional locked-margin release and sanity bounds as the flash path.
+            plan.lockedReduction = Math.mulDiv(
+                position.lockedMarginPTokens, plan.positionSeized, positionBalance, Math.Rounding.Ceil
+            );
+            if (plan.lockedReduction == 0 || plan.lockedReduction >= position.lockedMarginPTokens) {
+                revert LiquidationError(13);
+            }
+        } else {
+            plan.lockedReduction = position.lockedMarginPTokens;
+            if (sameToken) {
+                plan.marginLeft = positionBalance - plan.positionSeized;
+            } else {
+                uint256 marginBalance = PErc20(position.marginPToken).balanceOf(position.account);
+                // Only if the whole position cannot satisfy the cap does the funder also take margin pTokens.
+                if (plan.positionSeized == positionBalance) {
+                    uint256 usedUsd = _valueUsdCeil(position.positionPToken, positionBalance);
+                    uint256 remainingUsd = plan.capUsd > usedUsd ? plan.capUsd - usedUsd : 0;
+                    uint256 marginCap = _pTokensForUsdFloor(position.marginPToken, remainingUsd);
+                    plan.marginSeized = marginCap < marginBalance ? marginCap : marginBalance;
+                }
+                plan.positionLeft = positionBalance - plan.positionSeized;
+                plan.marginLeft = marginBalance - plan.marginSeized;
+            }
+        }
+
+        // Independent bound using the risk engine's own valuation helpers: seized value <= repaid x (1 + bonus).
+        if (_seizedValueUsd(position, plan) > plan.capUsd) revert LiquidationError(31);
+    }
+
+    function _seizedValueUsd(IsolatedMarginTypes.Position memory position, FundedPlan memory plan)
+        internal
+        view
+        returns (uint256 seizedUsd)
+    {
+        seizedUsd = riskEngine.pTokenValueUsd(position.positionPToken, plan.positionSeized);
+        if (plan.marginSeized > 0) seizedUsd += riskEngine.pTokenValueUsd(position.marginPToken, plan.marginSeized);
+    }
+
+    function _pullAndRepay(IsolatedMarginTypes.Position memory position, uint256 repay) internal {
+        address debtAsset = quoter.assetForMarket(position.debtPToken);
+        uint256 balanceBefore = IERC20(debtAsset).balanceOf(address(this));
+        IERC20(debtAsset).safeTransferFrom(msg.sender, address(this), repay);
+        if (IERC20(debtAsset).balanceOf(address(this)) - balanceBefore != repay) revert LiquidationError(29);
+        IERC20(debtAsset).forceApprove(position.debtPToken, repay);
+        if (PErc20(position.debtPToken).repayBorrowBehalf(position.account, repay) != 0) revert LiquidationError(21);
+        IERC20(debtAsset).forceApprove(position.debtPToken, 0);
+    }
+
+    function _moveFromAccount(address account, address pToken, uint256 amount, address to) internal {
+        if (amount == 0) return;
+        riskEngine.authorizeMovement(account, pToken, amount);
+        IsolatedMarginAccount(account).liquidationTransfer(pToken, amount, to);
+    }
+
+    /// @dev Price straight from the risk engine's oracle; the zero sentinel reverts like every other margin path.
+    function _priceOf(address pToken) internal view returns (address asset, uint256 priceUsd) {
+        IMarginPriceOracle oracle = riskEngine.oracle();
+        asset = oracle.marketAsset(pToken);
+        if (asset == address(0)) revert IsolatedMarginRiskEngineUpgradeable.PriceUnavailable(asset);
+        priceUsd = oracle.getPrice(asset);
+        if (priceUsd == 0) revert IsolatedMarginRiskEngineUpgradeable.PriceUnavailable(asset);
+    }
+
+    function _pTokensForUsdFloor(address pToken, uint256 valueUsd) internal view returns (uint256) {
+        (address asset, uint256 priceUsd) = _priceOf(pToken);
+        return IsolatedMarginMath.pTokenForUsd(
+            valueUsd, IERC20Metadata(asset).decimals(), priceUsd, PErc20(pToken).exchangeRateStored(), Math.Rounding.Floor
+        );
+    }
+
+    function _valueUsdCeil(address pToken, uint256 amount) internal view returns (uint256) {
+        (address asset, uint256 priceUsd) = _priceOf(pToken);
+        uint256 underlying = Math.mulDiv(amount, PErc20(pToken).exchangeRateStored(), 1e18, Math.Rounding.Ceil);
+        return Math.mulDiv(underlying, priceUsd, 10 ** uint256(IERC20Metadata(asset).decimals()), Math.Rounding.Ceil);
     }
 
     function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data)

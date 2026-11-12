@@ -1,0 +1,31 @@
+ok: testMatrix_A_oracleOnly_singlePosition
+ok: testMatrix_B_poolFollows_singlePosition
+ok: testMatrix_C1_oracleLag50
+FAILED: testMatrix_C2_oracleLag90 (forge exit 1)
+FAILED: testMatrix_C3_fixedLag50 (forge exit 1)
+FAILED: testMatrix_C4_fixedLag100 (forge exit 1)
+FAILED: testMatrix_C5_fixedLag200 (forge exit 1)
+FAILED: testMatrix_D_removal50_poolFollows (forge exit 1)
+FAILED: testMatrix_E_accrual90d_flashFee9 (forge exit 1)
+ok: testMatrix_F1_aggregate_1k_x5
+ok: testMatrix_F2_aggregate_5k_x10
+ok: testMatrix_F3_aggregate_25k_x4
+ok: testMatrix_G_ordinaryLending
+ok: testMatrix_G2_ordinaryGap
+FAILED: testSwapGuard_directionTable (forge exit 1)
+FAILED: testFallback_A_mockedOracle (forge exit 1)
+FAILED: testFallback_B_poolFollows (forge exit 1)
+FAILED: testFallback_C_fixedLag100 (forge exit 1)
+FAILED: testFallback_D_usdcDepeg98_lag100 (forge exit 1)
+FAILED: testFallback_E_accrual90d_fee9 (forge exit 1)
+ok: testFallback_G_noFloor_funderAbsorbsLoss
+ok: testFallback_F1_aggregate_k5
+ok: testFallback_F2_aggregate_k10
+ok: testFallback_F3_aggregate_k4
+ok: testFallback_H_zeroCash
+ok: testMatrix_F4_aggregate_k5_removal50
+ok: testMatrix_F5_aggregate_k10_removal50
+ok: testMatrix_F6_aggregate_k5_fixedLag100
+ok: testMatrix_F7_aggregate_k10_fixedLag100
+ok: testMatrix_F8_aggregate_k4_removal50
+ok: testMatrix_F9_aggregate_k4_fixedLag100

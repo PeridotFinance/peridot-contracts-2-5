@@ -1,0 +1,31 @@
+COLD SINGLE-RUN suite=reward-token attempt=1
+UTC start: 2026-11-05T13:34:46Z
+git HEAD: 6c584f6d44c592e9e35fb04d74dd6cb39056994d
+git status --short (contracts/): 35 entries
+RPC host: https://api.avax.network (direct, no proxy)
+isolated home: /tmp/avalanche-cold-home.JRafqk (fresh; RPC cache entries at start: 0)
+command: HOME=/tmp/avalanche-cold-home.JRafqk forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheCashOnlyRewardTokenIndependenceForkTest$ -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 10 --fork-retries 20 --fork-retry-backoff 2000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 3 tests for test/AvalancheCashOnlyRewardTokenIndependenceFork.t.sol:AvalancheCashOnlyRewardTokenIndependenceForkTest
+[PASS] testHardcodedBaseTokenAddress_HasNoCodeOnAvalanche() (gas: 6287)
+[PASS] testLendingPaths_NeverTouchTheRewardToken_TokenThatRevertsOnAnyCall() (gas: 6683936)
+[PASS] testLendingPaths_WithNoRewardTokenAtAll_AddressZero() (gas: 6496504)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.48s (283.60ms CPU time)
+
+Ran 1 test suite in 1.55s (1.48s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)
+-----
+UTC end: 2026-11-05T13:34:50Z  exit: 0

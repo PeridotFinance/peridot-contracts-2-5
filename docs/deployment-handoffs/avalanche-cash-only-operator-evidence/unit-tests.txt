@@ -1,0 +1,86 @@
+Provenance: operator/ unit tests, 2026-11-06T11:43:45Z, Node v26.4.0. No network (the keystore test uses a throwaway key, low scrypt cost).
+command: cd operator && npm test
+-----
+
+> peridot-operator@0.1.0 test
+> npm run build && node --test dist/test/*.test.js
+
+
+> peridot-operator@0.1.0 build
+> tsc -p tsconfig.json
+
+✔ de-duplication: the same finding is sent once; a severity increase is sent again (1.782209ms)
+✔ info findings are never sent (0.747542ms)
+✔ escalation timers 1 h / 4 h / 24 h fire once each, from T0, and only for escalating findings (1.641333ms)
+✔ a missed poll catches up on all due escalations once (0.303458ms)
+✔ resolution is announced once and the key can alert again afterwards (0.364834ms)
+✔ raise() adds one finding without resolving the others (0.369834ms)
+✔ state survives a restart (no duplicate page for an already-active alert) (0.208042ms)
+✔ alert text is masked before delivery (0.188875ms)
+✔ sinks: delivery failure reports the HTTP status and never the URL or token (0.634958ms)
+✔ createSink refuses to start without credentials in the environment (0.307209ms)
+✔ zero when every account is covered by its seizable collateral (healthy and recoverable rows) (0.476584ms)
+✔ positive on tail and default rows: sum of max(0, debt - collateral/LI) minus reserves (0.086917ms)
+✔ reserves absorb small defaults (clipped at zero, unclipped value still reported) (0.059542ms)
+✔ an account that cannot be valued makes the figure INCOMPLETE instead of silently low (0.077167ms)
+✔ the process REFUSES TO START (exit 78) with the checked-in template and names the unset decisions (201.639333ms)
+✔ refuses with no configuration, and with a configuration but no RPC endpoint or alert credentials in the environment (459.952291ms)
+✔ KEY HANDLING is confined to src/signer.ts, src/keeper.ts, src/executor.ts and src/txkit.ts (the latter three only call the ExternalSigner): no other module constructs a wallet or signer, reads a key, or sends a transaction (3.092375ms)
+✔ the keeper and the executor never read key material themselves: they only talk to the ExternalSigner interface (0.489083ms)
+✔ entrypoint: materialises the encrypted keystore with mode 600, prints no content, refuses to start without a keystore (18.740875ms)
+✔ the checked-in template is REFUSED, and every operator decision is reported (1.521375ms)
+✔ a fully decided configuration is accepted (1.050459ms)
+✔ each operator decision and each recorded-source rule, unset or broken alone, refuses the start (7.117459ms)
+✔ a config file carrying a URL with a key, a 32-byte hex string or key words is refused (0.704083ms)
+✔ loadConfig refuses the template file and a file with secrets, and names the problems (0.935959ms)
+✔ NO_DEBT: an account without debt needs no price (0.833916ms)
+✔ HEALTHY: debt but no shortfall (0.089666ms)
+✔ LIQUIDATABLE_RECOVERABLE: shortfall and a full liquidation clears the debt (0.715708ms)
+✔ UNRECOVERABLE_LIQUIDATE_FIRST: C/LI < D but collateral above dust (0.100625ms)
+✔ DEFAULT_EXHAUSTED fires only when collateral is dust (0.301417ms)
+✔ exact recoverable boundary: collUsd x 1e18 == debtUsd x LI is still RECOVERABLE (C/LI == D) (0.218042ms)
+✔ fail closed: a zero oracle price, an unreadable market, a controller error (0.161583ms)
+✔ fail closed: a missing reference price for a market the account touches (0.125ms)
+✔ tolerance boundary, to the wei, both directions (0.213166ms)
+✔ a wrong reference can only delay a payment, never cause one (28 reference/oracle pairs, divergence gate disabled) (0.36675ms)
+✔ MUTATION 1 (fire on shortfall alone) is caught by the verdict tests above (0.178084ms)
+✔ MUTATION 3 (no divergence gate) is caught by the boundary test (0.104458ms)
+✔ conservative valuation: collateral at max(P,R), debt at min(P,R) (0.106375ms)
+✔ plan: close factor of the debt when the collateral and the inventory allow it (2.678667ms)
+✔ plan: capped by what the collateral can pay for (0.2% below the 1/LI limit), then by the inventory (0.121708ms)
+✔ plan: an underfunded operator liquidates partially with all it holds (<= the close factor); below the minimum it does nothing; both are 'unfunded' steps (0.1015ms)
+✔ min-out: oracle value minus the slippage bound, integer arithmetic (0.075083ms)
+✔ state: starts clean (0.082167ms)
+✔ every function the executor encodes or decodes is in the ABI it uses (0.691208ms)
+✔ config: the executor block is validated only when enabled, must name an operator, and cannot run beside the keeper (9.476625ms)
+✔ oracle freshness: warn at 50% / 80% of the AVAX guard, crit when unreadable, crit on a zero price (1.122667ms)
+✔ exchange rate must not fall (0.294292ms)
+✔ shares consistency: mismatch is critical when the index is complete, disabled accounting is critical (0.149917ms)
+✔ configuration drift: collateral factor, WAVAX borrowing, cap, floor (0.128375ms)
+✔ utilisation, cash against the floor, cap use (0.092458ms)
+✔ operator inventory: crit below 0.75 x aggregate debt, warn below the pilot minimum, crit on low gas; nonce change tracked (0.264666ms)
+✔ treasury: capital below the requirement (warn) and below the expected call (crit) (0.102125ms)
+✔ USDC leaving the keeper wallet without a recorded payment is critical; recorded payments and inflows are not (0.118792ms)
+✔ confirmation: N consecutive evaluations on distinct blocks spanning S seconds; any gap resets (0.773333ms)
+✔ allowance is exactly the debt plus the margin, rounded up, never more (0.0785ms)
+✔ budget: refuses with no debt, insufficient balance (no partial repayment) and the daily cap (0.156333ms)
+✔ rolling 24 h window (0.163584ms)
+✔ keystore signer: loads with the password from the environment, reports its address, never leaks the password (189.458375ms)
+✔ every contract function the keeper encodes or decodes is in the ABI it uses (a missing entry must not surface mid-payment) (0.673083ms)
+✔ the URL, host and key-like tokens are masked wherever they appear (0.686792ms)
+✔ short path words stay readable and an unset variable masks nothing (0.150666ms)
+✔ safeError masks, flattens and bounds an ethers-style error (0.144334ms)
+✔ TickMath matches the on-chain library at its fixed points (0.63175ms)
+✔ mean tick floors toward minus infinity, as OracleLibrary does (0.206584ms)
+✔ price from a tick: pool tick -254599 is about 2.5e-? raw -> about USD 8.8 per WAVAX at USD 1.00 USDC (0.209875ms)
+✔ reference: ok path (0.199708ms)
+✔ reference FAILS CLOSED on every listed cause (0.232584ms)
+✔ liquidity floor: median (odd and even counts), 50% with floor division, hourly sampling over 7 days (0.44525ms)
+ℹ tests 67
+ℹ suites 0
+ℹ pass 67
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 757.753708

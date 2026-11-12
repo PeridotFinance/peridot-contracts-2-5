@@ -1,0 +1,76 @@
+{
+  "forkBlock": 99580750,
+  "attempts": [
+    {
+      "delaySeconds": 0,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "ok",
+      "gasUsed": "713221"
+    },
+    {
+      "delaySeconds": 1,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "REVERTED",
+      "gasUsed": "810245"
+    },
+    {
+      "delaySeconds": 3,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "REVERTED",
+      "gasUsed": "810245"
+    },
+    {
+      "delaySeconds": 10,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "REVERTED",
+      "gasUsed": "810245"
+    },
+    {
+      "delaySeconds": 60,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "REVERTED",
+      "gasUsed": "810245"
+    },
+    {
+      "delaySeconds": 600,
+      "marginPercent": 0,
+      "gasLimit": "839752",
+      "status": "REVERTED",
+      "gasUsed": "814624"
+    },
+    {
+      "delaySeconds": 60,
+      "marginPercent": 5,
+      "gasLimit": "881739",
+      "status": "ok",
+      "gasUsed": "742632"
+    },
+    {
+      "delaySeconds": 60,
+      "marginPercent": 10,
+      "gasLimit": "923727",
+      "status": "ok",
+      "gasUsed": "742632"
+    },
+    {
+      "delaySeconds": 60,
+      "marginPercent": 25,
+      "gasLimit": "1049690",
+      "status": "ok",
+      "gasUsed": "742632"
+    },
+    {
+      "delaySeconds": 600,
+      "marginPercent": 25,
+      "gasLimit": "1049690",
+      "status": "ok",
+      "gasUsed": "713323"
+    }
+  ],
+  "rawEstimate": "839752"
+}

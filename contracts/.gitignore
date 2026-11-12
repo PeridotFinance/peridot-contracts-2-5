@@ -38,3 +38,7 @@ ethers-scripts
 lib
 verify_project
 script/verify
+
+# Per-profile Foundry build dirs from rehearsal/mutation runs (regenerable)
+cache_*/
+out_*/

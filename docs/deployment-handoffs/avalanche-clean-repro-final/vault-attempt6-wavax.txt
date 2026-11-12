@@ -1,0 +1,748 @@
+VAULT CLEAN REPRODUCTION vault=wavax suite=AvalancheTrackAWavaxVaultForkTest
+UTC start: 2026-11-02T17:38:56Z
+git HEAD: 4e73c2d97728ca81e298f904ae90008656d5c46d
+git status --short (contracts/):
+   M contracts/PeridottrollerRobinhood.sol
+   M contracts/margin/RobinhoodV4RouterAdapter.sol
+   M foundry.toml
+   M fuji-margin-liquidation-testing.md
+   M robinhood_boosted_markets.md
+   M test/RobinhoodV4RouterAdapter.t.sol
+   M tools/fuji-liquidation-runner.cjs
+   M tools/fuji-liquidation-runner.local.test.cjs
+   M tools/fuji-liquidation-runner.test.cjs
+  ?? cache_fallback/
+  ?? cache_tracka/
+  ?? cache_tracka_assert/
+  ?? cache_tracka_repro/
+  ?? cache_vault_repro/
+  ?? out_fallback/
+  ?? out_tracka/
+  ?? out_tracka_assert/
+  ?? out_tracka_repro/
+  ?? out_vault_repro/
+  ?? tools/fuji-simulation-proxy.cjs
+  ?? tools/fuji-simulation-proxy.test.cjs
+RPC host: https://api.avax.network  (direct, no proxy)
+env: HOME=/tmp/avalanche-vault-clean-home.FNBvmq (isolated, empty .foundry/cache/rpc; svm symlinked for solc only) FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_vault_repro FOUNDRY_CACHE_PATH=cache_vault_repro TRACKA_PIN_BLOCK=99216312
+forge: forge Version: 1.7.1-Homebrew
+command: HOME=/tmp/avalanche-vault-clean-home.FNBvmq forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!A]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!T]* --match-contract AvalancheTrackAWavaxVaultForkTest -vv
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+[2m2026-11-02T17:39:20.597260Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb05b9262dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m25036522574420369009741875543571551124870022830896558427214514482932503494124
+[2m2026-11-02T17:39:27.167123Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb2ec9bb2dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m25036522574420369009741875543571551124870022830896558427214514482932503494124
+[2m2026-11-02T17:39:33.689992Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb5798182dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m61934901389043916705559223437602623035606339803978598717449959126315790960695
+[2m2026-11-02T17:39:40.252297Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb80984f2dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m25036522574420369009741875543571551124870022830896558427214514482932503494124
+[2m2026-11-02T17:39:46.801977Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eba98f0d2dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m89376881771571428549620214034014777094380521471075421884285320384515387470559
+[2m2026-11-02T17:39:53.363738Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebd28d322dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m89376881771571428549620214034014777094380521471075421884285320384515387470559
+[2m2026-11-02T17:39:59.914795Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebfb7c902dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m25036522574420369009741875543571551124870022830896558427214514482932503494124
+[2m2026-11-02T17:40:06.458367Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec245f422dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m25036522574420369009741875543571551124870022830896558427214514482932503494124
+[2m2026-11-02T17:40:12.993310Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec4d380e2dfd-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m89376881771571428549620214034014777094380521471075421884285320384515387470559
+[2m2026-11-02T17:40:28.987510Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecb1298f06e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:40:35.552633Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecda3b7606e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:40:42.116063Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed0339c406e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:40:48.669901Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed2c2ef906e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:40:55.233549Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed553f8a06e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:41:01.783948Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed7e2f8f06e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:41:08.333644Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eda71b8206e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:41:14.877125Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edcff9b206e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:41:21.424853Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edf8ef6906e3-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m73346648167250863274539371357940285764248562395044300174290164412903921063505
+[2m2026-11-02T17:41:43.296143Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 70287849042682197878886708636082821373693446420762353434988300039260557824167: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ee819a9eb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m70287849042682197878886708636082821373693446420762353434988300039260557824167
+[2m2026-11-02T17:41:49.851232Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eeaa9dbdb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:41:56.406758Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eed38b7fb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:42:02.962865Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eefc8a5db173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:42:09.516145Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef257cc6b173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:42:16.114015Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef4ebfceb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m43539429930107376151276498605695126579439821202189443895459515575586207122280
+[2m2026-11-02T17:42:22.678361Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `basic` [3merr[0m[2m=[0mfailed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef77ba0cb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2e234DAe75C793f67A35089C9d99245E1C58470b
+[2m2026-11-02T17:42:29.231320Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efa0ad3cb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m61934901389043916705559223437602623035606339803978598717449959126315790960695
+[2m2026-11-02T17:42:35.806865Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efc9c85cb173-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m36680635528694105053684005981154083250645281195113342507700771113259492265616
+[2m2026-11-02T17:42:58.463884Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 88790498986842932728329415686542270046669682090157838631100222895547627904782: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0575b716a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD [3mindex[0m[2m=[0m88790498986842932728329415686542270046669682090157838631100222895547627904782
+[2m2026-11-02T17:43:05.021544Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0805f2e6a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m36680635528694105053684005981154083250645281195113342507700771113259492265616
+[2m2026-11-02T17:43:11.571973Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 77414461398974456143339147266994930258995875856994577594916732927874063125044: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0a948206a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 [3mindex[0m[2m=[0m77414461398974456143339147266994930258995875856994577594916732927874063125044
+[2m2026-11-02T17:43:18.142274Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0d258236a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 [3mindex[0m[2m=[0m61934901389043916705559223437602623035606339803978598717449959126315790960695
+[2m2026-11-02T17:43:24.697236Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 87825688239549456242149251909093049637429020702289775669242016925356464509644: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0fb5f5a6a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m87825688239549456242149251909093049637429020702289775669242016925356464509644
+[2m2026-11-02T17:43:31.246262Z[0m [31mERROR[0m [2msharedbackend[0m[2m:[0m Failed to send/recv `storage` [3merr[0m[2m=[0mfailed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f1244f826a73-TXL
+server: cloudflare [3maddress[0m[2m=[0m0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE [3mindex[0m[2m=[0m36680635528694105053684005981154083250645281195113342507700771113259492265616
+
+Ran 40 tests for test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAWavaxVaultForkTest
+[PASS] testFinding_03_rewardSnipingAtEntry() (gas: 4932221)
+Logs:
+   PHAR earned by position at pin 821631199989894334
+   PHAR in vault after Bob's deposit (auto-claimed by increaseLiquidity) 821631199989894334
+   Bob's shares of supply (bps) 9984
+   donation D 11693597145624743337
+   Bob captured from D, bps (fair = 0) 9984
+   CONTROL (harvest+donate before Bob): Bob value / deposit 1152280325846476156111 1169359714562474333723
+
+[PASS] testFinding_04_rewardForfeitAtExit() (gas: 2981581)
+Logs:
+   Bob's share of supply, bps 9984
+   PHAR earned by position at Bob's join / after 1 day 0 177181083534743929
+   Bob redeemed asset 1152572434919302337290
+   Bob PHAR received 0
+   PHAR left in vault for the Safe/remaining holders 998812283524638263
+   Bob's approximate pro-rata entitlement forfeited (PHAR wei) 176897593801088338
+
+[PASS] test_00_addressMapAndConfig() (gas: 773333)
+Logs:
+  sAVAX/WAVAX vault (asset WAVAX)
+   vault         0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8
+   impl (ERC1967) 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
+   proxyAdmin     0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC
+   proxyAdmin.owner 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   vault.owner    0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   rebalancer     0x94696d767e65a75581145646960FA0eC886cE5d2
+   asset          0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+   paired         0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE
+   pool           0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD
+   gauge          0xCB348abA8D8CE40a45353955ad63ca72095E152d
+   oracle         0x2002aFd6C713a6075d66DaE758Dc466787faCeEF
+   positionMgr    0x0B4478e810D48B5882D4019D435A2f864Bab4F39
+   tokenId        485416
+   ticks lower/upper 1854 3054
+   spot tick      2554
+   pool fee(ppm)  100
+   pool liquidity 2240558373841569919951735
+   paused         false
+   depositCap     1
+   totalAssets    1736602432054834143
+   totalSupply    1723597814184121992
+   maxDeposit(alice) 0
+   twap/maxTwapTicks/maxOracleBps 1800 100 100
+   slippage/haircut bps 300 300
+   PHAR earned (gauge, tokenId) 821631199989894334
+   PHAR held by vault 0
+
+[PASS] test_01_accessMatrix() (gas: 2514650)
+Logs:
+   rebalancer.deployIdle: ok
+   owner.deployIdle: ok
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb05b9262dfd-TXL
+server: cloudflare] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb2ec9bb2dfd-TXL
+server: cloudflare] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb5798182dfd-TXL
+server: cloudflare] test_05_donationInflationAndRounding() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb80984f2dfd-TXL
+server: cloudflare] test_06_ladder_100k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eba98f0d2dfd-TXL
+server: cloudflare] test_06_ladder_10k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebd28d322dfd-TXL
+server: cloudflare] test_06_ladder_1k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebfb7c902dfd-TXL
+server: cloudflare] test_06_ladder_250k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec245f422dfd-TXL
+server: cloudflare] test_06_ladder_50k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec4d380e2dfd-TXL
+server: cloudflare] test_07_stress_large_k0() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecb1298f06e3-TXL
+server: cloudflare] test_07_stress_large_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecda3b7606e3-TXL
+server: cloudflare] test_07_stress_large_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed0339c406e3-TXL
+server: cloudflare] test_07_stress_large_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed2c2ef906e3-TXL
+server: cloudflare] test_07_stress_large_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed553f8a06e3-TXL
+server: cloudflare] test_07_stress_large_k5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed7e2f8f06e3-TXL
+server: cloudflare] test_07_stress_large_k6() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eda71b8206e3-TXL
+server: cloudflare] test_07_stress_large_k7() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edcff9b206e3-TXL
+server: cloudflare] test_07_stress_small_k0() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edf8ef6906e3-TXL
+server: cloudflare] test_07_stress_small_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 70287849042682197878886708636082821373693446420762353434988300039260557824167: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ee819a9eb173-TXL
+server: cloudflare] test_07_stress_small_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eeaa9dbdb173-TXL
+server: cloudflare] test_07_stress_small_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eed38b7fb173-TXL
+server: cloudflare] test_07_stress_small_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eefc8a5db173-TXL
+server: cloudflare] test_07_stress_small_k5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef257cc6b173-TXL
+server: cloudflare] test_07_stress_small_k6() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef4ebfceb173-TXL
+server: cloudflare] test_07_stress_small_k7() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef77ba0cb173-TXL
+server: cloudflare] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efa0ad3cb173-TXL
+server: cloudflare] test_08b_gate_outOfRange_oracleFollows_redeemInKind() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efc9c85cb173-TXL
+server: cloudflare] test_09_dislocation_oracleDoesNotFollow_gatesAndOwnerPath() (gas: 0)
+[PASS] test_10_keeperRebalance_mid() (gas: 5762063)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 50000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 5769062889840199996284 5763787756169440043217
+     change bps 9
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 5763787756169440043217 5763791807515670244035
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 5763791807515670244035 5763791810908159080048
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) 9
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[PASS] test_10_keeperRebalance_small() (gas: 5159572)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 10000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 1154189079926096993560 1154319557603575648798
+     change bps -1
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 1154319557603575648798 1154319675798011867094
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 1154319675798011867094 1154319675905459409057
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) -1
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 88790498986842932728329415686542270046669682090157838631100222895547627904782: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0575b716a73-TXL
+server: cloudflare] test_11_emergencyExit_mid() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0805f2e6a73-TXL
+server: cloudflare] test_11_emergencyExit_small() (gas: 0)
+[PASS] test_12_capSemantics() (gas: 1049447)
+Logs:
+   cap / managed / maxDeposit 2338719429124948667447 1736602432054834143 2336982826692893833304
+   deposit above cap: Vault__DepositCapExceeded
+   deposit exactly maxDeposit ok? false
+
+[FAIL: EVM error; database error: failed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 77414461398974456143339147266994930258995875856994577594916732927874063125044: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0a948206a73-TXL
+server: cloudflare] test_13_gate_inKind_baseCase_twoHolders() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0d258236a73-TXL
+server: cloudflare] test_14_gate_inKind_dislocation_viewsFrozen() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 87825688239549456242149251909093049637429020702289775669242016925356464509644: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0fb5f5a6a73-TXL
+server: cloudflare] test_16_gate_inKind_afterEmergencyExit() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f1244f826a73-TXL
+server: cloudflare] test_17_diag_laterDepositEffectOnIncumbentInKindValue() (gas: 0)
+Suite result: FAILED. 7 passed; 33 failed; 0 skipped; finished in 272.88s (272.34s CPU time)
+
+Ran 1 test suite in 272.90s (272.88s CPU time): 7 tests passed, 33 failed, 0 skipped (40 total tests)
+
+Failing tests:
+Encountered 33 failing tests in test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAWavaxVaultForkTest
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb05b9262dfd-TXL
+server: cloudflare] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb2ec9bb2dfd-TXL
+server: cloudflare] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb5798182dfd-TXL
+server: cloudflare] test_05_donationInflationAndRounding() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eb80984f2dfd-TXL
+server: cloudflare] test_06_ladder_100k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eba98f0d2dfd-TXL
+server: cloudflare] test_06_ladder_10k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebd28d322dfd-TXL
+server: cloudflare] test_06_ladder_1k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ebfb7c902dfd-TXL
+server: cloudflare] test_06_ladder_250k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 25036522574420369009741875543571551124870022830896558427214514482932503494124: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec245f422dfd-TXL
+server: cloudflare] test_06_ladder_50k() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 89376881771571428549620214034014777094380521471075421884285320384515387470559: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ec4d380e2dfd-TXL
+server: cloudflare] test_07_stress_large_k0() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecb1298f06e3-TXL
+server: cloudflare] test_07_stress_large_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ecda3b7606e3-TXL
+server: cloudflare] test_07_stress_large_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed0339c406e3-TXL
+server: cloudflare] test_07_stress_large_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed2c2ef906e3-TXL
+server: cloudflare] test_07_stress_large_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed553f8a06e3-TXL
+server: cloudflare] test_07_stress_large_k5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ed7e2f8f06e3-TXL
+server: cloudflare] test_07_stress_large_k6() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eda71b8206e3-TXL
+server: cloudflare] test_07_stress_large_k7() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edcff9b206e3-TXL
+server: cloudflare] test_07_stress_small_k0() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 73346648167250863274539371357940285764248562395044300174290164412903921063505: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544edf8ef6906e3-TXL
+server: cloudflare] test_07_stress_small_k1() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 70287849042682197878886708636082821373693446420762353434988300039260557824167: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ee819a9eb173-TXL
+server: cloudflare] test_07_stress_small_k2() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eeaa9dbdb173-TXL
+server: cloudflare] test_07_stress_small_k3() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eed38b7fb173-TXL
+server: cloudflare] test_07_stress_small_k4() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544eefc8a5db173-TXL
+server: cloudflare] test_07_stress_small_k5() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef257cc6b173-TXL
+server: cloudflare] test_07_stress_small_k6() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 43539429930107376151276498605695126579439821202189443895459515575586207122280: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef4ebfceb173-TXL
+server: cloudflare] test_07_stress_small_k7() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x2e234DAe75C793f67A35089C9d99245E1C58470b: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544ef77ba0cb173-TXL
+server: cloudflare] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efa0ad3cb173-TXL
+server: cloudflare] test_08b_gate_outOfRange_oracleFollows_redeemInKind() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544efc9c85cb173-TXL
+server: cloudflare] test_09_dislocation_oracleDoesNotFollow_gatesAndOwnerPath() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD at 88790498986842932728329415686542270046669682090157838631100222895547627904782: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0575b716a73-TXL
+server: cloudflare] test_11_emergencyExit_mid() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0805f2e6a73-TXL
+server: cloudflare] test_11_emergencyExit_small() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8 at 77414461398974456143339147266994930258995875856994577594916732927874063125044: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0a948206a73-TXL
+server: cloudflare] test_13_gate_inKind_baseCase_twoHolders() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 at 61934901389043916705559223437602623035606339803978598717449959126315790960695: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0d258236a73-TXL
+server: cloudflare] test_14_gate_inKind_dislocation_viewsFrozen() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 87825688239549456242149251909093049637429020702289775669242016925356464509644: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f0fb5f5a6a73-TXL
+server: cloudflare] test_16_gate_inKind_afterEmergencyExit() (gas: 0)
+[FAIL: EVM error; database error: failed to get storage for 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE at 36680635528694105053684005981154083250645281195113342507700771113259492265616: Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a544f1244f826a73-TXL
+server: cloudflare] test_17_diag_laterDepositEffectOnIncumbentInKindValue() (gas: 0)
+
+Encountered a total of 33 failing tests, 7 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 33 failed tests
+-----
+UTC end: 2026-11-02T17:43:31Z  forge exit: 1

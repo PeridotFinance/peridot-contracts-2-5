@@ -1,0 +1,43 @@
+Provenance: operator/ executor, ceremony and vault-opening rehearsals. Working tree on top of git 99d50760, 2026-11-06T11:36:54Z. Node v26.4.0, ethers 5.8.0, anvil 1.7.1-Homebrew. Private archive RPC through a local pass-through proxy (URL from the environment, never printed); accounts impersonated and operators sign with THROWAWAY keystores created inside the test run; nothing signed or broadcast on any real network.
+command: cd operator && node --test --test-concurrency=1 dist/test/fork/cycle.fork.test.js   (pinned block 99,200,000)
+-----
+▶ executor reproduces the liquidation cycle (cases 1, 2, 3, 5) on a mainnet fork
+  ✔ case 1: PW30 cap 5000 gap 35%: recycling clears the account; the funding numbers are exact (23355.823542ms)
+  ✔ case 1: PW40 cap 5000 gap 35%: recycling clears the account; the funding numbers are exact (22784.070166ms)
+  ✔ case 1: PW30 cap 1000 gap 35%: recycling clears the account; the funding numbers are exact (22083.044292ms)
+  ✔ case 1: PW30 cap 10000 gap 35%: recycling clears the account; the funding numbers are exact (37033.537959ms)
+  ✔ case 1: PW30 cap 5000 gap 10%: recycling clears the account; the funding numbers are exact (27441.887916ms)
+  ✔ case 2: PW30 cap 5000, 3 borrowers, gap 35%: interleaved operators with cap/2 each (81567.533ms)
+  ✔ case 2: PW30 cap 5000, 5 borrowers, gap 35%: interleaved operators with cap/2 each (102088.964583ms)
+  ✔ case 2: PW40 cap 5000, 3 borrowers, gap 35%: interleaved operators with cap/2 each (58683.474459ms)
+  ✔ case 2: PW30 cap 1000, 5 borrowers, gap 35%: interleaved operators with cap/2 each (87256.419875ms)
+  ✔ case 3: PW30 cap 5000, 5 borrowers, operator B alone with cap/2, recycling (18111.372958ms)
+  ✔ case 3: PW30 cap 5000, 5 borrowers, operator B alone with cap/4, recycling (18189.390208ms)
+  ✔ case 3: PW30 cap 5000, 5 borrowers, operator B alone with cap/2, no recycling (5753.920917ms)
+  ✔ case 3: PW30 cap 1000, 3 borrowers, operator B alone with cap/2, no recycling (3713.059042ms)
+  ✔ case 3: PW40 cap 5000, 3 borrowers, operator B alone with cap/2, recycling (11773.407292ms)
+  ✔ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback (8141.1675ms)
+  ✔ case 5: PW30, 1 borrowers, inventory cap/1, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback (9435.94525ms)
+  ✔ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 30 bp, limit 100 bp -> swaps proceed (5503.353167ms)
+  ✔ case 5: PW30, 1 borrowers, inventory cap/2, adverse pool move 100 bp, limit 50 bp -> conversion BLOCKED, no fallback (5871.961916ms)
+  ✔ case 5: PW40, 1 borrowers, inventory cap/2, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback (7987.239375ms)
+  ✔ case 5: PW40, 1 borrowers, inventory cap/1, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback (8461.98675ms)
+  ✔ case 5: PW40, 1 borrowers, inventory cap/2, adverse pool move 30 bp, limit 100 bp -> swaps proceed (5437.344542ms)
+  ✔ case 5: PW40, 1 borrowers, inventory cap/2, adverse pool move 100 bp, limit 50 bp -> conversion BLOCKED, no fallback (4566.47775ms)
+  ✔ case 5: PW30, 5 borrowers, inventory cap/2, adverse pool move 300 bp, limit 100 bp -> conversion BLOCKED, no fallback (16786.568875ms)
+  ✔ executor: refuses to act on a stale or a zero oracle price (accounts in shortfall are left alone) (2861.83025ms)
+  ✔ executor: a pending marker at start-up or a halted state stops everything; a wrong signer is refused (538.204541ms)
+  ✔ executor: fee above the cap and AVAX below the floor -> no transaction (1312.091708ms)
+  ✔ executor: a competing liquidator is first -> the simulation fails, the allowance is reset, a cooldown prevents a retry storm, no halt (1949.349583ms)
+  ✔ executor: the swap reverts at the min-out between simulation and send -> blocked (allowance reset, WAVAX held), not a halt (8809.35125ms)
+  ✔ executor: an unexpected error while sending the swap -> allowances revoked and the executor HALTS (3413.689292ms)
+✔ executor reproduces the liquidation cycle (cases 1, 2, 3, 5) on a mainnet fork (616145.22325ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 616369.917542
+exit=0

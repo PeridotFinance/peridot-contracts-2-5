@@ -1,0 +1,18 @@
+# UTC: 2026-11-03T13:56:24Z
+# git HEAD: 7d99930cd4090687815d9026a67db5a858af9acd
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_cycle FOUNDRY_CACHE_PATH=cache_cycle forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheWavaxUsdcRoutesForkTest$ --match-test test_route_lb20|test_depth|test_split -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# ---
+./run-attempt.sh: line 9: test_depth: command not found
+./run-attempt.sh: line 9: test_split: command not found
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+[2m2026-11-03T13:56:26.159835Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oft-evm/contracts/OFTAdapter.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.160037Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oft-evm-upgradeable/contracts/oft/OFTAdapterUpgradeable.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.183792Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.183838Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oapp-evm/contracts/oapp/OAppSender.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.184143Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oft-evm/contracts/interfaces/IOFT.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.184683Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/test-devtools-evm-foundry/contracts/TestHelperOz5.sol": No such file or directory (os error 2)
+[2m2026-11-03T13:56:26.184709Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/lz-address-book/lib/devtools/packages/oft-evm-upgradeable/test/mocks/ERC20Mock.sol": No such file or directory (os error 2)
+Error: Broken pipe (os error 32)
+exit=127
+# end UTC: 2026-11-03T13:56:27Z

@@ -1,0 +1,15 @@
+W1 organic refusal probability per liquidity-changing request (Poisson):
+     5 liquidity-changing ops/day -> 0.64% refused (retry after <=111 s)
+    20 liquidity-changing ops/day -> 2.54% refused (retry after <=111 s)
+   100 liquidity-changing ops/day -> 12.06% refused (retry after <=111 s)
+   500 liquidity-changing ops/day -> 47.40% refused (retry after <=111 s)
+W1 dust attacker (one deposit per 112 s keeps every exit refused): 771 tx/day, 3.31e+08 gas/day, 0.828 AVAX/day at 2.5 gwei
+EPOCH: deposit wait (avg = E/2) cost, bps of the deposit, APR assumed 20%%:
+  E=   122 s -> mean wait      61 s -> 0.0039 bps of the deposit; worst-case exit wait (no buffer) 122 s
+  E=  3600 s -> mean wait    1800 s -> 0.1142 bps of the deposit; worst-case exit wait (no buffer) 3600 s
+  E= 21600 s -> mean wait   10800 s -> 0.6849 bps of the deposit; worst-case exit wait (no buffer) 21600 s
+  E= 86400 s -> mean wait   43200 s -> 2.7397 bps of the deposit; worst-case exit wait (no buffer) 86400 s
+EPOCH idle buffer drag (bps of NAV per year at APR 20%):
+  buffer  1% of NAV -> 20 bps/yr
+  buffer  5% of NAV -> 100 bps/yr
+  buffer 10% of NAV -> 200 bps/yr

@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "chainId": 43114,
+  "deployment": {
+    "controller": "0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A",
+    "pWavax": "0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1",
+    "pUsdc": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+    "oracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+    "deploymentBlock": 99846691
+  },
+  "pilot": {
+    "label": "PW30",
+    "wavaxCollateralFactorBp": 3000,
+    "usdcCollateralFactorBp": 0,
+    "usdcBorrowCapUsd": 200,
+    "wavaxBorrowingDisabled": true,
+    "protectionCapitalUsd": 48,
+    "operatorInventoryMinUsd": 150,
+    "operatorInventoryTargetUsd": 178,
+    "cashFloorBp": 2000
+  },
+  "operators": [
+    {
+      "name": "op1",
+      "address": "0xA7640fc537E2172eD6c4b4A809C9456AbD60fbF4"
+    },
+    {
+      "name": "op2",
+      "address": "0xfbb137eBcBb0F7eb2Ba70F59ff0be9B0A0c5125d"
+    }
+  ],
+  "signer": {
+    "type": "foundry-keystore"
+  },
+  "alerts": {
+    "channel": "log"
+  },
+  "execution": {
+    "slippageBoundBp": 100
+  },
+  "reference": {
+    "toleranceBp": 500,
+    "minPoolLiquidity": "1783127772391886766",
+    "minPoolLiquiditySource": {
+      "fromBlock": 99236259,
+      "toBlock": 99856331,
+      "samples": 169,
+      "medianLiquidity": "3566255544783773533",
+      "method": "50% of the median of pool.liquidity() sampled every 3600 s over 7 days (block time 0.975 s); min 1025890592826714279, max 5593890921320581419; 0 failed samples"
+    }
+  },
+  "treasury": {
+    "address": "0xaF0FAcd12A02b5b030eC7C3bf5dE0726C828935D"
+  },
+  "monitor": {
+    "pollSeconds": 30,
+    "maxBlockLagSeconds": 60,
+    "reorgMarginBlocks": 10,
+    "logChunkBlocks": 1000,
+    "logs": {
+      "chunkBlocks": 1000,
+      "maxChunksPerCycle": 20,
+      "behindWarnBlocks": 600,
+      "behindCritBlocks": 3900
+    },
+    "statePath": "/data/state/state.json",
+    "dustUsd1e18": "10000000000000000",
+    "avaxFeedWarnRatio": 0.5,
+    "avaxFeedCritRatio": 0.8,
+    "usdcFeedWarnRatio": 0.89,
+    "usdcFeedCritRatio": 0.95,
+    "minOperatorGasWei": "40000000000000000",
+    "utilisationWarnBp": 8000,
+    "borrowCapWarnBp": 9000,
+    "escalationSeconds": [
+      3600,
+      14400,
+      86400
+    ],
+    "noReferencePageSeconds": 900
+  },
+  "executor": {
+    "enabled": true,
+    "operator": "op2",
+    "keystorePath": "/data/keystore/op2.json",
+    "passwordEnv": "OPERATOR_KEYSTORE_PASSWORD",
+    "convertToUsdc": true,
+    "minRepayUsdc": 1,
+    "maxFeeGwei": 100,
+    "minGasWei": "40000000000000000"
+  },
+  "rebalancer": {
+    "enabled": false,
+    "keystorePath": "UNSET",
+    "passwordEnv": "REBALANCER_KEYSTORE_PASSWORD",
+    "vaults": [
+      {
+        "name": "USDC vault",
+        "address": "0x855bF832f26a294d28500db59eE941dE3d654129",
+        "deployIdleMinAssetUnits": "1000000"
+      },
+      {
+        "name": "WAVAX vault",
+        "address": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+        "deployIdleMinAssetUnits": "100000000000000000"
+      }
+    ],
+    "edgeTicks": 5,
+    "minRebalanceIntervalSeconds": 3600,
+    "maxRebalanceLossBps": 50,
+    "maxDeployIdleLossBps": 50,
+    "maxActionsPerDay": 24,
+    "maxFeeGwei": 100,
+    "minGasWei": "40000000000000000"
+  },
+  "keeper": {
+    "enabled": false,
+    "keystorePath": "UNSET",
+    "passwordEnv": "KEEPER_KEYSTORE_PASSWORD",
+    "dailySpendCapUsdc": 48,
+    "confirmEvaluations": 2,
+    "confirmSeconds": 60,
+    "allowanceMarginBp": 10,
+    "maxFeeGwei": 100,
+    "minGasWei": "40000000000000000"
+  },
+  "margin": {
+    "enabled": true,
+    "executor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+    "liquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+    "riskEngine": "0xE022c90DB98ea8B1615c5B422Cbf46878B76a470",
+    "config": "0x5d59C647CC4bD6C05b4E9205c23062d490699631",
+    "watchHealthBps": 13000,
+    "liquidation": {
+      "enabled": true,
+      "dailyRepayCapUsdc": 100,
+      "maxRepayPerCallUsdc": 60,
+      "minRepayUsdc": 1,
+      "retryCooldownSeconds": 30,
+      "insolventCooldownSeconds": 600
+    }
+  }
+}

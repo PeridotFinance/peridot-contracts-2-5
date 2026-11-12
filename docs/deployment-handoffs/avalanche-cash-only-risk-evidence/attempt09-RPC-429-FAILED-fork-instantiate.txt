@@ -1,0 +1,18 @@
+# UTC: 2026-11-03T09:23:05Z
+# git HEAD: 401e9b0009b6b25ab3fdecd7f8f3ad08a2a9e8ab
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_risk FOUNDRY_CACHE_PATH=cache_risk forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyRiskStudyForkTest$' --match-test 'testRisk_' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: AvalancheBorrowFloorMarginFork.t.sol skipped (another agent's file under edit; not part of this suite)
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+Error: could not instantiate forked environment with provider api.avax.network
+
+Context:
+- Max retries exceeded HTTP error 429 with body: error code: 1015
+
+
+HTTP diagnostics:
+cf-ray: a54a521568415537-TXL
+server: cloudflare
+exit=1

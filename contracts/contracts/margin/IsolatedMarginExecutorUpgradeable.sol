@@ -6,6 +6,7 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/ut
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {IERC3156FlashBorrower, IERC3156FlashLender} from "../PTokenInterfaces.sol";
 import {PErc20} from "../PErc20.sol";
@@ -23,6 +24,9 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
     using SafeERC20 for IERC20;
 
     error ExecutorError(uint8 code);
+
+    /// @notice The order executor (the TP/SL close adapter) was set during an upgrade.
+    event OrderExecutorSet(address indexed orderExecutor);
 
     uint256 private constant BPS = 10_000;
     uint256 private constant LEVERAGE_SCALE = 100;
@@ -338,8 +342,40 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         emit DebtRepaid(positionId, repaidAmount, remainingDebt);
     }
 
+    /// @notice One-time wiring of the TP/SL close adapter. Callable only by the proxy admin inside `upgradeAndCall`,
+    ///         which the timelock owns, so it cannot be front-run between the upgrade and the call.
+    function initializeOrderExecutor(address orderExecutor_) external reinitializer(2) {
+        if (msg.sender != ERC1967Utils.getAdmin()) revert ExecutorError(58);
+        if (orderExecutor_.code.length == 0) revert ExecutorError(59);
+        orderExecutor = orderExecutor_;
+        emit OrderExecutorSet(orderExecutor_);
+    }
+
     function closePosition(CloseParams calldata params) external nonReentrant returns (uint256 returnedMarginPTokens) {
-        IsolatedMarginTypes.Position storage position = _activeOwnedPosition(params.positionId);
+        return _close(_activeOwnedPosition(params.positionId), params);
+    }
+
+    /// @notice Closes for the owner on behalf of an executed TP/SL order. Only the configured order executor may call.
+    ///         Everything else is the owner's own close path: the same checks, accrual, slippage floors and fees, and the
+    ///         returned margin is credited to the position owner in the margin vault, never to the caller.
+    ///         Liquidation is a separate path and is not affected.
+    function closePositionFor(address owner, CloseParams calldata params)
+        external
+        nonReentrant
+        returns (uint256 returnedMarginPTokens)
+    {
+        address executor_ = orderExecutor;
+        if (executor_ == address(0) || msg.sender != executor_) revert ExecutorError(60);
+        IsolatedMarginTypes.Position storage position = positions[params.positionId];
+        if (position.owner != owner) revert ExecutorError(46);
+        if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert ExecutorError(47);
+        return _close(position, params);
+    }
+
+    function _close(IsolatedMarginTypes.Position storage position, CloseParams calldata params)
+        private
+        returns (uint256 returnedMarginPTokens)
+    {
         if (params.closeBps == 0 || params.closeBps > BPS) revert ExecutorError(24);
 
         PErc20(position.positionPToken).exchangeRateCurrent();
@@ -728,5 +764,8 @@ contract IsolatedMarginExecutorUpgradeable is Initializable, ReentrancyGuardUpgr
         if (position.status != IsolatedMarginTypes.Status.ACTIVE) revert ExecutorError(47);
     }
 
-    uint256[40] private __gap;
+    /// @dev Appended in the order-executor upgrade; taken from the gap so the layout is unchanged.
+    address public orderExecutor;
+
+    uint256[39] private __gap;
 }

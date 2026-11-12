@@ -1,0 +1,22 @@
+fork block pinned for every run below: 99833032
+baseline (unmutated): test_01b|test_02_wire|test_03_lifecycle|test_02_wire|test_05_funded|test_02c|test_06e|test_06f|test_06b|test_06g
+  Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 17.64s (15.07s CPU time)  (exit 0)
+A1: KILLED by test_06e_adapterGuards_directCalls   [adapter: owner must be the position's owner]   (43 s)
+A2: KILLED by test_06e_adapterGuards_directCalls   [adapter: the price must equal the registry's trigger price]   (35 s)
+A3: KILLED by test_06f_adapterMinimum_clampAndDebtFloor   [adapter: order slippage is clamped to the pair's 100 bp]   (36 s)
+A4: KILLED by test_06e_adapterGuards_directCalls   [adapter: closeFor refuses a short]   (34 s)
+A4b: KILLED by test_06e_adapterGuards_directCalls   [adapter: a short is reported inactive]   (33 s)
+A5: KILLED by test_06g_adapterMinimum_debtFloorBinds   [adapter: the minimum is never below debt plus flash fee]   (35 s)
+A6: KILLED by test_06e_adapterGuards_directCalls   [adapter: only the registry may call closeFor]   (38 s)
+A7: KILLED by test_06e_adapterGuards_directCalls   [adapter: adapterData must be empty]   (42 s)
+A8: KILLED by test_06e_adapterGuards_directCalls   [adapter: order slippage at most 300 bp]   (32 s)
+W1: KILLED by test_02_wire_queueDelayExecuteEnable, test_03_lifecycle_open_caps_close   [script: the flash vault fee is set to 0 (default is 5 bp)]   (30 s)
+W2: KILLED by test_02_wire_queueDelayExecuteEnable, test_03_lifecycle_open_caps_close   [script: the controller's risk hook is the risk engine]   (31 s)
+W3: KILLED by test_02_wire_queueDelayExecuteEnable, test_05_fundedLiquidation_partial_thenDeeper_andRedeem   [script: every operator becomes a funded liquidator]   (30 s)
+W4: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions   [script: maintenance margin is 25% (pinned literal)]   (32 s)
+W5: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions   [script: position cap USD 5,000 (pinned literal)]   (30 s)
+W6: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions   [script: slippage floor 100 bp (pinned literal)]   (30 s)
+W7: KILLED by test_01b_stage1_refusals   [script: refuses when WAVAX borrowing is not paused (long only)]   (30 s)
+W8: KILLED by test_01b_stage1_refusals   [script: the deployer must not be the Ledger]   (31 s)
+
+mutants: 17  killed: 17  survived: none  invalid: none

@@ -1,0 +1,2 @@
+Price history used for the decision table (`analysis/decision-table.py`).
+Source: CoinGecko public API (`/coins/{id}/market_chart?vs_currency=usd&days=N`, fetched 2026-11-03, no key): `avalanche-2-365.json` (daily, 2025-11-04 to 2026-11-03), `avax-90h.json` (hourly, last 90 days), `usd-coin-365.json` (daily). This is a market-data aggregate, NOT the Chainlink feed the contracts read; it is used only to size price gaps by window. Moves are close-to-close at the sampling interval, so intra-interval extremes are not captured (worst moves are therefore lower bounds).

@@ -1,0 +1,21 @@
+{
+  "cap_usd": 200,
+  "avax_usd": "7.98694477",
+  "operator_config": {
+    "usdcBorrowCapUsd": 200,
+    "protectionCapitalUsd": 48,
+    "operatorInventoryMinUsd": 150,
+    "operatorInventoryTargetUsd": 178,
+    "cashFloorBp": 2000,
+    "keeperDailySpendCapUsdc": 48,
+    "marginDailyRepayCapUsdc": 100,
+    "marginMaxRepayPerCallUsdc": 60
+  },
+  "vaults": {
+    "usdc_deposit_cap_units": 200000000,
+    "wavax_deposit_cap_units": "25040864280322299010",
+    "usdc_team_seed_units": 10000000,
+    "wavax_team_seed_units": "1252043214016114950"
+  },
+  "process_gas_floor_wei": "40000000000000000"
+}

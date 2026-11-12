@@ -149,4 +149,16 @@ contract IsolatedMarginAccount {
         underlyingReceived = IERC20(underlying).balanceOf(address(this)) - beforeBalance;
         IERC20(underlying).safeTransfer(recipient, underlyingReceived);
     }
+
+    /**
+     * @notice Moves isolated collateral pTokens IN KIND (no redemption, no market cash needed) to `recipient`.
+     * @dev Used only by the funded in-kind liquidation fallback and its borrower-surplus return. Same trust model
+     *      as `liquidationRedeem`: only the configured liquidator may call it, and the controller independently
+     *      requires a same-block risk-engine movement authorization while the account still has debt.
+     */
+    function liquidationTransfer(address pToken, uint256 pTokenAmount, address recipient) external onlyLiquidator {
+        require(pToken == marginPToken || pToken == positionPToken, "IsolatedAccount: unsupported collateral");
+        require(recipient != address(0), "IsolatedAccount: zero recipient");
+        require(PErc20(pToken).transfer(recipient, pTokenAmount), "IsolatedAccount: transfer failed");
+    }
 }

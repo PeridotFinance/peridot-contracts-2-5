@@ -1,0 +1,109 @@
+{
+ "avax_usd_pin": 8.58216676,
+ "pairs": [
+  {
+   "token": "BLACK",
+   "pool": "blackhole-v2 BLACK/USDC",
+   "pair": "0x0d9fd6dd9b1ff55fb0a9bb0e5f1b6a2d65b741a3",
+   "stable": false,
+   "reserve_reward_token": 14843567.074367039,
+   "reserve_other": 35497.30032,
+   "other_side_usd": 35497.30032,
+   "mid_usd_per_token": 0.0023914265447218105,
+   "sales": [
+    {
+     "target_usd_at_mid": 500,
+     "tokens_sold": 209080.2249826845,
+     "usd_out": 489.651258,
+     "realised_vs_mid_pct": -2.0697484000000044,
+     "realised_usd_per_token": 0.0023419300320752555
+    },
+    {
+     "target_usd_at_mid": 2000,
+     "tokens_sold": 836320.899930738,
+     "usd_out": 1880.77458,
+     "realised_vs_mid_pct": -5.961271000000002,
+     "realised_usd_per_token": 0.0022488671276250072
+    }
+   ]
+  },
+  {
+   "token": "BLACK",
+   "pool": "blackhole-v2 BLACK/WAVAX",
+   "pair": "0x14e4a5bed2e5e688ee1a5ca3a4914250d1abd573",
+   "stable": false,
+   "reserve_reward_token": 11789015.657428542,
+   "reserve_other": 3298.120120864498,
+   "other_side_usd": 28305.016871770476,
+   "mid_usd_per_token": 0.002400965245468548,
+   "sales": [
+    {
+     "target_usd_at_mid": 500,
+     "tokens_sold": 208249.5783492381,
+     "usd_out": 488.42389919776423,
+     "realised_vs_mid_pct": -2.315220160447151,
+     "realised_usd_per_token": 0.0023453776140601305
+    },
+    {
+     "target_usd_at_mid": 2000,
+     "tokens_sold": 832998.3133969523,
+     "usd_out": 1857.5361370995395,
+     "realised_vs_mid_pct": -7.123193145023022,
+     "realised_usd_per_token": 0.002229939853688947
+    }
+   ]
+  },
+  {
+   "token": "PHAR",
+   "pool": "pharaoh-legacy PHAR/WAVAX",
+   "pair": "0x0afdee8162ccead9ac6a30c94f691e6e7d1af670",
+   "stable": false,
+   "reserve_reward_token": 4398314.366837728,
+   "reserve_other": 24262.51800405947,
+   "other_side_usd": 208224.97552834073,
+   "mid_usd_per_token": 0.047341994719228994,
+   "sales": [
+    {
+     "target_usd_at_mid": 500,
+     "tokens_sold": 10561.447673790433,
+     "usd_out": 493.8260586971623,
+     "realised_vs_mid_pct": -1.234788260567543,
+     "realised_usd_per_token": 0.046757421326117446
+    },
+    {
+     "target_usd_at_mid": 2000,
+     "tokens_sold": 42245.79069516173,
+     "usd_out": 1961.3496327089965,
+     "realised_vs_mid_pct": -1.9325183645501731,
+     "realised_usd_per_token": 0.04642710197713552
+    }
+   ]
+  },
+  {
+   "token": "PHAR",
+   "pool": "pharaoh-legacy PHAR/USDC",
+   "pair": "0x1b7bcd44e77adbb31bea105842139d78f352dc81",
+   "stable": false,
+   "reserve_reward_token": 547107.4720147931,
+   "reserve_other": 25512.995921,
+   "other_side_usd": 25512.995921,
+   "mid_usd_per_token": 0.04663251230520603,
+   "sales": [
+    {
+     "target_usd_at_mid": 500,
+     "tokens_sold": 10722.133020145695,
+     "usd_out": 485.578857,
+     "realised_vs_mid_pct": -2.884228599999994,
+     "realised_usd_per_token": 0.04528752404840076
+    },
+    {
+     "target_usd_at_mid": 2000,
+     "tokens_sold": 42888.53208058278,
+     "usd_out": 1837.40368,
+     "realised_vs_mid_pct": -8.129816000000002,
+     "realised_usd_per_token": 0.042841374858615416
+    }
+   ]
+  }
+ ]
+}

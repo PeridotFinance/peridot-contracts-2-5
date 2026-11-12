@@ -1,0 +1,412 @@
+{
+  "chainId": 43114,
+  "network": "avalanche-c-chain-mainnet",
+  "status": "enabled",
+  "statusNote": "Lending enabled and read back on chain at block 99,848,206 (9 Nov 2026): pWAVAX collateral factor 0.3, pUSDC collateral factor 0, USDC borrowing enabled, WAVAX borrowing paused, USDC supplied 250 + seed 10 = 260 USDC cash, borrow cap 200 USDC, cash floor 50 USDC. Margin 2x was enabled on chain at block 100,015,218 (11 Nov 2026, 10:32:05 UTC): see margin.status. The Pharaoh vaults are described under vault.",
+  "commit": "4bfb1549",
+  "deployBlock": 99846691,
+  "lastDeployBlock": 99846919,
+  "deployTimestampMs": 1794224707511,
+  "broadcastRecord": "contracts/broadcast/DeployAvalancheCashOnlyLending.s.sol/43114/run-latest.json",
+  "deployer": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "admin": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "pauseGuardian": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "capUsd": 200,
+  "lending": {
+    "controller": "0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A",
+    "controllerNote": "Unitroller proxy; call the controller ABI (PeridottrollerAvalanche) on this address",
+    "controllerImplementation": "0x4419aD340b3a4cf71303C7247dDA3AfF9BF41Ad6",
+    "oracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+    "oracleNote": "GuardedAvalanchePriceOracle; the controller's oracle",
+    "sourceOracle": "0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f",
+    "sourceOracleNote": "AvalanchePriceOracle (Chainlink feeds), owner = admin",
+    "interestRateModel": "0xe5a82bF40b493cf37C06851A934370F3f0896263",
+    "pTokenDelegate": "0xAB5a72E10eE33e19b7fE119C6771886141624f11",
+    "bootstrapper": "0xf8541dfef0E5A5aA4C158196EB8Db318ef77DD4C",
+    "markets": {
+      "pWAVAX": {
+        "address": "0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1",
+        "underlying": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+        "underlyingSymbol": "WAVAX",
+        "underlyingDecimals": 18
+      },
+      "pUSDC": {
+        "address": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+        "underlying": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+        "underlyingSymbol": "USDC",
+        "underlyingDecimals": 6
+      }
+    },
+    "chainlinkFeeds": {
+      "AVAX_USD": "0x0A77230d17318075983913bC2145DB16C7366156",
+      "USDC_USD": "0xF096872672F44d6EBA71458D74fe67F9a77a23B9"
+    }
+  },
+  "margin": {
+    "config": "0x5d59C647CC4bD6C05b4E9205c23062d490699631",
+    "riskEngine": "0xE022c90DB98ea8B1615c5B422Cbf46878B76a470",
+    "vault": "0x64DD15BD97aA41AAb46B963AFcBd2120f54fe0Ce",
+    "executor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+    "liquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+    "quoter": "0x066328FDCB526F57E69b2Ee2C196dE7a8465023E",
+    "orderRegistry": "0x4676C8Cf50CEd18683d255faEC4DaA882cbef440",
+    "closeAdapter": "0x669715b4fcb5731554fF79C67931DC4f821A9de8",
+    "flashLoanVault": "0x73B06542582e650925461194183C4882f6C0475b",
+    "oracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+    "insuranceFund": "0x8CbFF3c556B182bCaf4ba02257D5f9B8f994794E",
+    "feeDistributor": "0xdEF32Cd4095907146cA977FD18C07f44cb9a8eEE",
+    "swapModule": "0x07206bC8700Ea518c57C11AAa691Af27c060ed98",
+    "accountFactory": "0xa52982C91D4dAA063820E11f9a5Dac19C53f33d2",
+    "executorImplementation": "0xc62dF326F43AAc75fDc2Bb5FC9658C8da17736f0",
+    "routerAdapter": "0x727b6F8FAc93b200CD9e04684D72193E546A04Be",
+    "orderRegistryImplementation": "0xA744A226C9C29586Dd949BE5d53f0D0dD503a7D3",
+    "status": "enabled",
+    "statusNote": "Margin 2x (long WAVAX against USDC, up to 2x, isolated account per position) is live and open. Opens unpaused by the stage 4 transaction at block 100,015,218 (11 Nov 2026, 10:32:05 UTC). Pair risk read back from chain equals the deployment script's constants. Pilot size: position cap USD 200, debt cap USD 100. No position had been opened when this was written (nextPositionId 1). Take-profit / stop-loss orders can be stored on chain; their keeper is built but not deployed (see avalanche-order-keeper.md), so orders do not execute until a keeper runs.",
+    "addressesSource": "contracts/ceremony/margin-addresses.env (the live set; the PW30 oracle is reused). The ceremony's first stage-1 run on 10 Nov 2026 stopped after 8 of 22 transactions: those 8 contracts exist on chain, are unused and are not listed here.",
+    "frontendHandoff": "docs/deployment-handoffs/avalanche-margin-frontend-handoff.md",
+    "labels": {
+      "oracle": {
+        "contract": "GuardedAvalanchePriceOracle",
+        "kind": "shared",
+        "purpose": "The PW30 guarded price oracle, reused (the controller, risk engine, quoter and close adapter read the same prices). Not deployed by the margin ceremony."
+      },
+      "insuranceFund": {
+        "contract": "MarginInsuranceFundUpgradeable",
+        "kind": "proxy",
+        "purpose": "Insurance fund (seed 10 USDC as pUSDC). Used by the flash liquidation route only; the funded route does not draw on it."
+      },
+      "config": {
+        "contract": "IsolatedMarginConfigUpgradeable",
+        "kind": "proxy",
+        "purpose": "Margin configuration: pair risk limits, fees, opensPaused, funded-liquidator allowlist, 24 h action delay."
+      },
+      "feeDistributor": {
+        "contract": "MarginFeeDistributorUpgradeable",
+        "kind": "proxy",
+        "purpose": "Splits margin fees (open and close fees are 0 in the pilot)."
+      },
+      "vault": {
+        "contract": "IsolatedMarginVaultUpgradeable",
+        "kind": "proxy",
+        "purpose": "Margin vault: users deposit pUSDC here (free balance) and the executor locks it into a position. Close proceeds return here."
+      },
+      "riskEngine": {
+        "contract": "IsolatedMarginRiskEngineUpgradeable",
+        "kind": "proxy",
+        "purpose": "Risk engine and the controller's isolated-margin risk hook: metrics (equity, health factor), caps, liquidation sizing."
+      },
+      "quoter": {
+        "contract": "IsolatedMarginQuoter",
+        "kind": "contract",
+        "purpose": "Quotes the opening flash amount and the minimum position output (quoteOpen); price and fee helpers."
+      },
+      "swapModule": {
+        "contract": "IsolatedMarginSwapModule",
+        "kind": "contract",
+        "purpose": "Executes every swap with the slippage and oracle-deviation bounds (SwapError codes)."
+      },
+      "accountFactory": {
+        "contract": "IsolatedMarginAccountFactory",
+        "kind": "contract",
+        "purpose": "Deploys one isolated custody account (minimal clone) per position."
+      },
+      "executorImplementation": {
+        "contract": "IsolatedMarginExecutorUpgradeable",
+        "kind": "implementation",
+        "purpose": "Implementation behind the executor proxy (do not call; call the executor proxy)."
+      },
+      "executor": {
+        "contract": "IsolatedMarginExecutorUpgradeable",
+        "kind": "proxy",
+        "purpose": "Entry point for users: openPosition, addCollateral, repay, closePosition, exitDebtFreeToPTokens; positions(id)."
+      },
+      "liquidator": {
+        "contract": "IsolatedMarginLiquidatorUpgradeable",
+        "kind": "proxy",
+        "purpose": "Liquidations: liquidateFunded (the two funded operators) and the flash route liquidate."
+      },
+      "flashLoanVault": {
+        "contract": "SimpleFlashLoanVault",
+        "kind": "contract",
+        "purpose": "ERC-3156 flash lender the executor borrows the opening/closing USDC from (USDC only, fee 0, 100 USDC)."
+      },
+      "routerAdapter": {
+        "contract": "PharaohCLRouterAdapter",
+        "kind": "contract",
+        "purpose": "The one swap route: the Pharaoh CL WAVAX/USDC pool (tick spacing 10). No arbitrary paths."
+      },
+      "orderRegistryImplementation": {
+        "contract": "MarginOrderRegistry",
+        "kind": "implementation",
+        "purpose": "Implementation behind the order registry proxy (do not call)."
+      },
+      "orderRegistry": {
+        "contract": "MarginOrderRegistry",
+        "kind": "proxy",
+        "purpose": "Take-profit / stop-loss order registry: createOrder, modifyOrder, cancelOrder, executeOrder, canExecute."
+      },
+      "closeAdapter": {
+        "contract": "AvalancheMarginCloseAdapter",
+        "kind": "contract",
+        "purpose": "Bridge from the registry to executor.closePositionFor (long WAVAX/USDC only); set as the executor's orderExecutor."
+      }
+    },
+    "accountImplementation": "0x46Fdf5F52FF596898c9c9d1566aC338aDDddFBDC",
+    "accountImplementationNote": "IsolatedMarginAccount implementation cloned by the account factory (one clone per position; the position's account address is positions(id).account)",
+    "proxies": {
+      "insuranceFund": {
+        "implementation": "0xe6b6A5AE4014EDe51e75aAfbeA9F7d9B00FDF9de",
+        "proxyAdmin": "0x52d97630dd4a068dCba7F682104303936A4e35Ad",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "config": {
+        "implementation": "0x42F851C85F8F22d09c8f961dFe2c87089a56DD12",
+        "proxyAdmin": "0x8181e2B29650Ae720e04921595b652270815f77D",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "feeDistributor": {
+        "implementation": "0xD04446addc59Ca898b86044052176f19331E15D6",
+        "proxyAdmin": "0xd6B94eB6FFD84EDE12e1e24996Ac6b3b8a58cbDA",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "vault": {
+        "implementation": "0x14cA44ad40276078E10cA654Ec5AF5083484Bc62",
+        "proxyAdmin": "0x4E8bE4DBf8cB52f177985c68Ded3bf7D35d2dA80",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "riskEngine": {
+        "implementation": "0x98B5d2b3cFC88C2a9228d4036E7938F843F714E2",
+        "proxyAdmin": "0x632eFea26E42ae95f3a6b71E622cE3AbCb6a1E2e",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "executor": {
+        "implementation": "0xc62dF326F43AAc75fDc2Bb5FC9658C8da17736f0",
+        "proxyAdmin": "0x5c82dDF8DbB64Fbd9b4D8f81848e34A829aeD514",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "liquidator": {
+        "implementation": "0xb819F206607D448b0768081Af60bF11F0cE61B37",
+        "proxyAdmin": "0x95B32444D03262F0AEc106f3B74101Fe5Ac3Ff39",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "orderRegistry": {
+        "implementation": "0xA744A226C9C29586Dd949BE5d53f0D0dD503a7D3",
+        "proxyAdmin": "0xCd313165f45E47ef4124ab86A314DE9B78c5A068",
+        "proxyAdminOwner": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      }
+    },
+    "enable": {
+      "tx": "0x38ac3402768a37e95916e13dfd20d0232bc11b9512e0645db00748140826c6f2",
+      "block": 100015218,
+      "timestamp": 1794393125,
+      "timestampUtc": "2026-11-11T10:32:05Z",
+      "from": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "to": "0x5d59C647CC4bD6C05b4E9205c23062d490699631",
+      "note": "config.unpauseOpens(), the queued action executed 24 h after the wire stage"
+    },
+    "wire": {
+      "firstTx": "0x2acc99a05f2b24faa5cbf69b683e5fb626b1ad71efcb3fefa5ae4667223fb5b6",
+      "firstBlock": 99920695,
+      "firstTimestampUtc": "2026-11-10T08:10:50Z",
+      "lastTx": "0x82e126021fdc6e7c62810abd1ad3cf24f8aa87d8b61008040d0df17178a24601",
+      "lastBlock": 99920854,
+      "lastTimestampUtc": "2026-11-10T08:13:45Z",
+      "note": "First and last Ledger transactions of stage 2 (wire) on the live set, read from chain; the 24 h action delay started here. Stage 3 (execute: pair risk and funded liquidators) block is not recorded here."
+    },
+    "owner": {
+      "address": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "type": "EOA (the Ledger; no contract code at this address)",
+      "note": "Owner of the config, risk engine, vault, fee distributor, insurance fund and flash vault, configurator of the account factory, admin of the order registry, owner of every proxy admin, admin of the controller. NOT the Safe: the Safe 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12 (1 of 1 = the Ledger) owns the Pharaoh vaults only. Risk-increasing config changes (pair risk, funded liquidators, fees, endpoints, unpause) are queued and executable after actionDelay seconds; brakes (pauseOpens, disablePair, removeFundedLiquidator, registry.setPaused) are immediate.",
+      "checkedOwners": {
+        "config": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "riskEngine": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "vault": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "feeDistributor": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "insuranceFund": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "flashLoanVault": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "accountFactoryConfigurator": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "orderRegistryAdmin": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+        "controllerAdmin": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+      },
+      "actionDelaySeconds": 86400
+    },
+    "deployer": {
+      "address": "0x7413c1C72BAAfFc640C00Ba759BF14826b12C8C7",
+      "note": "Throwaway stage-1 deployer; holds no role at any time. Its keystore is to be deleted after the ceremony."
+    },
+    "fundedLiquidators": {
+      "liquidateFunded": [
+        "0xA7640fc537E2172eD6c4b4A809C9456AbD60fbF4",
+        "0xfbb137eBcBb0F7eb2Ba70F59ff0be9B0A0c5125d"
+      ],
+      "note": "pilot-op1 and pilot-op2 (the two operator wallets); both read back true on config.fundedLiquidators; the Ledger is not a funded liquidator"
+    },
+    "pair": {
+      "marginPToken": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+      "positionPToken": "0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1",
+      "debtPToken": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+      "marginUnderlying": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+      "positionUnderlying": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+      "side": "LONG",
+      "note": "The only enabled pair: margin = debt = USDC (as pUSDC shares), position = WAVAX (pWAVAX). WAVAX borrowing is paused on the controller, so no short can exist."
+    },
+    "pairRisk": {
+      "source": "config.getPairRisk(pUSDC, pWAVAX, pUSDC), read from chain; equal to pairRisk() in contracts/script/DeployAvalancheMarginMainnet.s.sol at CAP 200",
+      "readAtBlock": 100016420,
+      "enabled": true,
+      "maxLeverageX100": 200,
+      "initialMarginBps": 5000,
+      "maintenanceMarginBps": 2500,
+      "liquidationTargetBps": 12500,
+      "fullLiquidationHealthBps": 5000,
+      "maxLiquidationBps": 5000,
+      "liquidationBonusBps": 500,
+      "maxSlippageBps": 100,
+      "oracleDeviationBps": 100,
+      "maxPositionValueUsd": 200,
+      "maxDebtValueUsd": 100,
+      "usdScale": "maxPositionValueUsd and maxDebtValueUsd are whole USD here; on chain they are 1e18-scaled (200e18 and 100e18)"
+    },
+    "fees": {
+      "openFeeBps": 0,
+      "closeFeeBps": 0,
+      "depositorShareBps": 5000,
+      "insuranceShareBps": 5000,
+      "treasuryShareBps": 0,
+      "treasury": "0x94696d767e65a75581145646960FA0eC886cE5d2",
+      "treasuryNote": "config.treasury(); an EOA (no code), not the Ledger. The treasury share is 0 bps, so it receives nothing."
+    },
+    "flashVault": {
+      "address": "0x73B06542582e650925461194183C4882f6C0475b",
+      "tokens": {
+        "USDC": true,
+        "WAVAX": false
+      },
+      "feeBps": 0,
+      "paused": false,
+      "usdcBalanceRaw": "100000000",
+      "maxFlashLoanUsdcRaw": "100000000",
+      "note": "ERC-3156; USDC allowed, WAVAX not, fee 0, funded with 100 USDC; a position opening or closing borrows its USDC here, so the lender's balance bounds one position's debt"
+    },
+    "insuranceFundState": {
+      "pUsdcBalanceRaw": "50000000000",
+      "usdcValueRaw": "10000000",
+      "seedUsdc": 10,
+      "liquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+      "note": "10 USDC seed held as pUSDC; the funded liquidation route never draws on it"
+    },
+    "swapVenue": {
+      "router": "0xc8B8fCbDb5C019D7802fFb0b39603395D7d3915c",
+      "factory": "0xAE6E5c62328ade73ceefD42228528b70c8157D0d",
+      "pool": "0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534",
+      "tickSpacing": 10,
+      "note": "Pharaoh CL WAVAX/USDC pool, tick spacing 10; the only route; adapterData / swap data must be empty bytes"
+    },
+    "orders": {
+      "registry": "0x4676C8Cf50CEd18683d255faEC4DaA882cbef440",
+      "closeAdapter": "0x669715b4fcb5731554fF79C67931DC4f821A9de8",
+      "paused": false,
+      "nextOrderId": 1,
+      "maxOrdersPerPosition": 4,
+      "maxOrderLifetimeDays": 30,
+      "maxOrderSlippageBps": 300,
+      "note": "paused false and nextOrderId 1 (no order yet) when read; execution needs a keeper (not deployed)"
+    },
+    "lendingMarketLimits": {
+      "borrowCapRaw": "200000000",
+      "borrowCashFloorRaw": "50000000",
+      "note": "pUSDC borrow cap and cash floor are SHARED with lending: margin debt counts against them"
+    },
+    "nextPositionIdWhenRead": 1,
+    "verification": {
+      "readAtBlock": 100016420,
+      "readAtTimestampUtc": "2026-11-11T10:50:44Z",
+      "contractsWithCode": "17 of 17",
+      "allAddressesEip55": true,
+      "opensPaused": false,
+      "controllerRiskHookEqualsRiskEngine": true,
+      "executorOrderExecutorEqualsCloseAdapter": true,
+      "proxyAdminOwnersAreTheLedger": true,
+      "pairRiskEqualsScriptConstants": true,
+      "wavaxBorrowingPaused": true,
+      "wiring": {
+        "controllerRiskHook": "0xE022c90DB98ea8B1615c5B422Cbf46878B76a470",
+        "controllerRegistrar": "0xE022c90DB98ea8B1615c5B422Cbf46878B76a470",
+        "controllerOracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+        "executorOrderExecutor": "0x669715b4fcb5731554fF79C67931DC4f821A9de8",
+        "registryAdapter": "0x669715b4fcb5731554fF79C67931DC4f821A9de8",
+        "closeAdapterRegistry": "0x4676C8Cf50CEd18683d255faEC4DaA882cbef440",
+        "configRouterAdapter": "0x727b6F8FAc93b200CD9e04684D72193E546A04Be",
+        "configFlashLoanProvider": "0x73B06542582e650925461194183C4882f6C0475b",
+        "configInsuranceFund": "0x8CbFF3c556B182bCaf4ba02257D5f9B8f994794E",
+        "vaultExecutor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+        "vaultLiquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+        "riskEngineExecutor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af",
+        "riskEngineLiquidator": "0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578",
+        "accountFactoryExecutor": "0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af"
+      }
+    },
+    "abis": {
+      "dir": "docs/deployment-handoffs/avalanche-pilot-abis/",
+      "note": "Full ABIs from the Foundry build (profile debt_accounting, contracts/out_margin/); the runtime bytecode of the config, risk engine, vault, liquidator, executor and registry implementations, the flash vault, the quoter, the swap module, the close adapter and the account factory was compared with the deployed code (byte for byte; for the last four with the constructor-set immutable slots masked). Call the proxy addresses above with these ABIs. Pool-token calls (approve, mint, redeem, balances, exchange rates, borrow balances) use PErc20Delegator.json on the pToken addresses under lending.markets; its custom errors are decoded with PErc20Delegate.json. The controller flags are in PeridottrollerAvalanche.json.",
+      "files": {
+        "executor": "IsolatedMarginExecutorUpgradeable.json",
+        "vault": "IsolatedMarginVaultUpgradeable.json",
+        "riskEngine": "IsolatedMarginRiskEngineUpgradeable.json",
+        "config": "IsolatedMarginConfigUpgradeable.json",
+        "quoter": "IsolatedMarginQuoter.json",
+        "liquidator": "IsolatedMarginLiquidatorUpgradeable.json",
+        "swapModule": "IsolatedMarginSwapModule.json",
+        "orderRegistry": "MarginOrderRegistry.json",
+        "closeAdapter": "AvalancheMarginCloseAdapter.json",
+        "flashLoanVault": "SimpleFlashLoanVault.json"
+      }
+    }
+  },
+  "vault": {
+    "status": "open at CAP 200, R3 live (9 Nov 2026, blocks 99,856,007 and 99,856,067); rebalancer role still the Ledger until the rebalancer process runs",
+    "safe": "0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12",
+    "usdcVault": {
+      "proxy": "0x855bF832f26a294d28500db59eE941dE3d654129",
+      "proxyAdmin": "0x2DD4191B2944396B5853f4219E829f01636F65cf",
+      "depositCapUnits": "200000000",
+      "positionTokenId": "485334"
+    },
+    "wavaxVault": {
+      "proxy": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+      "proxyAdmin": "0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC",
+      "depositCapUnits": "25040864280322299010",
+      "positionTokenId": "485416"
+    },
+    "r3Base": "0x8f6632E2Db9f333466E83d5fEBDE54EBff81D60a",
+    "r3Extension": "0x92bBeec3e2F95A64494e92638420654400467F4a",
+    "previousExtension": "0x165E1f072e7bEeDf94f14F732838354cA20bA45d",
+    "rebalancerWalletPlanned": "0x70f341B85222cF2E590E40d596DdBD7bF0a3ddB9"
+  },
+  "pilotParameters": {
+    "source": "contracts/ceremony/pilot-pw30.env (public values only; amounts are raw units: WAVAX 18 decimals, USDC 6 decimals, mantissas 1e18)",
+    "values": {
+      "DEPLOYER": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "PERIDOT_TOKEN": "0x0000000000000000000000000000000000000000",
+      "LENDING_ALLOW_NO_REWARD_TOKEN": "true",
+      "PAUSE_GUARDIAN": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "LENDING_WAVAX_SEED_AMOUNT": "1252043214016114950",
+      "LENDING_USDC_SEED_AMOUNT": "10000000",
+      "LENDING_WAVAX_BORROW_CAP": "5008172856064459802",
+      "LENDING_USDC_BORROW_CAP": "200000000",
+      "LENDING_RESERVE_FACTOR": "100000000000000000",
+      "LENDING_CLOSE_FACTOR": "500000000000000000",
+      "LENDING_LIQUIDATION_INCENTIVE": "1080000000000000000",
+      "LENDING_BLOCKS_PER_YEAR": "33500000",
+      "LENDING_BASE_RATE_PER_YEAR": "20000000000000000",
+      "LENDING_MULTIPLIER_PER_YEAR": "100000000000000000",
+      "LENDING_JUMP_MULTIPLIER_PER_YEAR": "1000000000000000000",
+      "LENDING_KINK": "800000000000000000",
+      "AVAX_FEED_MAX_AGE": "1200",
+      "USDC_FEED_MAX_AGE": "90000",
+      "LENDING_WAVAX_BORROW_CASH_FLOOR": "0",
+      "LENDING_USDC_BORROW_CASH_FLOOR": "50000000"
+    }
+  },
+  "abis": "docs/deployment-handoffs/avalanche-pilot-abis/"
+}

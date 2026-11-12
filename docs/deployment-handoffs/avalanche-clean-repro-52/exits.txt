@@ -1,0 +1,2 @@
+usdc driver exit: 0
+wavax driver exit: 0

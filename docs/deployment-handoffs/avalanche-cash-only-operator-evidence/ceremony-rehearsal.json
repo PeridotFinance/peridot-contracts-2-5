@@ -1,0 +1,46 @@
+{
+  "startedAt": "2026-11-06T11:25:57.919Z",
+  "forkHead": 99580404,
+  "checkEnv": "all 20 inputs set; DEPLOYER is the Ledger",
+  "addresses": {
+    "controller": "0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2",
+    "implementation": "0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e",
+    "oracle": "0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02",
+    "pWavax": "0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f",
+    "pUsdc": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0"
+  },
+  "deployTransactions": 30,
+  "deployGasUsed": 19981702,
+  "deployGasCostAvaxAt3gwei": 0.059945106,
+  "verifyBeforeEnable": "ok",
+  "postState": {
+    "admin": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+    "pWavaxCollateralFactor": "300000000000000000",
+    "pUsdcCollateralFactor": "0",
+    "pUsdcBorrowPaused": false,
+    "pWavaxBorrowPaused": true,
+    "pUsdcBorrowCap": "5000000000",
+    "pUsdcCashFloor": "1250000000",
+    "pUsdcCash": "6350000000"
+  },
+  "smoke": {
+    "borrowed": "500000000",
+    "debtAfterAccrual": "500000000",
+    "overBorrowRefused": true,
+    "wavaxBorrowRefused": true,
+    "borrowCapRefused": true,
+    "debtAfterRepay": "0",
+    "rates": {
+      "utilisation": 0.7716535433070866,
+      "borrowRatePerBlock": "3476319190",
+      "supplyRatePerBlock": "2414262618"
+    }
+  },
+  "rateApr": {
+    "atUtilisation": 0.7716535433070866,
+    "borrowApr": 0.116456692865,
+    "supplyApr": 0.080877797703
+  },
+  "ok": true,
+  "finishedAt": "2026-11-06T11:26:02.888Z"
+}
