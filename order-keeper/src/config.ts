@@ -39,6 +39,10 @@ export interface KeeperConfig {
     unknownRevertCooldownSeconds: number;
     /** a due order that cannot be filled for this long raises a warning (a stop-loss that cannot fill: liquidation is the backstop) */
     unfilledAlertSeconds: number;
+    /** gas runway alert: warn when the keeper's AVAX covers fewer than this many executions at the CURRENT gas price (the fixed minGasWei floor stays as the hard stop) */
+    minExecutionsCovered: number;
+    /** gas of one execution used for that estimate (measured on mainnet 11 Nov 2026: 2,140,607 for a full close of a 1 USDC position) */
+    gasPerExecution: number;
   };
   /** the SEPARATE log endpoint: optional cross-check of OrderCreated against the id scan. Discovery never depends on it. */
   logs: { enabled: boolean; chunkBlocks: number; maxChunksPerCycle: number; minIntervalMs: number; reorgMarginBlocks: number; behindWarnBlocks: number };
@@ -92,6 +96,8 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
   if (typeof l.retryCooldownSeconds === "number" && typeof l.retryCooldownMaxSeconds === "number" && l.retryCooldownSeconds > l.retryCooldownMaxSeconds) problems.push({ path: "limits.retryCooldownMaxSeconds", problem: "must not be below retryCooldownSeconds" });
   int(problems, "limits.unknownRevertCooldownSeconds", l.unknownRevertCooldownSeconds, 1, 86_400);
   int(problems, "limits.unfilledAlertSeconds", l.unfilledAlertSeconds, 1, 86_400);
+  int(problems, "limits.minExecutionsCovered", l.minExecutionsCovered, 1, 1000);
+  int(problems, "limits.gasPerExecution", l.gasPerExecution, 100_000, 15_000_000);
   const g = c.logs ?? {};
   if (typeof g.enabled !== "boolean") problems.push({ path: "logs.enabled", problem: "must be a boolean" });
   int(problems, "logs.chunkBlocks", g.chunkBlocks, 1, 100); // free tier serves 10, the Avalanche public RPC 100 (measured 9 Nov 2026)

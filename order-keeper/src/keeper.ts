@@ -144,6 +144,21 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState): Promise<
   for (const [id, e] of Object.entries(st.cooldown)) {
     if (e.fails > 0 && nowS() - e.firstFailAt >= cfg.limits.unfilledAlertSeconds) await alerts.raise({ key: `order:${id}:unfilled`, severity: "warn", message: `order ${id} has been due for ${Math.round((nowS() - e.firstFailAt) / 60)} min but cannot be filled (${e.why}). It stays open; for a stop-loss the funded liquidation is the backstop`, audience: "keeper-operator" }, nowS());
   }
+  // ---- gas runway (every cycle, not only when something is due): how many executions the balance covers at the CURRENT gas price
+  try {
+    const [bal, fd] = await Promise.all([provider.getBalance(keeper), provider.getFeeData()]);
+    const price = fd.gasPrice ?? fd.maxFeePerGas;
+    if (price && price.gt(0)) {
+      const perExec = price.mul(cfg.limits.gasPerExecution);
+      const covered = bal.div(perExec).toNumber();
+      if (covered < cfg.limits.minExecutionsCovered) {
+        const need = perExec.mul(cfg.limits.minExecutionsCovered);
+        await alerts.raise({ key: "keeper:gas-runway", severity: "warn", message: `order keeper AVAX ${utils.formatEther(bal)} covers ${covered} execution(s) at ${utils.formatUnits(price, "gwei")} gwei (${utils.formatEther(perExec)} AVAX each, ${cfg.limits.gasPerExecution} gas), fewer than ${cfg.limits.minExecutionsCovered}; top up by about ${utils.formatEther(need.gt(bal) ? need.sub(bal) : 0)} AVAX`, audience: "keeper-operator" }, nowS());
+      } else await alerts.clear("keeper:gas-runway", nowS());
+    }
+  } catch (e) {
+    out.skipped.push(`gas runway not checked this cycle: ${safeError(e)}`);
+  }
   if (d.actions.length === 0) return out;
 
   // ---- gas and fees (only when something is due)

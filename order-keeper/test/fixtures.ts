@@ -22,7 +22,7 @@ export function decidedConfig(): KeeperConfig {
     marginExecutor: A.executor,
     marginVault: A.vault,
     keeper: { address: A.keeper, keystorePath: "/tmp/does-not-matter.json", passwordEnv: "ORDER_KEEPER_KEYSTORE_PASSWORD" },
-    limits: { maxFeeGwei: 100, minGasWei: "1000", maxGasLimit: 4_000_000, maxSendsPerCycle: 3, maxSendsPerDay: 60, maxMinedRevertsPerDay: 3, sweep: true, maxIdsPerCycle: 500, retryCooldownSeconds: 30, retryCooldownMaxSeconds: 300, unknownRevertCooldownSeconds: 900, unfilledAlertSeconds: 600 },
+    limits: { maxFeeGwei: 100, minGasWei: "1000", maxGasLimit: 4_000_000, maxSendsPerCycle: 3, maxSendsPerDay: 60, maxMinedRevertsPerDay: 3, sweep: true, maxIdsPerCycle: 500, retryCooldownSeconds: 30, retryCooldownMaxSeconds: 300, unknownRevertCooldownSeconds: 900, unfilledAlertSeconds: 600, minExecutionsCovered: 5, gasPerExecution: 2_200_000 },
     logs: { enabled: true, chunkBlocks: 10, maxChunksPerCycle: 5, minIntervalMs: 0, reorgMarginBlocks: 10, behindWarnBlocks: 600 },
     monitor: { pollSeconds: 15, maxBlockLagSeconds: 60, statePath: "/tmp/unused.json" },
     alerts: { channel: "log" },

@@ -118,7 +118,7 @@ describe("order keeper on a fork of the live head", { skip: !rpcAvailable() && "
     cfg = {
       schemaVersion: 1, chainId: 43114, label: "fork", registry: d.M_REGISTRY!, closeAdapter: d.M_CLOSE_ADAPTER!, marginExecutor: d.M_EXECUTOR!, marginVault: d.M_VAULT!,
       keeper: { address: keeperWallet.address, keystorePath: path.join(dir, "keeper.json"), passwordEnv: PW_ENV },
-      limits: { maxFeeGwei: 500, minGasWei: utils.parseEther("0.05").toString(), maxGasLimit: 6_000_000, maxSendsPerCycle: 3, maxSendsPerDay: 60, maxMinedRevertsPerDay: 3, sweep: true, maxIdsPerCycle: 500, retryCooldownSeconds: 30, retryCooldownMaxSeconds: 300, unknownRevertCooldownSeconds: 900, unfilledAlertSeconds: 600 },
+      limits: { maxFeeGwei: 500, minGasWei: utils.parseEther("0.05").toString(), maxGasLimit: 6_000_000, maxSendsPerCycle: 3, maxSendsPerDay: 60, maxMinedRevertsPerDay: 3, sweep: true, maxIdsPerCycle: 500, retryCooldownSeconds: 30, retryCooldownMaxSeconds: 300, unknownRevertCooldownSeconds: 900, unfilledAlertSeconds: 600, minExecutionsCovered: 5, gasPerExecution: 2_200_000 },
       logs: { enabled: false, chunkBlocks: 10, maxChunksPerCycle: 5, minIntervalMs: 0, reorgMarginBlocks: 10, behindWarnBlocks: 600 },
       monitor: { pollSeconds: 15, maxBlockLagSeconds: 3600, statePath: path.join(dir, "state.json") },
       alerts: { channel: "log" }, escalationSeconds: [3600, 14400, 86400],

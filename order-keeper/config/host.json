@@ -23,7 +23,9 @@
     "retryCooldownSeconds": 30,
     "retryCooldownMaxSeconds": 300,
     "unknownRevertCooldownSeconds": 900,
-    "unfilledAlertSeconds": 600
+    "unfilledAlertSeconds": 600,
+    "minExecutionsCovered": 5,
+    "gasPerExecution": 2200000
   },
   "logs": {
     "enabled": true,

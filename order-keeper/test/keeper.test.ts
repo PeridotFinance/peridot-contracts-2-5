@@ -365,6 +365,30 @@ test("limits: sends per cycle and per day; gas floor and fee cap stop sending", 
   assert.ok(of.skipped.some((s) => /above the cap/.test(s)));
 });
 
+test("gas runway: warns when the balance covers fewer than five executions at the current gas price, every cycle, even with nothing due; clears on refill; the fixed floor still stops sends", async () => {
+  // the fake reports a gas price of 25 gwei; 2.2M gas per execution = 0.055 AVAX each, so five need 0.275 AVAX
+  const r = rig();
+  r.w.keeperAvax = 3n * 55n * 10n ** 15n; // 0.165 AVAX = 3 executions, nothing due, nothing open
+  await r.step();
+  assert.ok(keys(r).includes("new:keeper:gas-runway"), "runway alert with no order due");
+  const msg = r.sink.messages.find((m) => m.key === "keeper:gas-runway")!.text;
+  assert.ok(/covers 3 execution/.test(msg) && /25(\.0)? gwei/.test(msg), msg);
+  const n = r.sink.messages.length;
+  await r.step();
+  assert.equal(r.sink.messages.length, n, "no repeat message while it persists");
+  r.w.keeperAvax = 5n * 55n * 10n ** 15n; // exactly five
+  await r.step();
+  assert.ok(keys(r).includes("resolved:keeper:gas-runway"), "resolved at five");
+  // above the fixed floor but below five: orders are still executed (the runway is a warning, not a stop)
+  const g = rig();
+  addPosition(g.w, 1);
+  addOrder(g.w, 1);
+  g.w.keeperAvax = 2n * 55n * 10n ** 15n;
+  await g.step();
+  assert.equal(g.w.sent.length, 1);
+  assert.ok(keys(g).includes("new:keeper:gas-runway"));
+});
+
 test("discovery by id: new ids only once, terminal orders dropped, open ids re-read, nothing beyond nextOrderId", async () => {
   const r = rig();
   addPosition(r.w, 1);
