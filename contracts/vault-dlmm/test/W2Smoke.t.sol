@@ -325,4 +325,51 @@ contract W2SmokeTest is Test {
         pair.setBurnReverts(true);
         vm.prank(user); vm.expectRevert(); v.redeemInKind(1e6, user, user);
     }
+
+    function test_openBandCapBlockedByFavourableSwap() public {
+        vm.prank(owner); v.unpause();
+        vm.prank(user); v.deposit(200e6, user); // NAV exactly at the cap
+        fp.set(1.001e8); // USDt valued 10 bp above USDC; the mock swap is 1:1 less 1 bp -> NAV rises above the cap
+        vm.prank(keeper); vm.expectRevert(); v.openBand(8388608, 0, 0, 0, 0, block.timestamp + 100);
+    }
+
+    function test_rebalanceWithSwapBothDirections() public {
+        _open();
+        // inventory after the burn is about 25 USDt + 75 USDC (mock band holds what it was given): swap USDC -> USDt (Y -> X) = swapXForY false
+        pair.setActive(8388620);
+        vm.prank(keeper); v.rebalance(8388620, 0, false, 10e6, 0, 0, 0, block.timestamp + 100);
+        (uint24 lo,,,,) = v.bandState(); assertEq(lo, 8388619);
+        vm.warp(vm.getBlockTimestamp() + 121);
+        pair.setActive(8388630);
+        uint256 dl = vm.getBlockTimestamp() + 100;
+        vm.prank(keeper); v.rebalance(8388630, 0, true, 5e6, 0, 0, 0, dl); // USDt -> USDC
+        // too large: > 60 % of NAV
+        vm.warp(vm.getBlockTimestamp() + 121);
+        pair.setActive(8388640);
+        dl = vm.getBlockTimestamp() + 100;
+        vm.prank(keeper); vm.expectRevert(); v.rebalance(8388640, 0, false, 70e6, 0, 0, 0, dl);
+        assertApproxEqAbs(v.totalAssets(), 100e6, 100_000);
+    }
+
+    function test_withdrawAndMint() public {
+        _open();
+        vm.prank(user); uint256 minted = v.mint(10e6, user); // assets ~ 10e6 (ceil)
+        assertApproxEqAbs(minted, 10e6, 2_000); // NAV is a few bp below supply after the 1 bp mock swap fee
+        uint256 before = usdc.balanceOf(user);
+        vm.prank(user); uint256 burned = v.withdraw(20e6, user, user);
+        uint256 got = usdc.balanceOf(user) - before;
+        assertApproxEqAbs(burned, 20e6, 20_000);
+        assertApproxEqAbs(got, 20e6, 20_000); // slightly below: the redeemer bears the swap fee
+    }
+
+    function test_depositWhileBandThenRebalanceFoldsIdle() public {
+        _open();
+        vm.prank(user); v.deposit(50e6, user);
+        assertEq(usdc.balanceOf(address(v)), 50e6 + usdc.balanceOf(address(v)) - 50e6); // idle USDC present
+        assertGe(usdc.balanceOf(address(v)), 50e6);
+        pair.setActive(8388620);
+        vm.prank(keeper); v.rebalance(8388620, 0, false, 40e6, 0, 0, 0, block.timestamp + 100);
+        assertLt(usdc.balanceOf(address(v)), 1e6, "idle folded into the new band");
+        assertApproxEqAbs(v.totalAssets(), 150e6, 200_000);
+    }
 }
