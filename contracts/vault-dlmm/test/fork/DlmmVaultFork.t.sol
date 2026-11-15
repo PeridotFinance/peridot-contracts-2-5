@@ -323,3 +323,301 @@ contract DlmmForkDepeg is DlmmForkBase {
         assertFalse(latched);
     }
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (6) EXITS under each condition
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract DlmmForkExit is DlmmForkBase {
+    uint256 internal aliceSh;
+    uint256 internal bobSh;
+    uint256 internal nav0;
+
+    function _state() internal {
+        _unpause();
+        aliceSh = _deposit(ALICE, 100e6);
+        bobSh = _deposit(BOB, 50e6);
+        _openBand();
+        nav0 = v.totalAssets();
+    }
+
+    function _inKind(address who, uint256 shares) internal returns (uint256 x, uint256 y) {
+        vm.prank(who);
+        (x, y) = v.redeemInKind(shares, who, who);
+    }
+
+    // ---------------------------------------------------------------- latched guard under each depeg
+    function _latchedExit(address feed, int256 ans, bool expectRedeemOk) internal {
+        _state();
+        _mockFeed(feed, ans, block.timestamp);
+        v.tripGuard();
+        (, bool latched, uint256 r) = v.guardState();
+        assertTrue(latched);
+        console2.log("latched, live reasons", r);
+        // the feed is STILL depegged: in-kind pays, no oracle read
+        uint256 sh = 10e6;
+        uint256 supply = v.totalSupply();
+        uint256 expect_ = nav0 * sh / supply;
+        (uint256 x, uint256 y) = _inKind(ALICE, sh);
+        console2.log("inKind USDt / USDC paid", x, y);
+        assertTrue(x > 0 && y > 0, "both legs paid (band in range)");
+        assertApproxEqRel(x + y, expect_, 3e15);
+        // redeem / withdraw (USDC out) while the feed is depegged: actual behaviour
+        (bool ok, bytes memory ret) = _try(BOB, address(v), abi.encodeCall(v.redeem, (10e6, BOB, BOB)));
+        console2.log("redeem under depeg, ok:", ok);
+        if (!ok) console2.logBytes4(_sel(ret));
+        assertEq(ok, expectRedeemOk, "redeem under the depeg: oracle minimum vs pool price");
+        (ok, ret) = _try(BOB, address(v), abi.encodeCall(v.withdraw, (5e6, BOB, BOB)));
+        console2.log("withdraw under depeg, ok:", ok);
+        assertEq(ok, expectRedeemOk);
+        // price recovers, latch stays: redeem and withdraw work (not gated by the latch), in-kind too
+        _freshFeeds();
+        (, latched,) = v.guardState();
+        assertTrue(latched);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        console2.log("redeem with the latch only, paid", got);
+        assertApproxEqRel(got, 10e6, 3e15);
+        vm.prank(BOB);
+        v.withdraw(5e6, BOB, BOB);
+        _inKind(ALICE, 10e6);
+    }
+
+    // oracle-implied value of USDt in USDC = pp/pa; redeem's swap min is that x (1 - 50 bp) while the pool pays ~par: it reverts when the oracle says USDt is worth > 1.005 USDC
+    function test_exit_latched_usdcLeg_098() public { _latchedExit(FEED_USDC, 98_000_000, false); }
+    function test_exit_latched_usdcLeg_102() public { _latchedExit(FEED_USDC, 102_000_000, true); }
+    function test_exit_latched_usdtLeg_098() public { _latchedExit(FEED_USDT, 98_000_000, true); }
+    function test_exit_latched_usdtLeg_102() public { _latchedExit(FEED_USDT, 102_000_000, false); }
+
+    // ---------------------------------------------------------------- pause
+    function test_exit_pausedVault() public {
+        _state();
+        vm.prank(SAFE);
+        v.pause();
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        vm.prank(BOB);
+        v.deposit(1e6, BOB);
+        uint256 expect_ = nav0 * 20e6 / v.totalSupply();
+        (uint256 x, uint256 y) = _inKind(ALICE, 20e6);
+        assertApproxEqRel(x + y, expect_, 3e15);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        assertApproxEqRel(got, 10e6, 3e15);
+        vm.prank(BOB);
+        v.withdraw(5e6, BOB, BOB);
+    }
+
+    // ---------------------------------------------------------------- reverting / stale feed: in-kind pays, USDC-out exits revert FeedInvalid (documented)
+    function _feedDown(address feed, uint8 which, uint256 mode) internal {
+        _state();
+        if (mode == 0) _mockFeedReverts(feed);
+        else if (mode == 1) _mockFeed(feed, 1e8, block.timestamp - 93_601);
+        else _mockFeed(feed, 0, block.timestamp);
+        uint256 supply = v.totalSupply();
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        assertTrue(x > 0 && y > 0);
+        assertApproxEqRel(x + y, nav0 * 10e6 / supply, 3e15);
+        bytes memory fi = abi.encodeWithSelector(PharaohDlmmVault.FeedInvalid.selector, which);
+        vm.expectRevert(fi);
+        vm.prank(BOB);
+        v.redeem(10e6, BOB, BOB);
+        vm.expectRevert(fi);
+        vm.prank(BOB);
+        v.withdraw(5e6, BOB, BOB);
+        vm.expectRevert(fi);
+        v.previewRedeem(1e6);
+        vm.expectRevert(fi);
+        v.maxWithdraw(BOB);
+        // with the guard tripped AND paused on top: still pays in kind
+        v.tripGuard();
+        vm.prank(SAFE);
+        v.pause();
+        (x, y) = _inKind(ALICE, 10e6);
+        assertTrue(x > 0 && y > 0);
+        // feed recovers: redeem works again
+        _freshFeeds();
+        vm.prank(BOB);
+        v.redeem(10e6, BOB, BOB);
+    }
+
+    function test_exit_feedReverts_usdc() public { _feedDown(FEED_USDC, 1, 0); }
+    function test_exit_feedReverts_usdt() public { _feedDown(FEED_USDT, 2, 0); }
+    function test_exit_feedStale_usdc() public { _feedDown(FEED_USDC, 1, 1); }
+    function test_exit_feedStale_usdt() public { _feedDown(FEED_USDT, 2, 1); }
+    function test_exit_feedZero_usdt() public { _feedDown(FEED_USDT, 2, 2); }
+
+    /// the LAST holders leave completely in kind with everything against them (latched, paused, both feeds reverting)
+    function test_exit_everyoneLeavesInKind_allGatesClosed() public {
+        _state();
+        _mockFeedReverts(FEED_USDC);
+        _mockFeedReverts(FEED_USDT);
+        v.tripGuard();
+        vm.prank(SAFE);
+        v.pause();
+        (uint256 ax, uint256 ay) = _inKind(ALICE, aliceSh);
+        (uint256 bx, uint256 by) = _inKind(BOB, bobSh);
+        console2.log("ALICE USDt / USDC", ax, ay);
+        console2.log("BOB   USDt / USDC", bx, by);
+        assertEq(v.totalSupply(), 0, "supply 0");
+        assertApproxEqAbs(ax + ay + bx + by, nav0, 3e6, "everything came out (rounding + a little fee income only)");
+        console2.log("vault USDC left", _bal(USDC, address(v)));
+        console2.log("vault USDt left", _bal(USDT, address(v)));
+        for (uint24 id = pinActiveId - 2; id <= pinActiveId + 2; ++id) assertEq(pair.balanceOf(address(v), id), 0, "no LB shares left");
+        (,,, bool hasBand,) = v.bandState();
+        assertFalse(hasBand, "band cleared on a full exit");
+    }
+
+    // ---------------------------------------------------------------- 100 % in one asset (natural: the active id leaves the band)
+    function test_exit_100pct_usdt_activeBelowBand() public {
+        _state();
+        (uint24 lo,,,,) = v.bandState();
+        _pushDown(lo - 1);
+        (,,,, bool oor) = v.bandState();
+        assertTrue(oor);
+        // oracle at its live values, guard calm (a 2-bin move does not trip anything)
+        uint256 supply = v.totalSupply();
+        uint256 navNow = v.totalAssets();
+        console2.log("NAV now / at open (vault holds only USDt)", navNow, nav0);
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        console2.log("in kind USDt / USDC", x, y);
+        assertEq(y, 0, "no USDC left");
+        assertTrue(x > 0);
+        assertApproxEqRel(x, navNow * 10e6 / supply, 3e15);
+        uint256 prev = v.previewRedeem(10e6);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        console2.log("redeem preview / paid (all USDt sold through the pool)", prev, got);
+        assertGt(got, 0);
+        // with the pool dumped by a depeg the oracle floor bites: latch + oracle 0.98 -> USDC-out reverts, in kind still pays
+        _mockFeed(FEED_USDT, 98_000_000, block.timestamp);
+        v.tripGuard();
+        (x, y) = _inKind(ALICE, 10e6);
+        assertTrue(x > 0 && y == 0);
+    }
+
+    function test_exit_100pct_usdc_activeAboveBand() public {
+        _state();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint256 supply = v.totalSupply();
+        uint256 navNow = v.totalAssets();
+        console2.log("NAV now / at open (vault holds only USDC)", navNow, nav0);
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        console2.log("in kind USDt / USDC", x, y);
+        assertEq(x, 0, "no USDt left");
+        assertApproxEqRel(y, navNow * 10e6 / supply, 3e15);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        assertApproxEqRel(got, navNow * 10e6 / supply, 3e15);
+        console2.log("redeem paid (no swap needed)", got);
+        _mockFeed(FEED_USDC, 98_000_000, block.timestamp);
+        v.tripGuard();
+        vm.prank(BOB);
+        got = v.redeem(10e6, BOB, BOB); // all USDC, no swap: nothing for the oracle to veto
+        console2.log("redeem with the USDC feed at 0.98, paid", got);
+        (x, y) = _inKind(ALICE, 10e6);
+        assertEq(x, 0);
+    }
+
+    // ---------------------------------------------------------------- 100 % in one asset, REAL deep depeg of the pool price (deal-funded LP adds depth, deal-funded trader dumps)
+    function _deepDown() internal returns (uint24 a0) {
+        _state();
+        a0 = pair.getActiveId();
+        _seedDepth(true, 21, 120, 4_000_000e6);
+        _pushDownBig(a0 - 100, 300_000e6);
+        console2.log("USDt dumped: active id moved down by", a0 - pair.getActiveId());
+    }
+
+    function test_exit_deepUsdtDepeg_oracleFollows() public {
+        _deepDown();
+        _mockFeed(FEED_USDT, 99_000_000, block.timestamp); // the feed follows the pool (~0.99)
+        v.tripGuard();
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        console2.log("in kind USDt / USDC (100 % in the depegged USDt)", x, y);
+        assertEq(y, 0);
+        assertTrue(x > 0);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        console2.log("redeem paid in USDC for", x, got);
+        assertApproxEqRel(got, x, 2e16);
+        vm.prank(BOB);
+        v.withdraw(5e6, BOB, BOB);
+    }
+
+    function test_exit_deepUsdtDepeg_oracleLags() public {
+        _deepDown(); // feed still reads ~1.00: the oracle minimum (-50 bp) is above what the dumped pool pays
+        uint256 r = _reasons();
+        console2.log("reasons (pool deviates from the lagging oracle)", r);
+        assertTrue(r & B_POOL != 0);
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        assertTrue(x > 0 && y == 0);
+        vm.prank(BOB);
+        (bool ok, bytes memory ret) = address(v).call(abi.encodeCall(v.redeem, (10e6, BOB, BOB)));
+        console2.log("redeem with the oracle lagging the pool, ok:", ok);
+        if (!ok) console2.logBytes4(_sel(ret));
+        assertFalse(ok, "USDC-out redeem is vetoed by the oracle minimum while the oracle lags");
+    }
+
+    function test_exit_deepUsdcDepeg_oracleFollows() public {
+        _state();
+        uint24 a0 = pair.getActiveId();
+        _seedDepth(false, 21, 120, 4_000_000e6);
+        _pushUpBig(a0 + 100, 300_000e6);
+        console2.log("USDC sold: active id moved up by", pair.getActiveId() - a0);
+        _mockFeed(FEED_USDC, 99_000_000, block.timestamp);
+        v.tripGuard();
+        (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
+        console2.log("in kind USDt / USDC (100 % in the depegged USDC)", x, y);
+        assertEq(x, 0);
+        assertTrue(y > 0);
+        vm.prank(BOB);
+        uint256 got = v.redeem(10e6, BOB, BOB);
+        console2.log("redeem paid", got);
+        assertApproxEqRel(got, y, 3e15);
+    }
+
+    // ---------------------------------------------------------------- dust: 1, 2, ... wei of shares
+    function test_dust_redeemInKind_and_redeem_thresholds() public {
+        _state();
+        uint256[20] memory ss = [uint256(1), 2, 3, 4, 5, 6, 8, 10, 16, 32, 64, 100, 128, 256, 512, 1000, 5000, 10_000, 100_000, 1e6];
+        uint256 firstKind;
+        uint256 firstRedeem;
+        for (uint256 i; i < ss.length; ++i) {
+            uint256 snap = vm.snapshotState();
+            (bool okK, bytes memory rK) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (ss[i], ALICE, ALICE)));
+            uint256 gotK = okK ? _bal(USDC, ALICE) + _bal(USDT, ALICE) : 0;
+            vm.revertToState(snap);
+            snap = vm.snapshotState();
+            (bool okR, bytes memory rR) = _try(ALICE, address(v), abi.encodeCall(v.redeem, (ss[i], ALICE, ALICE)));
+            uint256 gotR = okR ? _bal(USDC, ALICE) : 0;
+            vm.revertToState(snap);
+            console2.log("shares", ss[i]);
+            console2.log("  redeemInKind ok / raw paid", okK, gotK);
+            if (!okK) console2.logBytes4(_sel(rK));
+            console2.log("  redeem ok / USDC paid", okR, gotR);
+            if (!okR) console2.logBytes4(_sel(rR));
+            if (okK && firstKind == 0) firstKind = ss[i];
+            if (okR && firstRedeem == 0) firstRedeem = ss[i];
+        }
+        console2.log("smallest tried share count that pays: redeemInKind", firstKind);
+        console2.log("smallest tried share count that pays: redeem", firstRedeem);
+        // MEASURED at the pin (the share price is ~1.0 raw per share): 1-2 shares revert ExitFailed in BOTH exits; in kind pays from 3 shares; the USDC-out exit
+        // pays from 6 shares (3-5 shares: the pair's own LBPair__InsufficientAmountOut on the zero-output USDt swap). Reverts keep the shares (next test).
+        assertEq(firstKind, 3, "redeemInKind: smallest paying share count among those tried");
+        assertEq(firstRedeem, 6, "redeem: smallest paying share count among those tried");
+    }
+
+    /// shares are never lost on a failed exit: a revert leaves the balance untouched
+    function test_dust_failedExitKeepsShares() public {
+        _state();
+        uint256 before = v.balanceOf(ALICE);
+        (bool ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (1, ALICE, ALICE)));
+        assertFalse(ok, "1 share in kind reverts on the real pair");
+        assertEq(v.balanceOf(ALICE), before);
+        (ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeem, (1, ALICE, ALICE)));
+        assertFalse(ok, "1 share redeem reverts on the real pair");
+        assertEq(v.balanceOf(ALICE), before);
+        (ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeem, (2, ALICE, ALICE)));
+        assertFalse(ok, "2 shares redeem reverts on the real pair");
+        assertEq(v.balanceOf(ALICE), before);
+    }
+}
