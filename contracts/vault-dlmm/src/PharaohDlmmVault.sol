@@ -42,6 +42,7 @@ contract PharaohDlmmVault is
     uint256 private constant ONE_USD = 1e8;
     uint256 private constant MAX_ID_SLIPPAGE = 2;
     uint256 private constant MAX_BAND_BINS = 3;
+    uint256 private constant MIN_SUPPLY = 1e6;
 
     // guard bits of guardState().reasons (see the interface)
     uint256 internal constant FEED_ASSET_STALE_OR_BAD = 1;
@@ -69,6 +70,8 @@ contract PharaohDlmmVault is
     error BandExists();
     error NothingToDeploy();
     error ExitFailed();
+    error SupplyBelowMinimum(uint256 resultingSupply);
+    error RenounceDisabled();
 
     event RebalancerUpdated(address indexed oldRebalancer, address indexed newRebalancer);
 
@@ -217,6 +220,7 @@ contract PharaohDlmmVault is
         _checkCap(assets);
         shares = _convertToShares(assets, Math.Rounding.Floor);
         if (shares == 0) revert ZeroShares();
+        _requireMinSupply(shares);
         _deposit(msg.sender, receiver, assets, shares);
     }
 
@@ -225,7 +229,16 @@ contract PharaohDlmmVault is
         _requireEntryOk();
         assets = _convertToAssets(shares, Math.Rounding.Ceil);
         _checkCap(assets);
+        _requireMinSupply(shares);
         _deposit(msg.sender, receiver, assets, shares);
+    }
+
+    /// @dev DEPOSIT-SIDE ONLY minimum-liquidity rule (W10 F1): an entry may not leave the total supply in (0, MIN_SUPPLY), so the first-depositor /
+    ///      dust-supply inflation (the entry price uses a virtual offset of 1 while redemption is pro rata on the real supply) cannot be farmed with a
+    ///      few share-wei. NEVER applied to an exit (redeem, withdraw, redeemInKind): supply may fall below it and every exit keeps working.
+    function _requireMinSupply(uint256 mintedShares) private view {
+        uint256 s = totalSupply() + mintedShares;
+        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
     }
 
     /// @notice USDC out. NOTE: `previewRedeem`/`convertToAssets` OVERSTATE what is paid (they are the oracle NAV; the swap fee and the pool's standing
@@ -292,7 +305,10 @@ contract PharaohDlmmVault is
         paid = assetAmt;
         if (pairAmt != 0) {
             uint256 expectedOut = _pairToAsset(pairAmt, pa, pp);
-            paid += _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+            // pay what the vault's USDC balance actually gained (W10 F6): never trust the router's returned amount
+            uint256 balBefore = IERC20(asset()).balanceOf(address(this));
+            _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+            paid += IERC20(asset()).balanceOf(address(this)) - balBefore;
         }
         if (paid == 0) revert ExitFailed();
         IERC20(asset()).safeTransfer(receiver, paid);
@@ -390,6 +406,7 @@ contract PharaohDlmmVault is
             _guardedSwap(pairToken, IERC20(asset()), amountIn, swapMinOut, navBefore, pa, pp, deadline);
         }
 
+        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
         (uint24 active, uint256 addedX, uint256 addedY) = _addBand(expectedActiveId, idSlippage, amountXMin, amountYMin, deadline);
         _checkNavLoss(navBefore, pa, pp);
         // no cap post-check: openBand takes in no funds; the cap is enforced where assets enter (deposit, mint, maxDeposit, maxMint)
@@ -434,6 +451,7 @@ contract PharaohDlmmVault is
         uint256 swapOut = _guardedSwap(
             swapXForY ? tokenX : tokenY, swapXForY ? tokenY : tokenX, swapIn, swapMinOut, navBefore, pa, pp, deadline
         );
+        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
         (uint24 active,,) = _addBand(expectedActiveId, idSlippage, amountXMin, amountYMin, deadline);
         _checkNavLoss(navBefore, pa, pp);
 
@@ -568,10 +586,12 @@ contract PharaohDlmmVault is
         uint256 n = _hasBand ? uint256(_upper) - uint256(_lower) + 1 : 0;
         uint256[] memory ids = new uint256[](n);
         for (uint256 i; i < n; ++i) ids[i] = uint256(_lower) + i;
-        IDLMMRewarder(rewarder).claim(address(this), ids);
         IERC20 phar = IERC20(rewardToken);
-        uint256 amount = phar.balanceOf(address(this));
-        if (amount != 0) phar.safeTransfer(owner(), amount);
+        uint256 balBefore = phar.balanceOf(address(this));
+        IDLMMRewarder(rewarder).claim(address(this), ids);
+        uint256 amount = phar.balanceOf(address(this)) - balBefore; // PHAR claimed in THIS call (donated PHAR does not inflate the event)
+        uint256 whole = phar.balanceOf(address(this));
+        if (whole != 0) phar.safeTransfer(owner(), whole); // the whole balance is forwarded, as in R3
         // totalAssets in the event is 0 when a feed is bad: a harvest must not depend on the feeds
         (bool ok, uint256 nav) = _tryNav();
         emit PharHarvested(address(phar), amount, totalSupply(), ok ? nav : 0);
@@ -741,6 +761,11 @@ contract PharaohDlmmVault is
         _unpause();
     }
 
+    /// @dev renouncing would strand pause/unpause/clearGuard/params/cap/rebalancer rotation (W10 F7); transfer stays (use two-step handling in the ceremony)
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
+    }
+
     function setRebalancer(address r) external onlyOwner {
         if (r == address(0)) revert ZeroAddress();
         emit RebalancerUpdated(rebalancer, r);
@@ -760,7 +785,7 @@ contract PharaohDlmmVault is
     function _setGuardParams(GuardParams memory p) private {
         if (
             p.legBandBps < 10 || p.legBandBps > 200 || p.maxFeedAge < 3_600 || p.maxFeedAge > 172_800
-                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 111
+                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 112
                 || p.rebalanceCooldown > 3_600 || p.maxRebalancesPerDay < 4 || p.maxRebalancesPerDay > 96
                 || p.maxSwapBps < 1 || p.maxSwapBps > 10_000 || p.maxRebalanceLossBps < 5 || p.maxRebalanceLossBps > 300
         ) revert ParamOutOfBounds();
