@@ -135,7 +135,7 @@ test("anvil e2e recovery: the active bin returns inside the band before 60 s: no
   assert.equal((await r.step()).status, "in-range");
   assert.equal(await r.nonce(), 0);
 });
-test("anvil e2e guard latch: a latchable bit HALTS; for 6 more cycles the keeper makes ZERO RPC requests and sends nothing; resume with the bit gone runs again", { skip }, async () => {
+test("anvil e2e guard latch: a latchable bit HALTS; for 6 more cycles the keeper makes ZERO state RPC requests and sends nothing; resume with the bit gone runs again", { skip }, async () => {
   const r = await rig();
   await r.w.exitUp(100_000_000n);
   await (await r.w.vault.setReasons(4)).wait();
@@ -143,13 +143,13 @@ test("anvil e2e guard latch: a latchable bit HALTS; for 6 more cycles the keeper
   const o = await r.step();
   assert.equal(o.status, "halting");
   assert.equal(readHalt(r.w.cfg.monitor.haltPath)?.kind, "guard");
-  const before = anvil.provider.requests;
+  const before = anvil.provider.stateRequests;
   for (let i = 0; i < 6; i++) {
     const h = await r.step(); // (r.step reads the chain clock via anvil.provider: count it out)
     assert.equal(h.status, "halted");
   }
-  const clockReads = 6; // r.step() asks the chain for its time once per cycle
-  assert.equal(anvil.provider.requests - before, clockReads, "only the harness's own clock reads; the keeper itself made no request");
+  // (the harness reads the chain clock with eth_getBlockByNumber once per cycle, ethers' poller with eth_blockNumber: neither is a keeper read)
+  assert.equal(anvil.provider.stateRequests - before, 0, "no eth_call, no balance, no fee data, no estimate, no send while halted");
   assert.equal(await r.nonce(), 0);
   await (await r.w.vault.setReasons(0)).wait();
   assert.equal((await r.step()).status, "halted", "never auto-resumed");

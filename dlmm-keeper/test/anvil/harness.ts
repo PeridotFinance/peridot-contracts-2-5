@@ -30,8 +30,11 @@ function freePort(): Promise<number> {
 /** counts every JSON-RPC request that leaves the keeper (the proof of "calls nothing while halted") */
 export class CountingProvider extends providers.StaticJsonRpcProvider {
   requests = 0;
+  /** requests other than block reads (the harness reads the chain clock with eth_getBlockByNumber and ethers' own poller uses eth_blockNumber): calls, balances, fee data, estimates, sends */
+  stateRequests = 0;
   async send(method: string, params: Array<unknown>): Promise<unknown> {
     this.requests++;
+    if (method !== "eth_getBlockByNumber" && method !== "eth_blockNumber") this.stateRequests++;
     return super.send(method, params);
   }
 }
@@ -65,6 +68,7 @@ export async function startAnvil(blockTimeSeconds?: number): Promise<Anvil> {
   const proc = spawn("anvil", args, { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
   const provider = new CountingProvider(url, { chainId: 43114, name: "avalanche" });
+  provider.pollingInterval = 100; // ethers polls receipts every 4 s by default; the local chain mines at once
   for (let i = 0; i < 100; i++) {
     try {
       await new providers.StaticJsonRpcProvider(url, { chainId: 43114, name: "x" }).send("eth_chainId", []);

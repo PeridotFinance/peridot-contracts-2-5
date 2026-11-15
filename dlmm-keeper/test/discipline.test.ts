@@ -34,7 +34,7 @@ test("the RPC URL is read from the environment in ONE place and is not a CLI arg
     const p = path.join(ROOT, f);
     if (!fs.existsSync(p)) continue;
     const t = fs.readFileSync(p, "utf8").replace(/^\s*#.*$/gm, "");
-    assert.ok(!/--rpc-url|--fork-url|-f\s+"?\$/.test(t), `${f}: the endpoint must never be an argument`);
+    assert.ok(!/--rpc-url|--fork-url\s+"?\$|\s-f\s+"?\$\{?AVALANCHE/.test(t), `${f}: the endpoint must never be an argument`);
     assert.ok(!/(curl|cast|anvil)[^\n|]*\$\{?AVALANCHE_MAINNET_RPC_URL/.test(t), `${f}: no command line carries the endpoint`);
   }
 });

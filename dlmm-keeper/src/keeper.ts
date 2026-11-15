@@ -462,11 +462,20 @@ async function readBack(p: { provider: providers.Provider; cfg: KeeperConfig; tx
     eventText = `band [${Number(d.oldLowerId)},${Number(d.oldUpperId)}] -> [${newLower},${newUpper}] active ${activeId}, swap ${d.swapXForY ? "X->Y" : "Y->X"} in ${d.swapIn.toString()} out ${d.swapOut.toString()}, NAV ${d.navBefore.toString()} -> ${d.navAfter.toString()}`;
     if (!(newLower <= activeId && activeId <= newUpper)) issues.push(`the Rebalanced event's active id ${activeId} is outside its new band [${newLower}, ${newUpper}]`);
   }
-  const after = await readPoll(provider, cfg);
-  if (!after.band.hasBand) issues.push("the vault reports no band after the rebalance");
-  else if (ev && (after.band.lowerId !== newLower || after.band.upperId !== newUpper)) issues.push(`bandState [${after.band.lowerId}, ${after.band.upperId}] differs from the event's new band [${newLower}, ${newUpper}]`);
-  const lastR = await batchLast(provider, cfg);
-  if (lastR <= p.expectedLast) issues.push(`vault.lastRebalanceAt ${lastR} did not advance past ${p.expectedLast}`);
+  // a load-balanced node may not have the receipt's block yet: the state checks are retried (4 tries, 1 s apart) before they count as a mismatch
+  const stateIssues: string[] = [];
+  let lastR = p.expectedLast;
+  for (let i = 0; i < 4; i++) {
+    stateIssues.length = 0;
+    const after = await readPoll(provider, cfg);
+    if (!after.band.hasBand) stateIssues.push("the vault reports no band after the rebalance");
+    else if (ev && (after.band.lowerId !== newLower || after.band.upperId !== newUpper)) stateIssues.push(`bandState [${after.band.lowerId}, ${after.band.upperId}] differs from the event's new band [${newLower}, ${newUpper}]`);
+    lastR = await batchLast(provider, cfg);
+    if (lastR <= p.expectedLast) stateIssues.push(`vault.lastRebalanceAt ${lastR} did not advance past ${p.expectedLast}`);
+    if (stateIssues.length === 0) break;
+    if (i < 3) await p.sleep(1000);
+  }
+  issues.push(...stateIssues);
   return { issues, lastRebalanceAt: lastR, eventText };
 }
 async function batchLast(provider: providers.Provider, cfg: KeeperConfig): Promise<number> {
