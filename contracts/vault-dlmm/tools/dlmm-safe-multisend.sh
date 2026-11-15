@@ -28,6 +28,7 @@ DEAD=0x000000000000000000000000000000000000dEaD
 Z=0x0000000000000000000000000000000000000000
 SIG=0x000000000000000000000000064efe76812f5f18bd1aa9708739fb33c810b2dd000000000000000000000000000000000000000000000000000000000000000001
 EXEC='execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)'
+EXEC_CALL='execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)(bool)'
 
 V="${VAULT:?VAULT (the proxy address) is required}"
 SEED="${SEED:-1000000}"
@@ -62,7 +63,7 @@ if [ "$CMD" = build ]; then
   echo "# 0. OPERATOR-ONLY, before the MultiSend: the Ledger puts the seed USDC in the Safe (the Safe is msg.sender of the inner calls)"
   echo "cast send $USDC 'transfer(address,uint256)' $SAFE $SEED --ledger --from $LEDGER"
   echo "# 1. read-only simulation from the Ledger (must print true):"
-  echo "cast call $SAFE '$EXEC' $MULTISEND 0 $MS 1 0 0 0 $Z $Z $SIG --from $LEDGER"
+  echo "cast call $SAFE '$EXEC_CALL' $MULTISEND 0 $MS 1 0 0 0 $Z $Z $SIG --from $LEDGER"
   echo "# 2. OPERATOR-ONLY (one Ledger confirmation), explicit gas limit:"
   echo "cast send $SAFE '$EXEC' $MULTISEND 0 $MS 1 0 0 0 $Z $Z $SIG --ledger --from $LEDGER --gas-limit 1500000"
   exit 0
@@ -79,7 +80,7 @@ echo "vault paused: $PAUSED   totalSupply: $SUPPLY   Safe USDC: $(cast call "$US
 [ "$PAUSED" = true ] || { echo "the vault is not paused: the MultiSend is the opening step (unpause first inside it); stop and read the vault" >&2; exit 1; }
 [ "$SUPPLY" = 0 ] || { echo "totalSupply is not 0: this MultiSend is the FIRST funding only" >&2; exit 1; }
 [ "$(cast call "$USDC" 'balanceOf(address)(uint256)' "$SAFE" | awk '{print $1}')" -ge "$SEED" ] || { echo "the Safe holds less USDC than SEED: do step 0 (Ledger -> Safe transfer) first" >&2; exit 1; }
-RES="$(cast call "$SAFE" "$EXEC" "$MULTISEND" 0 "$MS" 1 0 0 0 $Z $Z $SIG --from "$LEDGER")"
+RES="$(cast call "$SAFE" "$EXEC_CALL" "$MULTISEND" 0 "$MS" 1 0 0 0 $Z $Z $SIG --from "$LEDGER")"
 echo "simulation of execTransaction from the Ledger: $RES   (must be true)"
 [ "$RES" = true ] || { echo "simulation did not return true: stop" >&2; exit 1; }
 [ "$CMD" = simulate ] && exit 0

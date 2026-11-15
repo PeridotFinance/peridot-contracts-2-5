@@ -64,7 +64,7 @@ case "$STEP" in
     FILE="${DLMM_ADDRESSES_FILE:-ceremony/dlmm-vault-addresses.$MODE.env}"
     mkdir -p "$(dirname "$FILE")"
     { for k in DLMM_IMPLEMENTATION DLMM_VALIDATOR DLMM_VAULT DLMM_PROXY_ADMIN DLMM_REWARDER_IMPL_CODEHASH; do
-        a="$(echo "$OUT" | grep -E "^\s*$k=0x[0-9a-fA-F]+" | tail -1 | sed -E "s/^\s*//")"
+        a="$(echo "$OUT" | grep -E "^[[:space:]]*$k=0x[0-9a-fA-F]+" | tail -1 | sed -E "s/^[[:space:]]*//")"
         echo "export ${a:-$k=MISSING}"
       done; } > "$FILE"
     echo "addresses written to $FILE (PUBLIC values only)"; grep -c "=0x" "$FILE" | sed 's/^/addresses found: /'

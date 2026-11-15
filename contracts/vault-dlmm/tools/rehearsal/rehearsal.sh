@@ -18,7 +18,7 @@ SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/dlmm-reh.XXXXXX")"; chmod 700 "$SCRATCH"
 REDACT() { sed -E 's#https?://[^[:space:]"]+#<url-redacted>#g'; }
 
 cd "$PROJ" || exit 2
-forge build 2>&1 | REDACT | tail -3
+forge build --skip test 2>&1 | REDACT | tail -3
 [ -f out/FixedFeed.sol/FixedFeed.json ] || { echo "FixedFeed artifact missing (forge build)"; exit 2; }
 cp -R "$KEEPER_SRC" "$SCRATCH/dlmm-keeper" || exit 2   # copy: the keeper checkout stays untouched
 

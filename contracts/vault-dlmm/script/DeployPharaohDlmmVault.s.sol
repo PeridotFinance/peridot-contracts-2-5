@@ -94,7 +94,7 @@ contract DeployPharaohDlmmVault is Script {
 
         vm.startBroadcast();
         (VmSafe.CallerMode mode, address sender,) = vm.readCallers();
-        require(mode == VmSafe.CallerMode.Broadcast && sender == deployer, "broadcaster is not DEPLOYER");
+        require(mode == VmSafe.CallerMode.RecurrentBroadcast && sender == deployer, "broadcaster is not DEPLOYER");
         PharaohDlmmVault impl = new PharaohDlmmVault(); // tx 1 (deployer nonce 0); its constructor deploys the validator
         // tx 2 (deployer nonce 1): initialOwner of the proxy's own ProxyAdmin = the SAFE (no hand-over step)
         TransparentUpgradeableProxy proxy =

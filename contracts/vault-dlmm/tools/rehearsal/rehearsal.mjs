@@ -58,7 +58,7 @@ const VAULT_ABI = [
   "error ActiveIdMoved(uint24 expected,uint24 actual,uint24 idSlippage)", "error NavLossTooLarge(uint256 navBefore,uint256 navAfter)", "error FeedInvalid(uint8 which)",
   "error ERC4626ExceededMaxRedeem(address owner,uint256 shares,uint256 max)", "error SwapTooLarge(uint256 swapIn,uint256 maxIn)", "error PairValidationFailed(uint8 check)",
   "error NothingToDeploy()", "error DeadlineExpired(uint256 deadline)", "error ParamOutOfBounds()", "error DailyRebalanceCapReached()",
-  "error InvalidAmount()", "error DustSupply()", "error BelowMinimumSupply()", "error RenounceDisabled()",
+  "error SupplyBelowMinimum(uint256 resultingSupply)", "error RenounceDisabled()",
 ];
 const ERC20_ABI = ["function balanceOf(address) view returns (uint256)", "function transfer(address,uint256) returns (bool)", "function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)", "function decimals() view returns (uint8)"];
 const SAFE_ABI = ["function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) payable returns (bool)", "function nonce() view returns (uint256)", "function getOwners() view returns (address[])"];
@@ -177,6 +177,17 @@ async function main() {
   const ceremony = (args, extra = {}) => run("bash", ["tools/dlmm-vault-ceremony.sh", ...args], { env: { ...ENV, ...extra } });
 
   // ------------------------------------------------------------------ S2 negative pre-flights (nothing may be sent)
+  await step("S2a STAGE 0 read-only pre-flight with cast (tools/dlmm-vault-stage0.sh)", async () => {
+    const s0 = run("bash", ["tools/dlmm-vault-stage0.sh"], { env: { ...BASE_ENV, DEPLOYER: deployerAddr, KEEPER: keeperW.address } });
+    console.log(indent(s0.out));
+    results.stage0 = s0.out;
+    if (s0.code !== 0) throw new Error("stage 0 failed");
+    const got = (s0.out.match(/REWARDER_IMPL_CODEHASH = (0x[0-9a-f]{64})/) || [])[1];
+    log(`   stage-0 codehash ${got} equals the harness's keccak ${EXPECT_HASH}: ${got === EXPECT_HASH}`);
+    if (got !== EXPECT_HASH) results.failures.push("stage-0 codehash differs from the harness keccak");
+    const ch = run("cast", ["codehash", facts.rewarderBeaconImpl], { env: BASE_ENV });
+    log(`   (for the record) cast codehash on this anvil fork: ${ch.out.trim().slice(0, 80)} ; cast keccak of the code: ${got}`);
+  });
   await step("S2 negative pre-flights: nothing is broadcast", async () => {
     const bad = ceremony(["deploy", "rehearsal"], { EXPECTED_REWARDER_IMPL_CODEHASH: "0x" + "11".repeat(32), DLMM_ADDRESSES_FILE: path.join(SCRATCH, "neg.env") });
     log(`   wrong expected codehash: exit ${bad.code}; ${(bad.out.match(/preflight:[^\n]*/) || ["(no preflight line)"])[0]}`);
@@ -220,6 +231,23 @@ async function main() {
     const neg = ceremony(["verify", "rehearsal"], { ...VENV, STAGE: "1", REBALANCER: A.LEDGER });
     log(`   negative read-back (REBALANCER wrong): exit ${neg.code}`);
     if (neg.code === 0) results.failures.push("read-back accepted a wrong REBALANCER");
+    const again = ceremony(["deploy", "rehearsal"], { DLMM_ADDRESSES_FILE: path.join(SCRATCH, "again.env") });
+    log(`   a second deploy with the same deployer: exit ${again.code}; ${(again.out.match(/preflight:[^\n]*/) || ["(no preflight line)"])[0]}`);
+    if (again.code === 0) results.failures.push("a second deploy was not refused");
+    const vc = run("bash", ["tools/dlmm-verify-runtime-code.sh", V], { env: { ...BASE_ENV } });
+    console.log(indent(vc.out));
+    results.runtimeCode = vc.out;
+    if (vc.code !== 0 || (vc.out.match(/equals the build output/g) || []).length !== 4) throw new Error("runtime code verification failed");
+    {
+      const validator = vc.out.match(/validator\(CREATE\(impl,1\)\) (0x[0-9a-fA-F]{40})/)[1];
+      const orig = await provider.getCode(validator);
+      const bad = orig.slice(0, 202) + (orig.slice(202, 204) === "ff" ? "00" : "ff") + orig.slice(204);
+      await rpc("anvil_setCode", [validator, bad]);
+      const neg2 = run("bash", ["tools/dlmm-verify-runtime-code.sh", V], { env: { ...BASE_ENV } });
+      log(`   negative: one byte of the validator's code flipped -> exit ${neg2.code}: ${(neg2.out.match(/MISMATCH[^\n]*/) || ["(no mismatch line)"])[0]}`);
+      if (neg2.code === 0) results.failures.push("runtime-code check accepted a tampered validator");
+      await rpc("anvil_setCode", [validator, orig]);
+    }
     // the deployer holds nothing: it cannot do anything owner-only
     const dsig = provider.getSigner(deployerAddr);
     await expectRevert("deployer calls unpause()", () => vault.connect(dsig).callStatic.unpause());
@@ -328,7 +356,7 @@ async function main() {
     results.ppm.openBand = ppmOf(navB, navA);
     log(`   openBand (keeper, live) took ${secs.toFixed(1)} s; NAV ${navB} -> ${navA}: loss ${results.ppm.openBand} ppm of NAV; band [${lo},${up}] active ${act} hasBand ${has} outOfRange ${oor}; idle before ${fmt6(idleB.usdc)} USDC`);
     // gas from the BandOpened log
-    const ev = await provider.getLogs({ address: V, topics: [vIface.getEventTopic("BandOpened")], fromBlock: "earliest" });
+    const ev = await provider.getLogs({ address: V, topics: [vIface.getEventTopic("BandOpened")], fromBlock: facts.block });
     const rc = await provider.getTransactionReceipt(ev[ev.length - 1].transactionHash);
     results.gas.openBand = rc.gasUsed.toNumber(); log("   gas openBand:", rc.gasUsed.toString(), "from", rc.from, "(keeper wallet", keeperW.address, ")");
     const e = vIface.parseLog(ev[ev.length - 1]); log("   BandOpened", e.args.map(String).join(","));
@@ -380,7 +408,7 @@ async function main() {
     const tRec = Date.now();
     if (!rec) throw new Error("the keeper did not re-centre within 360 s; keeper log tail:\n" + klog.slice(-1500));
     log(`   RE-CENTRED after ${((tRec - tExit) / 1000).toFixed(1)} s (exit wait is 60 s): new band [${rec.lo},${rec.up}] active ${rec.a}`);
-    const ev = await provider.getLogs({ address: V, topics: [vIface.getEventTopic("Rebalanced")], fromBlock: "earliest" });
+    const ev = await provider.getLogs({ address: V, topics: [vIface.getEventTopic("Rebalanced")], fromBlock: facts.block });
     const e = vIface.parseLog(ev[ev.length - 1]); const rc = await provider.getTransactionReceipt(ev[ev.length - 1].transactionHash);
     results.gas.rebalance = rc.gasUsed.toNumber();
     results.ppm.rebalance = ppmOf(e.args.navBefore, e.args.navAfter);
@@ -432,6 +460,10 @@ async function main() {
     await expectRevert("keeper rebalance/openBand while paused", () => vault.connect(provider.getSigner(keeperW.address)).callStatic.openBand(8388608, 0, 0, 0, 0, 9999999999));
     const e1 = await vault.connect(bob).callStatic.redeemInKind(1000, bobAddr, bobAddr);
     log("   exits are NOT gated by pause: redeemInKind(1000 shares) simulation ->", e1.map(String).join("/"), "; redeem(1000):", (await vault.connect(bob).callStatic.redeem(1000, bobAddr, bobAddr)).toString());
+    const rp = await vault.connect(bob).redeemInKind(1000, bobAddr, bobAddr, { gasLimit: 3_000_000 });
+    await gasOf(rp, "REAL redeemInKind(1000) while PAUSED");
+    const rp2 = await vault.connect(bob).redeem(1000, bobAddr, bobAddr, { gasLimit: 3_000_000 });
+    await gasOf(rp2, "REAL redeem(1000, USDC out) while PAUSED");
     log("   -- 11b Safe unpause()");
     await safeExec(V, abiv("unpause"), "unpause()");
     log("   paused:", await vault.paused());
@@ -468,6 +500,8 @@ async function main() {
     // exits are never gated by the latch or the bad feed: redeemInKind works, redeem (USDC out) may revert on the oracle
     const e2 = await vault.connect(bob).callStatic.redeemInKind(1000, bobAddr, bobAddr);
     log("   exits under the latch and the out-of-band feed: redeemInKind(1000) simulation ->", e2.map(String).join("/"));
+    const rl = await vault.connect(bob).redeemInKind(1000, bobAddr, bobAddr, { gasLimit: 3_000_000 });
+    await gasOf(rl, "REAL redeemInKind(1000) while LATCHED with the feed out of band");
     await rpc("anvil_setCode", [A.FEED_USDT, realCode]); // the real feed back
     log("   real feed code restored; guardState =", (await vault.guardState()).map(String).join(","), "(latched stays true until the owner clears it)");
     await expectRevert("deposit while latched, feed healthy again", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
@@ -484,6 +518,7 @@ async function main() {
     const val = (x, y) => y.mul(pp).div(pa).add(x.mul(0)).add(0); // helper not used
     const valueUsdc = (usdcAmt, usdtAmt) => usdcAmt.add(usdtAmt.mul(pp).div(pa));
     const bob = provider.getSigner(bobAddr);
+    const recv = { Ledger: BN(0), Bob: BN(0), Seed: BN(0) };
     // Ledger: half by redeem (USDC out), half in kind
     const half = ledgerShares.div(2);
     const navPerShare = async (s) => await vault.convertToAssets(s);
@@ -493,7 +528,7 @@ async function main() {
       const tx = await vault.connect(asLedger()).redeem(half, A.LEDGER, A.LEDGER, { gasLimit: 4_000_000 });
       await gasOf(tx, "redeem (USDC out) half of the Ledger shares");
       const got = (await usdc.balanceOf(A.LEDGER)).sub(b0);
-      results.ppm.redeemUsdcOut = ppmOf(exp, got);
+      results.ppm.redeemUsdcOut = ppmOf(exp, got); recv.Ledger = recv.Ledger.add(got);
       log(`   Ledger redeem(USDC) of ${half}: NAV value ${fmt6(exp)} paid ${fmt6(got)} USDC -> loss ${results.ppm.redeemUsdcOut} ppm`);
     }
     const kindOut = async (who, signer, label) => {
@@ -504,7 +539,7 @@ async function main() {
       await gasOf(tx, `redeemInKind ${label}`);
       const dx = (await usdt.balanceOf(who)).sub(bx0), dy = (await usdc.balanceOf(who)).sub(by0);
       const got = valueUsdc(dy, dx);
-      results.ppm["redeemInKind " + label] = ppmOf(exp, got);
+      results.ppm["redeemInKind " + label] = ppmOf(exp, got); recv[who === A.LEDGER ? "Ledger" : who === A.DEAD ? "Seed" : "Bob"] = recv[who === A.LEDGER ? "Ledger" : who === A.DEAD ? "Seed" : "Bob"].add(got);
       log(`   ${label} redeemInKind ${shares} shares: NAV value ${fmt6(exp)} ; received ${fmt6(dy)} USDC + ${fmt6(dx)} USDt (oracle value ${fmt6(got)}) -> loss ${results.ppm["redeemInKind " + label]} ppm`);
     };
     await kindOut(A.LEDGER, asLedger(), "Ledger (remaining half)");
@@ -512,7 +547,16 @@ async function main() {
     log("   before the seed: totalSupply", (await vault.totalSupply()).toString(), " seed shares", (await vault.balanceOf(A.DEAD)).toString());
     const dead = await impersonate(A.DEAD, "0x56BC75E2D63100000");
     await kindOut(A.DEAD, dead, "seed holder 0xdEaD (FORK ONLY: on mainnet the seed is never redeemed)");
+    {
+      const base = { Ledger: BN(100_000_000), Bob: BN(99_000_000).sub(2000), Seed: BN(1_000_000) }; // Bob's two 1000-share exits under pause are excluded
+      for (const k of Object.keys(base)) {
+        results.ppm["ROUND TRIP " + k] = ppmOf(base[k], recv[k]);
+        log(`   ROUND TRIP ${k}: deposited ${fmt6(base[k])} USDC, received (oracle value, PHAR excluded) ${fmt6(recv[k])} -> ${results.ppm["ROUND TRIP " + k]} ppm lost (negative = received more than deposited)`);
+      }
+    }
     const [lo, up, , has] = await vault.bandState();
+    await expectRevert("deposit of 500000 raw USDC into the EMPTY vault (supply would be < 1e6)", () => vault.connect(bob).callStatic.deposit(500_000, bobAddr));
+    await expectRevert("deposit of 4 raw USDC into the EMPTY vault (the W10 F1 4-wei attacker)", () => vault.connect(bob).callStatic.deposit(4, bobAddr));
     log("   VAULT EMPTY CHECK: totalSupply", (await vault.totalSupply()).toString(), " totalAssets", (await vault.totalAssets()).toString(), " hasBand", has, " vault USDC", (await usdc.balanceOf(V)).toString(), " USDt", (await usdt.balanceOf(V)).toString(), " PHAR", (await phar.balanceOf(V)).toString());
     for (let id = lo; id <= up; id++) log(`   bin ${id}: vault LB shares ${(await pair.balanceOf(V, id)).toString()}`);
     results.vaultEmpty = (await vault.totalSupply()).isZero();
