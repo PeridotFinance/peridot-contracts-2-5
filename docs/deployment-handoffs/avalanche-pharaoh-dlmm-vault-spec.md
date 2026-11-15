@@ -1,0 +1,57 @@
+# Pharaoh DLMM USDC/USDt 3-bin vault: frozen spec (W1), 15 Nov 2026
+
+Status: FROZEN for the build. Interface: `contracts/vault-dlmm/src/IPharaohDlmmVault.sol` (this file explains it; the interface wins on any conflict of signature). Decision: operator, 15 Nov 2026 ("build now, 3 bins, re-centre on exit, learn the economics live at the USD 200 cap"). Basis: `avalanche-pharaoh-dlmm-vault-second-measurement.md` and `...-evaluation.md` (section 8 has the DLMM function table; section 7 the claim, forfeiture and hook facts).
+
+## 1. Product and what is promised
+- ERC-4626 vault, asset USDC, pair token USDt, pool `0x16888EE58E706C253b821EAA637ae9b2cFeA255C` (bin step 1). Value sits in the active bin and one bin each side (3 bins, even by value). When the active bin leaves the band the keeper re-centres. Accounting: the R3 ownership NAV (`vault-r3/src/r3/PharaohLiquidityVaultR3.sol`), fees are inside bin reserves (NAV includes them; R3 excluded uncollected fees: state this in the handoff).
+- NAV prices the USDt leg with the two Chainlink feeds (USDC/USD, USDT/USD, 8 decimals), the same feeds the guard reads. No other price source.
+- PHAR: claimed by `harvestRewards()` to the owner as in R3. The share price does not include pending PHAR.
+- Roles: owner = Safe `0x80f4207e...fB12` (Ledger 1-of-1), ProxyAdmin owner = the Safe, rebalancer = a NEW keeper wallet (not the order keeper, not an operator, not the Ledger). Pattern, proxy and ceremony as the margin ceremony (section 7).
+
+## 2. Cap (non-negotiable 2)
+- `depositCap` is set to **200_000_000 (USDC, 6 decimals) inside `initialize`**, in the same transaction as proxy creation (no window with a zero or default cap). `DEPOSIT_CAP_CEILING` is an implementation immutable = 200_000_000; `setDepositCap` reverts `CapAboveCeiling` above it. Raising the cap above 200 therefore needs a new implementation (an upgrade the Safe signs), which is deliberate.
+- Enforced in `deposit`, `mint`, `maxDeposit`, `maxMint` and `openBand`'s funding path: `totalAssets()` after the call must be <= cap, else `CapExceeded`. Fuzz tests: no sequence of deposit, mint, gains, losses and donations lets a deposit or mint pass above the cap (a direct donation can only reduce headroom).
+- Command list read-backs: `depositCap() = 200000000`, `DEPOSIT_CAP_CEILING() = 200000000`, `maxDeposit(user) <= cap`.
+
+## 3. Exits that nothing we add can block (non-negotiable 1, what is and is not guaranteed)
+GUARANTEED by the vault code: `redeemInKind` (and `emergencyExit` from R3 if kept) is not gated by pause, the guard, the latch, the cooldown, the daily cap, the keeper, the rewarder codehash pin, or any oracle. It burns the vault's bins pro rata and pays both tokens; it makes no oracle read and no swap. `withdraw`/`redeem` (USDC out) are not gated by pause, the guard or the latch either, but they need NAV and a swap of the USDt leg, so they can revert when a feed reverts or is stale or a depegged pool cannot fill the swap within its oracle minimum: the frontend must then offer `redeemInKind` (read `guardState()`). Tests: oracle reverting, 100 % of the position in the depegged leg, in-kind exit in both, plus the failing-hook case below.
+NOT guaranteed by anything we can write, and to be accepted by the operator before the ceremony: the pair calls the rewarder hook on `burn`; **if the rewarder (a beacon proxy upgradable by Pharaoh's accessHub) or the voter reverts, every `burn`, hence every exit incl. `redeemInKind`, reverts until Pharaoh's factory owner unlinks the hook** (evaluation section 7, MEASURED hook flags 0x151 include BEFORE_BURN). LB shares are non-transferable, so there is no other exit. A fork test with a mocked reverting hook must show exactly this, and the frontend copy must say it.
+
+## 4. Depeg guard (non-negotiable 1) : semantics frozen, numbers calibrated by W-CAL inside the bounds
+Reference prices: the two Chainlink USD feeds, per leg. The pool's active price is NOT a reference by itself (it cannot say which leg moved, and a USD 10 swap moved it to -0.30 % on 30 Oct: a pool-only guard is a free griefing switch). Live check `guardState()`:
+| Bit | Condition | Latchable | Blocks |
+| --- | --- | --- | --- |
+| 1 / 2 | feed reverts, answer <= 0, `updatedAt` older than `maxFeedAge`, or round incomplete (asset / pair feed) | yes | deposits, mint, openBand, rebalance (never exits) |
+| 4 / 8 | feed answer outside 1.00 +- `legBandBps` (asset / pair leg) | yes | same |
+| 16 | pool active-bin price vs oracle ratio (USDC/USD over USDT/USD) deviates more than `maxPoolOracleDevBps` | no, live | deposits, mint, openBand, rebalance, only while it holds |
+| 32 | rewarder not linked as the pair hook, or its implementation codehash differs from the pinned one | no, live | same |
+Latch: anyone may call `tripGuard()` while a latchable bit holds; it sets `latched` and emits `GuardTripped(by, reasons)`. While latched, deposits, mint, openBand and rebalance revert `GuardLatched` even after prices recover; only the owner's `clearGuard()` (Safe tx, allowed only when the live state is safe) releases it. The keeper mirrors this: it halts on a latchable condition, writes a HALT state, alerts, and resumes only on a manual command.
+Defaults and derivation (ESTIMATED until W-CAL checks them against the 30-day window and the feeds' documented parameters):
+- `legBandBps` 50: must exceed the feed deviation threshold (Chainlink stable feeds update at 0.1 %; read live today: USDC 0.99975, USDT 0.99934 = -0.066 %, so ordinary feed noise is 10 bps per leg) plus a margin; 50 bps is five times that and still catches a real depeg (USDT 2023-type events were >1 %).
+- `maxFeedAge` 93,600 s (heartbeat 24 h + 2 h): a feed legitimately sits unchanged for up to 24 h when the price is inside its threshold (live ages today 4 to 6 h). A real depeg moves a feed immediately (deviation update), so staleness beyond heartbeat means a broken feed.
+- `maxPoolOracleDevBps` 60: standing pool discount about 11 bp (median), worst seen 29 to 30 bp, plus two feed noises of 10 bp, plus margin. W-CAL replays 30 days of pool active price against the feed ratio and reports false-trip counts for 40/50/60/80; the default is raised only if there is a false trip on an ordinary day.
+- Hard bounds for `setGuardParams`: legBandBps 10..200, maxFeedAge 3,600..172,800, maxPoolOracleDevBps 20..300, rebalanceCooldown 111..3,600, maxRebalancesPerDay 4..96, maxSwapBps 1..10,000, maxRebalanceLossBps 5..300; anything else reverts `ParamOutOfBounds`.
+Stale or reverting feed: blocks entry and re-centring (bits 1/2) and is reported, never blocks an exit.
+
+## 5. Rebalance (exit-triggered, measured policy P1)
+Preconditions (vault side): `hasBand`, `activeId < lowerId || activeId > upperId` (else `NotOutOfRange`), guard safe and not latched, `now >= lastRebalanceAt + rebalanceCooldown` (default 120 s, above the 111 s forfeiture window), `rebalancesToday < maxRebalancesPerDay` (default 48, measured 30-day maximum 32 a day, median 4), caller = rebalancer, not paused. Actions: harvest nothing (claims are separate); burn all band bins (`approveForAll` once, `removeLiquidity` or `pair.burn`); swap `swapIn` (<= `maxSwapBps` of NAV) of the over-held leg through the router with `swapMinOut` also >= oracle-implied out minus `maxRebalanceLossBps`; add 3 bins with `deltaIds -1,0,+1` around the NEW active id (`activeIdDesired = expectedActiveId`, `idSlippage` <= 2, even value distribution on the mixed inventory as `distributionX/Y` summing to 1e18 each); require oracle-valued NAV after >= NAV before x (1 - `maxRebalanceLossBps`), else `NavLossTooLarge`. Keeper: sees the exit, waits 60 s, simulates with `eth_call`, sends once, never loops on a revert.
+`openBand` creates the first band from idle assets under the same guard and NAV rules.
+
+## 6. Keeper (W5) interface and behaviour
+Reads only `bandState()`, `guardState()`, `rebalanceAllowed()`, `guardParams()`, pair `getActiveId()`, `getBin`/reserves for sizing the swap, router quotes. Polls the active id every 3 s; on exit waits 60 s, re-reads, computes `swapIn` for the 3-bin even mix, `swapMinOut`, `amountXMin/YMin`, `deadline = now + 120 s`, simulates, sends. Limits mirror the vault: <= 1 send per cycle, <= 48 a day, halt latch, gas-runway alert like `order-keeper` (`keeper:gas-runway`), logs on activity or every 20th cycle, config validated at start, RPC URL only from the environment variable (never printed, in a file or an argument), chain-event scans on the public endpoint in 100-block chunks. Reuse `order-keeper/` structure (TypeScript, Docker, systemd unit, `deploy/*-host.sh bootstrap|stage`). The wallet is new and holds only gas; it cannot move funds out of the vault (the rebalance ABI has no recipient parameter).
+
+## 7. Frontend (non-negotiable 3): a handoff spec only, no APY field
+Shows: "earns PHAR", the vault's own **realised PHAR rate** = sum of `PharHarvested.amount` over a trailing window divided by the share supply (`totalSupplyShares` in the event) per day, with the window length and the number of harvests shown, and "PHAR comes from a weekly vote: the amount can fall to zero in any week" with the last eight weekly emissions. Fee income is the change in `convertToAssets(1e6)`. No projected APY, no annualised number from a short window. Also shows: the cap and headroom (`depositCap`, `maxDeposit`), `guardState()` (deposits paused by the safety guard), and the exit paths including `redeemInKind` and the hook caveat of section 3. Deliverable: `avalanche-dlmm-vault-frontend-handoff.md` (ABIs, call sequences, copy, states), like the margin handoff.
+
+## 8. Deployment discipline (non-negotiable 4), same shape as the margin ceremony
+Throwaway deployer key (generated by the operator, funded by the Ledger with a few AVAX, deleted after); the script deploys implementation, ProxyAdmin/proxy and calls `initialize` in the proxy constructor data (cap 200, feeds, roles) atomically; verifies pair/router/rewarder/codehash/feeds on chain before any state change; hands ProxyAdmin ownership and vault ownership to the Safe in the same script; read-back script prints every value; one command list with exact `cast` read-backs; the Safe (Ledger) then: `setRebalancer`, first `openBand` funding by the Ledger deposit of at most 200. The deployer holds nothing afterwards (read-back of owner, admin, nonce). Rehearsal on a fork first. NOTHING is signed or sent by an agent; the ceremony is the operator's.
+
+## 9. Workstreams, ownership, branches (worktrees `/Users/joshua/Peridot/.wt-dlmm-<name>`, branch `feat/dlmm-vault-<name>` from `feat/dlmm-vault`)
+| ID | What | Branch / dir |
+| --- | --- | --- |
+| W2 | vault contract (+ W3 reward/harvest inside it) in `contracts/vault-dlmm/src` | `...-vault` |
+| W4 | mock LB pair/router/rewarder/feeds, unit + fuzz tests in `contracts/vault-dlmm/test` | `...-tests` |
+| W5 | keeper `dlmm-keeper/` against `IPharaohDlmmVault` and a stub vault | `...-keeper` |
+| W-CAL | guard calibration: feed parameters, 30-day replay, false-trip table | docs only |
+| W9 | frontend handoff spec, command-list skeleton, README | docs only |
+Later (not started today): W6 fork tests, W7 mutation checks, W8 rehearsal, W10 review. Fork queue (one job at a time through `/tmp/pilot-fork.lock`): W-CAL historic reads, then W5 keeper-on-fork, W6 happy path, W6 depeg and failing-hook cases, W8.
