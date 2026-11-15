@@ -27,7 +27,7 @@ interface Rig {
   /** state persisted most recently at the moment of each send */
   pendingAtSend: Array<KeeperState["pending"]>;
   sends: number;
-  step(o?: { skipWait?: boolean; live?: boolean }): Promise<KeeperOutcome>;
+  step(o?: { skipWait?: boolean; live?: boolean; openBand?: boolean }): Promise<KeeperOutcome>;
   /** what `dlmm-keeper resume` does, then what main.ts does on the next cycle: reload the state file */
   resume(): ReturnType<typeof resumeKeeper>;
   at(s: number): void;
@@ -52,7 +52,7 @@ function rig(mut?: (c: KeeperConfig) => void, y = 100_000_000n): Rig {
   r.step = async (o = {}) => {
     const out = await keeperStep(
       { provider: p as unknown as providers.Provider, cfg: o.live === false ? { ...cfg, mode: "dry-run" } : cfg, signer: o.live === false || cfg.mode === "dry-run" ? undefined : signer, alerts, persist: (s) => { r.persisted.push(structuredClone(s)); r.state = s; saveState(cfg.monitor.statePath, { ...s, alerts: alerts.toJson() }); }, now: () => w.now, sleep: async (ms) => { r.sleeps.push(ms); } },
-      r.state, { skipWait: o.skipWait },
+      r.state, { skipWait: o.skipWait, openBand: o.openBand },
     );
     r.state = out.state;
     return out;
@@ -64,6 +64,8 @@ const halted = (r: Rig) => readHalt(r.cfg.monitor.haltPath);
 test("in range: nothing sent, ONE eth_call per cycle (the multicall poll), no state written", async () => {
   const r = rig();
   r.w.activeId = r.w.band.upperId; // inside
+  await r.step(); // cycle 0 also runs the exit probe
+  r.at(3);
   const before = r.w.calls.eth_call;
   const o = await r.step();
   assert.equal(o.status, "in-range");
@@ -337,8 +339,9 @@ test("limit: the effective daily cap is also the VAULT's maxRebalancesPerDay whe
   await r.step();
   r.at(60);
   const o = await r.step();
-  assert.ok(["limit", "blocked"].includes(o.status));
+  assert.ok(["limit", "blocked", "cooldown"].includes(o.status));
   assert.equal(r.sends, 0);
+  assert.ok(r.sink.messages.some((m) => m.key === "limit:daily"));
 });
 test("failure backoff: a reverting simulation is NOT retried every cycle; backoff 30 s, 60 s, then HALT at maxConsecutiveFailures (3)", async () => {
   const r = rig();
@@ -427,7 +430,7 @@ test("ActiveIdMoved: ONE adaptive re-simulation with the id the vault reported (
   const o = await r.step();
   assert.equal(o.status, "sent");
   assert.equal(r.w.calls.sims, 2);
-  assert.equal(Number(r.w.sent[0]!.args.expectedActiveId), active + 2);
+  assert.equal(Number(r.w.sent[0]!.args.expectedActiveId), active + 1, "the midpoint of the pre-swap id and the reported post-swap id: within idSlippage of both");
   assert.equal(r.sends, 1);
 });
 test("ActiveIdMoved by more than maxActiveIdShift is NOT adopted (a counted failure, no send); a second ActiveIdMoved is a failure, not a loop", async () => {
@@ -435,7 +438,7 @@ test("ActiveIdMoved by more than maxActiveIdShift is NOT adopted (a counted fail
   await a.step();
   a.at(60);
   const id = a.w.activeId;
-  a.w.simRevert = [{ name: "ActiveIdMoved", args: [id, id + 9, 2] }];
+  a.w.simRevert = [{ name: "ActiveIdMoved", args: [id, id + 5, 2] }]; // 5 > 2 x idSlippage: no id is within 2 of both
   assert.equal((await a.step()).status, "failed");
   assert.equal(a.sends, 0);
   assert.equal(a.w.calls.sims, 1);
@@ -776,4 +779,187 @@ test("while halted the state file is NOT rewritten by the keeper step (resume's 
   for (let i = 1; i < 4; i++) { r.at(3 * i); await r.step(); }
   assert.equal(r.persisted.length, writes, "no persist while halted");
   assert.equal(fs.readFileSync(r.cfg.monitor.statePath, "utf8"), before);
+});
+
+// ---------------------------------------------------------------- the exit probe
+test("exit probe: every N cycles the keeper simulates pair.burn of the vault's own most valuable band bin FROM the vault (no shares, no state override); a passing probe is silent", async () => {
+  const r = rig((c) => (c.probe.everyCycles = 2));
+  r.w.activeId = r.w.band.upperId;
+  for (let i = 0; i < 6; i++) { r.at(3 * i); await r.step(); }
+  assert.equal(r.w.burnCalls.length, 3, "cycles 0, 2, 4");
+  const c = r.w.burnCalls[0]!;
+  assert.equal(c.from!.toLowerCase(), A.vault.toLowerCase(), "from = the vault: msg.sender == from, no approval needed");
+  assert.equal(String(c.args[0]).toLowerCase(), A.vault.toLowerCase());
+  assert.equal(String(c.args[1]).toLowerCase(), A.vault.toLowerCase());
+  assert.equal(r.sink.messages.filter((m) => m.key === "exit:probe").length, 0);
+  assert.equal(r.state.exitProbe, null);
+});
+test("exit probe FAILS (a failing hook: burn reverts while guardState reads 0): crit alert 'EXIT PROBE FAILED: pause deposits', state flag, NO halt, keeps probing", async () => {
+  const r = rig((c) => (c.probe.everyCycles = 2));
+  r.w.activeId = r.w.band.upperId;
+  r.w.hookRevert = true;
+  await r.step();
+  const m = r.sink.messages.find((x) => x.key === "exit:probe");
+  assert.ok(m);
+  assert.equal(m!.severity, "crit");
+  assert.match(m!.text, /EXIT PROBE FAILED: pause deposits/);
+  assert.ok(r.state.exitProbe);
+  assert.equal(halted(r), null, "not the HALT latch: it clears itself when the hook recovers");
+  for (let i = 1; i < 5; i++) { r.at(3 * i); await r.step(); }
+  assert.equal(r.w.burnCalls.length, 3, "keeps probing (cycles 0, 2, 4)");
+  assert.equal(r.sink.messages.filter((x) => x.key === "exit:probe").length, 1, "alerted once");
+});
+test("exit probe failed: a band exit is NOT re-centred (a burn would revert anyway): no simulation, no send; when the hook recovers the probe clears and the rebalance goes", async () => {
+  const r = rig();
+  r.w.hookRevert = true;
+  await r.step();
+  r.at(60);
+  const o = await r.step();
+  assert.equal(o.status, "blocked");
+  assert.equal(r.sends, 0);
+  assert.equal(r.w.calls.sims, 0);
+  r.w.hookRevert = false;
+  r.at(100);
+  r.w.feedAsset.updatedAt = r.w.now - 100;
+  r.w.feedPair.updatedAt = r.w.now - 100;
+  const o2 = await r.step();
+  assert.equal(o2.status, "sent");
+  assert.equal(r.state.exitProbe, null);
+  assert.ok(r.keys().includes("resolved:exit:probe"));
+});
+test("exit probe: a ZeroAmountsOut revert or no band shares is INCONCLUSIVE (no alert, no flag); an endpoint error is a failed cycle, not a hook failure", async () => {
+  const r = rig();
+  r.w.activeId = r.w.band.upperId;
+  r.w.burnZero = true;
+  await r.step();
+  assert.equal(r.state.exitProbe, null);
+  assert.equal(r.sink.messages.filter((m) => m.key === "exit:probe").length, 0);
+  const e = rig();
+  e.w.activeId = e.w.band.upperId;
+  e.w.bins.clear();
+  await e.step();
+  assert.equal(e.w.burnCalls.length, 0, "no shares: nothing to simulate");
+  assert.equal(e.state.exitProbe, null);
+});
+test("the probe is not run while HALTED (the keeper calls nothing)", async () => {
+  const r = rig((c) => (c.probe.everyCycles = 1));
+  r.w.reasons = 4;
+  await r.step();
+  const n = r.w.burnCalls.length;
+  for (let i = 1; i < 4; i++) { r.at(3 * i); await r.step(); }
+  assert.equal(r.w.burnCalls.length, n);
+});
+
+// ---------------------------------------------------------------- the real vault's wiring and rebalanceAllowed bits
+test("wiring: the keeper wallet is not the vault's rebalancer / the vault's pair or feeds differ from the configuration: HALT kind wiring", async () => {
+  for (const mut of [(w: World) => { w.wiring.rebalancer = A.vault; }, (w: World) => { w.wiring.pair = A.keeper; }, (w: World) => { w.wiring.feedPair = A.keeper; }, (w: World) => { w.wiring.asset = A.keeper; }]) {
+    const r = rig();
+    mut(r.w);
+    await r.step();
+    r.at(60);
+    assert.equal((await r.step()).status, "halting");
+    assert.equal(halted(r)!.kind, "wiring");
+    assert.equal(r.sends, 0);
+  }
+});
+test("NotRebalancer from the simulation (a rotated rebalancer) HALTS with kind wiring", async () => {
+  const r = rig();
+  r.w.simRevert = [{ name: "NotRebalancer", args: [] }];
+  await r.step();
+  r.at(60);
+  assert.equal((await r.step()).status, "halting");
+  assert.equal(halted(r)!.kind, "wiring");
+});
+test("rebalanceAllowed bit 2048 (paused): no send, no halt, warning; bit 512 (daily cap): waits until readyAt, no send; bit 128 (in range): recovered", async () => {
+  const a = rig();
+  a.w.paused = true;
+  await a.step();
+  a.at(60);
+  assert.equal((await a.step()).status, "blocked");
+  assert.ok(a.sink.messages.some((m) => m.key === "vault:paused"));
+  assert.equal(halted(a), null);
+  const b = rig();
+  b.w.rebalancesToday = 48;
+  await b.step();
+  b.at(60);
+  const ob = await b.step();
+  assert.ok(["cooldown", "limit"].includes(ob.status));
+  assert.equal(b.sends, 0);
+});
+test("the vault's daily cap is the vault's (UTC-day) counter: 5 sends of this keeper in the last 24 h do NOT block when the vault says 0 today and its cap is 4", async () => {
+  const r = rig();
+  r.w.params.maxRebalancesPerDay = 4;
+  r.w.rebalancesToday = 0;
+  const now = r.w.now;
+  r.state = { ...r.state, sends: Array.from({ length: 5 }, (_, i) => ({ ts: now - 3600 - i * 600, kind: "rebalance" as const, tx: "0x" + i, outcome: "ok" as const })) };
+  await r.step();
+  r.at(60);
+  assert.equal((await r.step()).status, "sent");
+});
+
+// ---------------------------------------------------------------- open-band
+test("open-band (DRY, the default): the vault has no band, idle USDC only: sized like the vault sizes its own swap, simulated, NOT sent", async () => {
+  const r = rig((c) => (c.mode = "dry-run"));
+  r.w.band.hasBand = false;
+  r.w.idle.set(A.usdc.toLowerCase(), 100_000_000n);
+  const o = await r.step({ skipWait: true, openBand: true });
+  assert.equal(o.status, "dry-run");
+  assert.equal(r.sends, 0);
+  assert.equal(r.w.openBandCalls.length, 1);
+  assert.equal(r.w.rebalanceCalls.length, 0);
+  const a = r.w.openBandCalls[0]!;
+  assert.equal(Number(a.expectedActiveId), r.w.activeId);
+  assert.equal(Number(a.idSlippage), 2);
+  assert.ok(BigInt(a.swapMinOut.toString()) > 49_900_000n, "half of 100 USDC swapped to USDt: min out about 50");
+  assert.ok(o.plan && o.plan.ok && o.plan.swapIn > 49_900_000n && o.plan.swapIn < 50_100_000n);
+  assert.equal(r.state.sends.length, 0);
+});
+test("open-band LIVE: ONE openBand is sent after the simulation, pending marker first, BandOpened read back, recorded as kind openBand (not counted against the rebalance limits)", async () => {
+  const r = rig();
+  r.w.band.hasBand = false;
+  r.w.idle.set(A.usdc.toLowerCase(), 100_000_000n);
+  const o = await r.step({ skipWait: true, openBand: true });
+  assert.equal(o.status, "sent");
+  assert.equal(r.sends, 1);
+  assert.equal(r.w.sent[0]!.fn, "openBand");
+  assert.deepEqual(r.pendingAtSend[0], { kind: "openBand", at: r.w.now });
+  assert.equal(r.state.pending, null);
+  assert.equal(r.state.sends[0]!.kind, "openBand");
+  assert.equal(r.w.band.hasBand, true);
+  // a second open-band: the band exists now
+  r.at(5);
+  assert.equal((await r.step({ skipWait: true, openBand: true })).status, "blocked");
+  assert.equal(r.sends, 1);
+});
+test("open-band obeys the same safety rules: a latchable guard bit HALTS, a paused vault blocks, a failing simulation backs off and counts, a read-back lie HALTS", async () => {
+  const mk = (mut: (r: Rig) => void): Rig => {
+    const r = rig();
+    r.w.band.hasBand = false;
+    r.w.idle.set(A.usdc.toLowerCase(), 100_000_000n);
+    mut(r);
+    return r;
+  };
+  const a = mk((r) => (r.w.reasons = 8));
+  assert.equal((await a.step({ skipWait: true, openBand: true })).status, "halting");
+  assert.equal(a.sends, 0);
+  const b = mk((r) => (r.w.paused = true));
+  assert.equal((await b.step({ skipWait: true, openBand: true })).status, "blocked");
+  assert.equal(b.sends, 0);
+  const c = mk((r) => (r.w.simRevertAlways = { name: "NavLossTooLarge", args: [1, 1] }));
+  assert.equal((await c.step({ skipWait: true, openBand: true })).status, "failed");
+  assert.equal(c.state.backoff?.fails, 1);
+  assert.equal(c.sends, 0);
+  const d = mk((r) => (r.w.lies.noEvent = true));
+  assert.equal((await d.step({ skipWait: true, openBand: true })).status, "halting");
+  assert.equal(halted(d)!.kind, "readback");
+  const e = mk((r) => (r.w.quoteFeeBps = 90n));
+  assert.equal((await e.step({ skipWait: true, openBand: true })).status, "blocked");
+  assert.equal(e.sends, 0, "the pool pays below the oracle floor: not sent");
+});
+test("open-band with nothing idle is refused (plan empty), never sent", async () => {
+  const r = rig();
+  r.w.band.hasBand = false;
+  const o = await r.step({ skipWait: true, openBand: true });
+  assert.equal(o.status, "blocked");
+  assert.equal(r.sends, 0);
 });

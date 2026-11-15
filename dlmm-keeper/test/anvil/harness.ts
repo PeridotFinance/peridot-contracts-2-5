@@ -125,6 +125,7 @@ export async function deployWorld(anvil: Anvil, mut?: (c: KeeperConfig) => void)
   const ACTIVE = 8_388_608;
   const pair = await dep("StubPair", usdt.address, usdc.address, ACTIVE);
   const vault = await dep("StubVault", pair.address, keeper.address, ACTIVE - 1, ACTIVE + 1);
+  await (await vault.setWiring(feedAsset.address, feedPair.address, usdc.address, usdt.address)).wait();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dlmm-anvil-"));
   const cfg = decidedConfig(dir);
   cfg.vault = vault.address;

@@ -1,15 +1,16 @@
 // Classification of a reverted simulation or transaction (the vault's custom errors, decoded). The keeper NEVER loops on a revert: every class sets a backoff.
+//   wiring    : NotRebalancer (the wallet is not the vault's rebalancer): HALT kind wiring
 //   halt      : GuardLatched, or GuardUnsafe with a latchable bit (1,2,4,8): the keeper stops sending (HALT file)
 //   benign    : the world moved, nothing is wrong (NotOutOfRange: the active bin returned; CooldownActive; DailyRebalanceCapReached; GuardUnsafe with only the live bits 16/32)
 //   retry     : ActiveIdMoved (one adaptive re-simulation with the reported id, then an ordinary failure)
 //   failure   : counted (NavLossTooLarge, SwapTooLarge, anything unclassified): backoff doubling, alert, counts toward maxConsecutiveFailures
 //   endpoint  : the node failed or limited the call: not the vault's fault, not counted as a failure of the vault logic, backoff
 import { utils } from "ethers";
-import { VAULT_ABI } from "./abi";
+import { VAULT_ABI, VAULT_EXTRA_ABI } from "./abi";
 import { LATCHABLE_MASK, bitNames } from "./constants";
 
-const errIface = new utils.Interface(VAULT_ABI.filter((f) => f.startsWith("error ")));
-export type RevertKind = "halt" | "benign" | "retry" | "failure" | "endpoint";
+const errIface = new utils.Interface([...VAULT_ABI, ...VAULT_EXTRA_ABI].filter((f) => f.startsWith("error ")));
+export type RevertKind = "halt" | "wiring" | "benign" | "retry" | "failure" | "endpoint";
 export interface RevertClass {
   kind: RevertKind;
   name: string;
@@ -89,6 +90,14 @@ export function classifyRevert(err: unknown): RevertClass {
       const reasons = n(0);
       return (reasons & LATCHABLE_MASK) !== 0 ? { kind: "halt", name, detail: bitNames(reasons), reasons } : { kind: "benign", name, detail: `live only: ${bitNames(reasons)}`, reasons };
     }
+    case "NotRebalancer":
+      return { kind: "wiring", name, detail: "the keeper wallet is not the vault's rebalancer" };
+    case "BandExists":
+      return { kind: "benign", name, detail: "a band already exists" };
+    case "FeedInvalid":
+      return { kind: "benign", name, detail: `feed ${n(0)} is stale or bad (the guard poll reports it)` };
+    case "EnforcedPause":
+      return { kind: "benign", name, detail: "the vault is paused" };
     case "NotOutOfRange":
       return { kind: "benign", name, detail: "the active bin is inside the band again" };
     case "CooldownActive":

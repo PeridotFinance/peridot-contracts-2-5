@@ -33,3 +33,18 @@ export const MAX_SENDS_PER_DAY = 48;
 export const MAX_DEADLINE_SECONDS = 120;
 export const MAX_ID_SLIPPAGE = 2;
 export const DAY = 86_400;
+/** rebalanceAllowed().reasonBits above the guard bits (DEVIATIONS.md of the real vault) */
+export const RB_NO_BAND = 64;
+export const RB_IN_RANGE = 128;
+export const RB_COOLDOWN = 256;
+export const RB_DAILY_CAP = 512;
+export const RB_LATCHED = 1024;
+export const RB_PAUSED = 2048;
+export function rbNames(bits: number): string {
+  const n: string[] = [];
+  const all: Array<[number, string]> = [[64, "NO_BAND"], [128, "ACTIVE_IN_RANGE"], [256, "COOLDOWN"], [512, "DAILY_CAP"], [1024, "LATCHED"], [2048, "PAUSED"]];
+  for (const [b, name] of all) if ((bits & b) !== 0) n.push(name);
+  const g = bits & 63;
+  if (g) n.push(bitNames(g));
+  return n.length ? n.join("+") : "none";
+}

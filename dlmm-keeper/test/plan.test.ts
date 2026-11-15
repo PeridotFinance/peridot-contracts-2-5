@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { E18, planSwap } from "../src/plan";
+import { E18, planOpenBand, planSwap } from "../src/plan";
 import type { PlanParams, Quote } from "../src/plan";
 
 // pool: 1 X = 0.9996 Y (raw), fee 3 bp; the oracle agrees (0.99959)
@@ -126,4 +126,42 @@ test("different token decimals (6 and 18): the sizing works in raw units", async
     assert.equal(pl.swapXForY, true);
     assert.ok(pl.swapIn > 49n * 10n ** 18n && pl.swapIn < 51n * 10n ** 18n);
   }
+});
+
+// ---------------------------------------------------------------- openBand sizing mirrors the VAULT's own formula (it has no swapIn parameter)
+const ob = (over: Record<string, unknown>): Parameters<typeof planOpenBand>[0] => ({ x: 0n, y: 0n, assetIsX: false, oracle18: P, maxSwapBps: 6000, effLossBps: 40, swapSlippageBps: 10, addSlippageBps: 50, quote: mkQuote(999_600_000_000_000_000n), ...over }) as Parameters<typeof planOpenBand>[0];
+test("openBand, idle asset only (asset = Y = USDC, pair token X = USDt): the vault swaps (asset - pv)/2 of the ASSET, Y for X", async () => {
+  const pl = await planOpenBand(ob({ y: 100_000_000n }));
+  assert.ok(pl.ok);
+  if (!pl.ok) return;
+  assert.equal(pl.swapXForY, false);
+  assert.equal(pl.swapIn, 50_000_000n, "(100 - 0) / 2 exactly, as the vault computes it");
+  assert.ok(pl.swapMinOut > 49_900_000n);
+  assert.ok(pl.residualImbalanceBps <= 3);
+});
+test("openBand, asset = X: the same asset-heavy inventory swaps X for Y; pair-token-heavy inventory swaps the pair token back, capped at the pair balance", async () => {
+  const a = await planOpenBand(ob({ x: 100_000_000n, assetIsX: true }));
+  assert.ok(a.ok && a.swapXForY === true && a.swapIn === 50_000_000n);
+  const b = await planOpenBand(ob({ x: 60_000_000n, y: 10_000_000n })); // asset = Y holds 10, USDt (X) worth ~60: the vault swaps USDt for USDC
+  assert.ok(b.ok);
+  if (b.ok) {
+    assert.equal(b.swapXForY, true);
+    const pv = (60_000_000n * P) / E18;
+    const want = ((pv - 10_000_000n) / 2n * E18) / P;
+    assert.equal(b.swapIn, want);
+  }
+});
+test("openBand: SwapTooLarge is predicted (the vault would revert when the half of the idle asset exceeds maxSwapBps of NAV) and the oracle floor / depth apply as in rebalance", async () => {
+  const pl = await planOpenBand(ob({ y: 100_000_000n, maxSwapBps: 4000 }));
+  assert.ok(!pl.ok && pl.code === "swap-too-large");
+  assert.ok(!(await planOpenBand(ob({ y: 100_000_000n, quote: mkQuote(1_010_000_000_000_000_000n) }))).ok); // X 1 % dearer in the pool: Y buys 1 % less X than the oracle says
+  const d = await planOpenBand(ob({ y: 100_000_000n, quote: mkQuote(999_600_000_000_000_000n, 3n, 1_000_000n) }));
+  assert.ok(!d.ok && d.code === "depth");
+  const e = await planOpenBand(ob({}));
+  assert.ok(!e.ok && e.code === "empty");
+});
+test("openBand: an already even idle inventory sends no swap (swapMinOut 0)", async () => {
+  const x = 50_000_000n;
+  const pl = await planOpenBand(ob({ x, y: (x * P) / E18 }));
+  assert.ok(pl.ok && pl.swapIn === 0n && pl.swapMinOut === 0n);
 });

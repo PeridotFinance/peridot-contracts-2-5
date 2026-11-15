@@ -32,7 +32,7 @@ export interface PlanParams {
   addSlippageBps: number;
   quote: Quote;
 }
-export type PlanSkip = "empty" | "depth" | "quote-below-oracle" | "bad-input";
+export type PlanSkip = "empty" | "depth" | "quote-below-oracle" | "bad-input" | "swap-too-large";
 export type Plan =
   | {
       ok: true;
@@ -103,4 +103,63 @@ export async function planSwap(p: PlanParams): Promise<Plan> {
     ok: true, swapXForY: xForY, swapIn: s1, swapMinOut, quoteOut: q1.amountOut, oracleOut, navY, capped,
     amountXMin: bps(xWorst, p.addSlippageBps), amountYMin: bps(yWorst, p.addSlippageBps), residualImbalanceBps: Number((resid * 10_000n) / navY),
   };
+}
+
+// ---------------------------------------------------------------- openBand
+export interface OpenBandParams extends Omit<PlanParams, "x" | "y"> {
+  /** the vault's idle balances (no band yet), raw units, by the pair's X / Y */
+  x: bigint;
+  y: bigint;
+  /** true when the vault's asset (USDC) is the pair's token X */
+  assetIsX: boolean;
+}
+/**
+ * openBand has NO swapIn parameter: the vault sizes its own swap from its idle balances (PharaohDlmmVault.openBand, read on 16 Nov 2026):
+ *   pv = the pair-token balance valued in asset units at the ORACLE; if asset > pv + 1: swap (asset - pv) / 2 of the asset;
+ *   else if pv > asset + 1: swap min(assetToPair((pv - asset) / 2), pair balance) of the pair token; the swap obeys SwapTooLarge (value <= maxSwapBps of NAV) and the oracle floor.
+ * The keeper mirrors that EXACTLY (same formula, same oracle price) to learn the swap the vault will make, quotes it, and returns the arguments the vault does take:
+ * swapMinOut (>= quote x (1 - slippage) and >= the oracle floor) and amountXMin / amountYMin (the worst-case inventory after the swap, x (1 - add slippage)).
+ * `swapIn` in the result is what the VAULT will swap (informational, not sent). Rounding differs from the vault by a few wei at most; swapMinOut sits well above that.
+ */
+export async function planOpenBand(p: OpenBandParams): Promise<Plan> {
+  const { x, y, oracle18: pO, assetIsX } = p;
+  if (x < 0n || y < 0n || pO <= 0n || p.maxSwapBps < 1 || p.maxSwapBps > 10_000) return { ok: false, code: "bad-input", reason: "negative inventory, non-positive oracle price or maxSwapBps outside 1..10000" };
+  const aAmt = assetIsX ? x : y;
+  const pAmt = assetIsX ? y : x;
+  const pairToAsset = (a: bigint): bigint => (assetIsX ? (a * E18) / pO : (a * pO) / E18);
+  const assetToPair = (a: bigint): bigint => (assetIsX ? (a * pO) / E18 : (a * E18) / pO);
+  const pv = pairToAsset(pAmt);
+  const nav = aAmt + pv;
+  if (nav === 0n) return { ok: false, code: "empty", reason: "the vault holds no idle assets: nothing to open a band with" };
+  let swapAsset: boolean | undefined;
+  let s = 0n;
+  if (aAmt > pv + 1n) {
+    swapAsset = true;
+    s = (aAmt - pv) / 2n;
+  } else if (pv > aAmt + 1n) {
+    swapAsset = false;
+    const want = assetToPair((pv - aAmt) / 2n);
+    s = want < pAmt ? want : pAmt;
+  }
+  const noSwap = (): Plan => ({ ok: true, swapXForY: false, swapIn: 0n, swapMinOut: 0n, quoteOut: 0n, oracleOut: 0n, navY: nav, capped: false, amountXMin: bps(x, p.addSlippageBps), amountYMin: bps(y, p.addSlippageBps), residualImbalanceBps: 0 });
+  if (swapAsset === undefined || s === 0n) return noSwap();
+  if (s >= U128) return { ok: false, code: "bad-input", reason: "swap size does not fit uint128" };
+  const inValue = swapAsset ? s : pairToAsset(s);
+  const maxIn = (nav * BigInt(p.maxSwapBps)) / 10_000n;
+  if (inValue > maxIn) return { ok: false, code: "swap-too-large", reason: `the vault would swap ${inValue} (asset units) which exceeds maxSwapBps of NAV (${maxIn}): openBand would revert SwapTooLarge` };
+  const xForY = swapAsset ? assetIsX : !assetIsX;
+  const q = await p.quote(xForY, s);
+  if (q.amountInLeft > 0n) return { ok: false, code: "depth", reason: `the pair cannot fill ${s} (left ${q.amountInLeft})` };
+  const oracleOut = swapAsset ? assetToPair(s) : pairToAsset(s);
+  const oracleFloor = ceilDiv(oracleOut * BigInt(10_000 - p.effLossBps), 10_000n);
+  if (q.amountOut < oracleFloor) return { ok: false, code: "quote-below-oracle", reason: `the pair pays ${q.amountOut} for ${s}, below the oracle floor ${oracleFloor} (oracle-implied ${oracleOut}, tolerance ${p.effLossBps} bp)` };
+  const quoteFloor = (q.amountOut * BigInt(10_000 - p.swapSlippageBps)) / 10_000n;
+  const swapMinOut = quoteFloor > oracleFloor ? quoteFloor : oracleFloor;
+  const xWorst = xForY ? x - s : x + swapMinOut;
+  const yWorst = xForY ? y + swapMinOut : y - s;
+  const xq = xForY ? x - s : x + q.amountOut;
+  const yq = xForY ? y + q.amountOut : y - s;
+  const vxq = (xq * pO) / E18;
+  const resid = vxq > yq ? vxq - yq : yq - vxq;
+  return { ok: true, swapXForY: xForY, swapIn: s, swapMinOut, quoteOut: q.amountOut, oracleOut, navY: (x * pO) / E18 + y, capped: false, amountXMin: bps(xWorst, p.addSlippageBps), amountYMin: bps(yWorst, p.addSlippageBps), residualImbalanceBps: Number((resid * 10_000n) / ((x * pO) / E18 + y || 1n)) };
 }

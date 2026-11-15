@@ -36,6 +36,7 @@
     "maxActiveIdShift": 4
   },
   "guard": { "autoTripGuard": false, "tripDebounceSeconds": 15 },
+  "probe": { "everyCycles": 20 },
   "monitor": { "statePath": "/data/state/dlmm-keeper.json", "haltPath": "/data/state/HALT" },
   "alerts": { "channel": "UNSET" }
 }
