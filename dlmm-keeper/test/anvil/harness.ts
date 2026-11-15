@@ -34,7 +34,7 @@ export class CountingProvider extends providers.StaticJsonRpcProvider {
   stateRequests = 0;
   async send(method: string, params: Array<unknown>): Promise<unknown> {
     this.requests++;
-    if (method !== "eth_getBlockByNumber" && method !== "eth_blockNumber") this.stateRequests++;
+    if (method !== "eth_getBlockByNumber" && method !== "eth_blockNumber" && !method.startsWith("evm_") && !method.startsWith("anvil_")) this.stateRequests++;
     return super.send(method, params);
   }
 }
@@ -53,6 +53,7 @@ const art = (name: string): { abi: any[]; bytecode: string; deployed: string } =
   const j = JSON.parse(fs.readFileSync(path.join(compileStubs(), "Stubs.sol", `${name}.json`), "utf8"));
   return { abi: j.abi, bytecode: j.bytecode.object, deployed: j.deployedBytecode.object };
 };
+export const stubArt = art;
 export const stubAbi = (name: string): any[] => art(name).abi;
 
 export interface Anvil {

@@ -263,7 +263,13 @@ export async function probeExit(provider: providers.Provider, cfg: KeeperConfig,
   });
   if (!best || best.value === 0n) return { status: "inconclusive", why: "the vault holds no band shares worth a raw unit" };
   try {
-    await provider.call({ from: cfg.vault, to: cfg.pair, data: pairIface.encodeFunctionData("burn", [cfg.vault, cfg.vault, [best.id], [best.bal.toString()]]) }, block);
+    const ret = await provider.call({ from: cfg.vault, to: cfg.pair, data: pairIface.encodeFunctionData("burn", [cfg.vault, cfg.vault, [best.id], [best.bal.toString()]]) }, block);
+    // a revert can come back as a plain result (see callVoid): only a result that DECODES as burn's bytes32[] is a pass
+    try {
+      pairIface.decodeFunctionResult("burn", ret);
+    } catch {
+      throw Object.assign(new Error("burn simulation returned revert data"), { data: ret });
+    }
     return { status: "ok" };
   } catch (e) {
     const data = revertData(e);
@@ -279,4 +285,14 @@ export async function probeExit(provider: providers.Provider, cfg: KeeperConfig,
     }
     return { status: "failed", why: data ? `burn of bin ${best.id} reverted with ${data.slice(0, 74)}` : `burn of bin ${best.id} reverted: ${safeError(e)}` };
   }
+}
+
+/**
+ * eth_call of a function that RETURNS NOTHING (rebalance, openBand, tripGuard). ethers v5 hands the revert data of a reverted eth_call back as an ordinary RESULT for some node
+ * error shapes (MEASURED on anvil: a reverting pair.burn came back as 0x08c379a0...), so a "successful" simulation is only one that returned EXACTLY "0x". Anything else is thrown as a
+ * revert with that data, so classifyRevert decodes it and nothing is ever sent on the strength of a reverted simulation.
+ */
+export async function callVoid(provider: providers.Provider, tx: { from: string; to: string; data: string }): Promise<void> {
+  const ret = await provider.call(tx);
+  if (ret !== "0x" && ret !== "") throw Object.assign(new Error("simulation returned revert data"), { data: ret });
 }

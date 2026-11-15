@@ -11,7 +11,7 @@
 //   * read errors BEFORE a send are an ordinary failed cycle (alert, nothing was sent). Any error AFTER the pending marker HALTS.
 import { providers, utils } from "ethers";
 import type { AlertManager } from "./alerts";
-import { bandInventory, pairQuote, probeExit, readAct, readPoll, vaultIface, WiringError } from "./chain";
+import { bandInventory, callVoid, pairQuote, probeExit, readAct, readPoll, vaultIface, WiringError } from "./chain";
 import type { BlockTag } from "./chain";
 import type { Act, Poll } from "./chain";
 import type { KeeperConfig } from "./config";
@@ -141,7 +141,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
       const data = vaultIface.encodeFunctionData("tripGuard", []);
       let gasLimit;
       try {
-        await provider.call({ from: keeper, to: cfg.vault, data });
+        await callVoid(provider, { from: keeper, to: cfg.vault, data });
         gasLimit = (await provider.estimateGas({ from: keeper, to: cfg.vault, data })).mul(13).div(10);
       } catch (e) {
         const c = classifyRevert(e);
@@ -416,7 +416,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   let adapted = false;
   for (;;) {
     try {
-      await provider.call({ from: keeper, to: cfg.vault, data });
+      await callVoid(provider, { from: keeper, to: cfg.vault, data });
       const est = await provider.estimateGas({ from: keeper, to: cfg.vault, data });
       gasLimit = est.mul(13).div(10);
       if (gasLimit.gt(cfg.limits.maxGasLimit)) return fail(`gas estimate ${est.toString()} x 1.3 is above the ceiling ${cfg.limits.maxGasLimit}`);
@@ -454,7 +454,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   const summary = `${txKind}(expected=${expected}, idSlip=${cfg.rebalance.idSlippage}, xForY=${plan.swapXForY}, in=${plan.swapIn}, minOut=${plan.swapMinOut}, xMin=${plan.amountXMin}, yMin=${plan.amountYMin}, deadline=${deadline}) gas~${gasLimit.toString()}`;
   if (!live || !deps.signer) {
     out.notes.push(`DRY-RUN: simulation passed, NOT sent: ${summary}`);
-    backoffSoft({ seconds: cfg.timing.cooldownSeconds }, "dry-run");
+    if (!opts.skipWait) backoffSoft({ seconds: cfg.timing.cooldownSeconds }, "dry-run"); // (a one-shot `check` / `open-band` leaves no state behind)
     return done("dry-run");
   }
 

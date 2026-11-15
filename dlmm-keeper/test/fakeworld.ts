@@ -30,6 +30,8 @@ export interface World {
   /** the vault's wiring getters (defaults = the configured values) */
   wiring: { pair: string; rebalancer: string; feedAsset: string; feedPair: string; asset: string; pairToken: string };
   /** pair.burn simulations from the vault: revert (a failing hook) / revert with ZeroAmountsOut (inconclusive) */
+  /** revert data comes back as an ordinary eth_call RESULT (what ethers v5 does for some node errors) */
+  revertAsResult: boolean;
   hookRevert: boolean;
   burnZero: boolean;
   burnCalls: Array<{ from?: string; args: utils.Result }>;
@@ -75,7 +77,7 @@ export function newWorld(): World {
     activeId: 8_388_608, activeIdQueue: [], band: { lowerId: 8_388_607, upperId: 8_388_609, hasBand: true },
     latched: false, reasons: 0, paused: false,
     wiring: { pair: A.pair, rebalancer: A.keeper, feedAsset: A.feedAsset, feedPair: A.feedPair, asset: A.usdc, pairToken: A.usdt },
-    hookRevert: false, burnZero: false, burnCalls: [],
+    revertAsResult: false, hookRevert: false, burnZero: false, burnCalls: [],
     params: { legBandBps: 50, maxFeedAge: 93_600, maxPoolOracleDevBps: 60, rebalanceCooldown: 120, maxRebalancesPerDay: 48, maxSwapBps: 6000, maxRebalanceLossBps: 50 },
     lastRebalanceAt: 0, rebalancesToday: 0,
     tokenX: A.usdt, tokenY: A.usdc, decX: 6, decY: 6,
@@ -224,7 +226,14 @@ export class FakeProvider {
   async getNetwork(): Promise<{ chainId: number }> { return { chainId: 43114 }; }
   async call(tx: { from?: string; to: string; data: string }, _block?: unknown): Promise<string> {
     this.w.calls.eth_call++;
-    return dispatch(this.w, tx.to, tx.data, tx.from);
+    try {
+      return dispatch(this.w, tx.to, tx.data, tx.from);
+    } catch (e) {
+      // ethers v5 returns the revert data of some node error shapes as a plain RESULT (MEASURED on anvil): the keeper must not read that as a pass
+      const data = (e as { data?: string }).data;
+      if (this.w.revertAsResult && data) return data;
+      throw e;
+    }
   }
   async estimateGas(): Promise<BigNumber> { return BigNumber.from(500_000); }
   async getBalance(): Promise<BigNumber> { this.w.calls.getBalance++; return BigNumber.from(this.w.keeperBalance); }

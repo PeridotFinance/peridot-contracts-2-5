@@ -963,3 +963,34 @@ test("open-band with nothing idle is refused (plan empty), never sent", async ()
   assert.equal(o.status, "blocked");
   assert.equal(r.sends, 0);
 });
+
+test("a reverted simulation that the node/ethers hands back as a plain RESULT is still a revert: nothing is sent (rebalance, openBand and the probe)", async () => {
+  const r = rig();
+  r.w.revertAsResult = true;
+  r.w.simRevertAlways = { name: "NavLossTooLarge", args: [1, 1] };
+  await r.step();
+  r.at(60);
+  const o = await r.step();
+  assert.equal(o.status, "failed");
+  assert.equal(r.sends, 0);
+  const g = rig();
+  g.w.revertAsResult = true;
+  g.w.simRevert = [{ name: "GuardLatched", args: [] }];
+  await g.step();
+  g.at(60);
+  assert.equal((await g.step()).status, "halting", "the revert class is decoded from the returned data");
+  assert.equal(g.sends, 0);
+  const b = rig();
+  b.w.revertAsResult = true;
+  b.w.band.hasBand = false;
+  b.w.idle.set(A.usdc.toLowerCase(), 100_000_000n);
+  b.w.simRevertAlways = { name: "NotRebalancer", args: [] };
+  assert.equal((await b.step({ skipWait: true, openBand: true })).status, "halting");
+  assert.equal(b.sends, 0);
+  const p = rig();
+  p.w.revertAsResult = true;
+  p.w.hookRevert = true;
+  p.w.activeId = p.w.band.upperId;
+  await p.step();
+  assert.ok(p.state.exitProbe, "the probe reads a returned revert payload as a failure");
+});
