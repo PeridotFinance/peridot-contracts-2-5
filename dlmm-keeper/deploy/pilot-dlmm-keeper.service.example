@@ -1,0 +1,18 @@
+# TEMPLATE (not installed by anything in this repository). A separate Droplet role "dlmmkeeper": its own Droplet, its own volume at /mnt/pilot_dlmmkeeper_data,
+# its own keystore, its own env file. /etc/pilot/dlmmkeeper.env (root, mode 600) holds AVALANCHE_MAINNET_RPC_URL= (and the alert credentials when the channel is
+# telegram / webhook). /etc/pilot/dlmmkeeper.password (owner uid 1000, mode 400) holds the keystore password and is mounted read-only into the container.
+# Install it NOT enabled; starting is the explicit step. A HALT file lives on the volume: a restart NEVER clears it.
+[Unit]
+Description=pilot DLMM keeper
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker rm -f dlmm-keeper
+ExecStart=/usr/bin/docker run --name dlmm-keeper --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --env-file /etc/pilot/dlmmkeeper.env -e DLMM_KEEPER_CONFIG=/data/config/host.json -e DLMM_KEEPER_KEYSTORE_PATH=/data/keystore/dlmm-keeper.json -e DLMM_KEEPER_KEYSTORE_PASSWORD_FILE=/run/secrets/dlmm-keeper-password -v /etc/pilot/dlmmkeeper.password:/run/secrets/dlmm-keeper-password:ro -v /mnt/pilot_dlmmkeeper_data:/data pilot-dlmm-keeper:local run
+ExecStop=/usr/bin/docker stop -t 60 dlmm-keeper
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+{
+  "name": "dlmm-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exit-triggered rebalance keeper for the Pharaoh DLMM USDC/USDt 3-bin vault. Dry-run by default; hot wallet holds gas only.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "test:anvil": "npm run build && node --test --test-concurrency=1 --test-timeout=300000 dist/test/anvil/*.anvil.test.js",
+    "test:fork": "npm run build && bash test/fork/run.sh",
+    "check": "node dist/src/main.js check",
+    "run": "node dist/src/main.js run",
+    "build:prod": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": { "ethers": "5.8.0" },
+  "devDependencies": { "@types/node": "22.9.0", "typescript": "5.6.3" }
+}

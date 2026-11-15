@@ -1,0 +1,9 @@
+# Own project for the keeper's stub contracts (never the repository's contracts/foundry.toml). Compiled on demand by test/anvil/*.anvil.test.ts with
+# FOUNDRY_OUT / FOUNDRY_CACHE_PATH in a temp directory. solc 0.8.24 is in the local svm cache (offline).
+[profile.default]
+src = "src"
+solc_version = "0.8.24"
+evm_version = "cancun"
+offline = true
+optimizer = true
+via_ir = true
