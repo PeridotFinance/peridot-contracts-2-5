@@ -2,7 +2,7 @@
 
 Status: **NOT DEPLOYED. SPEC-STAGE HANDOFF, written from the frozen interface before any contract code exists.** Nothing here has been run on a fork or on mainnet. The vault address, ABI JSON, feeds and the USDt address do not exist yet (marked **TBD**); a machine-readable entry (key `vaultDlmm` in `avalanche-pilot-addresses.json`) and the compiled ABI file are added after the ceremony (`avalanche-dlmm-vault-ceremony.md`). Where this document cannot tell from the frozen spec, it says **unverified** (the margin handoff's convention): re-check each one against the W2 source and the fork tests before coding against it.
 
-Sources, in order of authority: `contracts/vault-dlmm/src/IPharaohDlmmVault.sol` (FROZEN; wins on any signature), `avalanche-pharaoh-dlmm-vault-spec.md` (FROZEN; section 7 is the frontend contract this file implements), `avalanche-pharaoh-dlmm-vault-second-measurement.md` and `avalanche-pharaoh-dlmm-vault-evaluation.md` (numbers and the hook facts). Everything not listed in the interface (ERC-4626 views, `pause`, roles, `harvest` details) is **inherited from R3** (`vault-r3/src/r3/PharaohLiquidityVaultR3.sol`) and is marked **unverified until W2 lands**. Do not copy R3 names where the interface differs: R3 has `Vault__DepositCapExceeded`, `DepositCapUpdated`, `RewardsHarvested`, `harvestRewards(bool,uint256)`; this vault has `CapExceeded`, `DepositCapSet`, `PharHarvested`, `harvestRewards()`.
+**Updated with the W6 mainnet-fork findings** (local fork of block 100420249, nothing sent; `contracts/vault-dlmm/test/fork/RUN.md`; MEASURED at that block): sections 3.1, 3.2, 3.3, 4.1, 4.2, 5.3, 6, 8.3 and 11 carry them. Sources, in order of authority: `contracts/vault-dlmm/src/IPharaohDlmmVault.sol` (FROZEN; wins on any signature), `avalanche-pharaoh-dlmm-vault-spec.md` (FROZEN; section 7 is the frontend contract this file implements), `avalanche-pharaoh-dlmm-vault-second-measurement.md` and `avalanche-pharaoh-dlmm-vault-evaluation.md` (numbers and the hook facts). Everything not listed in the interface (ERC-4626 views, `pause`, roles, `harvest` details) is **inherited from R3** (`vault-r3/src/r3/PharaohLiquidityVaultR3.sol`) and is marked **unverified until W2 lands**. Do not copy R3 names where the interface differs: R3 has `Vault__DepositCapExceeded`, `DepositCapUpdated`, `RewardsHarvested`, `harvestRewards(bool,uint256)`; this vault has `CapExceeded`, `DepositCapSet`, `PharHarvested`, `harvestRewards()`.
 
 ## 0. The three rules that override everything else in the UI
 
@@ -62,11 +62,14 @@ States and copy:
 
 | State | Deposit button | Banner |
 | --- | --- | --- |
-| `!unsafe && !latched` | enabled (subject to cap, pause) | none |
+| `!unsafe && !latched` and the exit probe passes | enabled (subject to cap, pause) | none |
+| exit probe fails (whatever `guardState()` says) | **disabled** | the section 8.3 error text |
 | `unsafe && !latched` | disabled | "Deposits are paused by the safety guard (price check). Withdrawals are not affected." plus the reason text |
 | `latched` (whatever `unsafe` says) | disabled | "Deposits are paused by the safety guard until the Peridot team releases it. Withdrawals are not affected." |
 | `paused()` | disabled | "Vault paused. Withdrawals are not affected." (inherited pause does not gate exits per spec section 3; unverified until W2) |
 | any state | **exits stay enabled** | |
+
+**The guard does not see a failing Pharaoh hook (W6 MEASURED).** With the pair's `beforeBurn` hook reverting, `guardState()` still reads `unsafe = false, latched = false, reasons = 0` (bit 32 checks linkage and code hash only), deposits are still accepted, and `redeemInKind`, `redeem`, `withdraw` and `rebalance` all revert (the hook's own revert data is bubbled; pool swaps and mints still work). So `guardState()` alone must never be the signal that "everything is fine". **Exit probe (required):** before enabling the deposit button, and on every page load, run an `eth_call` of `redeemInKind(N, holder, holder)` from an address that holds shares (the team seed holder, address TBD, or a state-override balance), with `N` of at least 10 shares (1 to 2 shares always revert, see 4.2) and only when `bandState().hasBand` (with no band the exit does not burn and works anyway). If the probe fails, or cannot be run, **hide or disable deposits** (fail closed) and show the section 8.3 error text. A probe that succeeds proves the exit works at that block only.
 
 Anyone may call `tripGuard()`; the UI does not need to offer it (a monitoring page may). It reverts `GuardUnsafe(0)` when nothing latchable holds.
 
@@ -78,7 +81,7 @@ Anyone may call `tripGuard()`; the UI does not need to offer it (a monitoring pa
 | In range | `hasBand && !outOfRange` | "Invested in 3 pool price bins (ids `lowerId` to `upperId`)". Fees are earned; PHAR only while the active bin (`activeId`) is the one the pool rewards (section 5.3) |
 | Out of range | `hasBand && outOfRange` | "The pool price has left the vault's range; the keeper re-centres it, usually within minutes. While out of range the vault earns no fees and no PHAR." Show "re-centre pending" only from `rebalanceAllowed()`; do not promise a time |
 
-Whether a deposit made while a band exists is invested at once or waits idle for the next re-centre is **not in the frozen spec (unverified; open question 6)**. Until W2 settles it, the UI must not claim "your deposit is earning now"; show it as "deposited" and read the vault's idle USDC (`USDC.balanceOf(vault)`) if it wants to show an idle share.
+**Deposits earn nothing until the next `openBand` or `rebalance` (W6 MEASURED): a deposit is idle USDC until the keeper next builds the band.** The UI must not say "your deposit is earning"; show "deposited; invested at the next re-centre" and, if it shows an idle share, read the vault's idle USDC (`USDC.balanceOf(vault)`). A band that is in range can therefore be earning on less than the vault's NAV.
 
 ### 3.3 Cap
 
@@ -89,14 +92,14 @@ Whether a deposit made while a band exists is invested at once or waits idle for
 | Headroom | `max(0, depositCap() - totalAssets())`; the per-user limit is `maxDeposit(user)` (never offer more than it returns) |
 | Hard ceiling | `DEPOSIT_CAP_CEILING()` (implementation immutable, `200000000`); the owner cannot raise the cap above it (`CapAboveCeiling`); a higher cap needs a new implementation that the Safe signs |
 
-Cap rules (spec section 2): enforced in `deposit`, `mint`, `maxDeposit`, `maxMint` and the `openBand` funding path: `totalAssets()` after the call must be at most the cap, else `CapExceeded(cap, totalAssetsAfter)`. The cap counts the **whole vault**, first come first served; a direct token donation to the vault only reduces headroom. From the R3 fork rehearsal: **`maxDeposit` can overstate the room by a few units** because fees are collected inside `deposit` first; do not build a transaction for the last unit of headroom (leave 0.01 USDC) and handle `CapExceeded` as a normal outcome ("the pilot cap was reached while you were depositing"). Copy: "Pilot: the vault accepts at most USD 200 in total."
+Cap rules (spec section 2): enforced in `deposit`, `mint`, `maxDeposit`, `maxMint` and the `openBand` funding path: `totalAssets()` after the call must be at most the cap, else `CapExceeded(cap, totalAssetsAfter)`. The cap counts the **whole vault**, first come first served; a direct token donation to the vault only reduces headroom. From the R3 fork rehearsal: **`maxDeposit` can overstate the room by a few units** because fees are collected inside `deposit` first; do not build a transaction for the last unit of headroom (leave 0.01 USDC) and handle `CapExceeded` as a normal outcome ("the pilot cap was reached while you were depositing"). **`totalAssets()` can exceed the cap (W6 MEASURED): only entries are capped, and fees raise NAV above `depositCap()`.** Headroom is then 0 and `maxDeposit` is 0; do not draw "deposited / cap" as an error or clamp the displayed NAV to the cap, show "Pilot cap reached". Copy: "Pilot: the vault accepts at most USD 200 in total."
 
 ## 4. Call sequences (exact signatures)
 
 Signatures below are from the frozen interface or are the standard ERC-4626 forms inherited from R3 (**unverified until W2**). Selectors computed with `cast sig`.
 
 ### 4.1 Deposit
-1. Read section 3 state; refuse if `latched || unsafe || paused() || maxDeposit(user) == 0`.
+1. Read section 3 state; refuse if `latched || unsafe || paused() || maxDeposit(user) == 0` **or the exit probe of 3.1 fails**.
 2. `USDC.approve(vault, assets)` (exact amount).
 3. Preview: `previewDeposit(uint256 assets)(uint256 shares)` (R3's preview is on the ownership NAV and is a lower bound after an entry-loss allowance; unverified).
 4. `deposit(uint256 assets, address receiver)(uint256 shares)`, selector `0x6e553f65`. Send with an explicit gas limit; the R3 vault's first deposit into a position used about 2.4M gas and a raw estimate was not safe (`avalanche-pilot-vault-opening.md`); the DLMM figure is **TBD** from the rehearsal.
@@ -110,10 +113,14 @@ Errors to show: `CapExceeded(cap, totalAssetsAfter)` (0xf480e285) "The pilot cap
 2. **Withdraw in both tokens (`redeemInKind`)**: `redeemInKind(uint256 shares, address receiver, address owner_)(uint256 amountX, uint256 amountY)` selector `0xa4bfc6b6`; event `RedeemedInKind(owner, receiver, shares, amountX, amountY)`. It burns the vault's bins pro rata, pays both tokens (USDt `amountX`, USDC `amountY`), reads **no oracle** and makes **no swap**, and is **not gated** by pause, guard, latch, cooldown, daily cap, keeper, the rewarder codehash pin or any oracle. It has **no minimum-out parameter**: the split between USDt and USDC depends on where the pool price sits. Show the exact amounts first with an `eth_call` of `redeemInKind` from the user's address (the simulation returns both amounts at that block); the user gets what the pool bins hold at execution. Copy: "You receive USDC and USDt in the proportion the vault holds them. You can swap the USDt yourself afterwards."
 3. A third party redeeming for a holder needs the holder's share allowance (R3 behaviour, `owner_ != msg.sender`).
 
+**Routing rules measured on the real pool (W6, block 100420249):**
+- **`redeem` and `withdraw` can be vetoed by the oracle floor while the pool is fine.** When the oracle moves without the pool, for example the USDC feed at 0.98 or the USDT feed at 1.02 (the oracle values USDt more than 0.5 % above USDC), the swap minimum of the USDt leg is above what the pool pays and both revert, latched or not. `redeemInKind` paid in all four such cases. So **always offer `redeemInKind` next to the USDC exit, on every screen, in every state**, and make it the primary button as soon as the `redeem` simulation reverts.
+- **Dust:** 1 to 2 shares revert in both exits (`ExitFailed`); `redeemInKind` pays from 3 shares; `redeem` pays from 6 (3 to 5 shares revert inside the pair's swap). A reverted exit keeps the shares. At about 1 raw unit per share these are far below one cent: disable the button under 10 shares and say "amount too small to withdraw"; for a tiny holder show only the in-kind route. The same simulation-first logic applies.
+
 Decision logic for the exit screen (all reads at one block):
 - Always show both buttons. Default to path 1 when `reasons` has no bit 1, 2, 4 or 8 and an `eth_call` of `redeem` succeeds.
 - If the `redeem` simulation reverts, or `reasons & (1|2|4|8) != 0`: promote path 2 and say why ("USDC withdrawal is unavailable right now; you can withdraw in both tokens").
-- If the `redeemInKind` simulation itself reverts with no vault custom error (empty revert data or an error from another contract): show the hook caveat of section 8.3 as an error state ("Withdrawals are currently blocked on Pharaoh's side"), not a generic "transaction failed". Also show it, as a standing warning, whenever bit 32 is set.
+- If the `redeemInKind` simulation itself reverts with no vault custom error (and the amount is at least 10 shares) (empty revert data or an error from another contract): show the hook caveat of section 8.3 as an error state ("Withdrawals are currently blocked on Pharaoh's side"), not a generic "transaction failed". Also show it, as a standing warning, whenever bit 32 is set.
 
 ### 4.3 Reads for the position screen
 `balanceOf(user)` (shares), `convertToAssets(shares)` (USDC value at the oracle NAV; **may revert when a feed reverts: show "price unavailable", not an error page**, unverified), `totalSupply()`, `totalAssets()`, `maxRedeem(user)` (R3).
@@ -138,7 +145,7 @@ Plus the standard ERC-4626 and ERC-20 ABI. The compiled JSON is added to `avalan
 ## 5. The "earns PHAR" display (spec section 7)
 
 ### 5.1 Who receives PHAR (read before writing any copy)
-`harvestRewards()` claims PHAR and **forwards it to the vault owner (the Safe)**, as R3 does (spec section 1); **the share price does not include pending or harvested PHAR**. A depositor's shares therefore do not automatically receive PHAR. The spec's required copy is "earns PHAR"; taken literally to a depositor it over-promises. **Open question 1 for the operator**: is PHAR (a) kept by Peridot as the vault's income, (b) distributed to holders by some later mechanism, or (c) not paid to depositors at all? Until answered the UI must use the neutral wording "**This vault earns PHAR** (Pharaoh's reward token). PHAR is collected by the vault owner and is not part of the share price." and must not say "you earn PHAR" or show PHAR as the user's balance.
+`harvestRewards()` claims PHAR and **forwards it to the vault owner (the Safe)**, as R3 does (spec section 1); **the share price does not include pending or harvested PHAR**. A depositor's shares therefore do not automatically receive PHAR. The spec's required copy is "earns PHAR"; taken literally to a depositor it over-promises. **Open question 1 for the operator**: is PHAR (a) kept by Peridot as the vault's income, (b) distributed to holders by some later mechanism, or (c) not paid to depositors at all? **Status: the operator decision is still pending; keep the neutral wording below.** Until answered the UI must use the neutral wording "**This vault earns PHAR** (Pharaoh's reward token). PHAR is collected by the vault owner and is not part of the share price." and must not say "you earn PHAR" or show PHAR as the user's balance.
 
 ### 5.2 Realised PHAR rate: definition (literal, from the spec)
 Realised PHAR rate = **sum of `PharHarvested.amount` over a trailing window, divided by the share supply (`totalSupplyShares` in the event), per day.**
@@ -155,6 +162,8 @@ Required text, shown wherever the PHAR rate is shown: "**PHAR comes from a weekl
 
 Show the **last eight weekly emissions to this pool** next to the rate, as a small table or bar list of PHAR per week. Source: the weekly notification from the Pharaoh voter to the pool's reward contract (the `notifyRewarder` call in the evaluation section 7); the reward contract is the pair's hook (`init.rewarder`, address **TBD**). **The on-chain event or token transfer to index for this is not named in the evaluation (TBD, to be settled by reading the rewarder implementation or the first week's transactions); do not guess an event name.** A backend job produces the eight numbers; the page must not hard-code them. Reference values (MEASURED by the second measurement, 15 Nov 2026, last 8 epochs, PHAR to this pool per week, oldest first): 447, 356, 237, 4,713, 4,488, 9,649, 5,390, 6,249. Use them as a test fixture only. Note for the copy and for QA: this series stepped up about 20 times between epochs 2962 and 2963 with no floor in the contracts; in the evaluation four of the last 23 weeks had no transfer at all.
 
+A second reason the rate can read zero or low (W6 MEASURED): anyone can call `redeemInKind` with a tiny amount, which touches the vault's bins and makes Pharaoh forfeit the PHAR accrued since the last touch (a 10-share burn at 100 s cost the first 100 s of accrual in the test); repeated every 111 s or less it could deny the vault PHAR. The UI cannot detect it; it is one more reason the rate is shown with its window and harvest count and never as a promise.
+
 ### 5.4 What the PHAR rate must not be compared to
 Do not show it next to the pool's fee income, the pUSDC lending rate or any other product's rate as "better than". Different units, different risk.
 
@@ -165,7 +174,7 @@ Do not show it next to the pool's fee income, the pUSDC lending rate or any othe
 Computation:
 1. Index `convertToAssets(10**decimals)` at block samples (at least daily, and at each `Rebalanced`, `PharHarvested`, `RedeemedInKind` event) or call it at historical blocks.
 2. For a chosen start and end (the user's first deposit and now, or 7/30 days), show: `P_start`, `P_end` and the **difference in USDC per share, plus the same difference as a plain percentage of `P_start` for that exact period**, labelled "**Change in share price, from <date> to <date> (N days)**".
-3. Do **not** scale to a year, do not average daily changes into a rate, do not show it at all for a window under 24 hours (**proposal**: show "too early to say"), and always show it beside the same sentence: "Past change in share price; not a forecast. It can be negative."
+3. Expect small steps down: the real pool charged the vault about 24 ppm of NAV for the first `openBand` and 41 to 264 ppm for each re-centre in the fork test (W6 MEASURED; the decomposition is not done, see the risk register row 10), so with several re-centres a day the share price can fall in a quiet period even when the pool earns fees. Do not hide it and do not explain it as a fee. Do **not** scale to a year, do not average daily changes into a rate, do not show it at all for a window under 24 hours (**proposal**: show "too early to say"), and always show it beside the same sentence: "Past change in share price; not a forecast. It can be negative."
 4. A user-specific figure is `convertToAssets(balanceOf(user))` minus the user's deposits plus withdrawals (from the `Deposit` and `Withdraw` events): "Your position is worth X; you deposited Y".
 
 ## 7. Copy blocks (all required unless marked optional)
@@ -192,7 +201,7 @@ Shown on the vault page, the deposit confirmation and the withdraw screen:
 
 > "Withdrawals depend on Pharaoh's contracts. The pool calls a Pharaoh reward contract every time liquidity is withdrawn. If that contract fails or is changed by Pharaoh, **all withdrawals from this vault, including withdrawing in both tokens, can be blocked until Pharaoh fixes it.** Peridot cannot unblock them. Only deposit what you can leave there for an unknown time."
 
-Error-state variant (section 4.2): "Withdrawals are currently blocked on Pharaoh's side. Your funds are still in the vault; try again later."
+The failure is silent on chain: `guardState()` reads 0 and deposits stay open while it lasts (section 3.1), which is why the exit probe hides deposits. Error-state variant (section 4.2): "Withdrawals are currently blocked on Pharaoh's side. Your funds are still in the vault; try again later."
 
 ## 9. Events to index
 
@@ -225,6 +234,6 @@ Inherited, unverified until W2: ERC-4626 `Deposit` and `Withdraw`, ERC-20 `Trans
 3. The on-chain source of the weekly emission numbers (section 5.3).
 4. `mint`: spec lists it, R3 disables it (`maxMint = 0`).
 5. Whether `maxDeposit` returns 0 when the guard is unsafe, latched or the vault is paused (the UI checks `guardState()` regardless).
-6. Whether deposits into an existing band are invested at once or sit idle (section 3.2).
+6. ~~Whether deposits into an existing band are invested at once or sit idle~~: answered by W6, they sit idle until the next `openBand` or `rebalance` (section 3.2). Remaining: the probe holder address and who runs the probe server-side.
 7. Share `decimals()` and the USDt address (read-backs after deploy).
 8. Whether `convertToAssets` and `previewRedeem` revert when a feed reverts (assumed yes in this document).
