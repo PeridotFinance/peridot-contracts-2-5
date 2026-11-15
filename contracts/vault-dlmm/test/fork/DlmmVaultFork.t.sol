@@ -891,3 +891,402 @@ contract DlmmForkHook is DlmmForkBase {
 interface IDLMMRewarderBeaconView {
     function implementation() external view returns (address);
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (1) initialize validation on the real addresses (all 14 checks, one negative case each)
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract DlmmForkInit is DlmmForkBase {
+    /// params are built BEFORE vm.expectRevert (building them makes external calls that would consume it)
+    function _initFails(uint8 n) internal {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        _expectCheck(n);
+        _deployProxy(p);
+    }
+
+    function _expectCheck(uint8 n) internal {
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.PairValidationFailed.selector, n));
+    }
+
+    function test_init_realAddresses_allChecksPass_and_state() public view {
+        assertEq(v.owner(), SAFE);
+        assertEq(v.rebalancer(), KEEPER);
+        assertEq(v.depositCap(), 200_000_000, "cap set inside initialize");
+        assertEq(v.DEPOSIT_CAP_CEILING(), 200_000_000);
+        assertTrue(v.paused(), "starts paused");
+        assertEq(v.asset(), USDC);
+        assertEq(address(v.pairToken()), USDT);
+        assertEq(address(v.tokenX()), USDT, "pair order: X = USDt");
+        assertEq(address(v.tokenY()), USDC);
+        assertFalse(v.assetIsX());
+        assertEq(v.pair(), POOL);
+        assertEq(v.router(), ROUTER);
+        assertEq(v.factory(), FACTORY);
+        assertEq(v.rewarder(), REWARDER);
+        assertEq(v.rewarderBeacon(), beacon);
+        assertEq(v.rewardToken(), PHAR);
+        assertEq(v.rewarderImplCodehash(), _pinnedCodehash());
+        assertEq(v.feedAsset(), FEED_USDC);
+        assertEq(v.feedPair(), FEED_USDT);
+        assertEq(v.binStep(), 1);
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        assertEq(g.legBandBps, 50);
+        assertEq(g.maxFeedAge, 93_600);
+        assertEq(g.maxPoolOracleDevBps, 60);
+        assertEq(g.rebalanceCooldown, 120);
+        assertEq(g.maxRebalancesPerDay, 48);
+        assertEq(g.maxSwapBps, 6000);
+        assertEq(g.maxRebalanceLossBps, 50);
+        (bool unsafe, bool latched, uint256 reasons) = v.guardState();
+        assertFalse(unsafe);
+        assertFalse(latched);
+        assertEq(reasons, 0, "live guard clean on the real chain (all six bits)");
+        assertEq(v.totalAssets(), 0);
+        assertEq(v.maxDeposit(ALICE), 0, "paused: nothing can enter");
+        assertEq(v.name(), "Peridot Pharaoh DLMM USDC/USDt");
+        assertEq(v.decimals(), 6);
+    }
+
+    function test_init_check01_zeroAddress() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.rebalancer = address(0);
+        _expectCheck(1);
+        _deployProxy(p);
+        p = _params();
+        p.rewarderImplCodehash = bytes32(0);
+        _expectCheck(1);
+        _deployProxy(p);
+        p = _params();
+        p.feedPair = address(0);
+        _expectCheck(1);
+        _deployProxy(p);
+    }
+
+    function test_init_check02_assetEqualsPairToken() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.pairToken = USDC;
+        _expectCheck(2);
+        _deployProxy(p);
+    }
+
+    function test_init_check03_wrongBinStep() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.binStep = 2;
+        _expectCheck(3);
+        _deployProxy(p);
+        p.binStep = 10;
+        _expectCheck(3);
+        _deployProxy(p);
+    }
+
+    function test_init_check04_pairFactoryMismatch() public {
+        vm.mockCall(POOL, abi.encodeCall(IDLMMPair.getFactory, ()), abi.encode(address(0xFAC)));
+        _initFails(4);
+    }
+
+    function test_init_check04_pairBinStepMismatch() public {
+        vm.mockCall(POOL, abi.encodeCall(IDLMMPair.getBinStep, ()), abi.encode(uint16(5)));
+        _initFails(4);
+    }
+
+    function test_init_check05_pairTokensNotTheTwoLegs() public {
+        vm.mockCall(POOL, abi.encodeCall(IDLMMPair.getTokenX, ()), abi.encode(address(0xDEAD)));
+        _initFails(5);
+    }
+
+    function test_init_check06_routerOfAnotherFactory() public {
+        vm.mockCall(ROUTER, abi.encodeWithSignature("getFactory()"), abi.encode(address(0xFAC)));
+        _initFails(6);
+    }
+
+    function test_init_check06_routerIsNotARouter_revertsWithTheCallsOwnData() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.router = USDT; // a real contract without getFactory(): the validator's external read fails, the revert is bubbled (not PairValidationFailed)
+        vm.expectRevert();
+        _deployProxy(p);
+    }
+
+    function test_init_check07_hookIsNotTheRewarder() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.rewarder = address(0xBEEF00BEEF);
+        _expectCheck(7);
+        _deployProxy(p);
+    }
+
+    function test_init_check08_rewarderNotLinked() public {
+        vm.mockCall(REWARDER, abi.encodeCall(IDLMMRewarder.isLinked, ()), abi.encode(false));
+        _initFails(8);
+    }
+
+    function test_init_check09_routerNotAuthorisedByVoter() public {
+        vm.mockCall(voter, abi.encodeWithSignature("isAuthorizedDLMMManager(address)", ROUTER), abi.encode(false));
+        _initFails(9);
+    }
+
+    function test_init_check10_beaconDoesNotListTheRewarder() public {
+        vm.mockCall(beacon, abi.encodeCall(IDLMMRewarderBeaconCheck.getRewarder, (POOL)), abi.encode(address(0xDEAD)));
+        _initFails(10);
+    }
+
+    function test_init_check11_wrongPinnedCodehash() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.rewarderImplCodehash = bytes32(uint256(1));
+        _expectCheck(11);
+        _deployProxy(p);
+    }
+
+    function test_init_check12_rewardTokenIsALegOrZero() public {
+        vm.mockCall(REWARDER, abi.encodeCall(IDLMMRewarder.getRewardToken, ()), abi.encode(USDC));
+        _initFails(12);
+        vm.mockCall(REWARDER, abi.encodeCall(IDLMMRewarder.getRewardToken, ()), abi.encode(address(0)));
+        _initFails(12);
+    }
+
+    function test_init_check13_feedDecimalsNot8() public {
+        vm.mockCall(FEED_USDC, abi.encodeCall(IChainlinkFeed.decimals, ()), abi.encode(uint8(18)));
+        _initFails(13);
+        vm.clearMockedCalls();
+        vm.mockCall(FEED_USDT, abi.encodeCall(IChainlinkFeed.decimals, ()), abi.encode(uint8(6)));
+        _initFails(13);
+    }
+
+    function test_init_check13b_feedStaleOrRevertingAtDeployment() public {
+        _mockFeed(FEED_USDT, 1e8, block.timestamp - 93_601);
+        _initFails(13);
+        _mockFeedReverts(FEED_USDC);
+        _initFails(13);
+    }
+
+    function test_init_check14_decimalsAbove18() public {
+        vm.mockCall(USDT, abi.encodeWithSignature("decimals()"), abi.encode(uint8(19)));
+        _initFails(14);
+    }
+
+    function test_init_capAboveCeiling_andNoDoubleInit() public {
+        IPharaohDlmmVault.InitParams memory p = _params();
+        p.depositCap = 200_000_001;
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapAboveCeiling.selector, 200_000_001, 200_000_000));
+        _deployProxy(p);
+        p = _params();
+        vm.expectRevert(); // InvalidInitialization
+        v.initialize(p);
+        vm.expectRevert(); // the implementation itself is locked
+        impl.initialize(p);
+    }
+
+    function test_init_pinnedCodehashIsTheBeaconImplementationNotTheProxy() public view {
+        bytes32 impl_ = _pinnedCodehash();
+        assertTrue(impl_ != REWARDER.codehash, "the proxy's codehash is not what is pinned");
+        console2.logBytes32(impl_);
+    }
+}
+
+interface IDLMMRewarderBeaconCheck {
+    function getRewarder(address pool) external view returns (address);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (2) happy path, (8) cap with the real token
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract DlmmForkHappy is DlmmForkBase {
+    function _openLogged() internal returns (uint256 x, uint256 y, uint24 lo, uint24 hi) {
+        vm.recordLogs();
+        _openBand();
+        Vm.Log[] memory l = vm.getRecordedLogs();
+        bytes32 t0 = keccak256("BandOpened(uint24,uint24,uint24,uint256,uint256)");
+        for (uint256 i; i < l.length; ++i) {
+            if (l[i].topics.length > 0 && l[i].topics[0] == t0) {
+                uint24 act;
+                (lo, hi, act, x, y) = abi.decode(l[i].data, (uint24, uint24, uint24, uint256, uint256));
+                assertEq(act, pair.getActiveId());
+            }
+        }
+        require(hi != 0, "BandOpened not emitted");
+    }
+
+    /// The ceremony path, on the unmocked real feeds: the Ledger deposits exactly the cap, the keeper opens the band.
+    function test_happy_ceremonyPath_realFeeds() public {
+        _unpause();
+        uint256 sh = _deposit(ALICE, 200e6);
+        assertEq(sh, 200e6, "first deposit 1:1");
+        assertEq(v.totalAssets(), 200e6);
+        assertEq(v.maxDeposit(ALICE), 0, "at the cap");
+        // 1 wei over the cap reverts (deposit and mint)
+        _fund(BOB, USDC, 10e6);
+        vm.prank(BOB);
+        IERC20(USDC).approve(address(v), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        vm.prank(BOB);
+        v.deposit(1, BOB);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        vm.prank(BOB);
+        v.mint(1, BOB);
+
+        // swap cost of the vault's own USDC->USDt half (A/B: the same swap by the trader on a snapshot)
+        uint256 snap = vm.snapshotState();
+        uint256 out = _swap(USDC, USDT, 100e6);
+        vm.revertToState(snap);
+        console2.log("MEASURED pure swap USDC->USDt 100e6 in, out:", out);
+
+        (uint256 x, uint256 y, uint24 lo, uint24 hi) = _openLogged();
+        (uint24 l2, uint24 h2, uint24 a, bool hasBand, bool oor) = v.bandState();
+        assertTrue(hasBand);
+        assertFalse(oor);
+        assertEq(l2, a - 1);
+        assertEq(h2, a + 1);
+        assertEq(lo, l2);
+        assertEq(hi, h2);
+        for (uint24 id = lo; id <= hi; ++id) assertGt(pair.balanceOf(address(v), id), 0, "LB shares in each of the 3 bins");
+        uint256 nav = v.totalAssets();
+        console2.log("MEASURED band opened: USDt added / USDC added", x, y);
+        console2.log("MEASURED idle left in the vault: USDC / USDt", _bal(USDC, address(v)), _bal(USDT, address(v)));
+        console2.log("MEASURED NAV after openBand (deposit 200000000):", nav);
+        console2.log("MEASURED loss ppm of the deposit (swap + composition fee + floor rounding):", uint256(_ppm(200e6, nav)));
+        // loss decomposition at the oracle: swap part vs the rest
+        uint256 swapLoss = 100e6 - out * uint256(realAnsP) / uint256(realAnsA);
+        console2.log("  of which pure swap cost (raw USDC units, at the oracle):", swapLoss);
+        console2.log("  composition fee + rounding (raw):", (200e6 - nav) - swapLoss);
+        assertGe(nav * 10_000, 200e6 * 9_950, "within the 50 bp NAV-loss bound");
+        // with the D6 fix, openBand does not revert whatever NAV vs cap; NAV below the cap leaves headroom
+        uint256 head = v.maxDeposit(BOB);
+        console2.log("headroom under the cap after the open", head);
+        assertEq(head, 200e6 - nav);
+        // the vault holds no big idle amounts after the add (leftover refund only)
+        assertLt(_bal(USDC, address(v)) + _bal(USDT, address(v)), 1e6, "leftover below 1 USDC");
+        // shares price after open: the depositor's immediate cost
+        console2.log("previewRedeem(200e6 shares) right after the open", v.previewRedeem(200e6));
+    }
+
+    /// headroom after the open can be filled to the cap exactly, then 1 wei more reverts
+    function test_cap_fillHeadroomThenOneWei() public {
+        _unpause();
+        _deposit(ALICE, 200e6);
+        _openBand();
+        uint256 head = v.maxDeposit(BOB);
+        assertGt(head, 0);
+        _fund(BOB, USDC, head + 10);
+        vm.startPrank(BOB);
+        IERC20(USDC).approve(address(v), type(uint256).max);
+        v.deposit(head, BOB);
+        assertEq(v.totalAssets(), 200e6, "NAV == cap");
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        v.deposit(1, BOB);
+        vm.stopPrank();
+        // the late deposit sits idle until the next exit-triggered rebalance (decision 2)
+        assertEq(_bal(USDC, address(v)) >= head, true, "BOB's deposit is idle USDC");
+    }
+
+    function test_cap_mintPath_atCapAndOver() public {
+        _unpause();
+        assertEq(v.maxMint(ALICE), 200e6);
+        _fund(ALICE, USDC, 300e6);
+        vm.startPrank(ALICE);
+        IERC20(USDC).approve(address(v), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        v.mint(200e6 + 1, ALICE);
+        uint256 assets = v.mint(200e6, ALICE);
+        assertEq(assets, 200e6);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        v.mint(1, ALICE);
+        vm.stopPrank();
+        assertEq(v.maxMint(ALICE), 0);
+    }
+
+    function test_cap_donationOnlyReducesHeadroom() public {
+        _unpause();
+        _fund(BOB, USDC, 60e6);
+        vm.prank(BOB);
+        IERC20(USDC).transfer(address(v), 10e6); // direct donation
+        assertEq(v.totalAssets(), 10e6);
+        assertEq(v.maxDeposit(ALICE), 190e6);
+        _fund(ALICE, USDC, 300e6);
+        vm.startPrank(ALICE);
+        IERC20(USDC).approve(address(v), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        v.deposit(190e6 + 1, ALICE);
+        v.deposit(190e6, ALICE);
+        vm.stopPrank();
+        // a donation above the cap cannot be exploited to deposit; and (D6 fix) openBand still works with NAV > cap
+        vm.prank(BOB);
+        IERC20(USDC).transfer(address(v), 50e6);
+        assertGt(v.totalAssets(), 200e6);
+        assertEq(v.maxDeposit(ALICE), 0);
+        _openBand();
+        (,,, bool hasBand,) = v.bandState();
+        assertTrue(hasBand, "openBand does not revert when NAV exceeds the cap (D6 fix)");
+        assertEq(v.maxDeposit(ALICE), 0);
+    }
+
+    function test_cap_setDepositCap_ceilingAndLowering() public {
+        vm.prank(SAFE);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapAboveCeiling.selector, 200e6 + 1, 200e6));
+        v.setDepositCap(200e6 + 1);
+        vm.prank(SAFE);
+        v.setDepositCap(50e6);
+        _unpause();
+        assertEq(v.maxDeposit(ALICE), 50e6);
+        vm.prank(SAFE);
+        v.setDepositCap(0);
+        assertEq(v.maxDeposit(ALICE), 0);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, BOB));
+        vm.prank(BOB);
+        v.setDepositCap(1);
+    }
+
+    /// totalAssets drift: real swaps through the vault's bins generate fees (inside bin reserves, in the NAV), print the drift
+    function test_cap_totalAssetsDrift_withTrading_and_composition() public {
+        _unpause();
+        _deposit(ALICE, 200e6);
+        _openBand();
+        uint256 nav0 = v.totalAssets();
+        uint256 head0 = v.maxDeposit(BOB);
+        for (uint256 i; i < 10; ++i) {
+            _swap(USDC, USDT, 5_000e6);
+            _swap(USDT, USDC, _bal(USDT, TRADER));
+        }
+        (,,,, bool oor) = v.bandState();
+        uint256 nav1 = v.totalAssets();
+        console2.log("MEASURED NAV before / after 10 round trips of 5000 USDC through the pool:", nav0, nav1);
+        console2.log("MEASURED headroom before / after:", head0, v.maxDeposit(BOB));
+        console2.log("active id still inside the band:", !oor);
+        assertGe(nav1 + 5, nav0, "fees accrue (a few raw units of tolerance for floors)");
+        assertEq(v.maxDeposit(BOB), nav1 >= 200e6 ? 0 : 200e6 - nav1, "headroom tracks NAV drift");
+    }
+
+    /// what a depositor pays to get out: the round trip deposit 200 -> open -> redeem all (USDC out) and in kind
+    function test_happy_roundTripCost() public {
+        _unpause();
+        uint256 sh = _deposit(ALICE, 200e6);
+        _openBand();
+        uint256 prev = v.previewRedeem(sh);
+        uint256 snap = vm.snapshotState();
+        vm.prank(ALICE);
+        uint256 got = v.redeem(sh, ALICE, ALICE);
+        console2.log("MEASURED full redeem (USDC out): preview / paid / deposited", prev, got);
+        console2.log("MEASURED round-trip loss ppm of the deposit", uint256(_ppm(200e6, got)));
+        assertGe(got * 10_000, 200e6 * 9_950, "round trip within 50 bp");
+        vm.revertToState(snap);
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(sh, ALICE, ALICE);
+        console2.log("MEASURED full in-kind exit (USDt, USDC):", x, y);
+        assertGe((x + y) * 10_000, 200e6 * 9_950);
+    }
+
+    function test_happy_depositMintRedeemWithdrawSharePrice() public {
+        _unpause();
+        _deposit(ALICE, 100e6);
+        _openBand();
+        _approveBob(80e6);
+        uint256 nav = v.totalAssets();
+        uint256 supply = v.totalSupply();
+        vm.prank(BOB);
+        uint256 sh = v.deposit(40e6, BOB);
+        assertApproxEqAbs(sh, 40e6 * supply / nav, 1);
+        vm.prank(BOB);
+        uint256 a = v.mint(10e6, BOB);
+        assertApproxEqAbs(a, v.convertToAssets(10e6), 2);
+        vm.prank(BOB);
+        uint256 burned = v.withdraw(20e6, BOB, BOB);
+        assertApproxEqAbs(burned, v.convertToShares(20e6), 2);
+        console2.log("withdraw(20e6) burned shares", burned);
+    }
+}
