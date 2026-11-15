@@ -127,3 +127,30 @@ export function clearHalt(haltPath: string, nowSeconds: number): HaltRecord | nu
   fs.unlinkSync(haltPath);
   return rec;
 }
+
+/**
+ * THE `resume` COMMAND (offline). Everything that could re-halt the keeper for the OLD cause is reset, so that resuming really resumes:
+ *   pending         -> null  (the operator has checked the wallet's transactions and the vault's band)
+ *   backoff         -> null  (a `failures` halt would otherwise halt again on the first new failure)
+ *   exit            -> null  (the 60 s wait applies again)
+ *   lastRebalanceSeen -> null (re-learned at the next attempt: after a readback / unexpected / foreign-rebalance halt the vault's value is not the one the keeper last saw)
+ *   alerts.keeper:halted -> dropped (a later halt must alert again)
+ * The state file is written BEFORE the HALT file is removed: a running daemon that sees the HALT file gone reloads the state, and must find the reset one.
+ */
+export function resumeKeeper(statePath: string, haltPath: string, vault: string, nowSeconds: number): { was: HaltRecord | null; clearedPending: PendingMarker | null; stateProblem?: string } {
+  let st: KeeperState | undefined;
+  let stateProblem: string | undefined;
+  try {
+    st = loadState(statePath, vault);
+  } catch (e) {
+    stateProblem = e instanceof StateError ? e.message : "the state file could not be read";
+  }
+  let clearedPending: PendingMarker | null = null;
+  if (st) {
+    clearedPending = st.pending;
+    const alerts = st.alerts ? { active: Object.fromEntries(Object.entries(st.alerts.active).filter(([k]) => k !== "keeper:halted")) } : undefined;
+    saveState(statePath, { ...st, pending: null, backoff: null, exit: null, lastRebalanceSeen: null, ...(alerts ? { alerts } : {}) });
+  }
+  const was = clearHalt(haltPath, nowSeconds);
+  return { was, clearedPending, ...(stateProblem ? { stateProblem } : {}) };
+}

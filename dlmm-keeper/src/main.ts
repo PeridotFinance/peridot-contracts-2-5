@@ -16,7 +16,7 @@ import { keeperStep, verifySigner } from "./keeper";
 import { mask, safeError } from "./mask";
 import { KeystoreSigner } from "./signer";
 import type { ExternalSigner } from "./signer";
-import { clearHalt, loadState, readHalt, saveState, StateError } from "./state";
+import { loadState, readHalt, resumeKeeper, saveState, StateError } from "./state";
 import type { KeeperState } from "./state";
 
 const EX_CONFIG = 78;
@@ -70,12 +70,10 @@ async function main(): Promise<number> {
       console.log(JSON.stringify({ mode: cfg.mode, halted: !!h, halt: h, pending: st?.pending ?? null, exit: st?.exit ?? null, backoff: st?.backoff ?? null, sendsLast24h: st?.sends.filter((s) => s.ts > nowS() - 86_400).length ?? 0 }, null, 2));
       return h ? 1 : 0;
     }
-    const was = clearHalt(cfg.monitor.haltPath, nowS());
-    if (st && st.pending) {
-      saveState(cfg.monitor.statePath, { ...st, pending: null });
-      console.log(`cleared the pending marker (${st.pending.kind} started at ${st.pending.at}): you have checked the keeper wallet's transactions and the vault's band`);
-    }
-    console.log(was ? `HALT removed (was ${was.kind}: ${mask(was.reason)}). The keeper resumes on its next cycle. If the cause still holds (a latched guard), it will halt again at once.` : "there was no HALT file");
+    const r = resumeKeeper(cfg.monitor.statePath, cfg.monitor.haltPath, cfg.vault, nowS());
+    if (r.stateProblem) console.error(`state file: ${r.stateProblem} (left untouched)`);
+    if (r.clearedPending) console.log(`cleared the pending marker (${r.clearedPending.kind} started at ${r.clearedPending.at}): you have checked the keeper wallet's transactions and the vault's band`);
+    console.log(r.was ? `HALT removed (was ${r.was.kind}: ${mask(r.was.reason)}). Reset: pending marker, failure backoff, exit timer, last-seen rebalance (re-learned at the next attempt). The keeper resumes on its next cycle; if the cause still holds (a latched guard) it halts again at once.` : "there was no HALT file");
     return 0;
   }
   const forceDry = argv.includes("--dry-run");
@@ -127,13 +125,21 @@ async function main(): Promise<number> {
 
   let cycles = 0;
   let stopping = false;
+  let wasHalted = !!readHalt(cfg.monitor.haltPath);
   // a stop signal lets the current cycle finish (a transaction that was sent is read back and its marker cleared) and then ends the loop
   for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { stopping = true; });
   const once = async (): Promise<number> => {
     try {
+      // `resume` (another process) removed the HALT file and reset the state file: reload it, never write our older in-memory copy over it
+      if (wasHalted && !readHalt(cfg.monitor.haltPath)) {
+        state = loadState(cfg.monitor.statePath, cfg.vault);
+        wasHalted = false;
+      }
       const o = await keeperStep({ provider, cfg: effCfg, signer, alerts, persist }, state, { skipWait: cmd === "check", noHaltWrite: cmd === "check" });
       state = o.state;
-      if (cmd === "run") saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() });
+      wasHalted = o.halted;
+      // while the HALT file exists nothing is written: the state on disk is what `resume` will reset
+      if (cmd === "run" && o.status !== "halted") saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() });
       cycles++;
       const active = o.sent.length > 0 || o.notes.length > 0 || !["in-range", "halted"].includes(o.status);
       if (active || cycles % 20 === 1 || cmd === "check") {

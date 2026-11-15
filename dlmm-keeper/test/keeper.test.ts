@@ -8,7 +8,7 @@ import { AlertManager, MemorySink } from "../src/alerts";
 import type { KeeperConfig } from "../src/config";
 import { keeperStep, verifySigner } from "../src/keeper";
 import type { KeeperOutcome } from "../src/keeper";
-import { clearHalt, emptyState, readHalt } from "../src/state";
+import { clearHalt, emptyState, loadState, readHalt, resumeKeeper, saveState } from "../src/state";
 import type { KeeperState } from "../src/state";
 import { A, decidedConfig } from "./fixtures";
 import { bandAllX, bandAllY, FakeProvider, FakeSigner, newWorld } from "./fakeworld";
@@ -28,6 +28,8 @@ interface Rig {
   pendingAtSend: Array<KeeperState["pending"]>;
   sends: number;
   step(o?: { skipWait?: boolean; live?: boolean }): Promise<KeeperOutcome>;
+  /** what `dlmm-keeper resume` does, then what main.ts does on the next cycle: reload the state file */
+  resume(): ReturnType<typeof resumeKeeper>;
   at(s: number): void;
   keys(): string[];
 }
@@ -40,11 +42,16 @@ function rig(mut?: (c: KeeperConfig) => void, y = 100_000_000n): Rig {
   const p = new FakeProvider(w);
   const sink = new MemorySink();
   const alerts = new AlertManager(sink);
-  const r: Rig = { w, p, sink, alerts, cfg, dir, state: emptyState(cfg.vault), persisted: [], sleeps: [], pendingAtSend: [], sends: 0, step: undefined as never, at: (s) => { w.now = 1_800_000_000 + s; }, keys: () => sink.messages.map((m) => `${m.kind}:${m.key}`) };
+  const r: Rig = { w, p, sink, alerts, cfg, dir, state: emptyState(cfg.vault), persisted: [], sleeps: [], pendingAtSend: [], sends: 0, step: undefined as never, resume: undefined as never, at: (s) => { w.now = 1_800_000_000 + s; }, keys: () => sink.messages.map((m) => `${m.kind}:${m.key}`) };
   const signer = new FakeSigner(w, () => { r.sends++; r.pendingAtSend.push(r.persisted[r.persisted.length - 1]?.pending ?? null); });
+  r.resume = () => {
+    const res = resumeKeeper(cfg.monitor.statePath, cfg.monitor.haltPath, cfg.vault, w.now);
+    r.state = loadState(cfg.monitor.statePath, cfg.vault);
+    return res;
+  };
   r.step = async (o = {}) => {
     const out = await keeperStep(
-      { provider: p as unknown as providers.Provider, cfg: o.live === false ? { ...cfg, mode: "dry-run" } : cfg, signer: o.live === false || cfg.mode === "dry-run" ? undefined : signer, alerts, persist: (s) => { r.persisted.push(structuredClone(s)); r.state = s; }, now: () => w.now, sleep: async (ms) => { r.sleeps.push(ms); } },
+      { provider: p as unknown as providers.Provider, cfg: o.live === false ? { ...cfg, mode: "dry-run" } : cfg, signer: o.live === false || cfg.mode === "dry-run" ? undefined : signer, alerts, persist: (s) => { r.persisted.push(structuredClone(s)); r.state = s; saveState(cfg.monitor.statePath, { ...s, alerts: alerts.toJson() }); }, now: () => w.now, sleep: async (ms) => { r.sleeps.push(ms); } },
       r.state, { skipWait: o.skipWait },
     );
     r.state = out.state;
@@ -660,4 +667,113 @@ test("a read failure BEFORE any send is an ordinary failed cycle (the error prop
   await assert.rejects(r.step(), /SERVER_ERROR/);
   assert.equal(r.sends, 0);
   assert.equal(halted(r), null);
+});
+
+// ---------------------------------------------------------------- resume really resumes (the state fields that could re-halt for the OLD cause are reset)
+const resumeAndExpectNoReHalt = async (r: Rig, why: string): Promise<void> => {
+  r.resume();
+  assert.equal(halted(r), null, why);
+  r.at(86_400);
+  r.w.feedAsset.updatedAt = r.w.now - 100;
+  r.w.feedPair.updatedAt = r.w.now - 100;
+};
+test("resume after pending-interrupted: the pending marker is cleared ON DISK, the keeper runs again and does not halt for the old marker", async () => {
+  const r = rig();
+  r.state = { ...r.state, pending: { kind: "rebalance", at: r.w.now - 30 } };
+  saveState(r.cfg.monitor.statePath, r.state);
+  assert.equal((await r.step()).status, "halting");
+  const res = r.resume();
+  assert.equal(res.clearedPending?.kind, "rebalance");
+  assert.equal(loadState(r.cfg.monitor.statePath, r.cfg.vault).pending, null);
+  assert.equal((await r.step()).status, "exit-detected", "runs normally");
+  assert.equal(halted(r), null);
+});
+test("resume after a READBACK halt: the transaction DID mine, so lastRebalanceAt moved; the stale lastRebalanceSeen is reset and the next attempt does not halt as foreign-rebalance", async () => {
+  const r = rig();
+  r.w.lies.noEvent = true;
+  await r.step();
+  r.at(60);
+  assert.equal((await r.step()).status, "halting");
+  assert.equal(halted(r)!.kind, "readback");
+  r.w.lies.noEvent = false;
+  await resumeAndExpectNoReHalt(r, "resume removed the file");
+  assert.equal(r.state.lastRebalanceSeen, null);
+  bandAllY(r.w, 100_000_000n);
+  await r.step();
+  r.at(86_400 + 61);
+  const o = await r.step();
+  assert.equal(o.status, "sent", `${o.status} ${JSON.stringify(o.notes)}`);
+  assert.equal(halted(r), null);
+});
+test("resume after a foreign-rebalance halt: the new lastRebalanceAt becomes the baseline; the next attempt sends instead of halting again", async () => {
+  const r = rig();
+  await r.step();
+  r.at(60);
+  await r.step(); // sent
+  bandAllY(r.w, 100_000_000n);
+  r.w.lastRebalanceAt = r.w.now + 5;
+  r.at(70);
+  await r.step();
+  r.at(200);
+  r.w.feedAsset.updatedAt = r.w.now - 100;
+  r.w.feedPair.updatedAt = r.w.now - 100;
+  assert.equal((await r.step()).status, "halting");
+  assert.equal(halted(r)!.kind, "foreign-rebalance");
+  r.at(86_400);
+  r.w.feedAsset.updatedAt = r.w.now - 100;
+  r.w.feedPair.updatedAt = r.w.now - 100;
+  r.resume();
+  await r.step();
+  r.at(86_400 + 61);
+  assert.equal((await r.step()).status, "sent");
+  assert.equal(halted(r), null);
+});
+test("resume after a `failures` halt: the failure count starts again (the first new failure does not halt)", async () => {
+  const r = rig();
+  r.w.simRevertAlways = { name: "NavLossTooLarge", args: [1, 1] };
+  await r.step();
+  for (const s of [60, 91, 152]) {
+    r.at(s);
+    await r.step();
+  }
+  assert.equal(halted(r)!.kind, "failures");
+  await resumeAndExpectNoReHalt(r, "file removed");
+  assert.equal(r.state.backoff, null);
+  await r.step();
+  r.at(86_400 + 61);
+  assert.equal((await r.step()).status, "failed", "fails 1 of 3, not a halt");
+  assert.equal((r.state as KeeperState).backoff?.fails, 1);
+});
+test("a second halt after a resume ALERTS AGAIN (keeper:halted is cleared when the HALT file is gone)", async () => {
+  const r = rig();
+  r.w.reasons = 4;
+  await r.step();
+  r.resume();
+  await r.step(); // still unsafe: halts again at once
+  const news = r.sink.messages.filter((m) => m.key === "keeper:halted" && m.kind === "new");
+  assert.equal(news.length, 2, r.keys().join());
+  assert.ok(r.keys().includes("resolved:keeper:halted"));
+});
+test("attempt:failed is cleared when the episode ends without a send (the active bin returns)", async () => {
+  const r = rig();
+  r.w.simRevert = [{ name: "SwapTooLarge", args: [1, 1] }];
+  await r.step();
+  r.at(60);
+  await r.step();
+  assert.ok(r.sink.messages.some((m) => m.key === "attempt:failed"));
+  r.at(100);
+  r.w.activeId = r.w.band.upperId;
+  await r.step();
+  assert.ok(r.keys().includes("resolved:attempt:failed"));
+});
+test("while halted the state file is NOT rewritten by the keeper step (resume's reset is never overwritten)", async () => {
+  const r = rig();
+  saveState(r.cfg.monitor.statePath, r.state);
+  r.w.reasons = 4;
+  await r.step();
+  const before = fs.readFileSync(r.cfg.monitor.statePath, "utf8");
+  const writes = r.persisted.length;
+  for (let i = 1; i < 4; i++) { r.at(3 * i); await r.step(); }
+  assert.equal(r.persisted.length, writes, "no persist while halted");
+  assert.equal(fs.readFileSync(r.cfg.monitor.statePath, "utf8"), before);
 });

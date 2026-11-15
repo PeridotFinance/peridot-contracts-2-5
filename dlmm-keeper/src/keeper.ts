@@ -94,6 +94,13 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   const putHalt = (rec: HaltRecord, update = false): void => {
     if (!opts.noHaltWrite) writeHalt(cfg.monitor.haltPath, rec, update);
   };
+  await alerts.clear("keeper:halted", nowS()); // no HALT file: a later halt must alert again
+  /** a new episode (the active bin is back, or a rebalance was sent): the exit marker, the backoff and the failure alert go */
+  const endEpisode = async (): Promise<void> => {
+    st = { ...st, exit: null, backoff: null };
+    save();
+    await alerts.clear("attempt:failed", nowS());
+  };
   /** writes the HALT file FIRST, alerts, then (optionally) the one tripGuard; returns the outcome */
   const halt = async (kind: HaltKind, reason: string, o: { reasons?: number; latched?: boolean } = {}): Promise<KeeperOutcome> => {
     const rec: HaltRecord = { kind, reason, at: nowS(), ...(o.reasons !== undefined ? { reasons: o.reasons } : {}) };
@@ -219,8 +226,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   const outOfRange = poll.activeId < b.lowerId || poll.activeId > b.upperId; // spec section 5: outside [lowerId, upperId]
   if (!outOfRange) {
     if (st.exit) {
-      st = { ...st, exit: null, backoff: null };
-      save();
+      await endEpisode();
       out.notes.push(`the active bin ${poll.activeId} is back inside [${b.lowerId}, ${b.upperId}]: no rebalance`);
       await alerts.notify({ kind: "action", key: "band:recovered", severity: "info", audience: "keeper-operator", text: `active bin ${poll.activeId} returned inside the band [${b.lowerId}, ${b.upperId}] before a rebalance was needed; nothing sent` });
       return done("recovered");
@@ -270,8 +276,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   if (ag.latched || (ag.reasons & LATCHABLE_MASK) !== 0) return halt("guard", `vault guard ${ag.latched ? "LATCHED" : "UNSAFE"} at the re-read: ${bitNames(ag.reasons)} (reasons=${ag.reasons})`, { reasons: ag.reasons, latched: ag.latched });
   const stillOut = A.poll.activeId < A.poll.band.lowerId || A.poll.activeId > A.poll.band.upperId;
   if (!stillOut || !A.poll.band.outOfRange || !A.poll.band.hasBand) {
-    st = { ...st, exit: null, backoff: null };
-    save();
+    await endEpisode();
     out.notes.push(`at the re-read the active bin ${A.poll.activeId} is inside [${A.poll.band.lowerId}, ${A.poll.band.upperId}] (vault outOfRange=${A.poll.band.outOfRange}): no send`);
     return done("recovered");
   }
@@ -358,8 +363,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
       if (cls.kind === "halt") return halt("guard", `the simulation reverted with ${cls.name} (${cls.detail})`, { ...(cls.reasons !== undefined ? { reasons: cls.reasons } : {}), latched: cls.name === "GuardLatched" });
       if (cls.kind === "benign") {
         if (cls.name === "NotOutOfRange") {
-          st = { ...st, exit: null, backoff: null };
-          save();
+          await endEpisode();
           return done("recovered");
         }
         backoffSoft(cls.readyAt ? { until: cls.readyAt } : { seconds: cls.name === "DailyRebalanceCapReached" ? 3600 : cfg.limits.retryBackoffSeconds }, `${cls.name}`);
