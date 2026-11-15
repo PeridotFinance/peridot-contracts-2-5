@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {PharaohDlmmVault} from "../src/PharaohDlmmVault.sol";
@@ -304,6 +304,77 @@ contract W2SmokeTest is Test {
         fa.setUpdatedAt(vm.getBlockTimestamp());
         fp.setUpdatedAt(vm.getBlockTimestamp() + 1);
         (, , r) = v.guardState(); assertEq(r & 2, 2);
+    }
+
+    function test_minSupplyBlocksDustAttackerButNotExits() public {
+        vm.prank(owner); v.unpause();
+        // the review's attacker: 4 wei deposit is no longer possible (resulting supply < 1e6)
+        vm.prank(user); vm.expectRevert(abi.encodeWithSelector(PharaohDlmmVault.SupplyBelowMinimum.selector, 4));
+        v.deposit(4, user);
+        vm.prank(user); vm.expectRevert(abi.encodeWithSelector(PharaohDlmmVault.SupplyBelowMinimum.selector, 4));
+        v.mint(4, user);
+        // a legitimate 1 USDC seed works, and an exit may leave supply below 1e6 (exits are never gated)
+        vm.prank(user); v.deposit(100e6, user);
+        uint256 s1 = v.balanceOf(user);
+        vm.prank(user); v.redeem(s1 - 30, user, user); // supply 30
+        assertEq(v.totalSupply(), 30);
+        vm.prank(user); v.withdraw(10, user, user);
+        assertLt(v.totalSupply(), 30);
+        vm.prank(user); v.redeemInKind(5, user, user);
+        uint256 left = v.balanceOf(user);
+        assertGt(left, 0); assertLt(v.totalSupply(), 1e6);
+        // a dusty vault refuses entries that leave supply < 1e6 (the attack surface), and accepts one that clears it
+        vm.prank(user); vm.expectRevert(); v.deposit(10, user);
+        vm.prank(user); v.deposit(2e6, user);
+        uint256 fin = v.balanceOf(user);
+        vm.prank(user); v.redeem(fin, user, user);
+    }
+
+    function test_fourWeiAttackerScenarioNoLongerProfits() public {
+        vm.prank(owner); v.unpause();
+        address attacker = address(0xA77);
+        usdc.mint(attacker, 300e6);
+        vm.startPrank(attacker); usdc.approve(address(v), type(uint256).max);
+        vm.expectRevert(); v.deposit(4, attacker); // dust seed refused
+        v.deposit(1e6, attacker); // cheapest allowed seed: k = 1e6 shares
+        usdc.transfer(address(v), 141_857_142); // donation as in the review (NAV 142,857,142)
+        vm.stopPrank();
+        uint256 victimDeposit = 57_142_856;
+        vm.prank(user); uint256 sh = v.deposit(victimDeposit, user);
+        uint256 victimOut = v.convertToAssets(sh);
+        assertGe(victimOut + 100, victimDeposit * 99 / 100 * 100 / 99, "victim keeps (almost) everything"); // loss <= a few wei at k = 1e6
+        assertApproxEqAbs(victimOut, victimDeposit, 1_000);
+    }
+
+    function test_renounceOwnershipDisabled() public {
+        vm.prank(owner); vm.expectRevert(PharaohDlmmVault.RenounceDisabled.selector);
+        v.renounceOwnership();
+        assertEq(v.owner(), owner);
+    }
+
+    function test_cooldownLowerBound112() public {
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.rebalanceCooldown = 111;
+        vm.prank(owner); vm.expectRevert(IPharaohDlmmVault.ParamOutOfBounds.selector); v.setGuardParams(g);
+        g.rebalanceCooldown = 112;
+        vm.prank(owner); v.setGuardParams(g);
+    }
+
+    function test_harvestEventAmountIsTheClaimOnly() public {
+        _open();
+        phar.mint(address(v), 100e18); // donated PHAR
+        vm.recordLogs();
+        vm.prank(keeper); v.harvestRewards();
+        assertEq(phar.balanceOf(owner), 105e18); // the whole balance is forwarded
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool found;
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == IPharaohDlmmVault.PharHarvested.selector) {
+                (uint256 amount,,) = abi.decode(logs[i].data, (uint256, uint256, uint256));
+                assertEq(amount, 5e18); found = true;
+            }
+        }
+        assertTrue(found);
     }
 
     function test_harvestAndParams() public {
