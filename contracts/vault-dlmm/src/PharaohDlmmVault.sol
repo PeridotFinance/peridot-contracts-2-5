@@ -230,7 +230,7 @@ contract PharaohDlmmVault is
 
     /// @notice USDC out. NOTE: `previewRedeem`/`convertToAssets` OVERSTATE what is paid (they are the oracle NAV; the swap fee and the pool's standing
     ///         discount on the USDt part are charged to the redeemer). `withdraw(assets)` may likewise pay slightly LESS than `assets`. The redeemer's pro-rata slice is burned from the bins, its USDt part is swapped to USDC through the router with an oracle
-    ///         minimum (`maxRebalanceLossBps`); the REDEEMER bears the swap cost, other holders are never charged for it. Pays what is realised, so it
+    ///         minimum (`maxRebalanceLossBps`); the REDEEMER bears the swap cost; the spill onto other holders is bounded and tiny (the swap runs against the active bin, which can hold part of the vault's own band at a price off the oracle; MEASURED by W4: 12 wei on 30.8M units). Pays what is realised, so it
     ///         can be slightly below `previewRedeem` (swap fee plus the pool's standing discount). Not gated by pause, guard or latch. Needs the feeds
     ///         and pool depth; if either fails use `redeemInKind`.
     function redeem(uint256 shares, address receiver, address owner_) public override nonReentrant returns (uint256 assets) {
@@ -524,8 +524,8 @@ contract PharaohDlmmVault is
                 amountY: by,
                 amountXMin: amountXMin,
                 amountYMin: amountYMin,
-                activeIdDesired: expectedActiveId,
-                idSlippage: idSlippage,
+                activeIdDesired: active, // the REAL active id read after the inventory swap: ids and distributions are built around it
+                idSlippage: 0, // the caller's tolerance was applied above (ActiveIdMoved); the router must see exactly the id used here
                 deltaIds: deltas,
                 distributionX: distX,
                 distributionY: distY,
