@@ -29,7 +29,7 @@ for leg in ("USDC", "USDT"):
     res = []
     for e in eps:
         lo = max(0, e["i0"] - 3); hi = min(len(F) - 1, e["i1"] + 2)
-        rs = F[lo:hi + 1]; worst = max(rs, key=lambda r: abs(r[1] - 1e8))
+        ctx = F[lo:hi + 1]; rs = F[e['i0']:e['i1'] + 1]; worst = max(rs, key=lambda r: abs(r[1] - 1e8))
         first_gt = lambda th: next((r for r in rs if abs(r[1] - 1e8) / 1e4 > th), None)
         # when did the previous in-band round occur (the feed state before the move)
         prev = F[e["i0"] - 1]
@@ -39,17 +39,17 @@ for leg in ("USDC", "USDT"):
              "secs_first_20_to_first_50": (first_gt(50)[3] - F[e["i0"]][3]) if first_gt(50) else None}
         # seconds the feed read > 50 bps off, time weighted
         sec50 = 0
-        for j in range(lo, hi):
-            if abs(F[j][1] - 1e8) / 1e4 > 50: sec50 += F[j + 1][3] - F[j][3]
+        for j in range(e['i0'], e['i1'] + 1):
+            if abs(F[j][1] - 1e8) / 1e4 > 50 and j + 1 < len(F): sec50 += F[j + 1][3] - F[j][3]
         d["seconds_in_force_over_50bps"] = sec50; d["max_dev_bps"] = round(abs(worst[1] - 1e8) / 1e4, 1)
-        d["rounds"] = [[f(r[3]), r[1] / 1e8] for r in rs][:40]
+        d["rounds_with_context"] = [[f(r[3]), r[1] / 1e8] for r in ctx][:40]
         res.append(d)
     out[leg] = res
 json.dump(out, open(os.path.join(D, "depegs.json"), "w"), indent=1)
 for leg, rs in out.items():
     print("==", leg)
     for d in rs:
-        print({k: v for k, v in d.items() if k != "rounds"})
+        print({k: v for k, v in d.items() if k != "rounds_with_context"})
 
 # ---- how often would each legBand have latched (distinct excursions, merged if < 6 h apart), by era ----
 eras = {"all (2021-07 .. 2026-11)": 0, "since 2023-04-01": calendar_ts(2023, 4, 1) if False else 1680307200, "since 2024-09-01 (current aggregator family, phase 2+)": 1725148800}
