@@ -326,11 +326,16 @@ contract W2SmokeTest is Test {
         vm.prank(user); vm.expectRevert(); v.redeemInKind(1e6, user, user);
     }
 
-    function test_openBandCapBlockedByFavourableSwap() public {
+    function test_capExactThenOneWeiRevertsAndOpenBandSurvivesFavourableSwap() public {
         vm.prank(owner); v.unpause();
-        vm.prank(user); v.deposit(200e6, user); // NAV exactly at the cap
-        fp.set(1.001e8); // USDt valued 10 bp above USDC; the mock swap is 1:1 less 1 bp -> NAV rises above the cap
-        vm.prank(keeper); vm.expectRevert(); v.openBand(8388608, 0, 0, 0, 0, block.timestamp + 100);
+        vm.prank(user); v.deposit(200e6, user); // exactly the cap
+        assertEq(v.maxDeposit(user), 0);
+        vm.prank(user); vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CapExceeded.selector, 200e6, 200e6 + 1));
+        v.deposit(1, user);
+        fp.set(1.001e8); // favourable swap: NAV rises above the cap
+        vm.prank(keeper); v.openBand(8388608, 0, 0, 0, 0, block.timestamp + 100);
+        (,,, bool has,) = v.bandState(); assertTrue(has);
+        assertGt(v.totalAssets(), 200e6);
     }
 
     function test_rebalanceWithSwapBothDirections() public {

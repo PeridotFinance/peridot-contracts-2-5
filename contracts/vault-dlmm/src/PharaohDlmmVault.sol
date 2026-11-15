@@ -228,7 +228,8 @@ contract PharaohDlmmVault is
         _deposit(msg.sender, receiver, assets, shares);
     }
 
-    /// @notice USDC out. The redeemer's pro-rata slice is burned from the bins, its USDt part is swapped to USDC through the router with an oracle
+    /// @notice USDC out. NOTE: `previewRedeem`/`convertToAssets` OVERSTATE what is paid (they are the oracle NAV; the swap fee and the pool's standing
+    ///         discount on the USDt part are charged to the redeemer). `withdraw(assets)` may likewise pay slightly LESS than `assets`. The redeemer's pro-rata slice is burned from the bins, its USDt part is swapped to USDC through the router with an oracle
     ///         minimum (`maxRebalanceLossBps`); the REDEEMER bears the swap cost, other holders are never charged for it. Pays what is realised, so it
     ///         can be slightly below `previewRedeem` (swap fee plus the pool's standing discount). Not gated by pause, guard or latch. Needs the feeds
     ///         and pool depth; if either fails use `redeemInKind`.
@@ -391,8 +392,7 @@ contract PharaohDlmmVault is
 
         (uint24 active, uint256 addedX, uint256 addedY) = _addBand(expectedActiveId, idSlippage, amountXMin, amountYMin, deadline);
         _checkNavLoss(navBefore, pa, pp);
-        uint256 navAfter = _nav(pa, pp);
-        if (navAfter > depositCap) revert CapExceeded(depositCap, navAfter);
+        // no cap post-check: openBand takes in no funds; the cap is enforced where assets enter (deposit, mint, maxDeposit, maxMint)
         emit BandOpened(_lower, _upper, active, addedX, addedY);
     }
 
