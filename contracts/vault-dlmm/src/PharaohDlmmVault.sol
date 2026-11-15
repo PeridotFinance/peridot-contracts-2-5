@@ -667,7 +667,7 @@ contract PharaohDlmmVault is
             price[i] = uint256(answer);
             hasMask |= 1 << i;
             if (updatedAt == 0 || answeredInRound < roundId) continue;
-            if (updatedAt <= block.timestamp && block.timestamp - updatedAt > maxAge) continue;
+            if (updatedAt > block.timestamp || block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
             okMask |= 1 << i;
         }
     }
