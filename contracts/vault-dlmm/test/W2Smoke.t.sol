@@ -21,6 +21,7 @@ contract MFeed {
     uint256 public updatedAt;
     function decimals() external pure returns (uint8) { return 8; }
     function set(int256 a) external { answer = a; updatedAt = block.timestamp; }
+    function setUpdatedAt(uint256 t) external { updatedAt = t; }
     function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
         return (1, answer, 0, updatedAt == 0 ? block.timestamp : updatedAt, 1);
     }
@@ -292,6 +293,17 @@ contract W2SmokeTest is Test {
         (, , r) = v.guardState(); assertEq(r & 16, 16);
         fp.set(1.0040e8);
         (, , r) = v.guardState(); assertEq(r & 16, 0);
+    }
+
+    function test_futureUpdatedAtFeedIsBad() public {
+        vm.prank(owner); v.unpause();
+        fa.setUpdatedAt(vm.getBlockTimestamp() + 1);
+        (bool unsafe,, uint256 r) = v.guardState(); assertTrue(unsafe); assertEq(r & 1, 1);
+        vm.expectRevert(abi.encodeWithSelector(PharaohDlmmVault.FeedInvalid.selector, uint8(1)));
+        v.totalAssets();
+        fa.setUpdatedAt(vm.getBlockTimestamp());
+        fp.setUpdatedAt(vm.getBlockTimestamp() + 1);
+        (, , r) = v.guardState(); assertEq(r & 2, 2);
     }
 
     function test_harvestAndParams() public {
