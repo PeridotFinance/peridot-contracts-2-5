@@ -48,6 +48,12 @@ contract CapTest is Base {
         assertEq(v.rebalancesToday(), 0);
     }
 
+    /// ACTUAL (spec-silent): the vault starts paused after initialize. Recorded, and the world must be usable after the Safe unpauses (done in Base).
+    function test_startsPausedRecorded() public {
+        emit log_named_string("ACTUAL vault paused straight after initialize", startedPaused ? "yes" : "no");
+        assertFalse(adm.paused(), "Base unpaused it");
+    }
+
     function test_cannotInitializeTwiceNorTheImplementation() public {
         vm.expectRevert();
         adm.initialize(_initParams());

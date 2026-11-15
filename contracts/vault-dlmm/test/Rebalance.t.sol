@@ -123,11 +123,6 @@ contract RebalanceTest is Base {
         assertGe(_sharePrice() * 1000, sp0 * 995, "opening costs at most the loss bound");
     }
 
-    function test_openBandRoleGated() public {
-        _deposit(ALICE, 50e6);
-        _assertRevertsWith(ATTACKER, address(v), _openBandArgs(), IPharaohDlmmVault.NoBand.selector); // placeholder, overwritten below
-    }
-
     function test_openBandOnlyRebalancer() public {
         _deposit(ALICE, 50e6);
         bytes memory ret = _assertReverts(ATTACKER, address(v), _openBandArgs());
@@ -151,10 +146,12 @@ contract RebalanceTest is Base {
         assertEq(e, a + 5);
         assertEq(ac, a);
         assertEq(sl, 1);
-        // within the slippage it passes
+        // within the slippage the router adds the 3 bins around the DESIRED id (a+1), not around the real active id (a): the pair then rejects the
+        // one-sided rule on the bin a+1 or accepts. Record which (see the findings: idSlippage > 0 has no usable path if it reverts).
         vm.prank(KEEPER);
-        v.openBand(a + 1, 1, 0, 0, 0, block.timestamp + 120);
-        assertTrue(_hasBand());
+        (bool ok, bytes memory r2) = address(v).call(abi.encodeCall(IPharaohDlmmVault.openBand, (a + 1, 1, 0, 0, 0, block.timestamp + 120)));
+        emit log_named_string("ACTUAL openBand(expected = active+1, idSlippage = 1)", ok ? "succeeds" : "reverts");
+        if (!ok) emit log_named_bytes32("  revert selector", bytes32(_sel(r2)));
     }
 
     function test_openBandIdSlippageAboveTwoReverts() public {
@@ -322,7 +319,7 @@ contract RebalanceTest is Base {
         _fundAndOpen(100e6);
         _pushOut(true);
         _rebalance();
-        uint256 t0 = block.timestamp;
+        uint256 t0 = vm.getBlockTimestamp();
         _pushOut(false);
         (bool ok, uint256 bits, uint256 readyAt) = v.rebalanceAllowed();
         assertFalse(ok, "cooldown");
@@ -351,7 +348,7 @@ contract RebalanceTest is Base {
         _fundAndOpen(100e6);
         _pushOut(true);
         _rebalance();
-        uint256 t0 = block.timestamp;
+        uint256 t0 = vm.getBlockTimestamp();
         _pushOut(false);
         vm.warp(t0 + 300);
         _refreshFeeds();

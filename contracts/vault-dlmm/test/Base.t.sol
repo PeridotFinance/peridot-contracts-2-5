@@ -41,6 +41,7 @@ abstract contract Base is World {
     address internal proxyAdmin;
     uint256 internal initCap = CAP;
     bytes32 internal rewarderCodehash;
+    bool internal startedPaused;
 
     // ------------------------------------------------------------------ errors from other libraries
     bytes4 internal constant ENFORCED_PAUSE = bytes4(keccak256("EnforcedPause()"));
@@ -114,6 +115,12 @@ abstract contract Base is World {
         erc = IERC4626(proxy);
         adm = IVaultAdmin(proxy);
         shares = IERC20(proxy);
+        // the vault may start PAUSED (ceremony: the owner unpauses after the read-backs). Record it and unpause as the Safe.
+        startedPaused = adm.paused();
+        if (startedPaused) {
+            vm.prank(SAFE);
+            adm.unpause();
+        }
         _mintTokens(ALICE, 10_000e6, 0);
         _mintTokens(BOB, 10_000e6, 0);
         _mintTokens(CAROL, 10_000e6, 0);
@@ -158,8 +165,9 @@ abstract contract Base is World {
     }
 
     function _openBand() internal {
+        uint24 a = pair.getActiveId(); // read BEFORE the prank: a call in the argument list would consume it
         vm.prank(KEEPER);
-        v.openBand(pair.getActiveId(), 1, 0, 0, 0, block.timestamp + 120);
+        v.openBand(a, 1, 0, 0, 0, block.timestamp + 120);
     }
 
     /// deposit by ALICE of `amt` USDC then the keeper opens the first band
@@ -235,7 +243,7 @@ abstract contract Base is World {
     }
 
     function _warp(uint256 dt) internal {
-        vm.warp(block.timestamp + dt);
+        vm.warp(vm.getBlockTimestamp() + dt);
         _refreshFeeds();
     }
 

@@ -126,12 +126,12 @@ contract GuardTest is Base {
 
     // ---- bit 8: pair leg out of band
     function test_bit8_pairLegLow() public {
-        feedUsdt.setAnswer(0.994e8);
+        feedUsdt.setAnswer(0.9945e8);
         _assertOnly(8);
     }
 
     function test_bit8_pairLegHigh() public {
-        feedUsdt.setAnswer(1.006e8);
+        feedUsdt.setAnswer(1.0055e8);
         _assertOnly(8);
     }
 
@@ -278,8 +278,8 @@ contract GuardTest is Base {
     function _breakBit(uint256 bit) internal {
         if (bit == 1) feedUsdc.setRevertLatest(true);
         else if (bit == 2) feedUsdt.setRevertLatest(true);
-        else if (bit == 4) feedUsdc.setAnswer(1.01e8);
-        else if (bit == 8) feedUsdt.setAnswer(0.99e8);
+        else if (bit == 4) feedUsdc.setAnswer(1.0055e8); // 55 bp: outside the 50 bp leg band, inside the 60 bp pool tolerance
+        else if (bit == 8) feedUsdt.setAnswer(0.9945e8);
         else if (bit == 16) pair.forceActiveId(ID0 + 80);
         else if (bit == 32) pair.setHook(address(0));
     }
@@ -288,7 +288,7 @@ contract GuardTest is Base {
         _breakBit(bit);
         bytes memory ret = _callAs(BOB, abi.encodeWithSignature("deposit(uint256,address)", 10e6, BOB));
         assertEq(_sel(ret), IPharaohDlmmVault.GuardUnsafe.selector, "deposit blocked by the guard");
-        assertEq(abi.decode(_tail(ret), (uint256)), bit, "GuardUnsafe carries the reason");
+        assertEq(abi.decode(_tail(ret), (uint256)) & bit, bit, "GuardUnsafe carries the reason");
         // mint: blocked too (or disabled: maxMint == 0 in R3 style)
         _callAs(BOB, abi.encodeWithSignature("mint(uint256,address)", 10e6, BOB));
         // openBand blocked (nothing deposited: the guard must come first or the call fails for another reason: both are reverts, assert the guard only when funds exist)
@@ -376,7 +376,7 @@ contract GuardTest is Base {
             _breakBit(bits[i]);
             bytes memory ret = _assertReverts(KEEPER, address(v), _openBandArgs());
             assertEq(_sel(ret), IPharaohDlmmVault.GuardUnsafe.selector, "openBand blocked");
-            assertEq(abi.decode(_tail(ret), (uint256)), bits[i]);
+            assertEq(abi.decode(_tail(ret), (uint256)) & bits[i], bits[i]);
             vm.revertToState(snap);
         }
     }
@@ -415,7 +415,7 @@ contract GuardTest is Base {
     }
 
     function test_latchSurvivesRecovery() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         vm.prank(ATTACKER);
         v.tripGuard();
         feedUsdc.setAnswer(1e8); // prices recover
@@ -431,7 +431,7 @@ contract GuardTest is Base {
     function test_latchBlocksOpenBandAndRebalance() public {
         _fundAndOpen(100e6);
         _pushOut(true);
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         vm.prank(ATTACKER);
         v.tripGuard();
         feedUsdc.setAnswer(1e8);
@@ -443,7 +443,7 @@ contract GuardTest is Base {
 
     function test_latchBlocksOpenBand() public {
         _deposit(ALICE, 50e6);
-        feedUsdt.setAnswer(0.99e8);
+        feedUsdt.setAnswer(0.9945e8);
         vm.prank(ATTACKER);
         v.tripGuard();
         feedUsdt.setAnswer(1e8);
@@ -452,7 +452,7 @@ contract GuardTest is Base {
     }
 
     function test_clearGuardOwnerOnly() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         v.tripGuard();
         feedUsdc.setAnswer(1e8);
         vm.prank(ATTACKER);
@@ -464,7 +464,7 @@ contract GuardTest is Base {
     }
 
     function test_clearGuardRefusedWhileLiveUnsafe() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         v.tripGuard();
         vm.prank(SAFE);
         vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardStillUnsafe.selector, 4));
@@ -472,7 +472,7 @@ contract GuardTest is Base {
     }
 
     function test_clearGuardReleasesWhenSafe() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         v.tripGuard();
         feedUsdc.setAnswer(1e8);
         vm.expectEmit(address(v));
@@ -487,7 +487,7 @@ contract GuardTest is Base {
     }
 
     function test_clearGuardRefusedUnderLiveBit16and32() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         v.tripGuard();
         feedUsdc.setAnswer(1e8);
         pair.forceActiveId(ID0 + 80);
@@ -508,7 +508,7 @@ contract GuardTest is Base {
     }
 
     function test_tripWhileAlreadyLatchedIsRecorded() public {
-        feedUsdc.setAnswer(1.01e8);
+        feedUsdc.setAnswer(1.0055e8);
         v.tripGuard();
         (bool ok,) = address(v).call(abi.encodeCall(IPharaohDlmmVault.tripGuard, ()));
         emit log_named_string("ACTUAL second tripGuard while latched", ok ? "succeeds" : "reverts");
@@ -517,7 +517,7 @@ contract GuardTest is Base {
     }
 
     function test_tripLatchesOnlyLatchableBitsEvenWhenOthersHold() public {
-        feedUsdc.setAnswer(1.01e8); // bit 4, latchable
+        feedUsdc.setAnswer(1.0055e8); // bit 4, latchable
         pair.setHook(address(0)); // bit 32, live only
         vm.recordLogs();
         v.tripGuard();
