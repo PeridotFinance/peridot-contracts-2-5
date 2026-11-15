@@ -1,0 +1,225 @@
+{
+ "USDC": {
+  "30": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 8,
+    "first_times": [
+     "2021-12-04 05:54:34",
+     "2022-05-11 12:44:35",
+     "2022-05-11 20:37:26",
+     "2022-05-12 05:26:26",
+     "2022-08-03 09:32:46",
+     "2022-11-10 11:26:54",
+     "2023-03-10 22:57:19",
+     "2023-03-14 01:14:45"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "50": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 7,
+    "first_times": [
+     "2021-12-04 05:54:34",
+     "2022-05-11 12:44:35",
+     "2022-05-11 20:37:26",
+     "2022-05-12 05:26:26",
+     "2022-08-03 09:32:46",
+     "2022-11-10 11:26:54",
+     "2023-03-11 00:38:21"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "75": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 2,
+    "first_times": [
+     "2022-05-12 05:36:25",
+     "2023-03-11 01:18:56"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "100": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 3,
+    "first_times": [
+     "2022-05-12 05:36:25",
+     "2023-03-11 01:57:53",
+     "2023-03-13 10:43:14"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "150": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 2,
+    "first_times": [
+     "2022-05-12 07:00:57",
+     "2023-03-11 03:14:25"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  }
+ },
+ "USDT": {
+  "30": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 14,
+    "first_times": [
+     "2021-12-04 05:32:00",
+     "2022-01-05 22:41:16",
+     "2022-05-11 20:40:07",
+     "2022-11-09 20:38:34",
+     "2023-03-10 23:20:12",
+     "2023-03-14 03:39:12",
+     "2023-03-15 03:09:32",
+     "2023-03-15 13:35:52",
+     "2023-03-15 21:17:10",
+     "2023-03-20 04:04:07",
+     "2023-03-20 16:51:03",
+     "2023-06-15 08:54:44"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 3,
+    "first_times": [
+     "2023-06-15 08:54:44",
+     "2024-01-03 12:11:02",
+     "2025-10-10 21:34:27"
+    ]
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 1,
+    "first_times": [
+     "2025-10-10 21:34:27"
+    ]
+   }
+  },
+  "50": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 9,
+    "first_times": [
+     "2021-12-04 05:33:26",
+     "2022-05-12 04:27:17",
+     "2022-11-09 20:48:24",
+     "2022-11-10 08:30:09",
+     "2023-03-11 01:00:16",
+     "2023-03-13 14:20:13",
+     "2023-03-14 08:07:52",
+     "2024-01-03 12:11:02",
+     "2025-10-10 21:47:56"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 2,
+    "first_times": [
+     "2024-01-03 12:11:02",
+     "2025-10-10 21:47:56"
+    ]
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 1,
+    "first_times": [
+     "2025-10-10 21:47:56"
+    ]
+   }
+  },
+  "75": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 6,
+    "first_times": [
+     "2022-05-12 05:44:42",
+     "2022-11-09 20:50:25",
+     "2022-11-10 12:06:46",
+     "2023-03-11 01:22:16",
+     "2023-03-11 15:24:03",
+     "2023-03-13 14:35:14"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "100": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 6,
+    "first_times": [
+     "2022-05-12 06:21:18",
+     "2022-11-10 12:14:46",
+     "2023-03-11 02:16:18",
+     "2023-03-11 16:36:51",
+     "2023-03-12 05:00:17",
+     "2023-03-12 14:33:55"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  },
+  "150": {
+   "all (2021-07 .. 2026-11)": {
+    "distinct_excursions": 3,
+    "first_times": [
+     "2022-05-12 06:30:37",
+     "2022-11-10 12:24:17",
+     "2023-03-12 19:26:04"
+    ]
+   },
+   "since 2023-04-01": {
+    "distinct_excursions": 0,
+    "first_times": []
+   },
+   "since 2024-09-01 (current aggregator family, phase 2+)": {
+    "distinct_excursions": 0,
+    "first_times": []
+   }
+  }
+ }
+}
