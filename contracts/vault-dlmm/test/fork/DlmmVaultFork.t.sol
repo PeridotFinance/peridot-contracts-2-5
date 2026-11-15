@@ -487,7 +487,7 @@ contract DlmmForkExit is DlmmForkBase {
         uint256 got = v.redeem(10e6, BOB, BOB);
         console2.log("redeem preview / paid (all USDt sold through the pool)", prev, got);
         assertGt(got, 0);
-        // with the pool dumped by a depeg the oracle floor bites: latch + oracle 0.98 -> USDC-out reverts, in kind still pays
+        // oracle depeg on the USDt leg while the vault holds only USDt: in kind still pays (the USDC-out behaviour under an oracle move is in test_exit_latched_*)
         _mockFeed(FEED_USDT, 98_000_000, _ts());
         v.tripGuard();
         (x, y) = _inKind(ALICE, 10e6);
@@ -757,17 +757,41 @@ contract DlmmForkHook is DlmmForkBase {
         _state();
         vm.mockCallRevert(voter, abi.encodeWithSignature("isAntiSybilEnabled()"), "voter: revert");
         Row memory r = _matrix("voter.isAntiSybilEnabled() reverts");
-        // MEASURED: the hook tolerates this revert on burn and swap (the vault's exits survive); it breaks MINT (openBand / rebalance re-add)
-        assertTrue(r.burnInKind && r.redeemUsdc && r.swap, "burn and swap survive a reverting isAntiSybilEnabled");
+        // MEASURED: the voter is NOT read on a burn made in the same second as the mint (the hook is inside its time threshold), so this matrix (no time passed)
+        // sees burn and swap pass and the MINT path fail. Once the bins are older than 111 s both voter reads are fatal for the burn:
+        // test_hook_voterReadsRevert_burnAfterTimeThreshold (the realistic state of an exit).
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap, "same-second burn and swap do not read the voter");
         assertFalse(r.addLiq, "mint path reads isAntiSybilEnabled and reverts");
         vm.clearMockedCalls();
 
         vm.mockCallRevert(voter, abi.encodeWithSignature("timeThresholdForGauge(address)", REWARDER), "voter: revert");
         r = _matrix("voter.timeThresholdForGauge(rewarder) reverts");
-        assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq, "a reverting timeThresholdForGauge changes nothing (tolerated)");
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq, "no time passed: timeThresholdForGauge is not read (see the burnAfterTimeThreshold test)");
         vm.clearMockedCalls();
         r = _matrix("after un-mocking");
         assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq && r.deposit);
+    }
+
+
+    /// the voter reads only happen on the burn path once the bins are older than the time threshold (111 s): re-test the two voter reverts with time passed
+    function test_hook_voterReadsRevert_burnAfterTimeThreshold() public {
+        _state();
+        _warpBy(300);
+        vm.mockCallRevert(voter, abi.encodeWithSignature("isAntiSybilEnabled()"), "voter: revert");
+        (bool ok, bytes memory ret) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        console2.log("burn 300 s after the mint with isAntiSybilEnabled() reverting, ok:", ok);
+        if (!ok) console2.logBytes(ret);
+        assertFalse(ok, "FINDING: a reverting voter.isAntiSybilEnabled blocks every burn (hence every exit) once the bins are > 111 s old");
+        vm.clearMockedCalls();
+        vm.mockCallRevert(voter, abi.encodeWithSignature("timeThresholdForGauge(address)", REWARDER), "voter: revert");
+        (ok, ret) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        console2.log("burn 300 s after the mint with timeThresholdForGauge() reverting, ok:", ok);
+        if (!ok) console2.logBytes(ret);
+        assertFalse(ok, "FINDING: a reverting voter.timeThresholdForGauge blocks every burn as well");
+        assertEq(_reasons(), 0, "the guard sees none of it");
+        vm.clearMockedCalls();
+        (ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        assertTrue(ok, "un-mocked: works");
     }
 
     /// a reverting beforeSwap blocks the USDC-out exits and every swap, NOT the in-kind exit
@@ -1052,6 +1076,7 @@ contract DlmmForkInit is DlmmForkBase {
     function test_init_check13b_feedStaleOrRevertingAtDeployment() public {
         _mockFeed(FEED_USDT, 1e8, _ts() - 93_601);
         _initFails(13);
+        _freshFeeds(); // clear the stale USDT mock before the next case
         _mockFeedReverts(FEED_USDC);
         _initFails(13);
     }
@@ -1350,19 +1375,63 @@ contract DlmmForkHarvest is DlmmForkBase {
         _warpBy(300);
         uint256 pend2 = _pending();
         later = _harvest();
+        if (dt <= 110) assertApproxEqRel(later, 5317684586061233, 1e12, "later claim = 300 s of accrual: the dt seconds before the in-window claim are forfeited");
         console2.log("claim at +s after the mint / pending before / paid:", dt, pend);
         console2.log("   paid:", paid);
         console2.log("   300 s later: pending / paid:", pend2, later);
     }
 
-    // MEASURED: a claim inside the window pays 0 AND forfeits the accrual up to that moment: the claim 300 s later pays 5317684586061233 (300 s of accrual,
-    // the same as a first claim at +300), not the 300 + dt seconds a claim-free run would have paid. NOTE: repeated warps within one test make
-    // getPendingRewards non-linear in an unexplained way (reads at +100, +112, +200 then +300 gave 2.4x the single-warp value); only single-warp, one-claim-per-case figures are used.
+    // MEASURED: a claim inside the window pays 0 AND forfeits the accrual up to that moment: the claim 300 s later pays 5317684586061233 (300 s of accrual at
+    // about 1.7726e13 PHAR-wei/s, the same as a first claim at +300), not the 300 + dt seconds a claim-free run would have paid.
     function test_harvest_forfeit_010s() public { (, uint256 paid,) = _forfeit(10); assertEq(paid, 0, "inside 111 s: nothing paid"); }
     function test_harvest_forfeit_060s() public { (, uint256 paid,) = _forfeit(60); assertEq(paid, 0); }
     function test_harvest_forfeit_110s() public { (, uint256 paid,) = _forfeit(110); assertEq(paid, 0); }
     function test_harvest_forfeit_112s() public { (, uint256 paid,) = _forfeit(112); assertGt(paid, 0, "outside the window: paid"); }
     function test_harvest_forfeit_300s() public { (, uint256 paid,) = _forfeit(300); assertGt(paid, 0); }
+
+
+    /// the keeper's actual rule after a rebalance: what a harvest INSIDE the 111 s window after the re-mint does with PHAR the old band earned
+    function test_harvest_immediatelyAfterRebalance_insideWindow() public {
+        _live(100e6);
+        _warpBy(600);
+        uint256 pendBefore = _pending();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        _rebalanceAuto();
+        uint256 pendAfter = _pending();
+        _warpBy(30); // inside the window of the re-mint
+        uint256 paidIn = _harvest();
+        _warpBy(300);
+        uint256 pend2 = _pending();
+        uint256 paidLater = _harvest();
+        console2.log("pending before the rebalance (old band, 600 s) / right after it:", pendBefore, pendAfter);
+        console2.log("harvest 30 s after the re-mint, paid:", paidIn);
+        console2.log("harvest 300 s later: pending / paid:", pend2, paidLater);
+    }
+
+    /// permissionless dust burn inside the window (spec/DEVIATIONS item 7): BOB redeems 10 shares in kind at +100 s, then the keeper harvests at +300 s
+    function _dustBurnCase(bool burn) internal returns (uint256 paid) {
+        _live(100e6);
+        _deposit(BOB, 10e6);
+        _warpBy(100);
+        if (burn) {
+            vm.prank(BOB);
+            v.redeemInKind(10, BOB, BOB);
+        }
+        _warpBy(200);
+        paid = _harvest();
+        console2.log(burn ? "harvest at +300 after a third-party 10-share burn at +100, paid:" : "harvest at +300, no dust burn, paid:", paid);
+    }
+
+    // control and burn are separate fresh tests (no state travel); compare the two logged payouts
+    // MEASURED at the pin: control 5317684586061233 (300 s of accrual); after a 10-share (about 10 raw units of value) burn by a third party at +100 s the harvest
+    // at +300 s pays 3545122735643822 = 200 s of accrual: the first 100 s are forfeited. FINDING: the permissionless dust burn can zero the vault's PHAR repeatedly.
+    function test_harvest_dustBurn_control_noBurn() public { assertApproxEqRel(_dustBurnCase(false), 5317684586061233, 1e12); }
+
+    function test_harvest_dustBurn_thirdPartyBurnAt100s() public {
+        uint256 paid = _dustBurnCase(true);
+        assertApproxEqRel(paid, uint256(3545122735643822), 1e12, "the accrual before the dust burn is forfeited (100 of 300 s)");
+    }
 
     /// PHAR earned on the OLD band's bins before a rebalance: is it still paid by harvestRewards (which claims only the CURRENT band's ids)?
     function test_harvest_afterRebalance_oldBinRewards() public {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the DLMM vault fork tests while holding the shared fork lock /tmp/pilot-fork.lock (one fork job at a time).
 # Usage:  AVALANCHE_MAINNET_RPC_URL=<set in your environment, never in a file>  ./run-locked.sh [forge test args, e.g. --match-contract DlmmDepegFork]
-# The endpoint is read from the environment only; it is never printed or passed as an argument. Output is redacted of any URL before it is shown.
+# The endpoint is read from the environment only; it is never printed or passed as an argument. Output is redacted of any URL in the pipe before it is shown or stored.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$HERE/../.." && pwd)"
@@ -24,9 +24,8 @@ HELD=1
 trap release EXIT INT TERM HUP
 echo "acquire $(date -u +%FT%TZ) epoch=$(date +%s)" >> "$STAMPS"
 
-forge test "$@" > "$LOG" 2>&1
-RC=$?
+# the raw output never touches the disk: it is redacted in the pipe (an RPC error may quote the endpoint, key included)
+forge test "$@" 2>&1 | sed -E 's#https?://[^[:space:]"]+#<url-redacted>#g' | tee "$LOG"
+RC=${PIPESTATUS[0]}
 release
-sed -E 's#https?://[^[:space:]"]+#<url-redacted>#g' "$LOG" > "$LOG.redacted"
-cat "$LOG.redacted"
 exit $RC
