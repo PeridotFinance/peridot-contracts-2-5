@@ -64,16 +64,21 @@ contract FuzzTest is Base {
     function testFuzz_depositNeverExceedsMaxDeposit(uint256 prior, uint256 amt) public {
         prior = bound(prior, 0, 250e6);
         amt = bound(amt, 1, 400e6);
-        if (prior != 0) {
+        if (prior >= 1e6) {
             uint256 p = prior > CAP ? CAP : prior;
             _deposit(ALICE, p);
         }
         uint256 md = erc.maxDeposit(BOB);
         usdc.mint(BOB, amt);
+        uint256 newSupply = shares.totalSupply() + erc.previewDeposit(amt);
         vm.prank(BOB);
-        if (amt <= md) {
+        if (amt <= md && newSupply >= 1e6) {
             erc.deposit(amt, BOB);
             assertLe(erc.totalAssets(), CAP);
+        } else if (amt <= md) {
+            // minimum-supply rule (W10 F1): an entry may not leave the supply in (0, 1e6)
+            vm.expectRevert();
+            erc.deposit(amt, BOB);
         } else {
             vm.expectRevert();
             erc.deposit(amt, BOB);
@@ -255,11 +260,11 @@ contract FuzzTest is Base {
         if (leg % 2 == 0) leg = uint16(10 + leg % 191);
         if (age % 2 == 0) age = uint32(3_600 + age % 169_201);
         if (dev % 2 == 0) dev = uint16(20 + dev % 281);
-        if (cd % 2 == 0) cd = uint32(111 + cd % 3_490);
+        if (cd % 2 == 0) cd = uint32(112 + cd % 3_489);
         if (perDay % 2 == 0) perDay = uint16(4 + perDay % 93);
         if (swapBps % 2 == 0) swapBps = uint16(1 + swapBps % 10_000);
         if (loss % 2 == 0) loss = uint16(5 + loss % 296);
-        bool valid = leg >= 10 && leg <= 200 && age >= 3_600 && age <= 172_800 && dev >= 20 && dev <= 300 && cd >= 111 && cd <= 3_600 && perDay >= 4
+        bool valid = leg >= 10 && leg <= 200 && age >= 3_600 && age <= 172_800 && dev >= 20 && dev <= 300 && cd >= 112 && cd <= 3_600 && perDay >= 4
             && perDay <= 96 && swapBps >= 1 && swapBps <= 10_000 && loss >= 5 && loss <= 300;
         IPharaohDlmmVault.GuardParams memory g = IPharaohDlmmVault.GuardParams(leg, age, dev, cd, perDay, swapBps, loss);
         vm.prank(SAFE);
