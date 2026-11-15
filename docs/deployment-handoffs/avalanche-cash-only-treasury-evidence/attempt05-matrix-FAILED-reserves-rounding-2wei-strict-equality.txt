@@ -1,0 +1,267 @@
+# UTC: 2026-11-03T13:43:26Z
+# git HEAD: 7d99930cd4090687815d9026a67db5a858af9acd
+# test file sha256: c7d6577fabca5e1d62abef5c6934db30f1d15d445d6d89e25660b50b24157b89
+# command: TREASURY_MUTATION=0 AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_treasury FOUNDRY_CACHE_PATH=cache_treasury forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyTreasuryRepayForkTest$' --match-test 'testMatrix_PW40_Cap1000' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: timing run of one matrix test
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 2 tests for test/AvalancheCashOnlyTreasuryRepayFork.t.sol:AvalancheCashOnlyTreasuryRepayForkTest
+[FAIL: reserves unchanged by the repayment: 986950 != 986952] testMatrix_PW40_Cap1000() (gas: 49757255)
+Logs:
+  TRP|BASE|cap=1000|cand=PW40|supply=1250000000|borrowed=1000000000|floor=250000000|cashAtBorrow=250000000|minPowerPpm=999999|aprPpmAtBorrow=119999|END
+  TRP|BASE|cap=1000|cand=PW40|ACCRUAL30|debt30=1009863013|growthPpm=9863|aprPpmAfter=122193|reserves=986301|rate=201420273920000|END
+  TRP|EVT|cap=1000|cand=PW40|fall=6000|dGap=1009863013|c0=2500000050|cAfter=1000000018|repaid=925925944|l0=83937069|closedForm=83937071|residualMaxUsdc6=0|uEffPpm=1009862|END
+  TRP|DLY|cap=1000|cand=PW40|fall=6000|delay=0|ld=83937069|phantom=0|reserves=986301|cash=1175925944|claims=1258876711|rate=201420273920000|aprPpm=28334|utilPpm=66676|END
+  TRP|FND|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|budget=83937069|paid=83937069|nFull=3|nPartial=0|unpaid=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ABCD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ABDC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ACBD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ACDB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ADBC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ADCB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BACD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BADC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BCAD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BCDA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BDAC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BDCA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CABD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CADB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CBAD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CBDA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CDAB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CDBA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DABC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DACB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DBAC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DBCA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DCAB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DCBA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|rem=0|res=986301|cash=1259863013|shortTot=0|cA=629438356|cB=314719178|cC=188831506|cD=125887671|minA=629438356|minB=314719178|minC=188831506|minD=125887671
+  TRP|TAB2|cap=1000|cand=PW40|fall=6000|delay=0|fund=F100|maxA=629438357|maxB=314719179|maxC=188831506|maxD=125887672|worstPpm=1000000|firstShortMax=0|lastShortMax=0|lastShortMin=0|nShortOrders=0|END
+  TRP|FND|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|budget=41968534|paid=41968534|nFull=1|nPartial=1|unpaid=41968535|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ABCD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ABDC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ACBD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ACDB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ADBC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ADCB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BACD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BADC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BCAD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BCDA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BDAC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BDCA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CABD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CADB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CBAD|sA=0|sB=0|sC=0|sD=40982234|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CBDA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CDAB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CDBA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DABC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DACB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DBAC|sA=0|sB=0|sC=40982233|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DBCA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DCAB|sA=0|sB=40982234|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DCBA|sA=40982234|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|rem=41968535|res=986301|cash=1217894478|shortTot=40982234|cA=629438356|cB=314719178|cC=188831506|cD=125887671|minA=588456123|minB=273736945|minC=147849273|minD=84905438
+  TRP|TAB2|cap=1000|cand=PW40|fall=6000|delay=0|fund=F50|maxA=629438356|maxB=314719178|maxC=188831506|maxD=125887671|worstPpm=674453|firstShortMax=0|lastShortMax=40982234|lastShortMin=40982233|nShortOrders=24|END
+  TRP|FND|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|budget=20984267|paid=20984267|nFull=0|nPartial=1|unpaid=62952802|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ABCD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ABDC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ACBD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ACDB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ADBC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ADCB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BACD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BADC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BCAD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BCDA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BDAC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BDCA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CABD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CADB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CBAD|sA=0|sB=0|sC=0|sD=61966501|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CBDA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CDAB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CDBA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DABC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DACB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DBAC|sA=0|sB=0|sC=61966500|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DBCA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DCAB|sA=0|sB=61966501|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DCBA|sA=61966501|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|rem=62952802|res=986301|cash=1196910211|shortTot=61966501|cA=629438356|cB=314719178|cC=188831506|cD=125887671|minA=567471856|minB=252752678|minC=126865006|minD=63921171
+  TRP|TAB2|cap=1000|cand=PW40|fall=6000|delay=0|fund=F25|maxA=629438356|maxB=314719178|maxC=188831506|maxD=125887671|worstPpm=507763|firstShortMax=0|lastShortMax=61966501|lastShortMin=61966500|nShortOrders=24|END
+  TRP|FND|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|budget=0|paid=0|nFull=0|nPartial=0|unpaid=83937069|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ABCD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ABDC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ACBD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ACDB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ADBC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ADCB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BACD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BADC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BCAD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BCDA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BDAC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BDCA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CABD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CADB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CBAD|sA=0|sB=0|sC=0|sD=82950768|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CBDA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CDAB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CDBA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DABC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DACB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DBAC|sA=0|sB=0|sC=82950767|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DBCA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DCAB|sA=0|sB=82950768|sC=0|sD=0|END
+  TRP|ORD|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DCBA|sA=82950768|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|rem=83937069|res=986301|cash=1175925944|shortTot=82950768|cA=629438356|cB=314719178|cC=188831506|cD=125887671|minA=546487589|minB=231768411|minC=105880739|minD=42936904
+  TRP|TAB2|cap=1000|cand=PW40|fall=6000|delay=0|fund=F0|maxA=629438356|maxB=314719178|maxC=188831506|maxD=125887671|worstPpm=341073|firstShortMax=0|lastShortMax=82950768|lastShortMin=82950767|nShortOrders=24|END
+  TRP|DLY|cap=1000|cand=PW40|fall=6000|delay=1|ld=83943582|phantom=6513|reserves=986952|cash=1175925944|claims=1258882575|rate=201421212160000|aprPpm=28335|utilPpm=66681|END
+
+[FAIL: reserves unchanged by the repayment: 9869526 != 9869528] testMatrix_PW40_Cap10000() (gas: 49760137)
+Logs:
+  TRP|BASE|cap=10000|cand=PW40|supply=12500000000|borrowed=10000000000|floor=2500000000|cashAtBorrow=2500000000|minPowerPpm=999999|aprPpmAtBorrow=119999|END
+  TRP|BASE|cap=10000|cand=PW40|ACCRUAL30|debt30=10098630136|growthPpm=9863|aprPpmAfter=122193|reserves=9863013|rate=201420273968000|END
+  TRP|EVT|cap=10000|cand=PW40|fall=6000|dGap=10098630136|c0=25000000050|cAfter=10000000018|repaid=9259259276|l0=839370860|closedForm=839370861|residualMaxUsdc6=1|uEffPpm=1009863|END
+  TRP|DLY|cap=10000|cand=PW40|fall=6000|delay=0|ld=839370860|phantom=0|reserves=9863013|cash=11759259276|claims=12588767121|rate=201420273968000|aprPpm=28334|utilPpm=66676|END
+  TRP|FND|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|budget=839370860|paid=839370860|nFull=3|nPartial=0|unpaid=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ABCD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ABDC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ACBD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ACDB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ADBC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=ADCB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BACD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BADC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BCAD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BCDA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BDAC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=BDCA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CABD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CADB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CBAD|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CBDA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CDAB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=CDBA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DABC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DACB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DBAC|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DBCA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DCAB|sA=0|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|perm=DCBA|sA=0|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|rem=0|res=9863013|cash=12598630136|shortTot=0|cA=6294383561|cB=3147191780|cC=1888315068|cD=1258876712|minA=6294383561|minB=3147191780|minC=1888315068|minD=1258876712
+  TRP|TAB2|cap=10000|cand=PW40|fall=6000|delay=0|fund=F100|maxA=6294383563|maxB=3147191782|maxC=1888315068|maxD=1258876713|worstPpm=1000000|firstShortMax=0|lastShortMax=0|lastShortMin=0|nShortOrders=0|END
+  TRP|FND|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|budget=419685430|paid=419685430|nFull=1|nPartial=1|unpaid=419685430|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ABCD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ABDC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ACBD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ACDB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ADBC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=ADCB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BACD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BADC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BCAD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BCDA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BDAC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=BDCA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CABD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CADB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CBAD|sA=0|sB=0|sC=0|sD=409822417|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CBDA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CDAB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=CDBA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DABC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DACB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DBAC|sA=0|sB=0|sC=409822416|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DBCA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DCAB|sA=0|sB=409822417|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|perm=DCBA|sA=409822417|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|rem=419685430|res=9863013|cash=12178944706|shortTot=409822417|cA=6294383561|cB=3147191780|cC=1888315068|cD=1258876712|minA=5884561145|minB=2737369364|minC=1478492652|minD=849054296
+  TRP|TAB2|cap=10000|cand=PW40|fall=6000|delay=0|fund=F50|maxA=6294383562|maxB=3147191781|maxC=1888315068|maxD=1258876712|worstPpm=674453|firstShortMax=0|lastShortMax=409822417|lastShortMin=409822416|nShortOrders=24|END
+  TRP|FND|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|budget=209842715|paid=209842715|nFull=0|nPartial=1|unpaid=629528145|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ABCD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ABDC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ACBD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ACDB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ADBC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=ADCB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BACD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BADC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BCAD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BCDA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BDAC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=BDCA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CABD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CADB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CBAD|sA=0|sB=0|sC=0|sD=619665132|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CBDA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CDAB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=CDBA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DABC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DACB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DBAC|sA=0|sB=0|sC=619665131|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DBCA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DCAB|sA=0|sB=619665132|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|perm=DCBA|sA=619665132|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|rem=629528145|res=9863013|cash=11969101991|shortTot=619665132|cA=6294383561|cB=3147191780|cC=1888315068|cD=1258876712|minA=5674718430|minB=2527526649|minC=1268649937|minD=639211581
+  TRP|TAB2|cap=10000|cand=PW40|fall=6000|delay=0|fund=F25|maxA=6294383562|maxB=3147191781|maxC=1888315068|maxD=1258876712|worstPpm=507763|firstShortMax=0|lastShortMax=619665132|lastShortMin=619665131|nShortOrders=24|END
+  TRP|FND|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|budget=0|paid=0|nFull=0|nPartial=0|unpaid=839370860|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ABCD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ABDC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ACBD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ACDB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ADBC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=ADCB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BACD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BADC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BCAD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BCDA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BDAC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=BDCA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CABD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CADB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CBAD|sA=0|sB=0|sC=0|sD=829507847|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CBDA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CDAB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=CDBA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DABC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DACB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DBAC|sA=0|sB=0|sC=829507846|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DBCA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DCAB|sA=0|sB=829507847|sC=0|sD=0|END
+  TRP|ORD|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|perm=DCBA|sA=829507847|sB=0|sC=0|sD=0|END
+  TRP|TAB|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|rem=839370860|res=9863013|cash=11759259276|shortTot=829507847|cA=6294383561|cB=3147191780|cC=1888315068|cD=1258876712|minA=5464875715|minB=2317683934|minC=1058807222|minD=429368866
+  TRP|TAB2|cap=10000|cand=PW40|fall=6000|delay=0|fund=F0|maxA=6294383562|maxB=3147191781|maxC=1888315068|maxD=1258876712|worstPpm=341073|firstShortMax=0|lastShortMax=829507847|lastShortMin=829507846|nShortOrders=24|END
+  TRP|DLY|cap=10000|cand=PW40|fall=6000|delay=1|ld=839436017|phantom=65157|reserves=9869528|cash=11759259276|claims=12588825765|rate=201421212272000|aprPpm=28335|utilPpm=66681|END
+
+Suite result: FAILED. 0 passed; 2 failed; 0 skipped; finished in 1.30s (293.53ms CPU time)
+
+Ran 1 test suite in 1.69s (1.30s CPU time): 0 tests passed, 2 failed, 0 skipped (2 total tests)
+
+Failing tests:
+Encountered 2 failing tests in test/AvalancheCashOnlyTreasuryRepayFork.t.sol:AvalancheCashOnlyTreasuryRepayForkTest
+[FAIL: reserves unchanged by the repayment: 986950 != 986952] testMatrix_PW40_Cap1000() (gas: 49757255)
+[FAIL: reserves unchanged by the repayment: 9869526 != 9869528] testMatrix_PW40_Cap10000() (gas: 49760137)
+
+Encountered a total of 2 failing tests, 0 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 2 failed tests
+exit=1
+# UTC end: 2026-11-03T13:43:34Z

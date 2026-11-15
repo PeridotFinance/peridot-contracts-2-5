@@ -1,0 +1,892 @@
+Compiling 2 files with Solc 0.8.35
+Solc 0.8.35 finished in 25.14s
+Compiler run successful with warnings:
+58 |     event Failure(uint256 error, uint256 info, uint256 detail);
+811 |         uint256 error = pTokenCollateral.accrueInterest();
+1256 |         string calldata error
+1270 |         string calldata error
+1278 |     function assertApproxEqAbs(uint256 left, uint256 right, uint256 maxDelta, string calldata error) external pure;
+1285 |     function assertApproxEqAbs(int256 left, int256 right, uint256 maxDelta, string calldata error) external pure;
+1302 |         string calldata error
+1320 |         string calldata error
+1330 |     function assertApproxEqRel(uint256 left, uint256 right, uint256 maxPercentDelta, string calldata error)
+1341 |     function assertApproxEqRel(int256 left, int256 right, uint256 maxPercentDelta, string calldata error)
+1350 |     function assertEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1357 |     function assertEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1363 |     function assertEq(bool left, bool right, string calldata error) external pure;
+1369 |     function assertEq(string calldata left, string calldata right, string calldata error) external pure;
+1375 |     function assertEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+1381 |     function assertEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+1387 |     function assertEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+1393 |     function assertEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+1402 |     function assertEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+1408 |     function assertEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+1414 |     function assertEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+1420 |     function assertEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+1423 |     function assertEq(uint256 left, uint256 right, string calldata error) external pure;
+1429 |     function assertEq(int256 left, int256 right, string calldata error) external pure;
+1435 |     function assertEq(address left, address right, string calldata error) external pure;
+1441 |     function assertEq(bytes32 left, bytes32 right, string calldata error) external pure;
+1447 |     function assertFalse(bool condition, string calldata error) external pure;
+1455 |     function assertGeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1463 |     function assertGeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1470 |     function assertGe(uint256 left, uint256 right, string calldata error) external pure;
+1477 |     function assertGe(int256 left, int256 right, string calldata error) external pure;
+1485 |     function assertGtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1493 |     function assertGtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1500 |     function assertGt(uint256 left, uint256 right, string calldata error) external pure;
+1507 |     function assertGt(int256 left, int256 right, string calldata error) external pure;
+1515 |     function assertLeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1523 |     function assertLeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1530 |     function assertLe(uint256 left, uint256 right, string calldata error) external pure;
+1537 |     function assertLe(int256 left, int256 right, string calldata error) external pure;
+1545 |     function assertLtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1553 |     function assertLtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1560 |     function assertLt(uint256 left, uint256 right, string calldata error) external pure;
+1567 |     function assertLt(int256 left, int256 right, string calldata error) external pure;
+1574 |     function assertNotEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+1581 |     function assertNotEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+1587 |     function assertNotEq(bool left, bool right, string calldata error) external pure;
+1593 |     function assertNotEq(string calldata left, string calldata right, string calldata error) external pure;
+1599 |     function assertNotEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+1605 |     function assertNotEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+1611 |     function assertNotEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+1617 |     function assertNotEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+1626 |     function assertNotEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+1632 |     function assertNotEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+1638 |     function assertNotEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+1644 |     function assertNotEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+1647 |     function assertNotEq(uint256 left, uint256 right, string calldata error) external pure;
+1653 |     function assertNotEq(int256 left, int256 right, string calldata error) external pure;
+1659 |     function assertNotEq(address left, address right, string calldata error) external pure;
+1665 |     function assertNotEq(bytes32 left, bytes32 right, string calldata error) external pure;
+1671 |     function assertTrue(bool condition, string calldata error) external pure;
+67 |             uint256 balance = market.borrowBalanceStored(borrower);
+Note: The other declaration is here:
+35 |     function balance(uint256 shares, uint256 index) external pure returns (uint256) {
+81 |     function setShares(address borrower, uint256 balance, uint256 previousClaim, uint256 repaidCash)
+Note: The other declaration is here:
+35 |     function balance(uint256 shares, uint256 index) external pure returns (uint256) {
+297 |             assembly {
+404 |         assembly {
+11 |         assembly {
+15 |         assembly {
+23 |         assembly {
+32 |         assembly {
+40 |         assembly {
+52 |             assembly {
+63 |             assembly {
+75 |             assembly {
+82 |             assembly {
+91 |             assembly {
+103 |         assembly {
+112 |         assembly {
+122 |         assembly {
+131 |         assembly {
+141 |         assembly {
+150 |         assembly {
+162 |         assembly {
+181 |         assembly {
+194 |         assembly {
+205 |         assembly {
+217 |         assembly {
+228 |         assembly {
+240 |         assembly {
+251 |         assembly {
+265 |         assembly {
+286 |         assembly {
+300 |         assembly {
+311 |         assembly {
+323 |         assembly {
+334 |         assembly {
+346 |         assembly {
+357 |         assembly {
+371 |         assembly {
+392 |         assembly {
+406 |         assembly {
+417 |         assembly {
+429 |         assembly {
+440 |         assembly {
+452 |         assembly {
+463 |         assembly {
+477 |         assembly {
+498 |         assembly {
+514 |         assembly {
+535 |         assembly {
+551 |         assembly {
+572 |         assembly {
+588 |         assembly {
+609 |         assembly {
+627 |         assembly {
+651 |         assembly {
+668 |         assembly {
+681 |         assembly {
+695 |         assembly {
+708 |         assembly {
+722 |         assembly {
+735 |         assembly {
+751 |         assembly {
+774 |         assembly {
+790 |         assembly {
+803 |         assembly {
+817 |         assembly {
+830 |         assembly {
+844 |         assembly {
+857 |         assembly {
+873 |         assembly {
+896 |         assembly {
+912 |         assembly {
+925 |         assembly {
+939 |         assembly {
+952 |         assembly {
+966 |         assembly {
+979 |         assembly {
+995 |         assembly {
+1018 |         assembly {
+1036 |         assembly {
+1059 |         assembly {
+1077 |         assembly {
+1100 |         assembly {
+1118 |         assembly {
+1141 |         assembly {
+1161 |         assembly {
+1187 |         assembly {
+1205 |         assembly {
+1218 |         assembly {
+1232 |         assembly {
+1245 |         assembly {
+1259 |         assembly {
+1272 |         assembly {
+1288 |         assembly {
+1311 |         assembly {
+1327 |         assembly {
+1340 |         assembly {
+1354 |         assembly {
+1367 |         assembly {
+1381 |         assembly {
+1394 |         assembly {
+1410 |         assembly {
+1433 |         assembly {
+1449 |         assembly {
+1462 |         assembly {
+1476 |         assembly {
+1489 |         assembly {
+1503 |         assembly {
+1516 |         assembly {
+1532 |         assembly {
+1555 |         assembly {
+1573 |         assembly {
+1596 |         assembly {
+1614 |         assembly {
+1637 |         assembly {
+1655 |         assembly {
+1678 |         assembly {
+1698 |         assembly {
+1724 |         assembly {
+1742 |         assembly {
+1755 |         assembly {
+1769 |         assembly {
+1782 |         assembly {
+1796 |         assembly {
+1809 |         assembly {
+1825 |         assembly {
+1848 |         assembly {
+1864 |         assembly {
+1877 |         assembly {
+1891 |         assembly {
+1904 |         assembly {
+1918 |         assembly {
+1931 |         assembly {
+1947 |         assembly {
+1970 |         assembly {
+1986 |         assembly {
+1999 |         assembly {
+2013 |         assembly {
+2026 |         assembly {
+2040 |         assembly {
+2053 |         assembly {
+2069 |         assembly {
+2092 |         assembly {
+2110 |         assembly {
+2133 |         assembly {
+2151 |         assembly {
+2174 |         assembly {
+2192 |         assembly {
+2215 |         assembly {
+2235 |         assembly {
+2261 |         assembly {
+2281 |         assembly {
+2304 |         assembly {
+2322 |         assembly {
+2345 |         assembly {
+2363 |         assembly {
+2386 |         assembly {
+2406 |         assembly {
+2432 |         assembly {
+2452 |         assembly {
+2475 |         assembly {
+2493 |         assembly {
+2516 |         assembly {
+2534 |         assembly {
+2557 |         assembly {
+2577 |         assembly {
+2603 |         assembly {
+2623 |         assembly {
+2646 |         assembly {
+2664 |         assembly {
+2687 |         assembly {
+2705 |         assembly {
+2728 |         assembly {
+2748 |         assembly {
+2774 |         assembly {
+2796 |         assembly {
+2822 |         assembly {
+2844 |         assembly {
+2870 |         assembly {
+2892 |         assembly {
+2918 |         assembly {
+2942 |         assembly {
+2971 |         assembly {
+2992 |         assembly {
+3007 |         assembly {
+3023 |         assembly {
+3038 |         assembly {
+3054 |         assembly {
+3069 |         assembly {
+3087 |         assembly {
+3112 |         assembly {
+3130 |         assembly {
+3145 |         assembly {
+3161 |         assembly {
+3176 |         assembly {
+3192 |         assembly {
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+Ran 22 tests for test/AvalancheMarginMainnetRehearsalFork.t.sol:AvalancheMarginMainnetRehearsalForkTest
+[PASS] test_01_stage1_deployerHoldsNothing_andEverythingIsLedgerOwned() (gas: 137628)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+[PASS] test_01b_stage1_refusals() (gas: 129560)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+[PASS] test_02_wire_queueDelayExecuteEnable() (gas: 2637712)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_02b_orderExecutor_isOneShot_andAdminOnly() (gas: 1251820)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_02c_pairRisk_onChainEqualsTheDecisions() (gas: 1763937)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_03_lifecycle_open_caps_close() (gas: 10689295)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  gross asset USD (1e18): 4944240434787349128556
+  debt USD (1e18): 2450061458406029940000
+  health bps: 20178
+  margin 2,550 (position over USD 5,000, debt under 2,500) opens (0/1): 0
+  margin returned (USDC 1e6) of 2,500: 2495150087
+[PASS] test_04_sharedBudget_operatingRule() (gas: 4945334)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  pUSDC cash after team 2,000 + margin 2,450: 2149504951
+[PASS] test_04b_sharedBudget_teamBorrowsMoreThanTheRule_marginIsRefused() (gas: 7326497)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_05_fundedLiquidation_partial_thenDeeper_andRedeem() (gas: 6045171)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  funded partial: USDC repaid by operator 1 (1e6): 1225247524
+  funded partial: value of the pWAVAX received (USDC 1e6): 1286282265
+  funded partial: gas: 570325
+  pWAVAX market cash before redeem (WAVAX 1e18): 642461038261600002039
+  WAVAX redeemed by operator 1 (1e18): 256280155824200000813
+  final status (5 = CLOSED, 6 = LIQUIDATED, 2 = ACTIVE): 2
+  debt left (USDC 1e6): 612623763
+[PASS] test_05b_insolvent_operatorDeclinesWithFloor_orAbsorbsWithout() (gas: 5088682)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  insolvent -55%: operator repaid (USDC 1e6): 2450495049
+  insolvent -55%: operator received (USDC 1e6): 2224908194
+[PASS] test_05c_flashRouteControl_andThePoolCliff() (gas: 18631839)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  flash route with a pool that LAGS the oracle (0/1): 1
+  pool: USD sold trying to reach 70% of the head price (1e6): 185704756020
+  pool answer after the attempt (1e8): 65
+[PASS] test_06_orders_takeProfit_executedByAStranger() (gas: 20343275)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  executeOrder gas (full TP close): 1474800
+[PASS] test_06b_orders_stopLoss_clampAndLiquidationBackstop() (gas: 20429810)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  pool sold down: USD (1e6): 282321420120
+  pool sold down: chunks: 72
+  pool answer (1e8) after the move: 734659904
+  DEPTH WALL: the pool cannot take the stop-loss sale within the 1% floor at this head; the order stays open (liquidation is the backstop)
+[PASS] test_06c_orders_liquidationCancelsOrders_andOwnerCloseCancels() (gas: 9476671)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_06d_registryPause_stopsOnlyExecution() (gas: 5477243)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_06e_adapterGuards_directCalls() (gas: 5461977)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_06f_adapterMinimum_clampAndDebtFloor() (gas: 5473423)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_06g_adapterMinimum_debtFloorBinds() (gas: 5438088)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+[PASS] test_07_poolDepth_milestones() (gas: 14274027)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  head: real AVAX answer (1e8): 784226167
+  head: block: 99833032
+  SELL side: cumulative USD (1e6) to reach 99% of the head price: 137239579225
+     pool answer now (1e8): 776211427
+  SELL side: cumulative USD (1e6) to reach 95% of the head price: 250952373440
+     pool answer now (1e8): 744822703
+  SELL side: cumulative USD (1e6) to reach 90% of the head price: 282321420120
+     pool answer now (1e8): 2035
+[PASS] test_07b_poolDepth_buySide() (gas: 93260898)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  BUY side: cumulative USD (1e6) to reach 101% of the head price: 145000000000
+  BUY side: cumulative USD (1e6) to reach 105% of the head price: 550000000000
+  BUY side: cumulative USD (1e6) to reach 110% of the head price: 995000000000
+  BUY side: cumulative USD (1e6) to reach 120% of the head price: 1850000000000
+  BUY side: cumulative USD (1e6) to reach 130% of the head price: 2650000000000
+[PASS] test_08_roundTripCost_atThePool() (gas: 12481356)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+  margin (USDC 1e6): 500000000
+    round-trip cost, bps of the margin: 19
+    open gas: 2579951
+    close gas: 1372644
+  margin (USDC 1e6): 1500000000
+    round-trip cost, bps of the margin: 19
+    open gas: 2480781
+    close gas: 1326712
+  margin (USDC 1e6): 2500000000
+    round-trip cost, bps of the margin: 19
+    open gas: 2471876
+    close gas: 1326744
+[PASS] test_09_marginAccount_isNotOrdinarilyLiquidatable_andLendingStillWorks() (gas: 5118965)
+Logs:
+  Cash-only lending: Unitroller/controller 0x2Cd1AAe6C727984678BbA046d28eDAE900790Da2
+    implementation 0x1eA163Eae2280cC2e61eE52E40f46F3c5D65262e
+    guarded oracle 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+    pWAVAX 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+    pUSDC 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+  Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  oracle (PW30 guarded, reused) 0xFC0f2901Dc8FF05E39DAb7A91090573972b4eE02
+  insuranceFund 0xDEC29ceB8e2680498513670C0131b072839C16bf
+  config 0xe91c65825E5997eF83AcC06B633721917aD93D86
+  feeDistributor 0x00399A3b396545CeA4619a387b568fCdE8ccE2cB
+  vault 0x659D4Be42ceFeB469330f20aAf609F1068382314
+  riskEngine 0x03c29573C8a755a2788D7D8DA1BE63447e2306A3
+  quoter 0x71ea68dB252F524FB3cba2C2B2Ed2d36e20698A3
+  swapModule 0x405A4032Fc8ED22aAf16f09Bf58A53B0f6268D3a
+  accountFactory 0x7AcE64d009Fb50aE3785e2C90066441eaCFB661e
+  executorImpl 0x6294DcE2f5D91C0F3c5d728E4cd8a5D2C61a3A81
+  executor 0x88Ef3924d5f5AeA3Cbf4e52Bd7215FaB9B348713
+  liquidator 0xa7fEB9408Df89989f829a80C8141137ff231bEa6
+  flashVault 0xA49fDf80CEDAFA2919A53AF51FD25A30A0AfC75D
+  clAdapter 0xD701f501f6a1ccD567B6a04e57206042F48d8797
+  registryImpl 0x6927a6f93788214cBc9F99e90aad21C606B619E5
+  registry 0x2C731a83548fFeD57f5FB6929229e332B08A17ba
+  closeAdapter 0xFcF4Af996d714376b1D27747A46BD063B4962507
+  wire done; queued actions execute after 1794297634
+Suite result: ok. 22 passed; 0 failed; 0 skipped; finished in 73.75s (73.64s CPU time)
+Ran 1 test suite in 73.76s (73.75s CPU time): 22 tests passed, 0 failed, 0 skipped (22 total tests)

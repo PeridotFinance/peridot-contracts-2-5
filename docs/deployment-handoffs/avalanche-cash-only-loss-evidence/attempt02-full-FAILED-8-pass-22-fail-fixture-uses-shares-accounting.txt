@@ -1,0 +1,395 @@
+# UTC: 2026-11-03T11:02:24Z
+# git HEAD: 33e1f42a4cbecb1b6bde75817bafcc2bd8fb9dd4
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_loss FOUNDRY_CACHE_PATH=cache_loss forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyLossHandlingForkTest$' --match-test 'test' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: first full run
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 30 tests for test/AvalancheCashOnlyLossHandlingFork.t.sol:AvalancheCashOnlyLossHandlingForkTest
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesCoverTheLoss() (gas: 15039196)
+Logs:
+  LOSS|ROW|t=X_R15000_S0|step=event|cash=570778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=action|cash=570778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_early|cash=470778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_small|cash=469778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_big|cash=69778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=69778149907|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S0|step=exit_late|cash=0|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=0|c_late=30221850093|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S0|who=late|pos=4|claim=100000000000|got=69778149907|END
+  LOSS|EXIT|t=X_R15000_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R15000_S1|step=event|cash=570778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=action|cash=610030249843|borrows=49847900061|defDebt=49847900061|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_early|cash=510030249843|borrows=49847900061|defDebt=49847900061|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_small|cash=509030249843|borrows=49847900061|defDebt=49847900061|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_big|cash=109030249843|borrows=49847900061|defDebt=49847900061|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S1|step=exit_late|cash=9030249843|borrows=49847900061|defDebt=49847900061|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=9030249843|END
+  LOSS|ROW|t=X_R15000_S2|step=event|cash=570778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=action|cash=610030249843|borrows=89099999997|defDebt=89099999997|reserves=98130249840|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_early|cash=510030249843|borrows=89099999997|defDebt=89099999997|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_small|cash=509030249843|borrows=89099999997|defDebt=89099999997|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_big|cash=109030249843|borrows=89099999997|defDebt=89099999997|reserves=98130249840|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R15000_S2|step=exit_late|cash=9030249843|borrows=89099999997|defDebt=89099999997|reserves=98130249840|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R15000_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R15000_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R15000_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=9030249843|END
+  LOSS|ROW|t=X_R15000_S3|step=event|cash=570778149907|borrows=89099999997|defDebt=89099999997|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesThirtyPercentOfLoss() (gas: 15037418)
+Logs:
+  LOSS|ROW|t=X_R3000_S0|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=action|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_early|cash=423675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_small|cash=422675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_big|cash=22675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=22675629983|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S0|step=exit_late|cash=0|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=0|c_late=77324370017|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S0|who=late|pos=4|claim=100000000000|got=22675629983|END
+  LOSS|EXIT|t=X_R3000_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R3000_S1|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=action|cash=562927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_early|cash=462927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_small|cash=461927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_big|cash=61927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=61927729919|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S1|step=exit_late|cash=0|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=38072270081|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S1|who=late|pos=4|claim=100000000000|got=61927729919|END
+  LOSS|EXIT|t=X_R3000_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R3000_S2|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=action|cash=562927729919|borrows=89099999997|defDebt=89099999997|reserves=51027729916|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_early|cash=462927729919|borrows=89099999997|defDebt=89099999997|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_small|cash=461927729919|borrows=89099999997|defDebt=89099999997|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_big|cash=61927729919|borrows=89099999997|defDebt=89099999997|reserves=51027729916|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=61927729919|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R3000_S2|step=exit_late|cash=0|borrows=89099999997|defDebt=89099999997|reserves=51027729916|rate=200000000000000|c_early=0|c_late=38072270081|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R3000_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R3000_S2|who=late|pos=4|claim=100000000000|got=61927729919|END
+  LOSS|EXIT|t=X_R3000_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R3000_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R3000_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R3000_S3|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesZero() (gas: 14778849)
+Logs:
+  LOSS|ROW|t=X_R0_S0|step=event|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=action|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=exit_early|cash=411900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S0|step=exit_small|cash=410900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S0|step=exit_big|cash=10900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=10900000003|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S0|step=exit_late|cash=0|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=0|c_late=89099999997|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S0|who=late|pos=4|claim=100000000000|got=10900000003|END
+  LOSS|EXIT|t=X_R0_S0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S1|step=event|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=action|cash=551152099939|borrows=49847900061|defDebt=49847900061|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=exit_early|cash=451152099939|borrows=49847900061|defDebt=49847900061|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S1|step=exit_small|cash=450152099939|borrows=49847900061|defDebt=49847900061|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S1|step=exit_big|cash=50152099939|borrows=49847900061|defDebt=49847900061|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=50152099939|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S1|step=exit_late|cash=0|borrows=49847900061|defDebt=49847900061|reserves=0|rate=200000000000000|c_early=0|c_late=49847900061|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S1|who=late|pos=4|claim=100000000000|got=50152099939|END
+  LOSS|EXIT|t=X_R0_S1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S2|step=event|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=action|cash=551152099939|borrows=89099999997|defDebt=89099999997|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=exit_early|cash=451152099939|borrows=89099999997|defDebt=89099999997|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=X_R0_S2|step=exit_small|cash=450152099939|borrows=89099999997|defDebt=89099999997|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=X_R0_S2|step=exit_big|cash=50152099939|borrows=89099999997|defDebt=89099999997|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=50152099939|w_big=0|w_small=0|END
+  LOSS|ROW|t=X_R0_S2|step=exit_late|cash=0|borrows=89099999997|defDebt=89099999997|reserves=39252099936|rate=200000000000000|c_early=0|c_late=49847900061|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=X_R0_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=X_R0_S2|who=late|pos=4|claim=100000000000|got=50152099939|END
+  LOSS|EXIT|t=X_R0_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=X_R0_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=X_R0_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=X_R0_S3|step=event|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: write-off not supported with shares accounting] testDrift90Days_InterestOnBadDebt_S0AndS2VersusS1AndS3() (gas: 8709903)
+Logs:
+  LOSS|ROW|t=drift_S0|step=after_90d|cash=561747900064|borrows=39524687196|defDebt=39524687196|reserves=27258726|rate=200081640111148|c_early=100040820055|c_late=100040820055|c_big=400163280222|c_small=1000408200|w_early=100040820055|w_late=100040820055|w_big=400163280222|w_small=1000408200|END
+  LOSS|ROW|t=drift_S2|step=after_90d|cash=601000000000|borrows=39524687196|defDebt=39524687196|reserves=39279358662|rate=200081640111148|c_early=100040820055|c_late=100040820055|c_big=400163280222|c_small=1000408200|w_early=100040820055|w_late=100040820055|w_big=400163280222|w_small=1000408200|END
+  LOSS|ROW|t=drift_S1|step=after_90d|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[PASS] testEvent_RealLiquidationShortfall_ClosedFormSeizeShareAndRates() (gas: 6219416)
+Logs:
+  LOSS|ROW|t=event|step=pre-loss|cash=422800000003|borrows=178199999997|defDebt=178199999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=event|step=post-liquidation|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|EVENT|d0=178199999997|loss=39252099936|repaid=138947900061|collAfterUsd6=149999999997|predLossUsd6=39235429571|lossUsd6=39235429569|pWavaxSeizeReserveWavax=982558418353200457815|pWavaxSeizeReserveUsd6=4199999999|pUsdcReserves=0|END
+
+[FAIL: write-off not supported with shares accounting] testHealthyBorrowerOutstanding_IlliquidityIsCashNotLoss_S0VersusS3() (gas: 8307867)
+Logs:
+  LOSS|ROW|t=HB_S0|step=with_healthy_borrow|cash=541747900064|borrows=59252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: storage slot unchanged: 20: 0x000000000000000000000000d6bbde9174b1cdaa358d2cf4d57d1a9f7178fbff != 0x0000000000000000000000001d1499e622d69689cdf9004d05ec547d650ff211] testInstall_PlainDelegateHasNoWriteOff_UpgradePreservesEveryStorageSlot() (gas: 7729135)
+[PASS] testS0_DoNothing_FirstComeFirstServed_EarlyVersusLate() (gas: 7559331)
+Logs:
+  LOSS|ROW|t=S0_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=exit_early|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_fwd|step=exit_small|cash=460747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S0_fwd|step=exit_big|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=60747900064|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_fwd|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=0|c_late=39252099936|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_fwd|who=late|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=S0_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_fwd|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S0_rev|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=action|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_late|cash=461747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=0|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_big|cash=61747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=1000000000|w_early=61747900064|w_late=0|w_big=0|w_small=1000000000|END
+  LOSS|ROW|t=S0_rev|step=exit_small|cash=60747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=0|w_early=60747900064|w_late=0|w_big=0|w_small=0|END
+  LOSS|ROW|t=S0_rev|step=exit_early|cash=0|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=39252099936|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S0_rev|who=early|pos=4|claim=100000000000|got=60747900064|END
+  LOSS|EXIT|t=S0_rev|who=late|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S0_rev|who=big|pos=2|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S0_rev|who=small|pos=3|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S0_rev|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+
+[FAIL: same event under every reserve level: 49847900061 > 16] testS0_ReserveExhaustionGrid() (gas: 11133322)
+[PASS] testS1_TreasuryRepayment_AllSuppliersWhole_BothOrders() (gas: 8184662)
+Logs:
+  LOSS|ROW|t=S1_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_fwd|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_fwd|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_fwd|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_fwd|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_fwd|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_rev|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_late|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=0|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_big|cash=101000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=1000000000|w_early=100000000000|w_late=0|w_big=0|w_small=1000000000|END
+  LOSS|ROW|t=S1_rev|step=exit_small|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=0|c_big=0|c_small=0|w_early=100000000000|w_late=0|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_rev|step=exit_early|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_rev|who=early|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_rev|who=late|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_rev|who=big|pos=2|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_rev|who=small|pos=3|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_rev|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS1_TreasurySizes_Partial_Exact_Surplus() (gas: 9235445)
+Logs:
+  LOSS|ROW|t=S1_T0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=action|cash=581373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=exit_early|cash=481373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T0|step=exit_small|cash=480373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T0|step=exit_big|cash=80373950032|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=80373950032|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T0|step=exit_late|cash=0|borrows=19626049968|defDebt=19626049968|reserves=0|rate=200000000000000|c_early=0|c_late=19626049968|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T0|who=late|pos=4|claim=100000000000|got=80373950032|END
+  LOSS|EXIT|t=S1_T0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T0|treasuryIn=19626049968|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_T1|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T1|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T1|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T1|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_T2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_T2|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_T2|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_T2|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_T2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_T2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_T2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_T2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS2_AddReserves_IsNotRepayment_PreciseDifferences() (gas: 8094676)
+Logs:
+  LOSS|ROW|t=S2_fwd|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_fwd|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_fwd|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_fwd|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_fwd|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_fwd|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_fwd|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_fwd|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_fwd|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S1_vs_S2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=action|cash=601000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_early|cash=501000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_small|cash=500000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_big|cash=100000000000|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_vs_S2|step=exit_late|cash=0|borrows=0|defDebt=0|reserves=0|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_vs_S2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_vs_S2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_vs_S2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+
+[PASS] testS2_ReservesUnbackedAfterExit_ReduceReservesFails() (gas: 6528012)
+[PASS] testS2_Revocable_AdminCanReduceReservesAndBringTheShortfallBack() (gas: 6705483)
+Logs:
+  LOSS|ROW|t=S2_revoked|step=after_reduceReserves|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[PASS] testS2_SizesAndTheMinimumSufficientAmount() (gas: 10003950)
+Logs:
+  LOSS|ROW|t=S2_T0|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=action|cash=581373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=exit_early|cash=481373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T0|step=exit_small|cash=480373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T0|step=exit_big|cash=80373950032|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=80373950032|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T0|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=19626049968|rate=200000000000000|c_early=0|c_late=19626049968|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T0|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T0|who=late|pos=4|claim=100000000000|got=80373950032|END
+  LOSS|EXIT|t=S2_T0|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T0|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T0|treasuryIn=19626049968|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T1|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T1|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T1|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T1|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T1|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T1|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T1|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T1|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T1|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T2|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=action|cash=601000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=exit_early|cash=501000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T2|step=exit_small|cash=500000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T2|step=exit_big|cash=100000000000|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T2|step=exit_late|cash=0|borrows=39252099936|defDebt=39252099936|reserves=39252099936|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T2|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T2|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T2|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T2|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T2|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S2_T3|step=event|cash=561747900064|borrows=39252099936|defDebt=39252099936|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=action|cash=620626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=exit_early|cash=520626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S2_T3|step=exit_small|cash=519626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S2_T3|step=exit_big|cash=119626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=100000000000|w_big=0|w_small=0|END
+  LOSS|ROW|t=S2_T3|step=exit_late|cash=19626049968|borrows=39252099936|defDebt=39252099936|reserves=58878149904|rate=200000000000000|c_early=0|c_late=0|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S2_T3|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T3|who=late|pos=4|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S2_T3|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S2_T3|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S2_T3|treasuryIn=58878149904|removed=0|fromReserves=0|cashLeft=19626049968|END
+
+[FAIL: the account's loss is larger than the caps: 13084033312 <= 15000000000] testS3_Caps_PerCallAndPerPeriod() (gas: 7546753)
+[FAIL: write-off not supported with shares accounting] testS3_EventLog_SplitMatchesAccounting() (gas: 11437942)
+[FAIL: write-off not supported with shares accounting] testS3_ExitsBeforeTheWriteOff_ShiftTheWholeLossOntoTheRemainingSuppliers() (gas: 7553264)
+[FAIL: Error != expected error: write-off not supported with shares accounting != nothing to write off] testS3_Preconditions_NonAdmin_Amounts_Healthy_CollateralRemains() (gas: 7561906)
+[FAIL: write-off not supported with shares accounting] testS3_RealReserveFactorAccrual_30Days_ReservesFirst() (gas: 8704007)
+Logs:
+  LOSS|REALRF|borrowsPreGap=162714937201|reservesPreGap=71493720|loss=23767037139|lossOverReservesBp=3324353|END
+  LOSS|ROW|t=RF_S0|step=event|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=action|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=exit_early|cash=477840837921|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287824|c_early=0|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=0|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+  LOSS|ROW|t=RF_S0|step=exit_small|cash=476839767300|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124288000|c_early=0|c_late=100107062144|c_big=400428248576|c_small=0|w_early=0|w_late=100107062144|w_big=400428248576|w_small=0|END
+  LOSS|ROW|t=RF_S0|step=exit_big|cash=76411518724|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124288000|c_early=0|c_late=100107062144|c_big=0|c_small=0|w_early=0|w_late=76411518724|w_big=0|w_small=0|END
+  LOSS|ROW|t=RF_S0|step=exit_late|cash=0|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287998|c_early=0|c_late=23695543419|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=RF_S0|who=early|pos=1|claim=100107062143|got=100107062143|END
+  LOSS|EXIT|t=RF_S0|who=late|pos=4|claim=100107062144|got=76411518724|END
+  LOSS|EXIT|t=RF_S0|who=big|pos=3|claim=400428248576|got=400428248576|END
+  LOSS|EXIT|t=RF_S0|who=small|pos=2|claim=1001070621|got=1001070621|END
+  LOSS|SUM|t=RF_S0|treasuryIn=0|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=RF_S3|step=event|cash=577947900064|borrows=23767037139|defDebt=23767037139|reserves=71493719|rate=200214124287520|c_early=100107062143|c_late=100107062143|c_big=400428248575|c_small=1001070621|w_early=100107062143|w_late=100107062143|w_big=400428248575|w_small=1001070621|END
+
+[FAIL: write-off not supported with shares accounting] testS3_Recognition_PushesALeveragedSupplierIntoShortfall_S0AndS1DoNot() (gas: 8820715)
+[FAIL: write-off not supported with shares accounting] testS3_ReserveFirst_ExhaustionGrid_LossBelowEqualAboveReserves() (gas: 11257812)
+Logs:
+  LOSS|ROW|t=S3_R0|step=event|cash=511900000003|borrows=89099999997|defDebt=89099999997|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: BorrowAccountingAlreadyEnabled()] testS3_SharesAccountingMarket_RefusesWriteOff() (gas: 7549915)
+[FAIL: write-off not supported with shares accounting] testS3_TopUpReservesThenWriteOff_SameSuppliersOutcomeAsRepayment_SameNetProtocolOutlay() (gas: 13085499)
+Logs:
+  LOSS|ROW|t=S1_R30|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=action|cash=562927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=exit_early|cash=462927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=0|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+  LOSS|ROW|t=S1_R30|step=exit_small|cash=461927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=400000000000|c_small=0|w_early=0|w_late=100000000000|w_big=400000000000|w_small=0|END
+  LOSS|ROW|t=S1_R30|step=exit_big|cash=61927729919|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=100000000000|c_big=0|c_small=0|w_early=0|w_late=61927729919|w_big=0|w_small=0|END
+  LOSS|ROW|t=S1_R30|step=exit_late|cash=0|borrows=49847900061|defDebt=49847900061|reserves=11775629980|rate=200000000000000|c_early=0|c_late=38072270081|c_big=0|c_small=0|w_early=0|w_late=0|w_big=0|w_small=0|END
+  LOSS|EXIT|t=S1_R30|who=early|pos=1|claim=100000000000|got=100000000000|END
+  LOSS|EXIT|t=S1_R30|who=late|pos=4|claim=100000000000|got=61927729919|END
+  LOSS|EXIT|t=S1_R30|who=big|pos=3|claim=400000000000|got=400000000000|END
+  LOSS|EXIT|t=S1_R30|who=small|pos=2|claim=1000000000|got=1000000000|END
+  LOSS|SUM|t=S1_R30|treasuryIn=39252099936|removed=0|fromReserves=0|cashLeft=0|END
+  LOSS|ROW|t=S3TOPUP_R30|step=event|cash=523675629983|borrows=89099999997|defDebt=89099999997|reserves=11775629980|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+[FAIL: write-off not supported with shares accounting] testSeizeShare_IsInTheCollateralMarket_NotInTheLossMarket() (gas: 7557663)
+[FAIL: Error != expected error: write-off not supported with shares accounting != per-call cap] testTheft_CapAloneBoundsEachCallButNotTheTotal_PeriodCapBoundsThePeriod() (gas: 1928514)
+[FAIL: write-off not supported with shares accounting] testTheft_OracleManipulationPassesThePrecondition_CapsBoundIt() (gas: 1971673)
+[FAIL: write-off not supported with shares accounting] testTheft_OracleManipulation_WithCapsLimitedToThePeriodAllowance() (gas: 1931534)
+[FAIL: Error != expected error: write-off not supported with shares accounting != account is not in shortfall] testTheft_PreconditionStopsIt_StrictRevertsOnTheHealthyLoan() (gas: 1929062)
+[FAIL: write-off not supported with shares accounting] testTheft_UnrestrictedAdmin_WritesOffItsOwnHealthyLoan_SuppliersPay() (gas: 2030479)
+Logs:
+  LOSS|ROW|t=THEFT_open|step=before|cash=551000000000|borrows=50000000000|defDebt=0|reserves=0|rate=200000000000000|c_early=100000000000|c_late=100000000000|c_big=400000000000|c_small=1000000000|w_early=100000000000|w_late=100000000000|w_big=400000000000|w_small=1000000000|END
+
+Suite result: FAILED. 8 passed; 22 failed; 0 skipped; finished in 5.37s (4.36s CPU time)
+
+Ran 1 test suite in 5.76s (5.37s CPU time): 8 tests passed, 22 failed, 0 skipped (30 total tests)
+
+Failing tests:
+Encountered 22 failing tests in test/AvalancheCashOnlyLossHandlingFork.t.sol:AvalancheCashOnlyLossHandlingForkTest
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesCoverTheLoss() (gas: 15039196)
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesThirtyPercentOfLoss() (gas: 15037418)
+[FAIL: write-off not supported with shares accounting] testCross_SameEvent_ReservesZero() (gas: 14778849)
+[FAIL: write-off not supported with shares accounting] testDrift90Days_InterestOnBadDebt_S0AndS2VersusS1AndS3() (gas: 8709903)
+[FAIL: write-off not supported with shares accounting] testHealthyBorrowerOutstanding_IlliquidityIsCashNotLoss_S0VersusS3() (gas: 8307867)
+[FAIL: storage slot unchanged: 20: 0x000000000000000000000000d6bbde9174b1cdaa358d2cf4d57d1a9f7178fbff != 0x0000000000000000000000001d1499e622d69689cdf9004d05ec547d650ff211] testInstall_PlainDelegateHasNoWriteOff_UpgradePreservesEveryStorageSlot() (gas: 7729135)
+[FAIL: same event under every reserve level: 49847900061 > 16] testS0_ReserveExhaustionGrid() (gas: 11133322)
+[FAIL: the account's loss is larger than the caps: 13084033312 <= 15000000000] testS3_Caps_PerCallAndPerPeriod() (gas: 7546753)
+[FAIL: write-off not supported with shares accounting] testS3_EventLog_SplitMatchesAccounting() (gas: 11437942)
+[FAIL: write-off not supported with shares accounting] testS3_ExitsBeforeTheWriteOff_ShiftTheWholeLossOntoTheRemainingSuppliers() (gas: 7553264)
+[FAIL: Error != expected error: write-off not supported with shares accounting != nothing to write off] testS3_Preconditions_NonAdmin_Amounts_Healthy_CollateralRemains() (gas: 7561906)
+[FAIL: write-off not supported with shares accounting] testS3_RealReserveFactorAccrual_30Days_ReservesFirst() (gas: 8704007)
+[FAIL: write-off not supported with shares accounting] testS3_Recognition_PushesALeveragedSupplierIntoShortfall_S0AndS1DoNot() (gas: 8820715)
+[FAIL: write-off not supported with shares accounting] testS3_ReserveFirst_ExhaustionGrid_LossBelowEqualAboveReserves() (gas: 11257812)
+[FAIL: BorrowAccountingAlreadyEnabled()] testS3_SharesAccountingMarket_RefusesWriteOff() (gas: 7549915)
+[FAIL: write-off not supported with shares accounting] testS3_TopUpReservesThenWriteOff_SameSuppliersOutcomeAsRepayment_SameNetProtocolOutlay() (gas: 13085499)
+[FAIL: write-off not supported with shares accounting] testSeizeShare_IsInTheCollateralMarket_NotInTheLossMarket() (gas: 7557663)
+[FAIL: Error != expected error: write-off not supported with shares accounting != per-call cap] testTheft_CapAloneBoundsEachCallButNotTheTotal_PeriodCapBoundsThePeriod() (gas: 1928514)
+[FAIL: write-off not supported with shares accounting] testTheft_OracleManipulationPassesThePrecondition_CapsBoundIt() (gas: 1971673)
+[FAIL: write-off not supported with shares accounting] testTheft_OracleManipulation_WithCapsLimitedToThePeriodAllowance() (gas: 1931534)
+[FAIL: Error != expected error: write-off not supported with shares accounting != account is not in shortfall] testTheft_PreconditionStopsIt_StrictRevertsOnTheHealthyLoan() (gas: 1929062)
+[FAIL: write-off not supported with shares accounting] testTheft_UnrestrictedAdmin_WritesOffItsOwnHealthyLoan_SuppliersPay() (gas: 2030479)
+
+Encountered a total of 22 failing tests, 8 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 22 failed tests
+# exit: 1

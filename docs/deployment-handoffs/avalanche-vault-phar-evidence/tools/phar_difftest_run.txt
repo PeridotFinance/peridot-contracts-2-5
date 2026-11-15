@@ -1,0 +1,63 @@
+## 1. vault ledger vs oracle, aligned generator, 20000 histories x 45 ops, seeds 0..19999 (no minimisation)
+mode=aligned histories=20000 ops=899100
+coverage: refused ops 61196, ambiguous periods 1231, funded (period,token) cells 25411, loss entries 0, final periods checked 130010, crashes 0
+histories with a mismatch: 20
+FAILSEEDS [229, 635, 750, 4606, 5100, 5174, 6862, 7474, 8038, 9742, 11135, 11236, 12470, 12727, 13482, 13591, 16697, 18337, 19104, 19178]
+  kind A: 12 histories
+    seed 229 EPOCH buf=0: W[C,104] model=89008607/294 oracle=605541/2
+    seed 750 W1 buf=0: Z p=106 model=604526 oracle=1208941
+    seed 4606 W1 buf=0: W[A,102] model=1448449/278 oracle=10421/2
+  kind N: 8 histories
+    seed 635 EPOCH buf=500: final(103)=False but oracle gauge owes=False (validator=always bl=[] mode=ok)
+    seed 8038 W1 buf=0: final(100)=False but oracle gauge owes=False (validator=normal bl=[] mode=ok)
+    seed 9742 W1 buf=0: final(101)=False but oracle gauge owes=False (validator=normal bl=[] mode=ok)
+
+## 2. same generator, 600 histories with minimisation of the first examples of each kind (seeds 0..599)
+mode=aligned histories=600 ops=26955
+coverage: refused ops 1891, ambiguous periods 42, funded (period,token) cells 742, loss entries 0, final periods checked 3858, crashes 0
+histories with a mismatch: 1
+FAILSEEDS [229]
+  kind A: 1 histories
+    seed 229 EPOCH buf=0: W[C,104] model=89008607/294 oracle=605541/2
+      minimal (9 ops): [('dep', 'C', 441), ('batch', 'user'), ('rd', False), ('red', 'C', 0.2), ('adv', 302400, 'main'), ('batch', 'keeper'), ('adv', 604799, 'all'), ('nft', Fraction(1, 2)), ('adv', 111, 'all')]
+
+## 3. strict generator (also emits the F4/F7 operations), 4000 histories x 45 ops, minimised examples
+mode=strict histories=4000 ops=162630
+coverage: refused ops 10321, ambiguous periods 264, funded (period,token) cells 5180, loss entries 120, final periods checked 24377, crashes 0
+histories with a mismatch: 386
+FAILSEEDS [17, 18, 36, 39, 40, 62, 68, 72, 85, 86, 90, 96, 107, 111, 118, 130, 146, 161, 164, 175, 177, 179, 186, 189, 200, 210, 226, 229, 253, 259, 264, 270, 275, 288, 290, 297, 302, 309, 311, 323, 333, 340, 344, 354, 360, 368, 380, 385, 396, 412, 446, 448, 454, 456, 473, 494, 504, 513, 526, 530, 549, 550, 566, 584, 602, 608, 610, 633, 635, 636, 680, 706, 714, 716, 731, 750, 769, 773, 780, 783, 784, 788, 795, 796, 818, 836, 837, 842, 856, 872, 880, 884, 886, 896, 902, 908, 909, 914, 920, 926, 994, 1010, 1012, 1029, 1038, 1044, 1071, 1074, 1088, 1097, 1106, 1108, 1116, 1120, 1124, 1144, 1148, 1154, 1168, 1169, 1170, 1185, 1206, 1216, 1224, 1239, 1247, 1248, 1251, 1267, 1272, 1289, 1292, 1299, 1306, 1310, 1312, 1315, 1324, 1329, 1350, 1352, 1354, 1368, 1373, 1374, 1376, 1380, 1393, 1420, 1422, 1442, 1445, 1475, 1490, 1502, 1515, 1527, 1528, 1542, 1548, 1564, 1570, 1579, 1590, 1613, 1616, 1638, 1640, 1659, 1672, 1674, 1685, 1694, 1710, 1720, 1732, 1749, 1762, 1764, 1784, 1786, 1796, 1800, 1806, 1816, 1822, 1838, 1855, 1863, 1865, 1871, 1874, 1878, 1889, 1896, 1904, 1931, 1948, 1958, 1961, 1966, 1969, 1970, 2000, 2008, 2014, 2030, 2044, 2065, 2066, 2080, 2082, 2092, 2094, 2109, 2119, 2134, 2140, 2147, 2150, 2162, 2168, 2196, 2202, 2206, 2218, 2224, 2225, 2231, 2236, 2270, 2276, 2336, 2361, 2399, 2403, 2405, 2416, 2418, 2451, 2455, 2469, 2473, 2497, 2502, 2530, 2536, 2550, 2552, 2554, 2574, 2594, 2600, 2619, 2630, 2637, 2642, 2654, 2657, 2683, 2691, 2698, 2701, 2703, 2704, 2724, 2727, 2744, 2746, 2752, 2770, 2775, 2779, 2781, 2788, 2851, 2852, 2877, 2906, 2910, 2924, 2930, 2932, 2968, 2986, 2990, 2996, 2998, 3002, 3019, 3020, 3023, 3025, 3029, 3044, 3045, 3047, 3058, 3068, 3100, 3104, 3106, 3108, 3132, 3150, 3154, 3162, 3164, 3174, 3202, 3205, 3235, 3238, 3250, 3256, 3261, 3268, 3279, 3288, 3321, 3332, 3360, 3373, 3374, 3379, 3386, 3390, 3394, 3401, 3403, 3412, 3421, 3446, 3464, 3467, 3503, 3506, 3517, 3528, 3530, 3535, 3552, 3554, 3555, 3558, 3561, 3564, 3567, 3581, 3582, 3588, 3589, 3598, 3602, 3615, 3618, 3620, 3630, 3634, 3635, 3678, 3680, 3683, 3697, 3704, 3708, 3714, 3728, 3748, 3789, 3802, 3806, 3819, 3824, 3852, 3854, 3866, 3902, 3907, 3919, 3926, 3934, 3942, 3988, 3998]
+  kind A: 3 histories
+    seed 146 W1 buf=0: Z p=102 model=604800 oracle=1503043/2
+      minimal (7 ops): [('dep', 'C', 437), ('rd', False), ('adv', 4000, 'none'), ('red', 'C', 1.0), ('adv', 604807, 'all'), ('nft', Fraction(1, 2)), ('adv', 112, 'all')]
+  kind B: 382 histories
+    of which explained by the known guard deviations (validator=none or position-manager blacklist): 350, unexplained: 32
+    seed 17 EPOCH buf=2000: refusal differs: model=None oracle=('Blocked', 'blacklist', None) now=61085231 lm=60480000 thr=111 val=normal bl=['posmgr']/[2]
+      minimal (3 ops): [('gov', 'bl_wallet_add', 'posmgr'), ('dep', 'A', 357), ('batch', 'keeper')]
+  kind N: 1 histories
+    seed 635 EPOCH buf=500: final(103)=False but oracle gauge owes=False (validator=always bl=[] mode=ok)
+      minimal (4 ops): [('nft', Fraction(1, 2)), ('adv', 1814400, 'all'), ('retire',), ('burn2',)]
+
+## 4. aligned, 5000 histories x 90 ops, seeds 50000..54999
+mode=aligned histories=5000 ops=445860
+coverage: refused ops 37690, ambiguous periods 831, funded (period,token) cells 8103, loss entries 0, final periods checked 49182, crashes 0
+histories with a mismatch: 46
+FAILSEEDS [50148, 50172, 50225, 50284, 50623, 50645, 50655, 50725, 50934, 51058, 51184, 51217, 51521, 51605, 51673, 51690, 51724, 51764, 51818, 52145, 52196, 52314, 52485, 52571, 52836, 52992, 53024, 53030, 53112, 53184, 53252, 53326, 53368, 53379, 53718, 53738, 53934, 53936, 54004, 54047, 54084, 54087, 54098, 54538, 54664, 54939]
+  kind A: 37 histories
+    seed 50148 W1 buf=0: W[B,105] model=174163676/895 oracle=389193/2
+    seed 50172 W1 buf=0: W[A,107] model=861737 oracle=1118674
+    seed 50225 EPOCH buf=2000: W[A,108] model=61055025/194 oracle=38861375/97
+  kind N: 9 histories
+    seed 50645 EPOCH buf=0: final(101)=False but oracle gauge owes=False (validator=always bl=['bot', 'vault'] mode=ok)
+    seed 51605 EPOCH buf=0: final(106)=False but oracle gauge owes=False (validator=normal bl=[] mode=ok)
+    seed 51690 W1 buf=0: final(107)=False but oracle gauge owes=False (validator=always bl=[] mode=ok)
+
+## 5. gauge mirror vs source-based oracle, gauge-side pool read never off, 20000 histories x 60 ops
+gauge-only histories=20000 mismatches=0
+GAUGEFAILSEEDS []
+
+## 6. gauge mirror vs oracle, pool read may fail, 10000 histories
+gauge-only histories=10000 mismatches=25
+GAUGEFAILSEEDS [223, 618, 1504, 1571, 1771, 2047, 2656, 3477, 3554, 3793, 3841, 3999, 4057, 4116, 4329, 4336, 5264, 5602, 5787, 6559, 7046, 7647, 8366, 9243, 9505]
+  seed 223: G: claimed differs after pm_change: model={(2, 100, 'PHAR'): Fraction(125, 6)} oracle={(2, 100, 'PHAR'): Fraction(125, 6), (1, 100, 'PHAR'): Fraction(70, 1)}
+  seed 618: G: claimed differs after claim_period: model={(1, 103, 'XPHAR'): Fraction(2171, 33600)} oracle={(1, 103, 'XPHAR'): Fraction(2171, 33600), (1, 101, 'XPHAR'): Fraction(33, 1)}
+ENDOFRUN

@@ -1,0 +1,13 @@
+REMEDY EVIDENCE exact_check.py
+UTC: 2026-11-03T10:54:45Z
+python: Python 3.9.6
+sha256: 52487a41050bc5f705e5657a4b0f94ab849e24b8df537abd2880fbffb6b7f24e  exact_check.py
+-----
+exact check OK: 20000 random states, closed form == CURRENT-rule transfer (identity), R1 transfer == 0 exactly, R2 residual == h*costVal*A0/(H1-h*P1) exactly; 5011 states had T < 0 (incumbent gains)
+h=0.01 idle=0.01: exact T = 50.25 (50 ppm of vault) ; h*y = 45.00  (T / (h*y) = 1.1167)
+h=0.01 idle=0.03: exact T = 150.75 (151 ppm of vault) ; h*y = 145.00  (T / (h*y) = 1.0397)
+h=0.01 idle=0.15: exact T = 753.77 (754 ppm of vault) ; h*y = 745.00  (T / (h*y) = 1.0118)
+h=0.03 idle=0.01: exact T = 152.28 (152 ppm of vault) ; h*y = 135.00  (T / (h*y) = 1.1280)
+h=0.03 idle=0.03: exact T = 456.85 (457 ppm of vault) ; h*y = 435.00  (T / (h*y) = 1.0502)
+h=0.03 idle=0.15: exact T = 2284.26 (2284 ppm of vault) ; h*y = 2235.00  (T / (h*y) = 1.0220)
+-----

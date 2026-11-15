@@ -1,0 +1,1 @@
+ok: risk engine storage layout identical to the pre-change copy

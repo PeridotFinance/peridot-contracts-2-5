@@ -1,0 +1,236 @@
+{
+  "startedAt": "2026-11-06T14:37:30.316Z",
+  "forkHead": 99592366,
+  "safe": {
+    "owners": [
+      "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+    ],
+    "threshold": "1"
+  },
+  "vaults": [
+    {
+      "name": "USDC vault",
+      "opening": {
+        "totalAssets": "726199648",
+        "totalSupply": "725900309",
+        "tokenId": "485334"
+      },
+      "upgrade": {
+        "proxyAdmin": "0x2DD4191B2944396B5853f4219E829f01636F65cf",
+        "calldata": "0x9623609d000000000000000000000000855bf832f26a294d28500db59ee941de3d654129000000000000000000000000e37997cf7e4f09f00e309ef8b1c8c5375a87456500000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+        "safeGas": 73611
+      },
+      "immediateRoundTripBp": 9946,
+      "rotation": {
+        "calldata": "0x6cfd1553000000000000000000000000ea76b2d32107f49cba0610e6dee145dd51639e4b",
+        "safeGas": 74173
+      }
+    },
+    {
+      "name": "WAVAX vault",
+      "opening": {
+        "totalAssets": "80727549009644782598",
+        "totalSupply": "79878653469037804117",
+        "tokenId": "485416"
+      },
+      "upgrade": {
+        "proxyAdmin": "0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC",
+        "calldata": "0x9623609d000000000000000000000000e9a53f0077f9cf767a95ce75da483e906ee190e8000000000000000000000000e37997cf7e4f09f00e309ef8b1c8c5375a87456500000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+        "safeGas": 73599
+      },
+      "immediateRoundTripBp": 9873,
+      "rotation": {
+        "calldata": "0x6cfd1553000000000000000000000000ea76b2d32107f49cba0610e6dee145dd51639e4b",
+        "safeGas": 74161
+      }
+    }
+  ],
+  "deployed": {
+    "base": "0xb4635868ec79CC7ba79f60b3a022058e4d903D77",
+    "baseCodehash": "0x62c312eca7879a53f56bb56d232150b16f45a53c84a5f94c85878f5bdc58d535",
+    "extension": "0xe37997Cf7E4f09f00E309EF8b1c8C5375A874565",
+    "baseBytes": 24490,
+    "extensionBytes": 2231
+  },
+  "step1": {
+    "done": [
+      {
+        "vault": "0x855bF832f26a294d28500db59eE941dE3d654129",
+        "action": "deployIdle",
+        "tx": "0xb60997ff439f061b810ddea6c98c464d06c3c659cd3d9d75835e2f915a5980c3",
+        "lossBps": 3
+      },
+      {
+        "vault": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+        "action": "deployIdle",
+        "tx": "0xcb65e6750059eee0d48def4633b813057b40d10e8996f9d795595071e590e9ab",
+        "lossBps": 3
+      }
+    ],
+    "skipped": [],
+    "halted": false
+  },
+  "alerts": [
+    "warn: rebalancer deployIdle on USDC vault (idle assets above the threshold): 0xb60997ff439f061b810ddea6c98c464d06c3c659cd3d9d75835e2f915a5980c3 block 99592392; ",
+    "warn: rebalancer deployIdle on WAVAX vault (idle assets above the threshold): 0xcb65e6750059eee0d48def4633b813057b40d10e8996f9d795595071e590e9ab block 99592393;",
+    "warn: USDC vault: this wallet is not the vault's rebalancer (it is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B); nothing is done until the Safe rotates the role",
+    "warn: WAVAX vault: this wallet is not the vault's rebalancer (it is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B); nothing is done until the Safe rotates the role"
+  ],
+  "checks": [
+    {
+      "name": "the Safe is 1-of-1 and its owner is the Ledger",
+      "ok": true,
+      "detail": "{\"owners\":[\"0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD\"],\"threshold\":\"1\"}"
+    },
+    {
+      "name": "USDC vault: opened under the deployed code (cap, team seed, deployIdle, one user deposit)",
+      "ok": true,
+      "detail": "{\"totalAssets\":\"726199648\",\"totalSupply\":\"725900309\",\"tokenId\":\"485334\"}"
+    },
+    {
+      "name": "WAVAX vault: opened under the deployed code (cap, team seed, deployIdle, one user deposit)",
+      "ok": true,
+      "detail": "{\"totalAssets\":\"80727549009644782598\",\"totalSupply\":\"79878653469037804117\",\"tokenId\":\"485416\"}"
+    },
+    {
+      "name": "the R3 extension refuses a base implementation with a different codehash",
+      "ok": true
+    },
+    {
+      "name": "USDC vault: ProxyAdmin owner is the Safe",
+      "ok": true
+    },
+    {
+      "name": "USDC vault: ERC-1967 implementation slot now holds the R3 extension",
+      "ok": true,
+      "detail": "0x165e1f072e7beedf94f14f732838354ca20ba45d -> 0xe37997cf7e4f09f00e309ef8b1c8c5375a874565"
+    },
+    {
+      "name": "USDC vault: every parameter, role, the position and the supply are unchanged by the upgrade",
+      "ok": true,
+      "detail": "{}"
+    },
+    {
+      "name": "USDC vault: totalAssets is unchanged (the haircut view is untouched)",
+      "ok": true,
+      "detail": "726199648 vs 726199648"
+    },
+    {
+      "name": "USDC vault: previewRedeem for the team seed and the user is identical before and after",
+      "ok": true,
+      "detail": "497403208,198933701 vs 497403208,198933701"
+    },
+    {
+      "name": "USDC vault: a deposit after the upgrade works; shares minted >= previewDeposit (the preview is a lower bound)",
+      "ok": true,
+      "detail": "gas 966025; minted 99428728, preview 96459096"
+    },
+    {
+      "name": "USDC vault: immediate deposit + redeem returns the exit-cost figure (>= 98%)",
+      "ok": true,
+      "detail": "99.46% back"
+    },
+    {
+      "name": "WAVAX vault: ProxyAdmin owner is the Safe",
+      "ok": true
+    },
+    {
+      "name": "WAVAX vault: ERC-1967 implementation slot now holds the R3 extension",
+      "ok": true,
+      "detail": "0x165e1f072e7beedf94f14f732838354ca20ba45d -> 0xe37997cf7e4f09f00e309ef8b1c8c5375a874565"
+    },
+    {
+      "name": "WAVAX vault: every parameter, role, the position and the supply are unchanged by the upgrade",
+      "ok": true,
+      "detail": "{}"
+    },
+    {
+      "name": "WAVAX vault: totalAssets is unchanged (the haircut view is untouched)",
+      "ok": true,
+      "detail": "80727549009644782598 vs 80727549009644782598"
+    },
+    {
+      "name": "WAVAX vault: previewRedeem for the team seed and the user is identical before and after",
+      "ok": true,
+      "detail": "59256244027402920462,19729389952697719359 vs 59256244027402920462,19729389952697719359"
+    },
+    {
+      "name": "WAVAX vault: a deposit after the upgrade works; shares minted >= previewDeposit (the preview is a lower bound)",
+      "ok": true,
+      "detail": "gas 829465; minted 9770025641273560655, preview 8887152379478653515"
+    },
+    {
+      "name": "WAVAX vault: immediate deposit + redeem returns the exit-cost figure (>= 98%)",
+      "ok": true,
+      "detail": "98.73% back"
+    },
+    {
+      "name": "USDC vault: rebalancer() reads back as the new wallet",
+      "ok": true
+    },
+    {
+      "name": "USDC vault: the Ledger (old rebalancer) is now refused",
+      "ok": true,
+      "detail": "Vault__NotRebalancer()"
+    },
+    {
+      "name": "USDC vault: the new rebalancer cannot pause, change the cap or change the role",
+      "ok": true,
+      "detail": "pause: OwnableUnauthorizedAccount(address); setDepositCap: OwnableUnauthorizedAccount(address); setRebalancer: OwnableUnauthorizedAccount(address)"
+    },
+    {
+      "name": "WAVAX vault: rebalancer() reads back as the new wallet",
+      "ok": true
+    },
+    {
+      "name": "WAVAX vault: the Ledger (old rebalancer) is now refused",
+      "ok": true,
+      "detail": "Vault__NotRebalancer()"
+    },
+    {
+      "name": "WAVAX vault: the new rebalancer cannot pause, change the cap or change the role",
+      "ok": true,
+      "detail": "pause: OwnableUnauthorizedAccount(address); setDepositCap: OwnableUnauthorizedAccount(address); setRebalancer: OwnableUnauthorizedAccount(address)"
+    },
+    {
+      "name": "the keystore signer's address is the rotated rebalancer",
+      "ok": true
+    },
+    {
+      "name": "module step 1: deployIdle executed on BOTH vaults, not halted",
+      "ok": true,
+      "detail": "[{\"action\":\"deployIdle\",\"lossBps\":3},{\"action\":\"deployIdle\",\"lossBps\":3}]"
+    },
+    {
+      "name": "USDC vault: after the module's deployIdle the idle asset is (nearly) zero",
+      "ok": true,
+      "detail": "idle 0 of 50000000"
+    },
+    {
+      "name": "WAVAX vault: after the module's deployIdle the idle asset is (nearly) zero",
+      "ok": true,
+      "detail": "idle 0 of 5000000000000000000"
+    },
+    {
+      "name": "module step 2: nothing to do (in range, nothing idle)",
+      "ok": true,
+      "detail": "USDC vault: in range, nothing idle | WAVAX vault: in range, nothing idle"
+    },
+    {
+      "name": "a wallet that is not the rebalancer is refused by the module before any transaction",
+      "ok": true,
+      "detail": "USDC vault: the vault's rebalancer() is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B, not this wallet | WAVAX vault: the vault's rebalancer() is 0xEA76B2D32107f49CbA0610E6DEe145dd51639E4B, not this wallet"
+    },
+    {
+      "name": "USDC vault: rollback to the previous extension restores the implementation slot and the exit value",
+      "ok": true,
+      "detail": "previewRedeem 566081868"
+    },
+    {
+      "name": "WAVAX vault: rollback to the previous extension restores the implementation slot and the exit value",
+      "ok": true,
+      "detail": "previewRedeem 66668852484489782958"
+    }
+  ],
+  "allPass": true
+}

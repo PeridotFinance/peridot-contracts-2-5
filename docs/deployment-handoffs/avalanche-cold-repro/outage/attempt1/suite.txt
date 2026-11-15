@@ -1,0 +1,76 @@
+COLD SINGLE-RUN suite=outage attempt=1
+UTC start: 2026-11-05T13:34:40Z
+git HEAD: 6c584f6d44c592e9e35fb04d74dd6cb39056994d
+git status --short (contracts/): 35 entries
+RPC host: https://api.avax.network (direct, no proxy)
+isolated home: /tmp/avalanche-cold-home.93v1B4 (fresh; RPC cache entries at start: 0)
+command: HOME=/tmp/avalanche-cold-home.93v1B4 forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheCashOnlyPilotOutageForkTest$ -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 10 --fork-retries 20 --fork-retry-backoff 2000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 4 tests for test/AvalancheCashOnlyPilotOutageFork.t.sol:AvalancheCashOnlyPilotOutageForkTest
+[PASS] testOutage_TailStep_MatchesClosedFormWithInterest() (gas: 19265859)
+Logs:
+  OUTAGE|tail|cf=3000|cap=5000000000|outageS=86400|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=6|repaid=3859663891|bad6=1141979943|badBpOfDebt=2283
+  OUTAGE|tail|cf=3000|cap=5000000000|outageS=604800|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5011506849|interestPpm=2301|rounds=6|repaid=3859663891|bad6=1151842957|badBpOfDebt=2298
+  OUTAGE|tail|cf=3000|cap=5000000000|outageS=2592000|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5049315068|interestPpm=9863|rounds=6|repaid=3859663891|bad6=1189651176|badBpOfDebt=2356
+  OUTAGE|tail|cf=4000|cap=5000000000|outageS=86400|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=5|repaid=2894747919|bad6=2106895915|badBpOfDebt=4212
+  OUTAGE|tail|cf=4000|cap=5000000000|outageS=604800|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5011506849|interestPpm=2301|rounds=5|repaid=2894747919|bad6=2116758929|badBpOfDebt=4223
+  OUTAGE|tail|cf=4000|cap=5000000000|outageS=2592000|fallBp=7500|usdcBp=10000|debt0=5000000000|debtResume=5049315068|interestPpm=9863|rounds=5|repaid=2894747919|bad6=2154567148|badBpOfDebt=4267
+
+[PASS] testOutage_ThenAdverseMove_AllCapsBothCandidates() (gas: 49822334)
+Logs:
+  OUTAGE|worst|cf=3000|cap=1000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=1000000000|debtResume=1000013697|interestPpm=13|rounds=1|repaid=500006848|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=1000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=1000000000|debtResume=1000328767|interestPpm=328|rounds=1|repaid=500164383|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=1000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=1000000000|debtResume=1002301369|interestPpm=2301|rounds=1|repaid=501150684|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=1000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=1000000000|debtResume=1009863013|interestPpm=9863|rounds=2|repaid=757397259|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=1000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=1000000000|debtResume=1000013697|interestPpm=13|rounds=1|repaid=500006848|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=1000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=1000000000|debtResume=1000328767|interestPpm=328|rounds=1|repaid=500164383|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=1000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=1000000000|debtResume=1002301369|interestPpm=2301|rounds=1|repaid=501150684|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=1000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=1000000000|debtResume=1009863013|interestPpm=9863|rounds=3|repaid=883630136|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=5000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=5000000000|debtResume=5000068492|interestPpm=13|rounds=1|repaid=2500034246|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=5000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=5000000000|debtResume=5011506849|interestPpm=2301|rounds=1|repaid=2505753424|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=5000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=5000000000|debtResume=5049315068|interestPpm=9863|rounds=2|repaid=3786986301|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=5000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=5000000000|debtResume=5000068492|interestPpm=13|rounds=1|repaid=2500034246|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=5000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=5000000000|debtResume=5011506849|interestPpm=2301|rounds=1|repaid=2505753424|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=5000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=5000000000|debtResume=5049315068|interestPpm=9863|rounds=3|repaid=4418150684|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=10000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=10000000000|debtResume=10000136985|interestPpm=13|rounds=1|repaid=5000068492|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=10000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=10000000000|debtResume=10003287671|interestPpm=328|rounds=1|repaid=5001643835|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=10000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=10000000000|debtResume=10023013698|interestPpm=2301|rounds=1|repaid=5011506849|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=3000|cap=10000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=10000000000|debtResume=10098630136|interestPpm=9863|rounds=2|repaid=7573972602|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=10000000000|outageS=3600|fallBp=670|usdcBp=10000|debt0=10000000000|debtResume=10000136985|interestPpm=13|rounds=1|repaid=5000068492|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=10000000000|outageS=86400|fallBp=1240|usdcBp=10000|debt0=10000000000|debtResume=10003287671|interestPpm=328|rounds=1|repaid=5001643835|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=10000000000|outageS=604800|fallBp=2550|usdcBp=10000|debt0=10000000000|debtResume=10023013698|interestPpm=2301|rounds=1|repaid=5011506849|bad6=0|badBpOfDebt=0
+  OUTAGE|worst|cf=4000|cap=10000000000|outageS=2592000|fallBp=4290|usdcBp=10000|debt0=10000000000|debtResume=10098630136|interestPpm=9863|rounds=3|repaid=8836301369|bad6=0|badBpOfDebt=0
+
+[PASS] testUsdcDeviation_UpRaisesDebtValue_DownLowersIt() (gas: 13542625)
+Logs:
+  OUTAGE|usdc|cf=3000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10200|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc|cf=3000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10500|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc|cf=3000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=9800|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc|cf=4000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10200|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc|cf=4000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=10500|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc|cf=4000|cap=5000000000|outageS=86400|fallBp=1240|usdcBp=9800|debt0=5000000000|debtResume=5001643835|interestPpm=328|rounds=1|repaid=2500821917|bad6=0|badBpOfDebt=0
+  OUTAGE|usdc-combo|cf=4000|cap=5000000000|outageS=2592000|fallBp=4290|usdcBp=11000|debt0=5000000000|debtResume=5049315068|interestPpm=9863|rounds=3|repaid=4418150684|bad6=0|badBpOfDebt=0
+  combo bad debt (bp of debt): USDC +10%, 30 day outage, AVAX -42.9%: 0
+
+[PASS] testUsdcStaleAvaxFresh_LiquidationBlocked_ThenResumes() (gas: 2288565)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.50s (306.14ms CPU time)
+
+Ran 1 test suite in 1.58s (1.50s CPU time): 4 tests passed, 0 failed, 0 skipped (4 total tests)
+-----
+UTC end: 2026-11-05T13:34:46Z  exit: 0

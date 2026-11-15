@@ -194,9 +194,30 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
         emit AccountStatusUpdated(account, accountConfig.status);
     }
 
+    /// @notice Flash-route liquidation start. Behaviour is unchanged by the funded-sizing work: it sizes through
+    ///         `_liquidationQuote` (flash fee + swap-slippage gross-up) exactly as before.
     function beginLiquidation(address account)
         external
         onlyLiquidator
+        returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
+    {
+        return _beginLiquidation(account, false);
+    }
+
+    /// @notice Funded in-kind liquidation start (used by `liquidateFunded`). Identical to `beginLiquidation` (same health checks,
+    ///         dust and full/partial thresholds, `maxLiquidationBps`, improvement test, status transition) except that the
+    ///         partial-repay seizure requirement is `_fundedQuote`: no flash lender is read, no flash fee and no swap-slippage
+    ///         gross-up is charged, because that route neither borrows nor swaps.
+    function beginFundedLiquidation(address account)
+        external
+        onlyLiquidator
+        returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
+    {
+        return _beginLiquidation(account, true);
+    }
+
+    function _beginLiquidation(address account, bool funded)
+        internal
         returns (uint256 maxRepayUnderlying, uint256 previousHealthFactorBps)
     {
         AccountConfig storage accountConfig = accounts[account];
@@ -213,7 +234,12 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
             maxRepayUnderlying = debt;
         } else {
             maxRepayUnderlying = Math.mulDiv(debt, pairRisk.maxLiquidationBps, BPS);
-            (uint256 requiredSeizeValueUsd,) = _liquidationQuote(accountConfig, maxRepayUnderlying);
+            uint256 requiredSeizeValueUsd;
+            if (funded) {
+                requiredSeizeValueUsd = _fundedQuote(accountConfig, maxRepayUnderlying);
+            } else {
+                (requiredSeizeValueUsd,) = _liquidationQuote(accountConfig, maxRepayUnderlying);
+            }
             uint256 requiredPositionPTokens =
                 _pTokenForUsd(accountConfig.positionPToken, requiredSeizeValueUsd, Math.Rounding.Ceil);
             uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, maxRepayUnderlying);
@@ -366,6 +392,25 @@ contract IsolatedMarginRiskEngineUpgradeable is Initializable, OwnableUpgradeabl
     {
         require(isIsolatedMarginAccount[account] && repayUnderlying > 0, "RiskEngine: invalid quote");
         return _liquidationQuote(accounts[account], repayUnderlying);
+    }
+
+    /// @notice Seizure value the FUNDED route needs for `repayUnderlying`: repaid value plus the liquidation bonus, with the bonus
+    ///         FLOORED. This is exactly the cap `IsolatedMarginLiquidatorUpgradeable.liquidateFunded` enforces on what the funder may
+    ///         take (`capUsd`), so sizing and seizure use one formula and the borrower's seizure bound is unchanged. (The flash quote
+    ///         ceils the bonus; the funded route never has, and this does not change that.) Reads no lender.
+    function getFundedLiquidationQuote(address account, uint256 repayUnderlying) external view returns (uint256 seizeValueUsd) {
+        require(isIsolatedMarginAccount[account] && repayUnderlying > 0, "RiskEngine: invalid quote");
+        return _fundedQuote(accounts[account], repayUnderlying);
+    }
+
+    function _fundedQuote(AccountConfig memory accountConfig, uint256 repayUnderlying)
+        internal
+        view
+        returns (uint256 seizeValueUsd)
+    {
+        IsolatedMarginTypes.PairRiskConfig memory pairRisk = _pairRisk(accountConfig);
+        uint256 repayValueUsd = underlyingValueUsd(accountConfig.debtPToken, repayUnderlying);
+        seizeValueUsd = repayValueUsd + Math.mulDiv(repayValueUsd, pairRisk.liquidationBonusBps, BPS);
     }
 
     function _liquidationQuote(AccountConfig memory accountConfig, uint256 repayUnderlying)

@@ -1,0 +1,33 @@
+# UTC: 2026-11-03T09:21:21Z
+# git HEAD: 401e9b0009b6b25ab3fdecd7f8f3ad08a2a9e8ab
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_risk FOUNDRY_CACHE_PATH=cache_risk forge test --threads 1 --gas-limit 9000000000000000000 --match-contract '^AvalancheCashOnlyRiskStudyForkTest$' --match-test 'testRisk_ReserveFirst' -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: AvalancheBorrowFloorMarginFork.t.sol skipped (another agent's file under edit; not part of this suite)
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheCashOnlyRiskStudyFork.t.sol:AvalancheCashOnlyRiskStudyForkTest
+[PASS] testRisk_ReserveFirst_ExitIdentity() (gas: 6965443)
+Logs:
+  RISK|RESFIRST|case=no-markdown|exchRateBefore=200000000000000|exchRateAfter=200000000000000|claimsBefore=400000000000|claimsAfter=400000000000|cashAfter=396074790007|lossUnits=3925209993|residColl=0|END
+  RISK|RESFIRST|case=reserves-added|addedReserves=0|lossUnits=3925209993|totalReserves=0|cash=396074790007|claims=400000000000|exitShortfall=3925209993|lpFullExitOk=0|lpClaim=400000000000|lpGot=0|END
+  RISK|RESFIRST|case=reserves-added|addedReserves=1962604996|lossUnits=3925209993|totalReserves=1962604996|cash=398037395003|claims=400000000000|exitShortfall=1962604997|lpFullExitOk=0|lpClaim=400000000000|lpGot=0|END
+  RISK|RESFIRST|case=reserves-added|addedReserves=3964462092|lossUnits=3925209993|totalReserves=3964462092|cash=400039252099|claims=400000000000|exitShortfall=0|lpFullExitOk=1|lpClaim=400000000000|lpGot=400000000000|END
+  RISK|RESFIRST|case=reserves-added|addedReserves=7850419986|lossUnits=3925209993|totalReserves=7850419986|cash=403925209993|claims=400000000000|exitShortfall=0|lpFullExitOk=1|lpClaim=400000000000|lpGot=400000000000|END
+  RISK|RESFIRST|case=treasury-repays-on-behalf|paidUnits=3925209993|lossUnits=3925209993|cash=400000000000|claims=400000000000|lpFullExitOk=1|totalBorrowsAfter=0|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 988.92ms (14.94ms CPU time)
+
+Ran 1 test suite in 1.36s (988.92ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)
+exit=0

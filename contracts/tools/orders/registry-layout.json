@@ -1,0 +1,127 @@
+[
+ {
+  "label": "adapter",
+  "slot": 0,
+  "offset": 0,
+  "type": "contract IMarginCloseAdapter"
+ },
+ {
+  "label": "admin",
+  "slot": 1,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "label": "paused",
+  "slot": 1,
+  "offset": 20,
+  "type": "bool"
+ },
+ {
+  "label": "nextOrderId",
+  "slot": 2,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "label": "_orders",
+  "slot": 3,
+  "offset": 0,
+  "type": "mapping(uint256 => struct IMarginOrderRegistry.Order)"
+ },
+ {
+  "label": "_openOrders",
+  "slot": 4,
+  "offset": 0,
+  "type": "mapping(uint256 => uint256[])"
+ },
+ {
+  "label": "_openIndex",
+  "slot": 5,
+  "offset": 0,
+  "type": "mapping(uint256 => uint256)"
+ },
+ {
+  "label": "__gap",
+  "slot": 6,
+  "offset": 0,
+  "type": "uint256[44]"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "positionId",
+  "slot": 0,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "owner",
+  "slot": 1,
+  "offset": 0,
+  "type": "address"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "kind",
+  "slot": 1,
+  "offset": 20,
+  "type": "enum IMarginOrderRegistry.OrderKind"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "triggerAbove",
+  "slot": 1,
+  "offset": 21,
+  "type": "bool"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "triggerPriceE18",
+  "slot": 2,
+  "offset": 0,
+  "type": "uint256"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "closeBps",
+  "slot": 3,
+  "offset": 0,
+  "type": "uint16"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "maxSlippageBps",
+  "slot": 3,
+  "offset": 2,
+  "type": "uint16"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "expiry",
+  "slot": 3,
+  "offset": 4,
+  "type": "uint64"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "createdAt",
+  "slot": 3,
+  "offset": 12,
+  "type": "uint64"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "updatedAt",
+  "slot": 3,
+  "offset": 20,
+  "type": "uint64"
+ },
+ {
+  "struct": "struct IMarginOrderRegistry.Order",
+  "label": "status",
+  "slot": 3,
+  "offset": 28,
+  "type": "enum IMarginOrderRegistry.OrderStatus"
+ }
+]

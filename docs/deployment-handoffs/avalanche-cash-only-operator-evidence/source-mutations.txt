@@ -1,0 +1,31 @@
+Provenance: source mutants of operator/src applied one at a time and run against `npm test` (46 unit tests; the fork suite additionally pins the table). 2026-11-06.
+Baseline: 46 pass, 0 fail.
+mutant                                                           tests failing
+collateral valued at min(P,R) instead of max                     2
+debt valued at max(P,R) instead of min                           1
+tolerance gate > becomes >=                                      1
+dust test > becomes >=                                           1
+check for a missing reference removed                            1
+check for a zero oracle price removed                            1
+controller error code ignored                                    1
+recoverable boundary >= becomes >   (survived the first 45 tests; the exact-boundary test was added; now) 1
+exchange-rate monotonicity check removed (first mutant form did not compile; re-run as `< 0n`)           1
+inventory rule 0.75 x debt removed                               1
+one operator accepted (pilot needs two)                          1
+slippage bound no longer required                                3
+escalation timer off by more than a second                       1
+mean tick truncates toward zero instead of flooring              1
+a `new Wallet(...)` added to operator/src                        1 (the no-key-handling test)
+equivalent (not a gap): `signer.type` unset check removed -> the value "UNSET" is still refused by the enum check on the next line.
+Rule-level mutants through the monitor on the fork (hooks, see truth-table.fork.test.ts): M1 (fire on shortfall alone) pays the untouched tail account and a recoverable account; M3 (no divergence gate) lets a divergent oracle through. Both are asserted.
+
+Treasury keeper mutants (2026-11-06), each applied alone and run against the 30-test fork suite (the keeper tests are in truth-table.fork.test.ts):
+mutant                                                                         fork tests failing
+K1 re-verification at execution removed                                        15 (the hostile-state refusals, the budget refusals and the later keeper tests)
+K2 confirmation always satisfied                                               23
+K3 daily spend cap removed                                                     10
+K4 approve the maximum instead of the exact-need allowance                      5
+K5 repay the wrong account (the keeper's own address)                           5
+K6 halt flag ignored                                                           6
+K7 reference status not required at execution                                  3
+All seven are killed. (Many failures per mutant are cascades: once a mutant pays in an early test the later tests start from a changed chain.)

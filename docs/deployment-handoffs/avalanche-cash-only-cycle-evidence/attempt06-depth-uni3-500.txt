@@ -1,0 +1,29 @@
+# UTC: 2026-11-03T14:30:26Z
+# git HEAD: 2989471835eb364982fb173ae15f602fb74bb5db
+# command: AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_cycle FOUNDRY_CACHE_PATH=cache_cycle forge test --threads 1 --gas-limit 9000000000000000000 --match-contract \^AvalancheWavaxUsdcRoutesForkTest\$ --match-test test_depth_uni3_500 -vv  --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# ---
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheWavaxUsdcRoutesFork.t.sol:AvalancheWavaxUsdcRoutesForkTest
+[PASS] test_depth_uni3_500() (gas: 41191781)
+Logs:
+  DEPTH|Uniswap V3 0.05%|slippage<=100bp|maxUsd=109411
+  DEPTH|Uniswap V3 0.05%|slippage<=300bp|maxUsd=323261
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 24.24s (23.87s CPU time)
+
+Ran 1 test suite in 24.36s (24.24s CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)
+exit=0
+# end UTC: 2026-11-03T14:30:59Z

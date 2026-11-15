@@ -1,0 +1,99 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheFallbackMatrixFork.t.sol:AvalancheFallbackMatrixForkTest
+[PASS] testFallback_H_zeroCash() (gas: 42293876)
+Logs:
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|long|1000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|0|9500|10007|9500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|1|9000|10007|9000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|2|8500|10007|8500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|3|8250|10007|8250|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|4|8000|10007|8000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|5|7000|10007|7000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|1000|1|0|0|0|6|5000|10007|5000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|97978|0|0|611662|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|long|1000|1|1|6|0|0|0|0|0|0|0|980198019|2|3200000000000|105000000000000000000000|337144020949519712744541|1|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|long|1000|1|1|6|1|-|10007|980198019|980198019|97978|98887|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|long|1000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|long|1000|1|3200000000000|105000000000000000000000|337144020949520692942560|1|5000000000|150000000000000130334|525434|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|long|1000|1|30000000000|3500000000000000000000|29019801981|3500000000000000000000|0|231340315371800201010|39555|0|1|END
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|long|5000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|0|9500|10010|9500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|1|9000|10010|9000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|2|8500|10010|8500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|3|8250|10010|8250|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|4|8000|10010|8000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|5|7000|10010|7000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|5000|1|0|0|0|6|5000|10010|5000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|489890|0|0|611983|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|long|5000|1|1|6|0|0|0|0|0|0|0|4900990099|2|3200000000000|105000000000000000000000|339919682183209676915246|1|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|long|5000|1|1|6|1|-|10010|4900990099|4900990099|489890|494378|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|long|5000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|long|5000|1|3200000000000|105000000000000000000000|339919682183214577905345|1|5000000000|150000000000000255018|525434|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|long|5000|1|30000000000|3500000000000000000000|25099009901|3500000000000000000000|0|1156560726603001966295|197751|0|1|END
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|long|25000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|0|9500|10037|9500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|1|9000|10037|9000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|2|8500|10037|8500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|3|8250|10037|8250|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|4|8000|10037|8000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|5|7000|10037|7000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|long|25000|1|0|0|0|6|5000|10037|5000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|2449454|0|0|612304|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|long|25000|1|1|6|0|0|0|0|0|0|0|24504950495|2|3200000000000|105000000000000000000000|353781849139133836682881|1|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|long|25000|1|1|6|1|-|10037|24504950495|24504950495|2449454|2469531|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|long|25000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|long|25000|1|3200000000000|105000000000000000000000|353781849139158341633376|1|5000000000|150000000000000144849|525434|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|long|25000|1|30000000000|3500000000000000000000|5495049505|3500000000000000000000|0|5777283045251005578897|987812|0|1|END
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|short|1000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|0|11000|10006|11000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|1|11500|10006|11500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|2|12000|10006|12000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|3|12500|10006|12500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|4|13500|10006|13500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|5|15000|10006|15000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|1000|1|0|0|0|6|20000|10006|20000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|197935|0|0|592436|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|short|1000|1|1|6|0|0|0|0|0|0|0|115763923373363192192|2|3200000000000|105000000000000000000000|1|1307593733692050932436239|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|short|1000|1|1|6|1|-|10006|115763923373363192192|115763923373363192192|197935|198904|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|short|1000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|short|1000|1|3200000000000|105000000000000000000000|1|1307709497615424295628431|5000000000|150000000000000010968|884496|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|short|1000|1|30000000000|3500000000000000000000|30000000000|3384236076626636807808|1989885553|0|198904|1|0|END
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|short|5000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|0|11000|10005|11000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|1|11500|10005|11500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|2|12000|10005|12000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|3|12500|10005|12500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|4|13500|10005|13500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|5|15000|10005|15000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|5000|1|0|0|0|6|20000|10005|20000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|989678|0|0|592756|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|short|5000|1|1|6|0|0|0|0|0|0|0|578819616866815960959|2|3200000000000|105000000000000000000000|1|1309923684788737977988351|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|short|5000|1|1|6|1|-|10005|578819616866815960959|578819616866815960959|989678|994490|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|short|5000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|short|5000|1|3200000000000|105000000000000000000000|1|1310502504405604793949310|5000000000|150000000000000022199|884496|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|short|5000|1|30000000000|3500000000000000000000|30000000000|2921180383133184039041|9949126313|0|994490|1|0|END
+  MXIDS|fb-zerocash-oracle-only|cand-2x25|short|25000|1|1|1|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|0|11000|9987|11000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|1|11500|9987|11500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|2|12000|9987|12000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|3|12500|9987|12500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|4|13500|9987|13500|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|5|15000|9987|15000|0|0|-|0|0|0|0|0|0|0|0|0|END
+  MX|fb-zerocash-oracle-only|cand-2x25|short|25000|1|0|0|0|6|20000|9987|20000|1|0|RedeemTransferOutNotPossible|0|0|0|0|0|4948392|0|0|593077|END
+  MXT|fb-zerocash-oracle-only|cand-2x25|short|25000|1|1|6|0|0|0|0|0|0|0|2894098084100236679607|2|3200000000000|105000000000000000000000|1|1321567509770869461920596|END
+  MXF|fb-zerocash-oracle-only|cand-2x25|short|25000|1|1|6|1|-|9987|2894098084100236679607|2894098084100236679607|4948392|4970731|6|END
+  MXEND|fb-zerocash-oracle-only|cand-2x25|short|25000|1|1|6|1|0|0|0|0|0|END
+  MXSUM|fb-zerocash-oracle-only|cand-2x25|short|25000|1|3200000000000|105000000000000000000000|1|1324461607854969698600203|5000000000|150000000000000011166|884496|END
+  MXFSUM|fb-zerocash-oracle-only|cand-2x25|short|25000|1|30000000000|3500000000000000000000|30000000000|605901915899763320393|49728429943|0|4970731|1|0|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 291.58ms (128.91ms CPU time)
+
+Ran 1 test suite in 333.24ms (291.58ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

@@ -1,0 +1,341 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 40 tests for test/AvalancheFundedFallbackFork.t.sol:AvalancheFundedFallbackForkTest
+[PASS] testAcceptance_PartialSizingIndependentOfFlashLender() (gas: 5633909)
+[PASS] testAdversarialFunder_Long() (gas: 7663094)
+[PASS] testAdversarialFunder_Short() (gas: 8439949)
+[PASS] testAdversarial_DonationsDoNotChangeSeizure() (gas: 6350385)
+[PASS] testAdversarial_RecipientCannotBeAnotherMarginAccount() (gas: 7905276)
+[PASS] testAuthorization_NoOtherEntryPointsToMoveCollateral() (gas: 4882000)
+[PASS] testAuthorization_UnauthorizedCallerAndAllowlistGovernance() (gas: 6594141)
+[PASS] testBonusBound_Long_Full() (gas: 4056560)
+Logs:
+  LONG repaid USD (1e18): 4898908648504954700000
+     seized USD (1e18): 5143854080929598349161
+     cap USD (1e18): 5143854080930202435000
+     borrower surplus USD (1e18): 195430950711324544272
+
+[PASS] testBonusBound_Long_Partial() (gas: 5643027)
+Logs:
+  LONG repaid USD (1e18): 2449454323752689700000
+     seized USD (1e18): 2571927039939747034816
+     cap USD (1e18): 2571927039940324185000
+
+[PASS] testBonusBound_Short_Full() (gas: 4349577)
+Logs:
+  SHORT repaid USD (1e18): 8907106634554076999989
+     seized USD (1e18): 9352461965781993200000
+     cap USD (1e18): 9352461966281780849988
+     borrower surplus USD (1e18): 592438953272875700000
+
+[PASS] testBonusBound_Short_Partial() (gas: 6500590)
+Logs:
+  SHORT repaid USD (1e18): 3736036393937960074989
+     seized USD (1e18): 3922838212747735000000
+     cap USD (1e18): 3922838213634858078738
+
+[PASS] testEvent_FundedPositionLiquidatedMatchesMovements() (gas: 3951685)
+[PASS] testExtraMargin_Full_PositionAloneCoversCap_TwoRemaindersReturned() (gas: 4665120)
+[PASS] testExtraMargin_Full_TakesEverythingWhenBelowCap() (gas: 4427716)
+[PASS] testExtraMargin_Full_TopsUpFromMarginAndReturnsRemainder() (gas: 4717362)
+[PASS] testExtraMargin_Partial_LeavesMarginUntouched() (gas: 4415316)
+[PASS] testFundingExhausted_Long_RevertsAtomically() (gas: 7156757)
+[PASS] testFundingExhausted_Short_RevertsAtomically() (gas: 7961979)
+[PASS] testInsolvent_BorderlineForcesFull() (gas: 3889779)
+[PASS] testInsolvent_Long_FundedAbsorbsLossNoInsurance() (gas: 4474644)
+Logs:
+  LONG insolvent: debt USD (1e18): 4898908648504954700000
+     assets USD (1e18): 2966269462022734940799
+     residual bad debt if nobody liquidates, USD (1e18): 1932639186482219759201
+     insurance fund USD (1e18): 5382586450000005569330
+     insurance covers (% of bad debt): 278
+     funder repaid USD (1e18): 4898908648504954700000
+     funder received USD (1e18): 2966269462022734940799
+     funder LOSS USD (1e18): 1932639186482219759201
+
+[PASS] testInsolvent_Short_FundedAbsorbsLossNoInsurance() (gas: 4598585)
+Logs:
+  SHORT insolvent: debt USD (1e18): 13855499209306341999983
+     assets USD (1e18): 9944900919054868900000
+     residual bad debt if nobody liquidates, USD (1e18): 3910598290251473099983
+     insurance fund USD (1e18): 8588502700000000000000
+     insurance covers (% of bad debt): 219
+     funder repaid USD (1e18): 13855499209306341999983
+     funder received USD (1e18): 9944900919054868900000
+     funder LOSS USD (1e18): 3910598290251473099983
+
+[PASS] testInvalidPrices_Long_Revert() (gas: 4725850)
+[PASS] testInvalidPrices_Short_Revert() (gas: 4994358)
+[PASS] testOwnership_Long_PartialAccounting() (gas: 5606200)
+[PASS] testOwnership_Short_PartialAccounting() (gas: 6467461)
+[PASS] testPoolWall_Long_FlashFailsFundedSucceeds() (gas: 26031701)
+Logs:
+  USD sold into the pool (1e6): 108573697000
+  sell chunks: 127
+  pool-implied USD/AVAX e8: 48095
+  LONG pool-wall funded: repaid USDC (1e6): 2450495049
+
+[PASS] testPoolWall_Short_FlashFailsFundedSucceeds() (gas: 59895253)
+Logs:
+  USDC spent pumping the pool (1e6): 4925000000000
+  pump chunks: 197
+  pool-implied USD/AVAX e8: 1841747329
+  flash revert: Error(string)
+  SHORT pool-wall funded: repaid WAVAX (1e18): 289409808433407980479
+
+[PASS] testQuantify_AggregateStress() (gas: 23027846)
+Logs:
+  positions long / short: 4003
+  USDC budget for the longs (1e6): 39207920792
+  WAVAX budget for the shorts (1e18): 2083750620720537459453
+  pWAVAX inventory (8 dec): 44569110494196
+  pUSDC inventory (8 dec): 168415841595000
+  pWAVAX inventory underlying WAVAX (1e18): 8913822098839337270917
+  pUSDC inventory underlying USDC (1e6): 33683168319
+  pWAVAX market cash (1e18): 21382031444252929278623
+  pUSDC market cash (1e6): 440908343357
+  pWAVAX inventory as % of market cash (x100): 4168
+  pUSDC inventory as % of market cash (x100): 763
+
+[PASS] testQuantify_BadDebtSweep() (gas: 38462098)
+Logs:
+  LONG cap-sized position
+     AVAX price (% of pin x100): 4900
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 23235091394142249405094
+     bad debt USD (1e18): 279670118481618094906
+     bad debt % of debt (x100): 118
+  LONG cap-sized position
+     AVAX price (% of pin x100): 4500
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 21338349239518392310800
+     bad debt USD (1e18): 2176412273105475189200
+     bad debt % of debt (x100): 925
+  LONG cap-sized position
+     AVAX price (% of pin x100): 4000
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 18967421546238570942933
+     bad debt USD (1e18): 4547339966385296557067
+     bad debt % of debt (x100): 1933
+  LONG cap-sized position
+     AVAX price (% of pin x100): 3000
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 14225566159678928207200
+     bad debt USD (1e18): 9289195352944939292800
+     bad debt % of debt (x100): 3950
+  LONG cap-sized position
+     AVAX price (% of pin x100): 2000
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 9483710773119285471466
+     bad debt USD (1e18): 14031050739504582028534
+     bad debt % of debt (x100): 5966
+  LONG cap-sized position
+     AVAX price (% of pin x100): 1000
+     debt USD (1e18): 23514761512623867500000
+     assets USD (1e18): 4741855386559642735733
+     bad debt USD (1e18): 18772906126064224764267
+     bad debt % of debt (x100): 7983
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 20500
+     debt USD (1e18): 48692182931464028869988
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 972077117340132669988
+     bad debt % of debt (x100): 199
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 22000
+     debt USD (1e18): 52255025584985787079987
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 4534919770861890879987
+     bad debt % of debt (x100): 867
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 25000
+     debt USD (1e18): 59380710892029303499986
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 11660605077905407299986
+     bad debt % of debt (x100): 1963
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 30000
+     debt USD (1e18): 71256853070435164199983
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 23536747256311267999983
+     bad debt % of debt (x100): 3303
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 40000
+     debt USD (1e18): 95009137427246885599977
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 47289031613122989399977
+     bad debt % of debt (x100): 4977
+  SHORT cap-sized position
+     AVAX price (% of pin x100): 60000
+     debt USD (1e18): 142513706140870328399966
+     assets USD (1e18): 47720105814123896200000
+     bad debt USD (1e18): 94793600326746432199966
+     bad debt % of debt (x100): 6651
+  insurance fund pUSDC USD (1e18): 4997876500000000000000
+  insurance fund pWAVAX USD (1e18): 1282366500000000000000
+
+[PASS] testQuantify_PerPositionBudgets() (gas: 37601031)
+Logs:
+  LONG margin=5000 USDC PARTIAL
+     debt before (debt asset base units): 4900990099
+     funder budget needed = repay (debt asset base units): 2450495049
+     repay USD (1e18): 2449454323752689700000
+     pTokens received (8 dec): 2279102240715
+     pTokens received USD (1e18): 2571927039939747034816
+     gross bonus USD (1e18): 122472716187057334816
+     gas: 582073
+  LONG margin=5000 USDC FULL
+     debt before (debt asset base units): 4900990099
+     funder budget needed = repay (debt asset base units): 4900990099
+     repay USD (1e18): 4898908648504954700000
+     pTokens received (8 dec): 5571138811774
+     pTokens received USD (1e18): 5143854080929598349161
+     gross bonus USD (1e18): 244945432424643649161
+     gas: 596494
+  SHORT margin=5000 USDC PARTIAL
+     debt before (debt asset base units): 578819616866815960959
+     funder budget needed = repay (debt asset base units): 289409808433407980479
+     repay USD (1e18): 3736036393937960074989
+     pTokens received (8 dec): 19622524750000
+     pTokens received USD (1e18): 3922838212747735000000
+     gross bonus USD (1e18): 186801818809774925011
+     gas: 558055
+  SHORT margin=5000 USDC FULL
+     debt before (debt asset base units): 578819616866815960959
+     funder budget needed = repay (debt asset base units): 578819616866815960959
+     repay USD (1e18): 8907106634554076999989
+     pTokens received (8 dec): 46782178220000
+     pTokens received USD (1e18): 9352461965781993200000
+     gross bonus USD (1e18): 445355331227916200011
+     gas: 711006
+  LONG margin=24000 USDC PARTIAL
+     debt before (debt asset base units): 23524752475
+     funder budget needed = repay (debt asset base units): 11762376237
+     repay USD (1e18): 11757380755812146100000
+     pTokens received (8 dec): 10939690757108
+     pTokens received USD (1e18): 12345249793602015358703
+     gross bonus USD (1e18): 587869037789869258703
+     gas: 582320
+  LONG margin=24000 USDC FULL
+     debt before (debt asset base units): 23524752475
+     funder budget needed = repay (debt asset base units): 23524752475
+     repay USD (1e18): 23514761512623867500000
+     pTokens received (8 dec): 26741466296291
+     pTokens received USD (1e18): 24690499588254853122163
+     gross bonus USD (1e18): 1175738075630985622163
+     gas: 596742
+  SHORT margin=24000 USDC PARTIAL
+     debt before (debt asset base units): 2778334160726873487415
+     funder budget needed = repay (debt asset base units): 1389167080363436743707
+     repay USD (1e18): 17932974689392849656989
+     pTokens received (8 dec): 94188118810000
+     pTokens received USD (1e18): 18829623423188278600000
+     gross bonus USD (1e18): 896648733795428943011
+     gas: 558303
+  SHORT margin=24000 USDC FULL
+     debt before (debt asset base units): 2778334160726873487415
+     funder budget needed = repay (debt asset base units): 2778334160726873487415
+     repay USD (1e18): 42754111842261098519990
+     pTokens received (8 dec): 224554455445000
+     pTokens received USD (1e18): 44891817433554501700000
+     gross bonus USD (1e18): 2137705591293403180010
+     gas: 711253
+
+[PASS] testQuantify_RedemptionDelay_Long() (gas: 4503648)
+Logs:
+  LONG inventory pWAVAX (8 dec): 26741466296291
+  LONG inventory WAVAX (1e18): 5348293259258231021874
+  LONG inventory USD (1e6): 24690499588
+  LONG repaid USDC (1e6): 23524752475
+  LONG bonus if redeemed at repay-time price, USDC (1e6): 1165747113
+  redeem with zero cash succeeded (0/1): 0
+  redeem revert: RedeemTransferOutNotPossible (market cash)
+  WAVAX (long inventory)
+     market total borrows (underlying base units): 17696607057997502646190
+     market total supply (underlying base units): 17696607057997502646190
+     inventory USD (1e6): 24690499588
+     supply carry at 100% utilisation (APY bps, simple): 2879
+     days of delay: 1
+     carry earned USD (1e6): 19475054
+     days of delay: 7
+     carry earned USD (1e6): 136325380
+     days of delay: 30
+     carry earned USD (1e6): 584251629
+     price shock (bps): 1000
+     shock loss USD (1e6): 2469049958
+     price shock (bps): 2000
+     shock loss USD (1e6): 4938099917
+     price shock (bps): 3000
+     shock loss USD (1e6): 7407149876
+
+[PASS] testQuantify_RedemptionDelay_Short() (gas: 4966514)
+Logs:
+  SHORT inventory pUSDC (8 dec): 224554455445000
+  SHORT inventory USDC (1e6): 44910891089
+  SHORT repaid WAVAX (1e18): 2778334160726873487415
+  SHORT repaid USD (1e6): 42754111842
+  redeem with zero cash succeeded (0/1): 0
+  redeem revert: RedeemTransferOutNotPossible (market cash)
+  USDC (short inventory; peg risk only)
+     market total borrows (underlying base units): 452740381153
+     market total supply (underlying base units): 452740381154
+     inventory USD (1e6): 44910891089
+     supply carry at 100% utilisation (APY bps, simple): 2879
+     days of delay: 1
+     carry earned USD (1e6): 35424234
+     days of delay: 7
+     carry earned USD (1e6): 247969640
+     days of delay: 30
+     carry earned USD (1e6): 1062727031
+     price shock (bps): 100
+     shock loss USD (1e6): 449108910
+     price shock (bps): 300
+     shock loss USD (1e6): 1347326732
+     price shock (bps): 1000
+     shock loss USD (1e6): 4491089108
+
+[PASS] testSequence_FundedPartialThenFlashFull_Long() (gas: 6412524)
+[PASS] testSequence_Long_PartialThenFullThenRepeat() (gas: 6602228)
+Logs:
+  LONG partial-then-full: total repaid (debt asset): 4900990099
+
+[PASS] testSequence_Short_PartialThenFullThenRepeat() (gas: 7412833)
+Logs:
+  SHORT partial-then-full: total repaid (debt asset): 578819616866815960959
+
+[PASS] testSwapDeadAndLenderDisabled_FullFundedStillWorks() (gas: 4280053)
+[PASS] testZeroCash_Long_Full() (gas: 4824988)
+Logs:
+  flash route revert: RedeemTransferOutNotPossible (market cash)
+  LONG zero-cash gas: 591920
+
+[PASS] testZeroCash_Long_Partial() (gas: 6758664)
+Logs:
+  flash route revert: RedeemTransferOutNotPossible (market cash)
+  LONG zero-cash gas: 577578
+
+[PASS] testZeroCash_Short_Full() (gas: 5372148)
+Logs:
+  flash route revert: RedeemTransferOutNotPossible (market cash)
+  SHORT zero-cash gas: 706304
+
+[PASS] testZeroCash_Short_Partial() (gas: 7812866)
+Logs:
+  flash route revert: RedeemTransferOutNotPossible (market cash)
+  SHORT zero-cash gas: 553453
+
+Suite result: ok. 40 passed; 0 failed; 0 skipped; finished in 590.52ms (539.26ms CPU time)
+
+Ran 1 test suite in 595.73ms (590.52ms CPU time): 40 tests passed, 0 failed, 0 skipped (40 total tests)

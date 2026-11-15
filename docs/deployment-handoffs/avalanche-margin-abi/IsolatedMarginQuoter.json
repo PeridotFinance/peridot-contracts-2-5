@@ -1,0 +1,287 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [
+   {
+    "name": "config_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "oracle_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "LEVERAGE_SCALE",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "assetForMarket",
+  "inputs": [
+   {
+    "name": "pToken",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "config",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IIsolatedMarginConfig"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "expectedOut",
+  "inputs": [
+   {
+    "name": "tokenIn",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "tokenOut",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "amountIn",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "feePToken",
+  "inputs": [
+   {
+    "name": "pToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "feeValueUsd",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "flashAmountForLeverage",
+  "inputs": [
+   {
+    "name": "debtAsset",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "marginValueUsd",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "leverageX100",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "flashAmount",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "flashLender",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "lender",
+    "type": "address",
+    "internalType": "contract IERC3156FlashLender"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "oracle",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IMarginPriceOracle"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "price",
+  "inputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "priceUsd",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoteOpen",
+  "inputs": [
+   {
+    "name": "marginPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "positionPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "debtPToken",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "marginUnderlying",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "leverageX100",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "flashAmount",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minPositionUnderlying",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "underlyingForUsd",
+  "inputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "valueUsd",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "rounding",
+    "type": "uint8",
+    "internalType": "enum Math.Rounding"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "underlyingValueUsd",
+  "inputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ }
+]

@@ -1,0 +1,13 @@
+Provenance: DRY RUN of operator/scripts/compute-min-pool-liquidity.ts, 2026-11-06T09:06:29Z, read-only, private archive RPC from the environment (not printed). This value is NOT in any config: the operator decided it is computed ONCE AT DEPLOYMENT and recorded then with its block range.
+command: AVALANCHE_MAINNET_RPC_URL=<env> node dist/scripts/compute-min-pool-liquidity.js
+-----
+{
+  "minPoolLiquidity": "1835254077136228340",
+  "minPoolLiquiditySource": {
+    "fromBlock": 98931764,
+    "toBlock": 99571855,
+    "samples": 169,
+    "medianLiquidity": "3670508154272456681",
+    "method": "50% of the median of pool.liquidity() sampled every 3600 s over 7 days (block time 0.945 s); min 3055519309014637489, max 4792353961817372538; 0 failed samples"
+  }
+}

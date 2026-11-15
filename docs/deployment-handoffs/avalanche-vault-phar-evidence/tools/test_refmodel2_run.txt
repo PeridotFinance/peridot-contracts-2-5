@@ -1,0 +1,54 @@
+test_claim_timing_independence (__main__.TestBasics) ... ok
+test_late_notify_goes_by_recorded_weights (__main__.TestBasics) ... ok
+test_ten_then_ninety_claim_before_and_after (__main__.TestBasics) ... ok
+test_transfer_and_exited_holder_claims_later (__main__.TestBasics) ... ok
+test_zero_supply_bucket_and_last_holder (__main__.TestBasics) ... ok
+test_claim_is_paginated_and_pays_the_same (__main__.TestBoundedProcessing) ... ok
+test_conservation_for_fully_settled_periods_at_every_prefix (__main__.TestBoundedProcessing) ... ok
+test_dust_spam_on_a_victim_creates_at_most_one_deferred_segment_per_period (__main__.TestBoundedProcessing) ... ok
+test_paginated_equals_unpaginated (__main__.TestBoundedProcessing) ... ok
+test_partial_processing_is_consistent_and_holder_always_progresses (__main__.TestBoundedProcessing) ... ok
+test_update_path_is_O1_after_long_dormancy (__main__.TestBoundedProcessing) ... ok
+test_unresolved_never_attributed_and_ownership_after_reconcile (__main__.TestFuzzWithReadingFailures) ... ok
+test_gauge_implementation_replaced_claims_revert_then_recover_equals_control (__main__.TestGovernance) ... ok
+test_multi_nft_windows_are_independent (__main__.TestGovernance) ... ok
+test_retired_nft_keeps_intervals_and_burn_is_refused_with_outstanding (__main__.TestGovernance) ... ok
+test_threshold_change_mid_period_is_read_live (__main__.TestGovernance) ... ok
+test_unguarded_burn_orphans_rewards (__main__.TestGovernance) ... ok
+test_validator_replaced_and_blacklist_block_every_claim_never_forfeit (__main__.TestGovernance) ... ok
+test_xratio_second_token_mid_period_uses_same_weights (__main__.TestGovernance) ... ok
+test_EPOCH_dust_attacker_cannot_extend_the_bound (__main__.TestLiveness) ... ok
+test_EPOCH_empty_batches_do_not_reset_the_window (__main__.TestLiveness) ... ok
+test_EPOCH_governance_raised_threshold_bound_is_lm_plus_threshold (__main__.TestLiveness) ... ok
+test_EPOCH_idle_buffer_exit_survives_blacklist_and_threshold_raise (__main__.TestLiveness) ... ok
+test_EPOCH_quiet_bound_is_zero_with_buffer_and_threshold_plus_margin_without (__main__.TestLiveness) ... ok
+test_EPOCH_reading_outage_exits_still_served_deposits_stay_queued (__main__.TestLiveness) ... ok
+test_W1_dust_attacker_blocks_exits_unbounded (__main__.TestLiveness) ... ok
+test_W1_governance_raised_threshold_bound_is_threshold_minus_age (__main__.TestLiveness) ... ok
+test_W1_without_attacker_waits_zero_when_quiet (__main__.TestLiveness) ... ok
+test_both_variants_blacklisted_vault_liquidity_exit_unbounded (__main__.TestLiveness) ... ok
+test_burning_nft_with_outstanding_is_caught (__main__.TestMutations) ... ok
+test_drain_with_current_supply_is_caught (__main__.TestMutations) ... ok
+test_dropping_the_window_guard_is_caught (__main__.TestMutations) ... ok
+test_no_settle_before_balance_change_is_caught (__main__.TestMutations) ... ok
+test_unresolved_treated_as_resolved_is_caught (__main__.TestMutations) ... ok
+test_wall_clock_attribution_of_unresolved_is_caught (__main__.TestMutations)
+a 'degraded wall-clock split' for burns (the first draft's rule) would break the oracle equality ... ok
+test_attribution_functions_do_not_read_time (__main__.TestNoClockInAttribution) ... ok
+test_ownership_equals_oracle_and_ignores_touchers (__main__.TestOwnershipProperty) ... ok
+test_gauge_side_read_failure_is_recoverable_by_period_call (__main__.TestSlashAndZeroPayment) ... ok
+test_get_period_reward_scope_vs_get_reward_debt (__main__.TestSlashAndZeroPayment) ... ok
+test_guard_prevents_window_claim_and_blocks_without_forfeit (__main__.TestSlashAndZeroPayment) ... ok
+test_slash_chain_loss_grows_gauge_semantics (__main__.TestSlashAndZeroPayment)
+mirrors probe Q3/Q5: a clean change loses nothing; k changes 100 s apart lose the whole chain ... ok
+test_slash_is_booked_as_external_loss_borne_pro_rata (__main__.TestSlashAndZeroPayment) ... ok
+test_zero_payment_distinguishes_nothing_owed_from_slashed_and_noeffect (__main__.TestSlashAndZeroPayment) ... ok
+test_failure_across_periods_only_event_period_is_unresolved (__main__.TestUnresolved) ... ok
+test_failure_without_supply_event_is_exact_not_unresolved (__main__.TestUnresolved) ... ok
+test_period_does_not_finalise_while_reading_is_down (__main__.TestUnresolved) ... ok
+test_unresolved_interval_not_attributed_until_reconciled (__main__.TestUnresolved) ... ok
+
+----------------------------------------------------------------------
+Ran 47 tests in 4.030s
+
+OK

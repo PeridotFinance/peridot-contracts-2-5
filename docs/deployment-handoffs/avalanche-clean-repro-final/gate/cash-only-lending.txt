@@ -1,0 +1,24 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 6 tests for test/AvalancheCashOnlyLendingFork.t.sol:AvalancheCashOnlyLendingForkTest
+[PASS] testCashExhaustion_WithdrawalsLimitedByCash_RepayAndLiquidationStillWork() (gas: 3128779)
+[PASS] testFixture_NoMarginStack_HooksUnset_BorrowingPausedAtDeploy() (gas: 692624)
+[PASS] testOrdinaryLiquidation_BothDirections() (gas: 2901863)
+[PASS] testRepayOnBehalf_AndSupplierWithdrawalWithDebtLimit() (gas: 1069913)
+[PASS] testStaleFeed_EmergencyPrice_RejectsBorrowAndLiquidation_RepayStillWorks() (gas: 2662848)
+[PASS] testSupplyBorrowRepayRedeem_BothDirections() (gas: 2249472)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 67.38ms (12.58ms CPU time)
+
+Ran 1 test suite in 71.99ms (67.38ms CPU time): 6 tests passed, 0 failed, 0 skipped (6 total tests)

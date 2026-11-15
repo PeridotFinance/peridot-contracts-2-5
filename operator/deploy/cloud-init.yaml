@@ -1,0 +1,8 @@
+#cloud-config
+# First boot of a pilot Droplet: Docker, a firewall-friendly base, the directories the pilot uses. No secret is in this file.
+package_update: true
+packages: [docker.io, openssl, ca-certificates, curl]
+runcmd:
+  - systemctl enable --now docker
+  - mkdir -p /etc/pilot /opt/pilot && chmod 700 /etc/pilot
+  - touch /opt/pilot/cloud-init-done

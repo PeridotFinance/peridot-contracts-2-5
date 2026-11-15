@@ -1,0 +1,7 @@
+R1   REPRODUCED  period 104: sum(W)+Z+U = 4349169/4 but Tt = 1209186 (true exposure is all A's)
+R2   REPRODUCED  non-final periods [103, 104] although the gauge owes nothing; claim pays {'PHAR': Fraction(75575, 504), 'XPHAR': Fraction(0, 1)}
+R3   REPRODUCED  harvest outcome ['SLASHED']
+R4   REPRODUCED  NFT 2 retired 5 s after its mint: forfeited to r33 at the next clean claim: 5/12096 (booked as loss 5/12096)
+R5   REPRODUCED  debt {(1, 'PHAR'): (100, Fraction(25, 1512)), (1, 'XPHAR'): (100, Fraction(0, 1))}; after an external sweep outstanding(100)=25/1512, final=False
+R6   REPRODUCED  pool read failing after an XPHAR-only claim cached the period: model paid 0, source-based oracle paid 50
+R7   REPRODUCED  W1 redeem inside the window with validator=none: model does not refuse (specification refuses)

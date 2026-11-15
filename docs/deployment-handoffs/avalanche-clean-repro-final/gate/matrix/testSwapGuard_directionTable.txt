@@ -1,0 +1,79 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheCapacityMatrixFork.t.sol:AvalancheCapacityMatrixForkTest
+[PASS] testSwapGuard_directionTable() (gas: 15743197)
+Logs:
+  SG|candidate-guard|sell-WAVAX|-300|oracleE8=829856410|poolE8=855522072|expectedOut=4852060671|minOut=4803540064|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|-150|oracleE8=842689241|poolE8=855522072|expectedOut=4927092536|minOut=4877821610|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|-101|oracleE8=846881300|poolE8=855522072|expectedOut=4951602951|minOut=4902086921|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|-100|oracleE8=846966852|poolE8=855522072|expectedOut=4952103162|minOut=4902582130|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|-99|oracleE8=847052404|poolE8=855522072|expectedOut=4952603373|minOut=4903077339|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|-50|oracleE8=851244462|poolE8=855522072|expectedOut=4977113782|minOut=4927342644|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|0|oracleE8=855522072|poolE8=855522072|expectedOut=5002124402|minOut=4952103157|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|50|oracleE8=859799682|poolE8=855522072|expectedOut=5027135022|minOut=4976863671|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+  SG|candidate-guard|sell-WAVAX|99|oracleE8=863991740|poolE8=855522072|expectedOut=5051645430|minOut=5001128975|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|sell-WAVAX|100|oracleE8=864077292|poolE8=855522072|expectedOut=5052145642|minOut=5001624185|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|sell-WAVAX|101|oracleE8=864162844|poolE8=855522072|expectedOut=5052645853|minOut=5002119394|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|sell-WAVAX|150|oracleE8=868354903|poolE8=855522072|expectedOut=5077156267|minOut=5026384704|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|sell-WAVAX|300|oracleE8=881187734|poolE8=855522072|expectedOut=5152188133|minOut=5100666251|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-300|oracleE8=829856410|poolE8=855522072|expectedOut=602257985812268414001|minOut=596235405954145729860|actualOut=584107176537765873510|execE8=856007287
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-150|oracleE8=842689241|poolE8=855522072|expectedOut=593086544462005300480|minOut=587155679017385247475|actualOut=584107176537765873510|execE8=856007287
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-101|oracleE8=846881300|poolE8=855522072|expectedOut=590150768472512027364|minOut=584249260787786907090|actualOut=584107176537765873510|execE8=856007287
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-100|oracleE8=846966852|poolE8=855522072|expectedOut=590091157428201216073|minOut=584190245853919203912|actualOut=584107176537765873510|execE8=856007287
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-99|oracleE8=847052404|poolE8=855522072|expectedOut=590031558425280143588|minOut=584131242841027342152|actualOut=584107176537765873510|execE8=856007287
+  SG2|REVERT|Too little received|END
+  SG|candidate-guard|buy-WAVAX|-50|oracleE8=851244462|poolE8=855522072|expectedOut=587125875480879193079|minOut=581254616726070401148|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|0|oracleE8=855522072|poolE8=855522072|expectedOut=584190246350534834593|minOut=578348343887029486247|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|50|oracleE8=859799682|poolE8=855522072|expectedOut=581283827457847326814|minOut=575470989183268853545|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|99|oracleE8=863991740|poolE8=855522072|expectedOut=578463458458526466931|minOut=572678823873941202261|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|100|oracleE8=864077292|poolE8=855522072|expectedOut=578406184987442072485|minOut=572622123137567651760|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|101|oracleE8=864162844|poolE8=855522072|expectedOut=578348922856488840198|minOut=572565433627923951796|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|150|oracleE8=868354903|poolE8=855522072|expectedOut=575556893009216992928|minOut=569801324079124822998|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|candidate-guard|buy-WAVAX|300|oracleE8=881187734|poolE8=855522072|expectedOut=567174996559813666221|minOut=561503246594215529558|actualOut=584107176537765873510|execE8=856007287
+  SG2|PASS|-|END
+  SG|ALTERED-guard-slip300-dev50|sell-WAVAX|250|oracleE8=876910123|poolE8=855522072|expectedOut=5127177507|minOut=4973362181|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|SwapError(8)|END
+  SG|ALTERED-guard-slip300-dev50|sell-WAVAX|100|oracleE8=864077292|poolE8=855522072|expectedOut=5052145642|minOut=4900581272|actualOut=4997165828|execE8=855037132
+  SG2|REVERT|SwapError(8)|END
+  SG|ALTERED-guard-slip300-dev50|sell-WAVAX|40|oracleE8=858944160|poolE8=855522072|expectedOut=5022132898|minOut=4871468911|actualOut=4997165828|execE8=855037132
+  SG2|PASS|-|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 176.91ms (34.53ms CPU time)
+
+Ran 1 test suite in 192.23ms (176.91ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

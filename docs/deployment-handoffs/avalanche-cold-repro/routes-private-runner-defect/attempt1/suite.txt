@@ -1,0 +1,18 @@
+COLD SINGLE-RUN suite=wavax-usdc-routes attempt=1
+UTC start: 2026-11-05T18:18:24Z
+git HEAD: c6d63a0b9582111a1d8ea5a7159e4a658f1fcb22
+git status --short (contracts/): 35 entries
+RPC endpoint: private (URL and host masked; supplied through the environment, direct, no proxy)
+isolated home: /tmp/avalanche-cold-home.gTmFy2 (fresh; RPC cache entries at start: 0)
+command: HOME=/tmp/avalanche-cold-home.gTmFy2 FOUNDRY_PROFILE=debt_accounting forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheWavaxUsdcRoutesForkTest$ -vv --rpc-url avalanche_cold --compute-units-per-second 10 --fork-retries 20 --fork-retry-backoff 2000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol   (endpoint alias resolved from the environment)
+-----
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+Error: could not instantiate forked environment
+
+Context:
+- Internal transport error: No such file or directory (os error 2) with /Users/joshua/Peridot/peridot-contracts-2-5/contracts/avalanche_cold
+-----
+UTC end: 2026-11-05T18:18:28Z  exit: 1
+mask scan: attempt directory contains no trace of the RPC URL, host or key tokens

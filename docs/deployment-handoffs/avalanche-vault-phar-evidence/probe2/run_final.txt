@@ -1,0 +1,62 @@
+Compiling 1 files with Solc 0.8.35
+Solc 0.8.35 finished in 18.85s
+Compiler run successful with warnings:
+Ran 11 tests for test/PharRewardProbe2.t.sol:PharRewardProbe2
+[PASS] test_Q10_brokenReadLossIsRecoverableByPeriodCall() (gas: 400673)
+Logs:
+  Q10 old-period pending before the broken claim 26207949171163724
+  Q10 paid by getPeriodReward after recovery     26207949171163724
+[PASS] test_Q1_secondNftHasIndependentWindow() (gas: 4670169)
+Logs:
+  Q1 gas mint(B)                        1014864
+  Q1 gas increaseLiquidity(B)           279436
+  Q1 gas getReward(A, 12 periods)       1053520
+  Q1 B debt period/amount               2965 725347473692065
+  Q1 liquidity A / B                    3007352329 400577579560
+  Q1 PHAR accrued in 1h A / B           196272283574998 26143353916675976
+  Q1 per-liquidity rate A / B (1e18)    65264146698854585720873 65264146698854690138914
+[PASS] test_Q2_collectTransferDoNotTouchWindow() (gas: 1878409)
+[PASS] test_Q3_firstChangeLosslessSecondChangeLoses() (gas: 2119863)
+Logs:
+  Q3 accrual in the 50 s between the two changes 3458434936670
+  Q3 debt recorded period/amount                 2965 3458434936670
+  Q3 r33 received (the loss)                     3458434936670
+  Q3 vault received after window                 20750588906787
+[PASS] test_Q4_getPeriodRewardScope() (gas: 2692937)
+Logs:
+  Q4 unpaid old period / new period (in window) 6847701174606 36687694978723
+  Q4 branch getReward: debt period/amount       2966 36687694978723
+  Q4 branch getReward: lost to r33 / later paid 43535396153329 1334097999226302
+  Q4 branch getReward: earned view before late claim 1334097999226302
+  Q4 branch getPeriodReward: lost to r33 / later paid 6847701174606 1370785694205025
+[PASS] test_Q4b_getPeriodRewardOutsideWindowPaysOnePeriod() (gas: 1759859)
+Logs:
+  Q4b gas getPeriodReward(1 period)     178344
+[PASS] test_Q5_slashChainLossGrowsWithLength() (gas: 2381387)
+Logs:
+  Q5 chain step / debt after the change 1 6916869873340
+  Q5 chain step / debt after the change 2 13833732842269
+  Q5 chain step / debt after the change 3 20750588906787
+  Q5 chain step / debt after the change 4 27667438066893
+  Q5 forfeited to r33 at the clean claim 27667438066893
+  Q5 paid to vault                        138336845113913
+[PASS] test_Q6_governanceRaisedThreshold() (gas: 3917543)
+Logs:
+  Q6 threshold at pin (s)                111
+  Q6 clean harvest after 7 d: vault / r33 3013538858302927 11952345175720190
+[PASS] test_Q7_walletBlacklistOracle() (gas: 1731724)
+Logs:
+  Q7 validator(owner=PM) right after a change (should be true): 1
+[PASS] test_Q8_poolReadFailureHidesBacklogFromGetReward() (gas: 691530)
+Logs:
+  Q8 backlog before the broken-read claim 2320900114408409301
+  Q8 earned after the read recovers        486511446621211325
+[PASS] test_Q9_gasUnits() (gas: 496287)
+Logs:
+  Q9 gas positionPeriodSecondsInRange (cold, 1 call) 47910
+  Q9 gas positionPeriodSecondsInRange (2nd period)  18806
+  Q9 gas gauge.periodEarned (1 period)              55966
+  Q9 gas gauge.earned (12 periods)                  342418
+  Q9 gas positionLastModified                       926
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 182.89ms (169.25ms CPU time)
+Ran 1 test suite in 601.78ms (182.89ms CPU time): 11 tests passed, 0 failed, 0 skipped (11 total tests)

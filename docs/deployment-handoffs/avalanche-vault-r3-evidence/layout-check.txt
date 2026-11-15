@@ -1,0 +1,6 @@
+layout identical: src/orig/PharaohLiquidityVault.sol:PharaohLiquidityVault == src/r3/PharaohLiquidityVaultR3.sol:PharaohLiquidityVaultR3 (22 linear slots)
+layout identical: src/orig/PharaohRewardExtension.sol:PharaohRewardExtension == src/r3/PharaohRewardExtensionR3.sol:PharaohRewardExtensionR3 (0 linear slots)
+runtime size PharaohLiquidityVault        24153 bytes (limit 24576)
+runtime size PharaohLiquidityVaultR3      24490 bytes (limit 24576)
+runtime size PharaohRewardExtension       2219 bytes (limit 24576)
+runtime size PharaohRewardExtensionR3     2231 bytes (limit 24576)

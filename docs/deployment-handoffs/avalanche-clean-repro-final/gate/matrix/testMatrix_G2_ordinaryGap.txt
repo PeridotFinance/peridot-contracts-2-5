@@ -1,0 +1,37 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheCapacityMatrixFork.t.sol:AvalancheCapacityMatrixForkTest
+[PASS] testMatrix_G2_ordinaryGap() (gas: 920740838)
+Logs:
+  OX|GAP wavax-collateral/usdc-debt|70|5|3|6000|5|1049550|1101775|31735|1049550|0|END
+  OX|GAP wavax-collateral/usdc-debt|70|5|5|4000|5|1851790|1943935|55970|247290|247255|END
+  OX|GAP wavax-collateral/usdc-debt|70|5|6|3000|5|1388715|1457815|41975|710375|710210|END
+  OX|GAP wavax-collateral/usdc-debt|70|5|7|2000|5|925830|971900|27980|1173265|1173175|END
+  OX|GAP wavax-collateral/usdc-debt|99|5|3|6000|5|2777715|2915940|83975|190990|190960|END
+  OX|GAP wavax-collateral/usdc-debt|99|5|5|4000|5|1851650|1943790|55980|1117070|1116870|END
+  OX|GAP wavax-collateral/usdc-debt|99|5|6|3000|5|1388710|1457820|41980|1580010|1579835|END
+  OX|GAP wavax-collateral/usdc-debt|99|5|7|2000|5|925460|971515|27970|2043255|2042780|END
+  OX|GAP usdc-collateral/wavax-debt|70|5|3|17500|5|4448285|4669640|134500|143490|0|END
+  OX|GAP usdc-collateral/wavax-debt|70|5|5|25000|5|4627235|4857490|139900|1932450|1932015|END
+  OX|GAP usdc-collateral/wavax-debt|70|5|6|30000|5|4627505|4857770|139915|3244130|3243985|END
+  OX|GAP usdc-collateral/wavax-debt|70|5|7|40000|5|4626340|4856540|139890|5869190|5867770|END
+  OX|GAP usdc-collateral/wavax-debt|99|5|3|17500|5|4627195|4857435|139915|1866905|1866415|END
+  OX|GAP usdc-collateral/wavax-debt|99|5|5|25000|5|4626700|4856915|139890|4650595|4649570|END
+  OX|GAP usdc-collateral/wavax-debt|99|5|6|30000|5|4626720|4856945|139900|6506030|6505030|END
+  OX|GAP usdc-collateral/wavax-debt|99|5|7|40000|5|4627390|4857655|139920|10216280|10216010|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.50s (2.37s CPU time)
+
+Ran 1 test suite in 2.53s (2.50s CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

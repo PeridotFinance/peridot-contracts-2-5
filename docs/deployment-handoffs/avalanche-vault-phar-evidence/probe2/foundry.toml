@@ -1,0 +1,10 @@
+[profile.default]
+src = 'src'
+test = 'test'
+out = 'out'
+cache_path = 'cache'
+libs = ['/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib']
+remappings = ["forge-std/=/Users/joshua/Peridot/peridot-contracts-2-5/contracts/lib/forge-std/src/"]
+via_ir = true
+optimizer = true
+fs_permissions = [{ access = "read", path = "./" }]

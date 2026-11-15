@@ -1,0 +1,2 @@
+attempt	exit	class	reason
+1	1	UNKNOWN	exit 1 with no identified failure (compile/usage/crash?)

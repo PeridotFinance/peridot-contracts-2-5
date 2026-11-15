@@ -1,0 +1,370 @@
+{
+  "startedAt": "2026-11-09T08:13:06.009Z",
+  "forkHead": 99833864,
+  "position": {
+    "id": "1",
+    "owner": "0x000000000000000000000000000000000000a11c",
+    "account": "0x0DC07ba2fe3f321A3743F4A145d32C8E129081E8",
+    "status": 2,
+    "borrowedPrincipal": "2450495049"
+  },
+  "s1": {
+    "repaid": "1225247550",
+    "seizedPTokens": "1261593908910",
+    "usdcOut": "1977178832",
+    "txs": 6
+  },
+  "s2": {
+    "unrecoverableRawUsd18": "330809200228842853373"
+  },
+  "checks": {
+    "total": 50,
+    "passed": 50,
+    "failed": []
+  },
+  "mutations": [
+    {
+      "mutation": "monitor classifier off",
+      "detected": true,
+      "failedChecks": [
+        "the controller flags exactly the margin account (classified = 1)",
+        "the margin account is NOT in the lending verdict list",
+        "no lending finding names the margin account"
+      ]
+    },
+    {
+      "mutation": "executor classifier off",
+      "detected": true,
+      "failedChecks": [
+        "the lending executor sends NO transaction (no approve/reset pair for the margin account)"
+      ]
+    },
+    {
+      "mutation": "insolvent pre-filter AND break-even floor off",
+      "detected": true,
+      "failedChecks": [
+        "executor op-a: DECLINES (margin debt untouched, no round)",
+        "executor op-a: USDC inventory untouched",
+        "executor op-a: a critical 'declines' alert for the treasury signers"
+      ]
+    },
+    {
+      "mutation": "per-call allowance bound off",
+      "detected": true,
+      "failedChecks": [
+        "per-call bound 100 USDC: the contract refuses the larger repayment (debt untouched)"
+      ]
+    },
+    {
+      "mutation": "daily cap off",
+      "detected": true,
+      "failedChecks": [
+        "the second attempt cannot exceed the daily cap (total repaid <= 1,300 USDC)"
+      ]
+    }
+  ],
+  "ok": true,
+  "finishedAt": "2026-11-09T08:14:01.019Z",
+  "allChecks": [
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "the controller flags exactly the margin account (classified = 1)",
+      "pass": true,
+      "detail": "classified 1"
+    },
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "margin position 1 is read and HEALTHY",
+      "pass": true,
+      "detail": "{\"id\":\"1\",\"account\":\"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8\",\"owner\":\"0x000000000000000000000000000000000000a11c\",\"status\":2,\"verdict\":\"HEALTHY\",\"debtUsd\":\"2450061477402668080000\",\"assetsUsd\":\"4944921980072258862131\",\"equityUsd\":\"2494860502669590782131\",\"healthBps\":\"20181\"}"
+    },
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "the margin account is NOT in the lending verdict list",
+      "pass": true,
+      "detail": "accounts: 0x000000:HEALTHY"
+    },
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "the lending borrower is still evaluated (HEALTHY)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "no lending finding names the margin account",
+      "pass": true,
+      "detail": "margin:not-funder:op-c, treasury:capital"
+    },
+    {
+      "scenario": "S0 healthy margin account",
+      "name": "the lending executor sends NO transaction (no approve/reset pair for the margin account)",
+      "pass": true,
+      "detail": "nonce 0 -> 0; skipped: "
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "monitor: position 1 is LIQUIDATABLE",
+      "pass": true,
+      "detail": "LIQUIDATABLE"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "monitor: a warn finding for the liquidators",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "monitor: nothing for the treasury signers (no lending finding, expected treasury call 0)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "keeper: pays nothing and sends nothing",
+      "pass": true,
+      "detail": "paid 0, sent 0"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "executor op-a: one margin round on position 1",
+      "pass": true,
+      "detail": "{\"ts\":1794212015,\"borrower\":\"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8\",\"repay\":\"1225247550\",\"seizedPTokens\":\"1261593908910\",\"liquidateTx\":\"0x121f64d11cfd1bd928196bf76ae8cf464e02b033be0af5a054f0e2efe162c158\",\"marginPositionId\":\"1\",\"redeemTx\":\"0xff2b123f324166950c287a0addc1066d358d0b59793dbbc4395ff117d671fb89\",\"swapTx\":\"0xd8bc3bec75a4c2942dad5ac9549b12b39bece36a6b6c45389a4891524fb5a5ad\",\"wavaxIn\":\"252318781782043938456\",\"usdcOut\":\"1977178832\"}"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "the debt fell by the repaid amount (to within accrued interest)",
+      "pass": true,
+      "detail": "repaid 1225247550, debt 2450495068 -> 1225247551"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "the operator's allowance to the liquidator is back to 0",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "the operator holds no pWAVAX and no WAVAX (redeemed and converted)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "USDC inventory is not lower than before (oracle-only shock: the pool pays the real price)",
+      "pass": true,
+      "detail": "inventory 3750000000 -> 4501931282"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "repayment is within the per-call bound",
+      "pass": true,
+      "detail": "1225247550"
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "state: one margin round recorded, nothing pending, not halted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "an action alert was sent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S1 -35%: funded liquidation by op-a",
+      "name": "op-b: no second liquidation when the position is back above maintenance",
+      "pass": true,
+      "detail": "verdict after op-a: HEALTHY"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "monitor: position 1 is INSOLVENT",
+      "pass": true,
+      "detail": "INSOLVENT"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "monitor: critical, escalating, addressed to the treasury signers as a human decision",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "monitor: the margin deficit is in the unrecoverable-debt figure",
+      "pass": true,
+      "detail": "330809200228842853373"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "monitor: no lending verdict and no expected treasury call for the margin account",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "keeper: pays nothing and sends nothing for the insolvent margin account",
+      "pass": true,
+      "detail": "paid 0, sent 0"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "executor op-a: DECLINES (margin debt untouched, no round)",
+      "pass": true,
+      "detail": "debt 2450495068 -> 2450495068; margin position 1: insolvent (equity <= 0), declined at the break-even floor; the debt stays in the market"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "executor op-a: USDC inventory untouched",
+      "pass": true,
+      "detail": "3750000000 -> 3750000000"
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "executor op-a: a critical 'declines' alert for the treasury signers",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "executor op-a: allowance 0 afterwards",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S2 -55%: insolvent position is declined",
+      "name": "executor op-a: the pre-filter sent no transaction at all",
+      "pass": true,
+      "detail": "0 -> 0"
+    },
+    {
+      "scenario": "S2b -55%: the break-even floor itself refuses (pre-filter removed)",
+      "name": "simulation reverts with LiquidationError 32 and the step reports it",
+      "pass": true,
+      "detail": "margin position 1: declined by the break-even floor (LiquidationError 32); allowance reset"
+    },
+    {
+      "scenario": "S2b -55%: the break-even floor itself refuses (pre-filter removed)",
+      "name": "debt untouched, allowance reset to 0",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S2b -55%: the break-even floor itself refuses (pre-filter removed)",
+      "name": "only the approve and the reset were sent (no liquidation)",
+      "pass": true,
+      "detail": "txs: 2"
+    },
+    {
+      "scenario": "S2b -55%: the break-even floor itself refuses (pre-filter removed)",
+      "name": "a decline cooldown is recorded for the position",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S3a per-call bound",
+      "name": "per-call bound 100 USDC: the contract refuses the larger repayment (debt untouched)",
+      "pass": true,
+      "detail": "debt 2450495068 -> 2450495068; margin position 1: the repayment the risk engine wants exceeds the bound 100000000 (per-call-cap); allowance reset"
+    },
+    {
+      "scenario": "S3a per-call bound",
+      "name": "allowance reset to 0",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S3a per-call bound",
+      "name": "an alert says the bound is too low for this position",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S3b daily cap",
+      "name": "first round within the daily cap",
+      "pass": true,
+      "detail": "1225247550"
+    },
+    {
+      "scenario": "S3b daily cap",
+      "name": "the second attempt cannot exceed the daily cap (total repaid <= 1,300 USDC)",
+      "pass": true,
+      "detail": "first 1225247550, second 0, debt 1225247551 -> 1225247551"
+    },
+    {
+      "scenario": "S3b daily cap",
+      "name": "allowance reset to 0 after both",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S4 op-c is not a funded liquidator",
+      "name": "monitor: a warn finding that op-c is not a funder",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S4 op-c is not a funded liquidator",
+      "name": "executor op-c: no transaction, no round, a warn alert",
+      "pass": true,
+      "detail": "margin: this operator is not on the funded-liquidator allowlist"
+    },
+    {
+      "scenario": "S5 safety stops",
+      "name": "a pending marker found at start HALTS the executor with no transaction",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S5 safety stops",
+      "name": "a liquidator whose riskEngine() differs from the configuration HALTS before any allowance",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S5 safety stops",
+      "name": "monitor: the hook differing from the configured engine is a critical finding",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "monitor: B2 is a lending account in shortfall (verdict LIQUIDATABLE_RECOVERABLE or the fail-closed PRICE_DIVERGENCE), the margin account is not in the lending list",
+      "pass": true,
+      "detail": "B2 verdict PRICE_DIVERGENCE"
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "step 1: the margin position goes first (margin round)",
+      "pass": true,
+      "detail": "\"1\""
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "step 1: B2's debt is untouched in the margin step",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "step 2: the lending round liquidates B2 (not a margin round)",
+      "pass": true,
+      "detail": "{\"ts\":1794212027,\"borrower\":\"0x00000000000000000000000000000000000b0a02\",\"repay\":\"100000001\",\"seizedPTokens\":\"102942916083\",\"liquidateTx\":\"0x4ecbc997ad0286fb39ed03c65832108d0298afee72033a94399a8f67a35d86fd\",\"redeemTx\":\"0x6f0f0c65f9a933966b469d15cdad79590e1520f3c10f56233da74b75300515e7\",\"swapTx\":\"0x3c2d72015db7e0115732feeac293ad41bf27fc0a24212c4e2bf627f70b9a3abb\",\"wavaxIn\":\"20588583216605742620\",\"usdcOut\":\"161213061\"}"
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "step 2: B2's debt fell, the margin account was not touched by the lending path",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "scenario": "S6 lending liquidation is unchanged next to a margin position",
+      "name": "no allowance left to the pUSDC market or the liquidator",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

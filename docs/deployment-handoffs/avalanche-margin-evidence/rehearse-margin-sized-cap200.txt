@@ -1,0 +1,133 @@
+== PIPELINE: PW30 ceremony, then margin stages 1-4 (real wrappers, impersonated accounts on the fork)
+  [PW30 deploy] 41 lines of output; 1 status lines
+      Borrowing is PAUSED, collateral factors are ZERO, margin hooks are UNSET. Admin = deployer until a separate verified handover.
+  [margin check-env] 2 lines of output; 1 status lines
+      all inputs set; the owner is the Ledger and the deployer is not
+  [margin deploy] 53 lines of output; 1 status lines
+      == STAGE 1 deploy (rehearsal): signer = the throwaway deployer 0x000000000000000000000000000000000000DE17
+  [margin verify 1] 8 lines of output; 1 status lines
+      verify passed at stage 1
+  [margin wire] 33 lines of output; 2 status lines
+      == STAGE 2 wire (rehearsal): signer = the Ledger
+      wire done; queued actions execute after 1794308688
+  [margin verify 2] 8 lines of output; 1 status lines
+      verify passed at stage 2
+  [margin execute] 30 lines of output; 1 status lines
+      == STAGE 3 execute (rehearsal): signer = the Ledger
+  [margin verify 3] 8 lines of output; 1 status lines
+      verify passed at stage 3
+  [margin enable] 30 lines of output; 1 status lines
+      == STAGE 4 enable (rehearsal): signer = the Ledger (verify STAGE=3 first)
+  [margin verify 4] 8 lines of output; 1 status lines
+      verify passed at stage 4
+
+== S0 healthy margin account
+  PASS  the controller flags exactly the margin account (classified = 1)  [classified 1]
+  PASS  margin position 1 is read and HEALTHY  [{"id":"1","account":"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8","owner":"0x000000000000000000000000000000000000a11c","status":2,"verdict":"HEALTHY","debtUsd":"98002457376411060000","assetsUsd":"197720879473116278305","equityUsd":"99718422096705218305","healthBps":"20173"}]
+  PASS  the margin account is NOT in the lending verdict list  [accounts: 0x000000:HEALTHY]
+  PASS  the lending borrower is still evaluated (HEALTHY)
+  PASS  no lending finding names the margin account  [margin:not-funder:op-c, drift:cap-usdc, inventory:0x90b95c880061b05194870be83c70ed5746f6fa9f, inventory:0xae4898158af5d4d2ee0a987db8a7d943737fbf9a, inventory:0x65e4e479d5eef087e58b52fd62751e7357338cc2, treasury:capital]
+  PASS  the lending executor sends NO transaction (no approve/reset pair for the margin account)  [nonce 0 -> 0; skipped: ]
+
+== S1 -35%: funded liquidation by op-a
+  PASS  monitor: position 1 is LIQUIDATABLE  [LIQUIDATABLE]
+  PASS  monitor: a warn finding for the liquidators
+  PASS  monitor: nothing for the treasury signers (no lending finding, expected treasury call 0)
+  PASS  keeper: pays nothing and sends nothing  [paid 0, sent 0]
+  PASS  executor op-a: one margin round on position 1  [{"ts":1794222315,"borrower":"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8","repay":"49009901","seizedPTokens":"49553261009","liquidateTx":"0x9ee8c38ca8c41406ce0e78d7b75d25fb960522f9b7abb4ba7fdaf724bd14a441","marginPositionId":"1","redeemTx":"0xe2b4dad4e6d6e0bebb3d20d4de1050b1cc2bf28e2580699f3842414b21030d5e","swapTx":"0x7973da9fcb558d1885fb742ae88f4961a680c058a4c339aabd0a23aa5dcf2ae0","wavaxIn":"9910652201944659076","usdcOut":"79189644"}]
+  PASS  the debt fell by the repaid amount (to within accrued interest)  [repaid 49009901, debt 98019801 -> 49009902]
+  PASS  the operator's allowance to the liquidator is back to 0
+  PASS  the operator holds no pWAVAX and no WAVAX (redeemed and converted)
+  PASS  USDC inventory is not lower than before (oracle-only shock: the pool pays the real price)  [inventory 178000000 -> 208179743]
+  PASS  repayment is within the per-call bound (0.3 x CAP)  [49009901]
+  PASS  state: one margin round recorded, nothing pending, not halted
+  PASS  an action alert was sent
+  PASS  op-b: no second liquidation when the position is back above maintenance  [verdict after op-a: HEALTHY]
+
+== S2 -55%: insolvent position is declined
+  PASS  monitor: position 1 is INSOLVENT  [INSOLVENT]
+  PASS  monitor: critical, escalating, addressed to the treasury signers as a human decision
+  PASS  monitor: the margin deficit is in the unrecoverable-debt figure  [13264937755466755507]
+  PASS  monitor: no lending verdict and no expected treasury call for the margin account
+  PASS  keeper: pays nothing and sends nothing for the insolvent margin account  [paid 0, sent 0]
+  PASS  executor op-a: DECLINES (margin debt untouched, no round)  [debt 98019801 -> 98019801; margin position 1: insolvent (equity <= 0), declined at the break-even floor; the debt stays in the market]
+  PASS  executor op-a: USDC inventory untouched  [178000000 -> 178000000]
+  PASS  executor op-a: a critical 'declines' alert for the treasury signers
+  PASS  executor op-a: allowance 0 afterwards
+  PASS  executor op-a: the pre-filter sent no transaction at all  [0 -> 0]
+
+== S2b -55%: the break-even floor itself refuses (pre-filter removed)
+  PASS  simulation reverts with LiquidationError 32 and the step reports it  [margin position 1: declined by the break-even floor (LiquidationError 32); allowance reset]
+  PASS  debt untouched, allowance reset to 0
+  PASS  only the approve and the reset were sent (no liquidation)  [txs: 2]
+  PASS  a decline cooldown is recorded for the position
+
+== S3a per-call bound
+  PASS  per-call bound 4 USDC (0.02 x CAP): the contract refuses the larger repayment (debt untouched)  [debt 98019801 -> 98019801; margin position 1: the repayment the risk engine wants exceeds the bound 4000000 (per-call-cap); allowance reset]
+  PASS  allowance reset to 0
+  PASS  an alert says the bound is too low for this position
+
+== S3b daily cap
+  PASS  first round within the daily cap  [49009901]
+  PASS  the second attempt cannot exceed the daily cap (total repaid <= 52 USDC)  [first 49009901, second 0, debt 49009902 -> 49009902]
+  PASS  allowance reset to 0 after both
+
+== S4 op-c is not a funded liquidator
+  PASS  monitor: a warn finding that op-c is not a funder
+  PASS  executor op-c: no transaction, no round, a warn alert  [margin: this operator is not on the funded-liquidator allowlist]
+
+== S5 safety stops
+  PASS  a pending marker found at start HALTS the executor with no transaction
+  PASS  a liquidator whose riskEngine() differs from the configuration HALTS before any allowance
+  PASS  monitor: the hook differing from the configured engine is a critical finding
+
+== S6 lending liquidation is unchanged next to a margin position
+  PASS  monitor: B2 is a lending account in shortfall (verdict LIQUIDATABLE_RECOVERABLE or the fail-closed PRICE_DIVERGENCE), the margin account is not in the lending list  [B2 verdict PRICE_DIVERGENCE]
+  PASS  step 1: the margin position goes first (margin round)  ["1"]
+  PASS  step 1: B2's debt is untouched in the margin step
+  PASS  step 2: the lending round liquidates B2 (not a margin round)  [{"ts":1794222342,"borrower":"0x00000000000000000000000000000000000b0a02","repay":"2500000","seizedPTokens":"2527139085","liquidateTx":"0xa93c9d3133c3628e30845635135117a63b29f04a6201f9b7692e4874fbfb709d","redeemTx":"0x39ecacfbab8f285556e92a238f2f9481b5b0257e1b1b1f0d6efcf02a8f889d7e","swapTx":"0xd99c3a8778f7f62e100b15e24e63b49e0c48d626d47f00a2d10e85bb94ea5b21","wavaxIn":"505427817007473547","usdcOut":"4038438"}]
+  PASS  step 2: B2's debt fell, the margin account was not touched by the lending path
+  PASS  no allowance left to the pUSDC market or the liquidator
+
+== MUTATION monitor classifier off (must be caught)
+  FAIL  the controller flags exactly the margin account (classified = 1)  [classified 0]
+  PASS  margin position 1 is read and HEALTHY  [{"id":"1","account":"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8","owner":"0x000000000000000000000000000000000000a11c","status":2,"verdict":"HEALTHY","debtUsd":"98002457376411060000","assetsUsd":"197720879473116278305","equityUsd":"99718422096705218305","healthBps":"20173"}]
+  FAIL  the margin account is NOT in the lending verdict list  [accounts: 0x0dc07b:LIQUIDATABLE_RECOVERABLE, 0x000000:HEALTHY]
+  PASS  the lending borrower is still evaluated (HEALTHY)
+  FAIL  no lending finding names the margin account  [margin:not-funder:op-c, drift:cap-usdc, inventory:0x90b95c880061b05194870be83c70ed5746f6fa9f, inventory:0xae4898158af5d4d2ee0a987db8a7d943737fbf9a, inventory:0x65e4e479d5eef087e58b52fd62751e7357338cc2, acct:0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8:LIQUIDATABLE_RECOVERABLE, treasury:capital]
+  PASS  the lending executor sends NO transaction (no approve/reset pair for the margin account)  [nonce 0 -> 0; skipped: ]
+  => mutation DETECTED (3 failing checks)
+
+== MUTATION executor classifier off (must be caught)
+  PASS  the controller flags exactly the margin account (classified = 1)  [classified 1]
+  PASS  margin position 1 is read and HEALTHY  [{"id":"1","account":"0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8","owner":"0x000000000000000000000000000000000000a11c","status":2,"verdict":"HEALTHY","debtUsd":"98002457376411060000","assetsUsd":"197720879473116278305","equityUsd":"99718422096705218305","healthBps":"20173"}]
+  PASS  the margin account is NOT in the lending verdict list  [accounts: 0x000000:HEALTHY]
+  PASS  the lending borrower is still evaluated (HEALTHY)
+  PASS  no lending finding names the margin account  [margin:not-funder:op-c, drift:cap-usdc, inventory:0x90b95c880061b05194870be83c70ed5746f6fa9f, inventory:0xae4898158af5d4d2ee0a987db8a7d943737fbf9a, inventory:0x65e4e479d5eef087e58b52fd62751e7357338cc2, treasury:capital]
+  FAIL  the lending executor sends NO transaction (no approve/reset pair for the margin account)  [nonce 0 -> 2; skipped: 0x0dc07ba2fe3f321a3743f4a145d32c8e129081e8: liquidation simulation failed (Error: call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="liquidateBorrow(address,uint256,address)", data="0xb4cf93cc0000000000000000000000000000000000000000000000000000000000000003", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)); allowance reset]
+  => mutation DETECTED (1 failing check)
+
+== MUTATION insolvent pre-filter AND break-even floor off (must be caught)
+  PASS  monitor: position 1 is INSOLVENT  [INSOLVENT]
+  PASS  monitor: critical, escalating, addressed to the treasury signers as a human decision
+  PASS  monitor: the margin deficit is in the unrecoverable-debt figure  [13264937755466755507]
+  PASS  monitor: no lending verdict and no expected treasury call for the margin account
+  PASS  keeper: pays nothing and sends nothing for the insolvent margin account  [paid 0, sent 0]
+  FAIL  executor op-a: DECLINES (margin debt untouched, no round)  [debt 98019801 -> 0; ]
+  FAIL  executor op-a: USDC inventory untouched  [178000000 -> 277777893]
+  FAIL  executor op-a: a critical 'declines' alert for the treasury signers
+  PASS  executor op-a: allowance 0 afterwards
+  => mutation DETECTED (3 failing checks)
+
+== MUTATION per-call allowance bound off (must be caught)
+  FAIL  per-call bound 4 USDC (0.02 x CAP): the contract refuses the larger repayment (debt untouched)  [debt 98019801 -> 49009902; ]
+  PASS  allowance reset to 0
+  => mutation DETECTED (1 failing check)
+
+== MUTATION daily cap off (must be caught)
+  PASS  first round within the daily cap  [49009901]
+  FAIL  the second attempt cannot exceed the daily cap (total repaid <= 52 USDC)  [first 49009901, second 24504951, debt 49009902 -> 24504951]
+  PASS  allowance reset to 0 after both
+  => mutation DETECTED (1 failing check)
+
+checks: 50/50 passed; mutations detected: 5/5

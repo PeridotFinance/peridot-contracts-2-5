@@ -1,0 +1,425 @@
+PIN_BLOCK=99216312 PIN_HASH=0xc0f581b4342de95b97fd0670fe16bd277c48baf463887ab24510ba97096b6c57 WARM={"tag": "wavax", "block": "0x5e9ebb8", "n": 7653, "secs": 53.1} warm_secs=53 STATUS=done
+No files changed, compilation skipped
+
+
+Ran 35 tests for test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAWavaxVaultForkTest
+[PASS] testFinding_03_rewardSnipingAtEntry() (gas: 4932155)
+Logs:
+   PHAR earned by position at pin 821631199989894334
+   PHAR in vault after Bob's deposit (auto-claimed by increaseLiquidity) 821631199989894334
+   Bob's shares of supply (bps) 9984
+   donation D 11693597145624743337
+   Bob captured from D, bps (fair = 0) 9984
+   CONTROL (harvest+donate before Bob): Bob value / deposit 1152280325846476156111 1169359714562474333723
+
+[PASS] testFinding_04_rewardForfeitAtExit() (gas: 2981537)
+Logs:
+   Bob's share of supply, bps 9984
+   PHAR earned by position at Bob's join / after 1 day 0 177181083534743929
+   Bob redeemed asset 1152572434919302337290
+   Bob PHAR received 0
+   PHAR left in vault for the Safe/remaining holders 998812283524638263
+   Bob's approximate pro-rata entitlement forfeited (PHAR wei) 176897593801088338
+
+[PASS] test_00_addressMapAndConfig() (gas: 773225)
+Logs:
+  sAVAX/WAVAX vault (asset WAVAX)
+   vault         0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8
+   impl (ERC1967) 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
+   proxyAdmin     0x34CbBdfcBcc72e8bf70CbF6c7245fdb2725b94dC
+   proxyAdmin.owner 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   vault.owner    0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   rebalancer     0x94696d767e65a75581145646960FA0eC886cE5d2
+   asset          0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+   paired         0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE
+   pool           0x65B9016c376604Fe0aF38c1E336Ffcec0F8ecBbD
+   gauge          0xCB348abA8D8CE40a45353955ad63ca72095E152d
+   oracle         0x2002aFd6C713a6075d66DaE758Dc466787faCeEF
+   positionMgr    0x0B4478e810D48B5882D4019D435A2f864Bab4F39
+   tokenId        485416
+   ticks lower/upper 1854 3054
+   spot tick      2554
+   pool fee(ppm)  100
+   pool liquidity 2240558373841569919951735
+   paused         false
+   depositCap     1
+   totalAssets    1736602432054834143
+   totalSupply    1723597814184121992
+   maxDeposit(alice) 0
+   twap/maxTwapTicks/maxOracleBps 1800 100 100
+   slippage/haircut bps 300 300
+   PHAR earned (gauge, tokenId) 821631199989894334
+   PHAR held by vault 0
+
+[PASS] test_01_accessMatrix() (gas: 2514606)
+Logs:
+   rebalancer.deployIdle: ok
+   owner.deployIdle: ok
+
+[PASS] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 161524276)
+Logs:
+   fee volume (asset units) 28064633149499384009360
+   tick drift after ping-pong 0
+   NAV before fee collect 2306155038623838762901
+   NAV after  fee collect 2311786842413129786834
+   accrued fees visible only after collect 5631803789291023933
+   Bob deposit 2338719429124948667447
+   Bob NAV value right after deposit 2308684281697448487047
+   Bob redeemed 2308684544058774649242
+   Bob round-trip loss bps 128
+   Alice value  control / with-Bob 2310045363431977828930 2337190954796651253119
+   PPS control / with-Bob (1e18) 1010374326783594870 1022247344099357252
+   MUTATION naive-pricing Bob gain (asset units) 2817445198727982342
+
+[PASS] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 161144543)
+Logs:
+   total fees F (NAV units) 1035560370145273228; Bob's pro-rata share of supply (bps) 5002
+   Bob's expected fee share 518064060000357044; Bob's actual gain at exit 518064060000357046 (entry NAV 2308685143079517618233 exit 2309203207139517975279)
+
+[PASS] test_05_donationInflationAndRounding() (gas: 137604817)
+Logs:
+   baseline (no donation) Bob NAV value / deposit 1154595927359701030177 1169359714562474333723
+   donation D 1: PPS before/after (1e18) 1007912927723012562 1007912927723012562
+     victim extra loss vs no-donation baseline, bps 0
+     attacker PnL (asset units, negative = loses) -16907747505521160819
+   donation D 11693597145624743337: PPS before/after (1e18) 1007912927723012562 1018124536842910635
+     victim extra loss vs no-donation baseline, bps 1
+     attacker PnL (asset units, negative = loses) -16925346021492760030
+   donation D 1169359714562474333723: PPS before/after (1e18) 1007912927723012562 2029073839712819861
+     victim extra loss vs no-donation baseline, bps 152
+     attacker PnL (asset units, negative = loses) -18667679826396436164
+   donation D 116935971456247433372362: PPS before/after (1e18) 1007912927723012562 103124004126703742457
+     victim deposit REVERTS after donation: Error: Too little received
+     after keeper deployIdle(): keeper ok=false; victim deposit Error: Too little received
+     keeper rebalance() with the donated idle asset: Error: Too little received
+     existing holder can still redeem (idle asset covers it): true got 117912416228578797316602
+   dust deposit units 1 previewShares 0 result ok shares 177629362318542
+     shares worth (asset units) 179034930624053 => depositor gains 179034930624052 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 2 previewShares 0 result ok shares 177629362318544
+     shares worth (asset units) 179034930624055 => depositor gains 179034930624053 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 10 previewShares 8 result ok shares 177629362318550
+     shares worth (asset units) 179034930624061 => depositor gains 179034930624051 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 100 previewShares 90 result ok shares 177629362318638
+     shares worth (asset units) 179034930624150 => depositor gains 179034930624050 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 1000 previewShares 903 result ok shares 177629362319518
+     shares worth (asset units) 179034930625037 => depositor gains 179034930624037 (deploy-time NAV step of pre-existing idle assets)
+   redeem 1 share: ok=true assets 1
+
+[PASS] test_06_ladder_100k() (gas: 140066984)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 100000
+   pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+   single-tx deposit of USD 100000 FAILS: Error: Too little received
+     built in 4 chunk(s), last chunk USD x100 2499999; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 11543443873546107673573 128
+     maxWithdraw / deposit 11543443873546107673573 11693597145624743337236
+     position range 1854 3054 tick 2554; pool liquidity now 2406922453829752927144894
+     FULL REDEEM FAILS: Error: Too little received
+     largest single redeem that succeeds: 5/8 of the position = USD x100 6249999; vs NAV-part loss bps 0; vs deposit-part loss bps 128
+     first failure (larger redeem): 8/8 -> Error: Too little received
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 11699403412246867086665 -4
+     IN-KIND legs: asset, paired 6501113180400063630127 4019776626293036116770
+
+[PASS] test_06_ladder_10k() (gas: 6109888)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 10000
+   pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+   single-tx deposit of USD 10000 OK; tick move 5
+     built in 1 chunk(s), last chunk USD x100 999999; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 1152451843406985690172 144
+     maxWithdraw / deposit 1152451843406985690172 1169359714562474333723
+     position range 1854 3054 tick 2554; pool liquidity now 2255409791716148669255369
+     FULL REDEEM ok, got / deposited, round-trip loss bps 1152452159646549872218 144
+     exit-only loss vs NAV bps 0
+     PPS change for remaining holders (1e18 units) 9563733704859753006
+     largest single redeem that succeeds: 8/8 of the position = USD x100 999999; vs NAV-part loss bps 0; vs deposit-part loss bps 144
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 1170141552957724525844 -6
+     IN-KIND legs: asset, paired 580495109251902738315 455966651816475079177
+
+[PASS] test_06_ladder_1k() (gas: 6095809)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 1000
+   pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+   single-tx deposit of USD 1000 OK; tick move 1
+     built in 1 chunk(s), last chunk USD x100 99999; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 115267054905103934440 142
+     maxWithdraw / deposit 115267054905103934440 116935971456247433372
+     position range 1854 3054 tick 2554; pool liquidity now 2242052580967902803194037
+     FULL REDEEM ok, got / deposited, round-trip loss bps 115267061161729505739 142
+     exit-only loss vs NAV bps 0
+     PPS change for remaining holders (1e18 units) 956199407650867095
+     largest single redeem that succeeds: 8/8 of the position = USD x100 99999; vs NAV-part loss bps 0; vs deposit-part loss bps 142
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 117022018741879871836 -7
+     IN-KIND legs: asset, paired 58523432736867668613 45236267735400852412
+
+[PASS] test_06_ladder_250k() (gas: 143398442)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 250000
+   pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+   single-tx deposit of USD 250000 FAILS: Error: Too little received
+     built in 10 chunk(s), last chunk USD x100 2499999; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 28872581498771119125183 123
+     maxWithdraw / deposit 28872581498771119125183 29233992864061858343090
+     position range 1854 3054 tick 2554; pool liquidity now 2668222487113671636478632
+     FULL REDEEM FAILS: Error: Too little received
+     largest single redeem that succeeds: 5/8 of the position = USD x100 15624999; vs NAV-part loss bps 0; vs deposit-part loss bps 123
+     first failure (larger redeem): 8/8 -> Error: Too little received
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 29248709849238286561476 -5
+     IN-KIND legs: asset, paired 16712013252163323396948 9694479858610276724447
+
+[PASS] test_06_ladder_50k() (gas: 85549805)
+Logs:
+  LADDER sAVAX/WAVAX vault (asset WAVAX) USD 50000
+   pool active liquidity / vault seed liquidity 2240558373841569919951735 25993934561472485124
+   single-tx deposit of USD 50000 FAILS: Error: Too little received
+     built in 2 chunk(s), last chunk USD x100 2499999; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 5767325652333446820257 135
+     maxWithdraw / deposit 5767325652333446820257 5846798572812371668618
+     position range 1854 3054 tick 2554; pool liquidity now 2319967329230199929723159
+     FULL REDEEM FAILS: Error: Too little received
+     largest single redeem that succeeds: 7/8 of the position = USD x100 4374999; vs NAV-part loss bps 0; vs deposit-part loss bps 135
+     first failure (larger redeem): 8/8 -> Error: Too little received
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 5849726842044216002199 -5
+     IN-KIND legs: asset, paired 3103175867492072966640 2123875527916547929728
+
+[PASS] test_07_stress_large_k0() (gas: 5832952)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift -150 achieved -150 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2614217318368243283459
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -16
+
+[PASS] test_07_stress_large_k1() (gas: 32822959)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift -90 achieved -90 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2172220080533631108694
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -9
+
+[PASS] test_07_stress_large_k2() (gas: 32787852)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift -30 achieved -30 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1662792507283790253040
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -5
+
+[PASS] test_07_stress_large_k3() (gas: 32514022)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift -10 achieved -10 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1024574741062465364599
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -5
+
+[PASS] test_07_stress_large_k4() (gas: 32736130)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 10 achieved 10 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1358767387472242929814
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -4
+
+[PASS] test_07_stress_large_k5() (gas: 33178055)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 30 achieved 30 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2519269354979807774761
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -4
+
+[PASS] test_07_stress_large_k6() (gas: 7073334)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 90 achieved 90 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 3088161584939712290009
+     FULL REDEEM ok, loss bps vs deposit 128
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: ok, loss bps vs NAV-part 128
+     IN-KIND ok, oracle-valued loss bps vs deposit -7
+
+[PASS] test_07_stress_large_k7() (gas: 5935673)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 100000 requested tick shift 150 achieved 150 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 3658762968581959158224
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -12
+
+[PASS] test_07_stress_small_k0() (gas: 4112551)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -150 achieved -150 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1610284114535093337764
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -16
+
+[PASS] test_07_stress_small_k1() (gas: 31235049)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -90 achieved -90 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1570763877788900142838
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -10
+
+[PASS] test_07_stress_small_k2() (gas: 31107048)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -30 achieved -30 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1462607744147627962459
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -7
+
+[PASS] test_07_stress_small_k3() (gas: 4535837)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift -10 achieved -10 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 957879846361383094213
+     FULL REDEEM ok, loss bps vs deposit 144
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -6
+
+[PASS] test_07_stress_small_k4() (gas: 4710608)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 10 achieved 10 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 1272666851222847899049
+     FULL REDEEM ok, loss bps vs deposit 144
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -6
+
+[PASS] test_07_stress_small_k5() (gas: 5131903)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 30 achieved 30 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2260838548060758731661
+     FULL REDEEM ok, loss bps vs deposit 144
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -6
+
+[PASS] test_07_stress_small_k6() (gas: 5146980)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 90 achieved 90 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2311704828857513102288
+     FULL REDEEM ok, loss bps vs deposit 144
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 144
+     IN-KIND ok, oracle-valued loss bps vs deposit -8
+
+[PASS] test_07_stress_small_k7() (gas: 4277767)
+Logs:
+  STRESS sAVAX/WAVAX vault (asset WAVAX) USD 10000 requested tick shift 150 achieved 150 (TWAP gate 100 ticks)
+     pool trade used (tokenIn raw units) 2362723929971635773503
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -13
+
+[PASS] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 315214319)
+Logs:
+  OUT-OF-RANGE (oracle follows pool) sAVAX/WAVAX vault (asset WAVAX)
+   in-range PHAR accrual over 1h (wei) 38320744885147048
+   range lower/upper, spot after move 1854 3054 1849
+   totalAssets view ok / value true 5385270519631176561488
+   maxWithdraw(alice) / alice NAV / deposited 5383648853494169934382 5383648853494169934382 5846798572812371668618
+   maxDeposit(bob) 579294586761605990300324
+   new deposit while out of range: Vault__PositionNeedsRebalance
+   deployIdle while out of range: Vault__PositionNeedsRebalance
+   out-of-range PHAR accrual over 1h (wei) 0
+   Alice redeem while out of range: Error: Too little received
+     NO redeem down to 1/64 of the position succeeds; first failure 8/8 -> Error: Too little received
+   rebalance while out of range: Error: Too little received
+
+[PASS] test_09_dislocation_oracleDoesNotFollow_gatesAndOwnerPath() (gas: 5424396)
+Logs:
+  DISLOCATION (oracle does not follow) sAVAX/WAVAX vault (asset WAVAX)
+   oracle ratio (1e18) 1293178879106168358
+   spot moved (ticks) -705
+   immediately: redeem Vault__PriceDeviation
+   immediately: deposit Vault__PriceDeviation
+   immediately: rebalance Vault__PriceDeviation
+   immediately: totalAssets()/maxWithdraw view ok? false
+   after TWAP caught up: redeem Vault__OracleDeviation
+   after TWAP caught up: rebalance Vault__OracleDeviation
+   after TWAP caught up: totalAssets view ok? false
+   redeemInKind (permissionless): ok
+     legs asset / paired 1506697703930067 4613449496491262208086
+     oracle-valued (at pre-move ratio) loss bps vs deposit -203
+   after emergencyExit, redeem still gated: Vault__OracleDeviation
+
+[PASS] test_10_keeperRebalance_mid() (gas: 5761745)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 50000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 5769062889840199996284 5763787756169440043217
+     change bps 9
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 5763787756169440043217 5763791807515670244035
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 5763791807515670244035 5763791810908159080048
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) 9
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[PASS] test_10_keeperRebalance_small() (gas: 5159320)
+Logs:
+  REBALANCE sAVAX/WAVAX vault (asset WAVAX) USD 10000
+   rebalance #, result 1 ok
+     tokenId old/new 485416 655939
+     NAV before/after, change bps 1154189079926096993560 1154319557603575648798
+     change bps -1
+   rebalance #, result 2 ok
+     tokenId old/new 485416 655940
+     NAV before/after, change bps 1154319557603575648798 1154319675798011867094
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485416 655941
+     NAV before/after, change bps 1154319675798011867094 1154319675905459409057
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) -1
+   PHAR in vault before/after (claimed on exit of the old NFT) 821631199989894334 821631199989894334
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 900
+
+[PASS] test_11_emergencyExit_mid() (gas: 30034169)
+Logs:
+  EMERGENCY EXIT sAVAX/WAVAX vault (asset WAVAX)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 5767330312807651711133
+   redeem: Error: Too little received
+   redeemInKind after emergencyExit: ok=true asset 3103175867492072966641 paired 2123875527916547929728
+
+[PASS] test_11_emergencyExit_small() (gas: 3079782)
+Logs:
+  EMERGENCY EXIT sAVAX/WAVAX vault (asset WAVAX)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 1152452159646549872218
+   redeem: ok
+     got / deposited, loss bps 1152452159646549872218 144
+   redeemInKind after emergencyExit: ok=true asset 580495109251902738314 paired 455966651816475079177
+
+[PASS] test_12_capSemantics() (gas: 1049381)
+Logs:
+   cap / managed / maxDeposit 2338719429124948667447 1736602432054834143 2336982826692893833304
+   deposit above cap: Vault__DepositCapExceeded
+   deposit exactly maxDeposit ok? false
+
+Suite result: ok. 35 passed; 0 failed; 0 skipped; finished in 15.53s (15.40s CPU time)
+
+Ran 1 test suite in 15.56s (15.53s CPU time): 35 tests passed, 0 failed, 0 skipped (35 total tests)
+EXIT:0

@@ -1,0 +1,38 @@
+VAULT CLEAN REPRODUCTION vault=usdc suite=AvalancheTrackAUsdcVaultForkTest
+UTC start: 2026-11-02T18:33:23Z
+git HEAD: 3c86875c3cace9d9c74e20f3617291c1fef85dd2
+git status --short (contracts/):
+   M contracts/PeridottrollerRobinhood.sol
+   M contracts/margin/RobinhoodV4RouterAdapter.sol
+   M foundry.toml
+   M fuji-margin-liquidation-testing.md
+   M robinhood_boosted_markets.md
+   M test/RobinhoodV4RouterAdapter.t.sol
+   M tools/fuji-liquidation-runner.cjs
+   M tools/fuji-liquidation-runner.local.test.cjs
+   M tools/fuji-liquidation-runner.test.cjs
+  ?? cache_fallback/
+  ?? cache_tracka/
+  ?? cache_tracka_assert/
+  ?? cache_tracka_repro/
+  ?? cache_vault_repro/
+  ?? out_fallback/
+  ?? out_tracka/
+  ?? out_tracka_assert/
+  ?? out_tracka_repro/
+  ?? out_vault_repro/
+  ?? tools/fuji-simulation-proxy.cjs
+  ?? tools/fuji-simulation-proxy.test.cjs
+RPC host: https://api.avax.network  (direct, no proxy)
+env: HOME=/tmp/avalanche-vault-clean-home.jyWYe8 (isolated, empty .foundry/cache/rpc; svm symlinked for solc only) FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_vault_repro FOUNDRY_CACHE_PATH=cache_vault_repro TRACKA_PIN_BLOCK=99216397
+forge: forge Version: 1.7.1-Homebrew
+command: HOME=/tmp/avalanche-vault-clean-home.jyWYe8 forge test --threads 1 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip test/[!A]* --skip test/A[!v]* --skip test/Av[!a]* --skip test/Avalanche[!T]* --match-contract AvalancheTrackAUsdcVaultForkTest -vv --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000
+-----
+error: the following required arguments were not provided:
+  --rpc-url <URL>
+
+Usage: forge test --rpc-url <URL> --threads <THREADS> --skip <SKIP>... --match-contract <REGEX> --verbosity... --compute-units-per-second <CUPS> --fork-retries <RETRIES> --fork-retry-backoff <BACKOFF> [PATH]
+
+For more information, try '--help'.
+-----
+UTC end: 2026-11-02T18:33:23Z  forge exit: 2

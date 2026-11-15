@@ -1,0 +1,400 @@
+PIN_BLOCK=99216397 PIN_HASH=0x883381b513163bdd1b2e41915c706e28457506c4ec38ee859dcaacbe795c9c65 WARM={"tag": "usdc", "block": "0x5e9ec0d", "n": 7633, "secs": 58.1} warm_secs=58 STATUS=done
+No files changed, compilation skipped
+
+
+Ran 35 tests for test/AvalancheTrackAVaultsFork.t.sol:AvalancheTrackAUsdcVaultForkTest
+[PASS] testFinding_03_rewardSnipingAtEntry() (gas: 5115921)
+Logs:
+   PHAR earned by position at pin 2320900114408409301
+   PHAR in vault after Bob's deposit (auto-claimed by increaseLiquidity) 2320900114408409301
+   Bob's shares of supply (bps) 9708
+   donation D 100000000
+   Bob captured from D, bps (fair = 0) 9708
+   CONTROL (harvest+donate before Bob): Bob value / deposit 994255914 1000000000
+
+[PASS] testFinding_04_rewardForfeitAtExit() (gas: 2964465)
+Logs:
+   Bob's share of supply, bps 9708
+   PHAR earned by position at Bob's join / after 1 day 0 31969092608816100
+   Bob redeemed asset 994884697
+   Bob PHAR received 0
+   PHAR left in vault for the Safe/remaining holders 2352869207017225401
+   Bob's approximate pro-rata entitlement forfeited (PHAR wei) 31035595104638669
+
+[PASS] test_00_addressMapAndConfig() (gas: 842943)
+Logs:
+  USDC/USDt vault (asset USDC)
+   vault         0x855bF832f26a294d28500db59eE941dE3d654129
+   impl (ERC1967) 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
+   proxyAdmin     0x2DD4191B2944396B5853f4219E829f01636F65cf
+   proxyAdmin.owner 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   vault.owner    0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+   rebalancer     0x94696d767e65a75581145646960FA0eC886cE5d2
+   asset          0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E
+   paired         0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7
+   pool           0x9bFE3108Cc16D17a9Ec65545a0f50B2CA1C970c0
+   gauge          0xf51B4EB0f6801729170d18BEe67C7F5d98985572
+   oracle         0xe6060635dfdDd495ca22b828e144AB8411c8a431
+   positionMgr    0x0B4478e810D48B5882D4019D435A2f864Bab4F39
+   tokenId        485334
+   ticks lower/upper -109 91
+   spot tick      -10
+   pool fee(ppm)  50
+   pool liquidity 1490885715540
+   paused         false
+   depositCap     1
+   totalAssets    29847769
+   totalSupply    29850429
+   maxDeposit(alice) 0
+   twap/maxTwapTicks/maxOracleBps 1800 30 30
+   slippage/haircut bps 100 100
+   PHAR earned (gauge, tokenId) 2320900114408409301
+   PHAR held by vault 0
+
+[PASS] test_01_accessMatrix() (gas: 2524672)
+Logs:
+   rebalancer.deployIdle: ok
+   owner.deployIdle: ok
+
+[PASS] test_02_feeFairness_lateDepositorDoesNotCaptureAccruedFees() (gas: 162545347)
+Logs:
+   fee volume (asset units) 24000000000
+   tick drift after ping-pong 0
+   NAV before fee collect 1521982902
+   NAV after  fee collect 1522373849
+   accrued fees visible only after collect 390947
+   Bob deposit 1500000000
+   Bob NAV value right after deposit 1491843445
+   Bob redeemed 1491843911
+   Bob round-trip loss bps 54
+   Alice value  control / with-Bob 1492501243 1500217335
+   PPS control / with-Bob (1e18) 1000742914500625095 1005916661498472143
+   MUTATION naive-pricing Bob gain (asset units) 193518
+
+[PASS] test_02b_feeFairness_exitKeepsAccruedFees() (gas: 162082423)
+Logs:
+   total fees F (NAV units) 416436; Bob's pro-rata share of supply (bps) 4949
+   Bob's expected fee share 206135; Bob's actual gain at exit 206138 (entry NAV 1491843792 exit 1492049930)
+
+[PASS] test_05_donationInflationAndRounding() (gas: 248231352)
+Logs:
+   baseline (no donation) Bob NAV value / deposit 994768294 1000000000
+   donation D 1: PPS before/after (1e18) 1000485923132676349 1000485924109092240
+     victim extra loss vs no-donation baseline, bps 0
+     attacker PnL (asset units, negative = loses) -5213412
+   donation D 100000000: PPS before/after (1e18) 1000485923132676349 1098127512305273952
+     victim extra loss vs no-donation baseline, bps 5
+     attacker PnL (asset units, negative = loses) -8127950
+   donation D 10000000000: PPS before/after (1e18) 1000485923132676349 10764644840392436661
+     victim deposit REVERTS after donation: Error: Too little received
+     after keeper deployIdle(): keeper ok=false; victim deposit Error: Too little received
+     keeper rebalance() with the donated idle asset: Error: Too little received
+     existing holder can still redeem (idle asset covers it): true got 10703322148
+   donation D 1000000000000: PPS before/after (1e18) 1000485923132676349 977416377649108707606
+     victim deposit REVERTS after donation: Error: Too little received
+     after keeper deployIdle(): keeper ok=false; victim deposit Error: Too little received
+     keeper rebalance() with the donated idle asset: Error: Too little received
+     existing holder can still redeem (idle asset covers it): true got 971848352292
+   dust deposit units 1 previewShares 0 result ok shares 73
+     shares worth (asset units) 73 => depositor gains 72 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 2 previewShares 1 result ok shares 74
+     shares worth (asset units) 74 => depositor gains 72 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 10 previewShares 9 result ok shares 81
+     shares worth (asset units) 81 => depositor gains 71 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 100 previewShares 97 result ok shares 171
+     shares worth (asset units) 171 => depositor gains 71 (deploy-time NAV step of pre-existing idle assets)
+   dust deposit units 1000 previewShares 970 result ok shares 1067
+     shares worth (asset units) 1067 => depositor gains 67 (deploy-time NAV step of pre-existing idle assets)
+   redeem 1 share: ok=true assets 1
+
+[PASS] test_06_ladder_100k() (gas: 27719468)
+Logs:
+  LADDER USDC/USDt vault (asset USDC) USD 100000
+   pool active liquidity / vault seed liquidity 1490885715540 3007352329
+   single-tx deposit of USD 100000 FAILS: Error: Too little received
+     position NOT built by chunks above USD 10000 (impractical on this pool at the pin; exit side UNMEASURED for this size)
+
+[PASS] test_06_ladder_10k() (gas: 164353295)
+Logs:
+  LADDER USDC/USDt vault (asset USDC) USD 10000
+   pool active liquidity / vault seed liquidity 1490885715540 3007352329
+   single-tx deposit of USD 10000 FAILS: Error: Too little received
+     built in 5 chunk(s), last chunk USD x100 200000; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 9948412647 51
+     maxWithdraw / deposit 9948412647 10000000000
+     position range -109 91 tick -11; pool liquidity now 2484096611507
+     FULL REDEEM FAILS: Error: Too little received
+     largest single redeem that succeeds: 4/8 of the position = USD x100 500000; vs NAV-part loss bps 0; vs deposit-part loss bps 51
+     first failure (larger redeem): 8/8 -> Error: Too little received
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 9999166340 0
+     IN-KIND legs: asset, paired 4924960720 5078644260
+
+[PASS] test_06_ladder_1k() (gas: 110432222)
+Logs:
+  LADDER USDC/USDt vault (asset USDC) USD 1000
+   pool active liquidity / vault seed liquidity 1490885715540 3007352329
+   single-tx deposit of USD 1000 OK; tick move 2
+     built in 1 chunk(s), last chunk USD x100 100000; first deposit failure: none
+     entry: NAV value of shares / deposit, loss bps 994786478 52
+     maxWithdraw / deposit 994786478 1000000000
+     position range -109 91 tick -11; pool liquidity now 1584617722505
+     FULL REDEEM FAILS: Error: Too little received
+     largest single redeem that succeeds: 5/8 of the position = USD x100 62500; vs NAV-part loss bps 0; vs deposit-part loss bps 52
+     first failure (larger redeem): 8/8 -> Error: Too little received
+     IN-KIND full: asset + paired(oracle-valued) / deposited, loss bps 999924588 0
+     IN-KIND legs: asset, paired 486167281 514206714
+
+[PASS] test_06_ladder_250k() (gas: 27719138)
+Logs:
+  LADDER USDC/USDt vault (asset USDC) USD 250000
+   pool active liquidity / vault seed liquidity 1490885715540 3007352329
+   single-tx deposit of USD 250000 FAILS: Error: Too little received
+     position NOT built by chunks above USD 10000 (impractical on this pool at the pin; exit side UNMEASURED for this size)
+
+[PASS] test_06_ladder_50k() (gas: 27719949)
+Logs:
+  LADDER USDC/USDt vault (asset USDC) USD 50000
+   pool active liquidity / vault seed liquidity 1490885715540 3007352329
+   single-tx deposit of USD 50000 FAILS: Error: Too little received
+     position NOT built by chunks above USD 10000 (impractical on this pool at the pin; exit side UNMEASURED for this size)
+
+[PASS] test_07_stress_large_k0() (gas: 6801187)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift -40 achieved -40 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 2209282449
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -3
+
+[PASS] test_07_stress_large_k1() (gas: 32931031)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift -25 achieved -25 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 1456672956
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit -1
+
+[PASS] test_07_stress_large_k2() (gas: 32931071)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift -10 achieved -10 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 704627681
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_large_k3() (gas: 32933095)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift -3 achieved -3 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 352156966
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_large_k4() (gas: 33184374)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift 3 achieved 3 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 248770816
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_large_k5() (gas: 33589623)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift 10 achieved 10 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 3220610524
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_large_k6() (gas: 34314714)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift 25 achieved 25 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 4247160292
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 51
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_large_k7() (gas: 7769306)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 10000 requested tick shift 40 achieved 40 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 4998942411
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -2
+
+[PASS] test_07_stress_small_k0() (gas: 3764443)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift -40 achieved -40 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 560454322
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -3
+
+[PASS] test_07_stress_small_k1() (gas: 30431111)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift -25 achieved -25 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 411466747
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_small_k2() (gas: 30430853)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift -10 achieved -10 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 262590866
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_small_k3() (gas: 30433976)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift -3 achieved -3 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 191444434
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_small_k4() (gas: 30606878)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift 3 achieved 3 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 168498875
+     FULL REDEEM FAILS: Error: Too little received
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 1
+
+[PASS] test_07_stress_small_k5() (gas: 5230989)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift 10 achieved 10 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 2859323571
+     FULL REDEEM ok, loss bps vs deposit 52
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_small_k6() (gas: 5808862)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift 25 achieved 25 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 3283367034
+     FULL REDEEM ok, loss bps vs deposit 52
+     new deposit (USD 100): ok
+     10% REDEEM: ok, loss bps vs NAV-part 52
+     IN-KIND ok, oracle-valued loss bps vs deposit 0
+
+[PASS] test_07_stress_small_k7() (gas: 4951745)
+Logs:
+  STRESS USDC/USDt vault (asset USDC) USD 2000 requested tick shift 40 achieved 40 (TWAP gate 30 ticks)
+     pool trade used (tokenIn raw units) 3432190820
+     FULL REDEEM FAILS: Vault__PriceDeviation
+     new deposit (USD 100): Vault__PriceDeviation
+     10% REDEEM: Vault__PriceDeviation
+     IN-KIND ok, oracle-valued loss bps vs deposit -2
+
+[PASS] test_08_outOfRange_oracleFollows_keeperOutageAndRebalance() (gas: 314886599)
+Logs:
+  OUT-OF-RANGE (oracle follows pool) USDC/USDt vault (asset USDC)
+   in-range PHAR accrual over 1h (wei) 49741198000994217
+   range lower/upper, spot after move -109 91 -114
+   totalAssets view ok / value true 9849548910
+   maxWithdraw(alice) / alice NAV / deposited 9820069141 9820069141 10000000000
+   maxDeposit(bob) 4990150451090
+   new deposit while out of range: Vault__PositionNeedsRebalance
+   deployIdle while out of range: Vault__PositionNeedsRebalance
+   out-of-range PHAR accrual over 1h (wei) 0
+   Alice redeem while out of range: empty-revert
+     NO redeem down to 1/64 of the position succeeds; first failure 8/8 -> empty-revert
+   rebalance while out of range: empty-revert
+
+[PASS] test_09_dislocation_oracleDoesNotFollow_gatesAndOwnerPath() (gas: 7331226)
+Logs:
+  DISLOCATION (oracle does not follow) USDC/USDt vault (asset USDC)
+   oracle ratio (1e18) 999126000000000000
+   spot moved (ticks) -103
+   immediately: redeem Vault__PriceDeviation
+   immediately: deposit Vault__PriceDeviation
+   immediately: rebalance Vault__PriceDeviation
+   immediately: totalAssets()/maxWithdraw view ok? false
+   after TWAP caught up: redeem Vault__OracleDeviation
+   after TWAP caught up: rebalance Vault__OracleDeviation
+   after TWAP caught up: totalAssets view ok? false
+   redeemInKind (permissionless): ok
+     legs asset / paired 5199 10033174946
+     oracle-valued (at pre-move ratio) loss bps vs deposit -24
+   after emergencyExit, redeem still gated: Vault__OracleDeviation
+
+[PASS] test_10_keeperRebalance_mid() (gas: 8726000)
+Logs:
+  REBALANCE USDC/USDt vault (asset USDC) USD 10000
+   rebalance #, result 1 ok
+     tokenId old/new 485334 655942
+     NAV before/after, change bps 9978277702 9979514561
+     change bps -1
+   rebalance #, result 2 ok
+     tokenId old/new 485334 655943
+     NAV before/after, change bps 9979514561 9979514694
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485334 655944
+     NAV before/after, change bps 9979514694 9979514689
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) -1
+   PHAR in vault before/after (claimed on exit of the old NFT) 2320900114408409301 2320900114408409301
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 300
+
+[PASS] test_10_keeperRebalance_small() (gas: 5551512)
+Logs:
+  REBALANCE USDC/USDt vault (asset USDC) USD 2000
+   rebalance #, result 1 ok
+     tokenId old/new 485334 655942
+     NAV before/after, change bps 2019275299 2019704794
+     change bps -2
+   rebalance #, result 2 ok
+     tokenId old/new 485334 655943
+     NAV before/after, change bps 2019704794 2019704834
+     change bps 0
+   rebalance #, result 3 ok
+     tokenId old/new 485334 655944
+     NAV before/after, change bps 2019704834 2019704831
+     change bps 0
+   cumulative NAV change after 3 back-to-back rebalances, bps (no cooldown exists) -2
+   PHAR in vault before/after (claimed on exit of the old NFT) 2320900114408409301 2320900114408409301
+   max loss one rebalance may legally book (entry-loss bps = 2*slippage+haircut) 300
+
+[PASS] test_11_emergencyExit_mid() (gas: 31424343)
+Logs:
+  EMERGENCY EXIT USDC/USDt vault (asset USDC)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 9948424284
+   redeem: Error: Too little received
+   redeemInKind after emergencyExit: ok=true asset 4924960720 paired 5078644261
+
+[PASS] test_11_emergencyExit_small() (gas: 28791858)
+Logs:
+  EMERGENCY EXIT USDC/USDt vault (asset USDC)
+   deposit: EnforcedPause
+   maxDeposit / maxWithdraw(alice) 0 1989411807
+   redeem: Error: Too little received
+   redeemInKind after emergencyExit: ok=true asset 962050857 paired 1038646092
+
+[PASS] test_12_capSemantics() (gas: 1186851)
+Logs:
+   cap / managed / maxDeposit 20000000000 29847769 19970152231
+   deposit above cap: Vault__DepositCapExceeded
+   deposit exactly maxDeposit ok? false
+
+Suite result: ok. 35 passed; 0 failed; 0 skipped; finished in 15.93s (15.84s CPU time)
+
+Ran 1 test suite in 15.94s (15.93s CPU time): 35 tests passed, 0 failed, 0 skipped (35 total tests)
+EXIT:0

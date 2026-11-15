@@ -1,0 +1,10 @@
+# UTC: 2026-11-03T13:40:31Z
+# git HEAD: 7d99930cd4090687815d9026a67db5a858af9acd
+# test file sha256: 8e1a06cbef8bb1d807907c8d814fbbb14a5c0a9b92dda4e90c4af160f63427ec
+# command: TREASURY_MUTATION=0 AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_treasury FOUNDRY_CACHE_PATH=cache_treasury forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheCashOnlyTreasuryRepayForkTest$ --match-test (testDetect|testRoles|testRepayBehalf) -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol
+# note: smoke: detector truth table, roles, repay behalf (first run)
+# ---
+/private/tmp/claude-501/-Users-joshua-Peridot-peridot-contracts-2-5/248fd71c-044a-4eb7-9df4-18a648d75742/scratchpad/run.sh: eval: line 19: syntax error near unexpected token `('
+/private/tmp/claude-501/-Users-joshua-Peridot-peridot-contracts-2-5/248fd71c-044a-4eb7-9df4-18a648d75742/scratchpad/run.sh: eval: line 19: `TREASURY_MUTATION=0 AVALANCHE_MAINNET_RPC_URL=https://api.avax.network/ext/bc/C/rpc FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_treasury FOUNDRY_CACHE_PATH=cache_treasury forge test --threads 1 --gas-limit 9000000000000000000 --match-contract ^AvalancheCashOnlyTreasuryRepayForkTest$ --match-test (testDetect|testRoles|testRepayBehalf) -vv --rpc-url https://api.avax.network/ext/bc/C/rpc --compute-units-per-second 20 --fork-retries 10 --fork-retry-backoff 1000 --skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAdapterUpgradeable.t.sol --skip AvalancheBorrowFloorMarginFork.t.sol'
+exit=1
+# UTC end: 2026-11-03T13:40:31Z

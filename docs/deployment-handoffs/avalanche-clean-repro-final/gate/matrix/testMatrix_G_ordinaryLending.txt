@@ -1,0 +1,117 @@
+Warning: Found unknown `metadata` config for profile `default` defined in foundry.toml.
+Warning: Found unknown `metadata_hash` config for profile `default` defined in foundry.toml.
+No files changed, compilation skipped
+warning: invalid natspec tag '@member', custom tags must use format '@custom:name'
+    ╭▸ contracts/PTokenInterfaces.sol:112:5
+    │
+112 │ ┏     /**
+113 │ ┃      * @notice Container for borrow balance information
+114 │ ┃      * @member principal Total balance (with accrued interest), after applying the most recent balance-changing action
+115 │ ┃      * @member interestIndex Global borrowIndex as of the most recent balance-changing action
+116 │ ┃      */
+    ╰╴┗━━━━━━━┛
+
+
+Ran 1 test for test/AvalancheCapacityMatrixFork.t.sol:AvalancheCapacityMatrixForkTest
+[PASS] testMatrix_G_ordinaryLending() (gas: 287932308)
+Logs:
+  OX|path wavax-collateral/usdc-debt|70|1|0|9000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|1|8000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|2|7000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|3|6000|1|209910|220355|6347|209910|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|4|5000|1|104955|110177|3173|104955|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|5|4000|1|52477|55088|1586|52477|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|6|3000|1|26238|27544|793|26238|0|END
+  OX|path wavax-collateral/usdc-debt|70|1|7|2000|1|22957|24101|693|3279|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|0|9000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|1|8000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|2|7000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|3|6000|5|1049550|1101775|31735|1049550|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|4|5000|5|524775|550885|15865|524775|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|5|4000|5|262385|275440|7930|262385|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|6|3000|5|131190|137720|3965|131190|0|END
+  OX|path wavax-collateral/usdc-debt|70|5|7|2000|5|114785|120505|3465|16395|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|0|9000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|1|8000|1|269885|283314|8161|269885|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|2|7000|1|134942|141657|4080|134942|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|3|6000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|4|5000|1|67471|70828|2040|67471|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|5|4000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|6|3000|1|50602|53121|1530|16867|0|END
+  OX|path wavax-collateral/usdc-debt|90|1|7|2000|1|14757|15492|445|2108|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|0|9000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|1|8000|5|1349425|1416570|40805|1349425|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|2|7000|5|674710|708285|20400|674710|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|3|6000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|4|5000|5|337355|354140|10200|337355|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|5|4000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|6|3000|5|253010|265605|7650|84335|0|END
+  OX|path wavax-collateral/usdc-debt|90|5|7|2000|5|73785|77460|2225|10540|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|0|9000|1|296873|311646|8977|296873|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|1|8000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|2|7000|1|148436|155823|4488|148436|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|3|6000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|4|5000|1|74218|77911|2244|74218|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|5|4000|1|55663|58432|1683|18554|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|6|3000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|1|7|2000|1|17393|18258|525|1159|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|0|9000|5|1484365|1558230|44885|1484365|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|1|8000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|2|7000|5|742180|779115|22440|742180|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|3|6000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|4|5000|5|371090|389555|11220|371090|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|5|4000|5|278315|292160|8415|92770|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|6|3000|0|0|0|0|0|0|END
+  OX|path wavax-collateral/usdc-debt|99|5|7|2000|5|86965|91290|2625|5795|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|0|11000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|1|12500|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|2|15000|1|393582|413167|11901|393582|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|3|17500|1|229589|241014|6942|229589|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|4|20000|1|131194|137722|3967|131194|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|5|25000|1|143493|150633|4337|20499|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|6|30000|1|12299|12911|371|12299|0|END
+  OX|path usdc-collateral/wavax-debt|70|1|7|40000|1|15368|16132|460|1026|1026|END
+  OX|path usdc-collateral/wavax-debt|70|5|0|11000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|1|12500|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|2|15000|5|1967910|2065835|59505|1967910|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|3|17500|5|1147945|1205070|34710|1147945|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|4|20000|5|655970|688610|19835|655970|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|5|25000|5|717465|753165|21685|102495|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|6|30000|5|61495|64555|1855|61495|0|END
+  OX|path usdc-collateral/wavax-debt|70|5|7|40000|5|76840|80660|2300|5130|5130|END
+  OX|path usdc-collateral/wavax-debt|90|1|0|11000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|1|12500|1|632542|664018|19128|210847|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|2|15000|1|126508|132803|3825|126508|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|3|17500|1|73796|77468|2231|73796|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|4|20000|1|63253|66400|1912|21084|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|5|25000|1|19765|20749|597|6588|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|6|30000|1|3953|4150|119|3953|0|END
+  OX|path usdc-collateral/wavax-debt|90|1|7|40000|1|3952|4149|118|1317|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|0|11000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|1|12500|5|3162710|3320090|95640|1054235|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|2|15000|5|632540|664015|19125|632540|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|3|17500|5|368980|387340|11155|368980|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|4|20000|5|316265|332000|9560|105420|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|5|25000|5|98825|103745|2985|32940|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|6|30000|5|19765|20750|595|19765|0|END
+  OX|path usdc-collateral/wavax-debt|90|5|7|40000|5|19760|20745|590|6585|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|0|11000|1|408201|428513|12343|408201|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|1|12500|1|347898|365209|10519|115966|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|2|15000|1|69579|73042|2104|69579|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|3|17500|1|40588|42607|1227|40588|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|4|20000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|5|25000|1|54356|57063|1642|3623|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|6|30000|1|2174|2282|65|2174|0|END
+  OX|path usdc-collateral/wavax-debt|99|1|7|40000|1|2727|2862|79|168|168|END
+  OX|path usdc-collateral/wavax-debt|99|5|0|11000|5|2041005|2142565|61715|2041005|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|1|12500|5|1739490|1826045|52595|579830|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|2|15000|5|347895|365210|10520|347895|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|3|17500|5|202940|213035|6135|202940|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|4|20000|0|0|0|0|0|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|5|25000|5|271780|285315|8210|18115|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|6|30000|5|10870|11410|325|10870|0|END
+  OX|path usdc-collateral/wavax-debt|99|5|7|40000|5|13635|14310|395|840|840|END
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 911.46ms (752.35ms CPU time)
+
+Ran 1 test suite in 940.88ms (911.46ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

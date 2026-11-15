@@ -1,0 +1,7 @@
+attempt	exit	class	reason
+1	1	TRANSIENT	52 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E at 76162516398901
+2	1	TRANSIENT	24 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 11111484104787
+3	1	TRANSIENT	24 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 94897168296887
+4	1	TRANSIENT	24 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 65170246858172
+5	1	TRANSIENT	24 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 94897168296887
+6	1	TRANSIENT	24 failure(s), all RPC infrastructure errors, first: [FAIL: EVM error; database error: failed to get storage for 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 at 11111484104787

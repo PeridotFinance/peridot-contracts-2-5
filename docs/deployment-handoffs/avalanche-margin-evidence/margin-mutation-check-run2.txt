@@ -1,0 +1,11 @@
+fork block pinned for every run below: 99835789
+baseline (unmutated): test_02c|test_02c|test_02d|test_02d
+  Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 8.66s (81.81ms CPU time)  (exit 0)
+W4: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions   [script: maintenance margin is 25% (pinned literal)]   (35 s)
+W5: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions, test_02d_pairRisk_followsTheCap_andTheCapIsBounded   [script: position cap = the cap (pinned literal and derivation)]   (32 s)
+W9: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions, test_02d_pairRisk_followsTheCap_andTheCapIsBounded   [script: debt cap = cap / 2]   (33 s)
+W10: KILLED by test_02d_pairRisk_followsTheCap_andTheCapIsBounded   [script: the cap is bounded by the pilot decision (USD 5,000)]   (37 s)
+W11: KILLED by test_02d_pairRisk_followsTheCap_andTheCapIsBounded   [script: the flash vault must cover the debt cap]   (35 s)
+W6: KILLED by test_02c_pairRisk_onChainEqualsTheDecisions   [script: slippage floor 100 bp (pinned literal)]   (32 s)
+
+mutants: 6  killed: 6  survived: none  invalid: none

@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "chainId": 43114,
+  "deployment": {
+    "controller": "UNSET",
+    "pWavax": "UNSET",
+    "pUsdc": "UNSET",
+    "oracle": "UNSET",
+    "deploymentBlock": "UNSET"
+  },
+  "pilot": {
+    "label": "PW30",
+    "wavaxCollateralFactorBp": 3000,
+    "usdcCollateralFactorBp": 0,
+    "usdcBorrowCapUsd": 5000,
+    "wavaxBorrowingDisabled": true,
+    "protectionCapitalUsd": 1191,
+    "operatorInventoryMinUsd": 3750,
+    "operatorInventoryTargetUsd": 4440,
+    "cashFloorBp": 2000
+  },
+  "operators": [
+    {
+      "name": "UNSET",
+      "address": "UNSET"
+    },
+    {
+      "name": "UNSET",
+      "address": "UNSET"
+    }
+  ],
+  "signer": {
+    "type": "foundry-keystore"
+  },
+  "alerts": {
+    "channel": "log"
+  },
+  "execution": {
+    "slippageBoundBp": 100
+  },
+  "reference": {
+    "toleranceBp": 500,
+    "minPoolLiquidity": "UNSET",
+    "minPoolLiquiditySource": {
+      "fromBlock": "UNSET",
+      "toBlock": "UNSET",
+      "samples": "UNSET",
+      "medianLiquidity": "UNSET",
+      "method": "UNSET"
+    }
+  },
+  "treasury": {
+    "address": "UNSET"
+  },
+  "monitor": {
+    "pollSeconds": 15,
+    "maxBlockLagSeconds": 60,
+    "reorgMarginBlocks": 10,
+    "logChunkBlocks": 100,
+    "logs": {
+      "chunkBlocks": 100,
+      "maxChunksPerCycle": 10,
+      "behindWarnBlocks": 600,
+      "behindCritBlocks": 3900
+    },
+    "statePath": "state/monitor-state.json",
+    "dustUsd1e18": "10000000000000000",
+    "avaxFeedWarnRatio": 0.5,
+    "avaxFeedCritRatio": 0.8,
+    "usdcFeedWarnRatio": 0.89,
+    "usdcFeedCritRatio": 0.95,
+    "minOperatorGasWei": "500000000000000000",
+    "utilisationWarnBp": 8000,
+    "borrowCapWarnBp": 9000,
+    "escalationSeconds": [
+      3600,
+      14400,
+      86400
+    ],
+    "noReferencePageSeconds": 900
+  },
+  "executor": {
+    "enabled": false,
+    "operator": "UNSET",
+    "keystorePath": "UNSET",
+    "passwordEnv": "OPERATOR_KEYSTORE_PASSWORD",
+    "convertToUsdc": true,
+    "minRepayUsdc": 1,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
+  },
+  "rebalancer": {
+    "enabled": false,
+    "keystorePath": "UNSET",
+    "passwordEnv": "REBALANCER_KEYSTORE_PASSWORD",
+    "vaults": [
+      {
+        "name": "USDC vault",
+        "address": "0x855bF832f26a294d28500db59eE941dE3d654129",
+        "deployIdleMinAssetUnits": "1000000"
+      },
+      {
+        "name": "WAVAX vault",
+        "address": "0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8",
+        "deployIdleMinAssetUnits": "100000000000000000"
+      }
+    ],
+    "edgeTicks": 5,
+    "minRebalanceIntervalSeconds": 3600,
+    "maxRebalanceLossBps": 50,
+    "maxDeployIdleLossBps": 50,
+    "maxActionsPerDay": 24,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
+  },
+  "margin": {
+    "enabled": false,
+    "executor": "UNSET",
+    "liquidator": "UNSET",
+    "riskEngine": "UNSET",
+    "config": "UNSET",
+    "watchHealthBps": 13000,
+    "liquidation": {
+      "enabled": false,
+      "dailyRepayCapUsdc": 2500,
+      "maxRepayPerCallUsdc": 1500,
+      "minRepayUsdc": 1,
+      "retryCooldownSeconds": 30,
+      "insolventCooldownSeconds": 600
+    }
+  },
+  "keeper": {
+    "enabled": true,
+    "keystorePath": "UNSET",
+    "passwordEnv": "KEEPER_KEYSTORE_PASSWORD",
+    "dailySpendCapUsdc": "UNSET",
+    "confirmEvaluations": 2,
+    "confirmSeconds": 60,
+    "allowanceMarginBp": 10,
+    "maxFeeGwei": 100,
+    "minGasWei": "500000000000000000"
+  }
+}

@@ -1,0 +1,23 @@
+R3 mutation probe: test_probe_R3 (12 unskewed states x USDC and WAVAX vault, the assertions of _violates plus previewDeposit-on-ownership-basis plus
+"R2: no pool swap sold the paired token" plus "R2: at most 10 bp of the deposit left idle"), one mutant of PharaohLiquidityVaultR3.sol at a time, source restored after each.
+A mutant is KILLED when at least one of the two vault tests fails.
+
+baseline                                                           PASS (both vaults)
+M1 mint on the HAIRCUT NAV (R1 removed)                            KILLED  (incumbent moved / closed form / previewDeposit basis)      [run before the idle assertion was added; the added assertions can only kill more]
+M2 net contribution on N, denominator on the haircut NAV           KILLED  (same)                                                         [same note]
+M3 R2 removed (deploy as before, R1 kept)                          KILLED  (incumbent moved beyond rounding; deposit left >10 bp idle)
+M4 R2 swaps twice the proportional amount                          KILLED  (USDC or WAVAX vault: the probe deposit is refused by the vault's guards; the other vault passes)
+M5 previewDeposit left on the haircut basis                        KILLED  (previewDeposit not on the ownership basis)                    [run before the idle assertion was added]
+M6 after-deposit NAV on the haircut valuation                      KILLED  (the probe deposit is refused)                                  [same note]
+M7 R2 swaps half the proportional amount                           KILLED  (deposit left >10 bp idle: 25% / 69% of it)
+M8 R2 composition denominator on the haircut NAV (totalAssets)     KILLED  (deposit left >10 bp idle)
+M8b R2 composition denominator nBefore + assets                    KILLED  (deposit left >10 bp idle)
+M9 R2 swaps half of the deposit regardless of the composition      SURVIVES  Not a defect of the probe: at the probe states the position is ~50/50, which is the vault's own composition, so x = assets/2
+                                                                   equals the closed form up to rounding. It differs from R2 only when the composition is far from 50/50 (and then every incumbent
+                                                                   check in the 144-state grid applies). Documented as equivalent at probe resolution.
+
+M3's first run (before the idle/swap-direction assertions existed) SURVIVED the probe: R2's effect on an incumbent is second order (up to ~12 ppm of D in the model),
+so the probe was extended with two direct observations of R2 (swap direction and idle remainder) instead of a tighter tolerance. The swap-direction assertion
+(`soldPaired`) also runs in every one of the 144 grid states. The idle remainder is NOT asserted in the grid: deposits of 100-300% of NAV or into a skewed spot
+legitimately leave part of the deposit idle (it counts in NAV and the incumbent checks pass); a first version of the grid asserted it and the 8 + 1 states it flagged
+in the WAVAX vault were exactly those.

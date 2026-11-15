@@ -293,3 +293,58 @@ gMon(18 decimals): 0x8498312A6B3CbD158bf0c93AbdCF29E6e4F55081
 AUSD(6 decimals): 0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a
 MON Sentinel: 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
 WMON(18 decimals): 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A
+
+
+Avalanche C-Chain mainnet (chain 43114), cash-only lending pilot PW30, deployed 9 Nov 2026 (block 99846691), admin and signer: the Ledger 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD. Machine-readable copy with ABIs: docs/deployment-handoffs/avalanche-pilot-addresses.json (margin and vault addresses are added there when they are deployed).
+
+Unitroller (Proxy USE THIS): 0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A
+PeridottrollerAvalanche (Implementation): 0x4419aD340b3a4cf71303C7247dDA3AfF9BF41Ad6
+GuardedAvalanchePriceOracle: 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+AvalanchePriceOracle (inner source): 0x74eB16D81fD3B484C97ECddcdBd4Cf644016c84f
+ConfigurableJumpRateModelV2: 0xe5a82bF40b493cf37C06851A934370F3f0896263
+PErc20Delegator pWAVAX (Proxy use this): 0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1
+PErc20Delegator pUSDC (Proxy use this): 0x0f7849CD9E54ffb027aacaEec82007cca9470098
+PErc20Delegate (Implementation, both markets): 0xAB5a72E10eE33e19b7fE119C6771886141624f11
+AvalancheMarketBootstrapper (single use, done): 0xf8541dfef0E5A5aA4C158196EB8Db318ef77DD4C
+
+WAVAX (18 decimals): 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+USDC (6 decimals, native): 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E
+
+Avalanche Pharaoh vaults (existing proxies, opened 9 Nov 2026 at USD 200 per vault; R3 share-pricing implementation live, see docs/deployment-handoffs/avalanche-pilot-addresses.json):
+USDC vault (proxy): 0x855bF832f26a294d28500db59eE941dE3d654129
+WAVAX vault (proxy): 0xe9a53f0077f9cf767a95Ce75Da483E906eE190E8
+Safe (owner, 1 of 1 = the Ledger): 0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12
+PharaohRewardExtensionR3 (current implementation of both): 0x92bBeec3e2F95A64494e92638420654400467F4a
+PharaohLiquidityVaultR3 (its base): 0x8f6632E2Db9f333466E83d5fEBDE54EBff81D60a
+Previous implementation (rollback): 0x165E1f072e7bEeDf94f14F732838354cA20bA45d
+
+<!-- BEGIN GENERATED: avalanche-margin-2x (contracts/tools/gen-margin-addresses-md.py from docs/deployment-handoffs/avalanche-pilot-addresses.json; do not edit between the markers) -->
+
+Avalanche C-Chain mainnet (chain 43114), MARGIN 2x on top of PW30 (long WAVAX against USDC, up to 2x, one isolated account per position), enabled 2026-11-11 (block 100015218, tx 0x38ac3402768a37e95916e13dfd20d0232bc11b9512e0645db00748140826c6f2). Owner of every contract and proxy admin: the Ledger 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (an EOA, not the Safe). Pilot caps: position USD 200, debt USD 100. Machine-readable copy with ABIs: docs/deployment-handoffs/avalanche-pilot-addresses.json (key margin). Frontend notes: docs/deployment-handoffs/avalanche-margin-frontend-handoff.md.
+
+IsolatedMarginExecutorUpgradeable (Proxy USE THIS: open, add margin, repay, close): 0x445D51c8A684139e0Ec215C3Ed827D94Ee8b53af
+IsolatedMarginVaultUpgradeable (Proxy: margin deposits, pUSDC): 0x64DD15BD97aA41AAb46B963AFcBd2120f54fe0Ce
+IsolatedMarginQuoter (opening quote): 0x066328FDCB526F57E69b2Ee2C196dE7a8465023E
+IsolatedMarginRiskEngineUpgradeable (Proxy: metrics, health factor; the controller's isolated-margin risk hook): 0xE022c90DB98ea8B1615c5B422Cbf46878B76a470
+IsolatedMarginConfigUpgradeable (Proxy: pair risk, fees, opensPaused): 0x5d59C647CC4bD6C05b4E9205c23062d490699631
+MarginOrderRegistry (Proxy: take-profit / stop-loss orders): 0x4676C8Cf50CEd18683d255faEC4DaA882cbef440
+AvalancheMarginCloseAdapter (order close path): 0x669715b4fcb5731554fF79C67931DC4f821A9de8
+IsolatedMarginLiquidatorUpgradeable (Proxy): 0xaB9B345A32a338B15C2Bde6EFB0B42CDDFee3578
+SimpleFlashLoanVault (USDC flash lender, fee 0): 0x73B06542582e650925461194183C4882f6C0475b
+IsolatedMarginSwapModule: 0x07206bC8700Ea518c57C11AAa691Af27c060ed98
+PharaohCLRouterAdapter (the one WAVAX/USDC pool route): 0x727b6F8FAc93b200CD9e04684D72193E546A04Be
+IsolatedMarginAccountFactory: 0xa52982C91D4dAA063820E11f9a5Dac19C53f33d2
+IsolatedMarginAccount (Implementation cloned once per position): 0x46Fdf5F52FF596898c9c9d1566aC338aDDddFBDC
+MarginFeeDistributorUpgradeable (Proxy): 0xdEF32Cd4095907146cA977FD18C07f44cb9a8eEE
+MarginInsuranceFundUpgradeable (Proxy): 0x8CbFF3c556B182bCaf4ba02257D5f9B8f994794E
+GuardedAvalanchePriceOracle (the PW30 oracle, reused): 0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0
+IsolatedMarginExecutorUpgradeable (Implementation): 0xc62dF326F43AAc75fDc2Bb5FC9658C8da17736f0
+MarginOrderRegistry (Implementation): 0xA744A226C9C29586Dd949BE5d53f0D0dD503a7D3
+
+Pair (the only one enabled): margin and debt pUSDC 0x0f7849CD9E54ffb027aacaEec82007cca9470098, position pWAVAX 0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1; USDC 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E, WAVAX 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7; controller (Unitroller) 0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A
+Pair risk (read from chain): max leverage 200/100, initial margin 5000 bp, maintenance 2500 bp, liquidation target 12500 bp, full liquidation at health <= 5000 bp, max partial liquidation 5000 bp of the debt, bonus 500 bp, max slippage 100 bp, oracle deviation 100 bp
+Funded liquidators (liquidateFunded): 0xA7640fc537E2172eD6c4b4A809C9456AbD60fbF4, 0xfbb137eBcBb0F7eb2Ba70F59ff0be9B0A0c5125d
+Flash vault: USDC only, fee 0 bp, balance 100 USDC. Insurance fund seed: 10 USDC (as pUSDC).
+Swap venue: Pharaoh CL pool 0xf01449C0bA930B6e2CaCA3DEF3CCBd7a3E589534 (tick spacing 10), router 0xc8B8fCbDb5C019D7802fFb0b39603395D7d3915c
+
+<!-- END GENERATED: avalanche-margin-2x -->

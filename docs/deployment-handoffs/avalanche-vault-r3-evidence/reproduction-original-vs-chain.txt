@@ -1,0 +1,5 @@
+Byte-for-byte reproduction of the DEPLOYED code from the verified sources (forge 1.7.1, solc 0.8.35, optimizer 200, via-IR, evm osaka, bytecode_hash none), read-only
+`cast code ... --block 99580000` against the private endpoint (ETH_RPC_URL from the environment, never printed):
+
+PharaohLiquidityVault  (base 0x37E28a2C9FA3bBdab81efA69D5D480f5107a3770): local 24153 bytes; chain 24153 bytes; identical: True  (keccak 0x416f2a81...26ef = BASE_CODEHASH of the extension)
+PharaohRewardExtension (ext  0x165E1f072e7bEeDf94f14F732838354cA20bA45d): local  2219 bytes; chain  2219 bytes; identical: True  (keccak 0x4fa61d2d...2e4b)
