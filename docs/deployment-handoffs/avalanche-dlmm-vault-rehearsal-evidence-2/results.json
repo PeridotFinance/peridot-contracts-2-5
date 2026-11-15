@@ -1,0 +1,162 @@
+{
+  "steps": [
+    {
+      "name": "S0 fork facts",
+      "ms": 1012,
+      "ok": true
+    },
+    {
+      "name": "S1 actors, funding (anvil_setBalance / anvil_setStorageAt, fork only)",
+      "ms": 1635,
+      "ok": true
+    },
+    {
+      "name": "S2a STAGE 0 read-only pre-flight with cast (tools/dlmm-vault-stage0.sh)",
+      "ms": 1186,
+      "ok": true
+    },
+    {
+      "name": "S2 negative pre-flights: nothing is broadcast",
+      "ms": 562,
+      "ok": true
+    },
+    {
+      "name": "S3 DEPLOY (ceremony wrapper, rehearsal mode)",
+      "ms": 3165,
+      "ok": true
+    },
+    {
+      "name": "S4 READ-BACK stage 1 (forge script, read-only) + negative",
+      "ms": 1497,
+      "ok": true
+    },
+    {
+      "name": "S5 while paused (the window before the MultiSend)",
+      "ms": 977,
+      "ok": true
+    },
+    {
+      "name": "S6 SAFE MultiSend [unpause, USDC.approve, deposit(seed, DEAD)] (tools/dlmm-safe-multisend.sh)",
+      "ms": 2450,
+      "ok": true
+    },
+    {
+      "name": "S7 deposits: Ledger 100 USDC, Bob up to the cap",
+      "ms": 2582,
+      "ok": true
+    },
+    {
+      "name": "S8 keeper: validate-config, dry `check`, dry open-band, LIVE `open-band --send`",
+      "ms": 5712,
+      "ok": true
+    },
+    {
+      "name": "S9 keeper daemon (live) + REAL swap pushes the active bin out; watch the re-centre",
+      "ms": 79964,
+      "ok": true
+    },
+    {
+      "name": "S10 harvestRewards after 6 h of chain time (keeper stopped)",
+      "ms": 803,
+      "ok": true
+    },
+    {
+      "name": "S11 PAUSE / ROLLBACK procedure on the fork",
+      "ms": 15071,
+      "ok": true
+    },
+    {
+      "name": "S12 EXITS: redeem (USDC out) and redeemInKind by everyone; seed last (fork only); vault empty",
+      "ms": 3822,
+      "ok": true
+    }
+  ],
+  "gas": {
+    "deployImplementation": 6109695,
+    "deployProxyInit": 1234044,
+    "step0 Ledger USDC.transfer(Safe, seed)": 62159,
+    "safeMultiSend": 317296,
+    "deposit Ledger (first real deposit, idle)": 233799,
+    "deposit Bob (up to the cap, idle)": 238611,
+    "openBand": 746366,
+    "traderSwap": 242416,
+    "rebalance": 901632,
+    "harvestRewards": 288848,
+    "Safe tx: pause()": 87508,
+    "REAL redeemInKind(1000) while PAUSED": 370923,
+    "REAL redeem(1000, USDC out) while PAUSED": 447378,
+    "Safe tx: unpause()": 65144,
+    "Safe tx: setDepositCap(1)": 70913,
+    "Safe tx: setDepositCap(0) (zero-cap behaviour: closed, NOT unlimited as in R3)": 66101,
+    "Safe tx: setDepositCap(200000000)": 88037,
+    "Safe tx: setGuardParams(legBandBps 75)": 76258,
+    "Safe tx: setGuardParams(defaults restored)": 76258,
+    "Safe tx: setRebalancer(Ledger)": 71358,
+    "Safe tx: setRebalancer(keeper)": 71358,
+    "tripGuard (anyone)": 107841,
+    "REAL redeemInKind(1000) while LATCHED with the feed out of band": 331872,
+    "Safe tx: clearGuard()": 160874,
+    "redeem (USDC out) half of the Ledger shares": 450697,
+    "redeemInKind Ledger (remaining half)": 327096,
+    "redeemInKind Bob": 327096,
+    "redeemInKind seed holder 0xdEaD (FORK ONLY: on mainnet the seed is never redeemed)": 305574
+  },
+  "ppm": {
+    "depositLedger": 0,
+    "depositBob": 0,
+    "openBand": 63.035,
+    "rebalance": 288.307,
+    "redeemUsdcOut": -252.766,
+    "redeemInKind Ledger (remaining half)": 0.04,
+    "redeemInKind Bob": 0.02,
+    "redeemInKind seed holder 0xdEaD (FORK ONLY: on mainnet the seed is never redeemed)": 0,
+    "ROUND TRIP Ledger": 137.31,
+    "ROUND TRIP Bob": 274.126,
+    "ROUND TRIP Seed": 263
+  },
+  "notes": [],
+  "failures": [],
+  "facts": {
+    "chainId": 43114,
+    "block": 100427888,
+    "blockTs": 1794783874,
+    "wall": 1794783880,
+    "feedUsdcAns": "99975181",
+    "feedUsdcAgeS": 30666,
+    "feedUsdtAns": "99934000",
+    "feedUsdtAgeS": 24178,
+    "activeId": 8388605,
+    "safeOwners": [
+      "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD"
+    ],
+    "safeNonce": "19",
+    "ledgerUsdc": "7.697374",
+    "ledgerAvax": "19.960262700078401479",
+    "rewarderBeaconImpl": "0x9b9d60557b639EDa795BCc28822fa6214C29CEb2",
+    "rewarderImplCodehash": "0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355"
+  },
+  "stage0": "PASS  1  chain id: 43114\nPASS  2  Safe owners: [0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD]\nPASS  2  Safe threshold: 1\nPASS  2  Safe version: \"1.4.1\"\nINFO  2  Safe nonce (record it): 19\nINFO  3  Ledger AVAX 10.000000000000000000   Ledger USDC 300000000 raw   Safe USDC 0 raw\nPASS  MultiSendCallOnly v1.4.1 codehash at 0x9641d764fc13c8B624c04430C7356C1C7C8102e2: 0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939\nPASS  4  pair tokenX (USDt): 0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7\nPASS  4  pair tokenY (USDC): 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E\nPASS  5  bin step: 1\nPASS  5  pair factory: 0xEb480050b016f6c6d45203D2346B68bDDDa23D4D\nINFO  5  factory.getLBPairInformation(USDt, USDC, 1) = (1, 0x16888EE58E706C253b821EAA637ae9b2cFeA255C, true, false)\nPASS  5  factory registers the pair\nPASS  6  pair hook (low 160 bits of getLBHooksParameters): 0x32e68c4b8edc6d1f16e99eba826b292fdc18dadc\nPASS  6  rewarder.isLinked(): true\nINFO  7  voter = rewarder.owner() = 0x922b9Ca8e2207bfB850B6FF647c054d4b58a2Aa7\nINFO  7  beacon = voter.dlmmRewarderFactory() = 0xd28467eDe84cEde6B05070779E39Eaff4988548C\nPASS  7  beacon lists the rewarder for the pair: 0x32E68C4b8Edc6d1F16E99EbA826B292FDC18daDC\nINFO  7  beacon implementation = 0x9b9d60557b639EDa795BCc28822fa6214C29CEb2\nINFO  7  REWARDER_IMPL_CODEHASH = 0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355   <- record this value; it is the EXPECTED_REWARDER_IMPL_CODEHASH of the deploy (keccak256 of the implementation's runtime code = EXTCODEHASH)\nPASS  8  router is an authorised DLMM manager: true\nPASS  8  router factory: 0xEb480050b016f6c6d45203D2346B68bDDDa23D4D\nPASS  9  feed 0xF096872672F44d6EBA71458D74fe67F9a77a23B9 decimals: 8\nPASS  9  feed 0xF096872672F44d6EBA71458D74fe67F9a77a23B9 answer 99975181 (inside 1.00 +- 0.50 %) age 30670 s (<= 93600)\nPASS  9  feed 0xEBE676ee90Fe1112671f19b6B7459bC678B67e8a decimals: 8\nPASS  9  feed 0xEBE676ee90Fe1112671f19b6B7459bC678B67e8a answer 99934000 (inside 1.00 +- 0.50 %) age 24182 s (<= 93600)\nINFO  10 pool active id: 8388605 [8.388e6]   (about 8388598 to 8388608 is normal; the peg bin is 8388608)\nPASS  11 deployer nonce (fresh key): 0\nPASS  11 deployer has no code: 0x\nINFO  11 deployer AVAX: 100.000000000000000000\nPASS  12 planned implementation has no code: 0x\nPASS  12 planned proxy has no code: 0x\nINFO  12 planned implementation 0xAdfd8A262adCbefc6d4cDA635819cC689426dF40  planned proxy (the vault) 0x586E8c79C54E335c1E909a162427e90a51935b6A\nPASS  11 keeper has no code: 0x\nSTAGE 0: ALL CHECKS PASSED\n",
+  "deployTxs": [
+    {
+      "hash": "0xf19c3d5a41f389cafa00f853dbf2d30852c575ea48db9ebef658939d00f4b7fe",
+      "gasUsed": 6109695,
+      "gasPrice": 2951498352,
+      "kind": "PharaohDlmmVault",
+      "addr": "0xadfd8a262adcbefc6d4cda635819cc689426df40"
+    },
+    {
+      "hash": "0xde4c71f9a23b14f7d00de6bd6fb27cb4770572ff792a1a2114253b77c9adf2ce",
+      "gasUsed": 1234044,
+      "gasPrice": 2638913417,
+      "kind": "TransparentUpgradeableProxy",
+      "addr": "0x586e8c79c54e335c1e909a162427e90a51935b6a"
+    }
+  ],
+  "readbackStage1": "== read-back (rehearsal), stage 1: read-only, no broadcast\nNo files changed, compilation skipped\nScript ran successfully.\n\n== Logs ==\n  == read-back, stage 1, chain 43114, block 100427896\n  vault (proxy)            0x586E8c79C54E335c1E909a162427e90a51935b6A\n  implementation           0xAdfd8A262adCbefc6d4cDA635819cC689426dF40\n  proxy admin (ProxyAdmin) 0xD9ab0825FfC0a5D7b4f93ae94044b0b12328AE5c\n  ProxyAdmin owner         0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12   (expect the Safe)\n  implementation.owner()   0x0000000000000000000000000000000000000000   (expect 0: initializers disabled)\n  validator CREATE(impl,1) 0x2db592b1F1cc547F2173D0F29780717c1B4e10C4   code bytes 3680\n  vault owner              0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12   (expect the Safe)\n  rebalancer               0x09F21a721B3443eb855B84f92bFf73dBd13C158a   (expect the keeper wallet)\n  asset                    0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E\n  pairToken                0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7\n  tokenX / tokenY          0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7 / 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E   assetIsX false\n  pair                     0x16888EE58E706C253b821EAA637ae9b2cFeA255C\n  router                   0xff2BEFC4ff86CB0f3e8D3d9D6200B7A05BF5D93d\n  factory                  0xEb480050b016f6c6d45203D2346B68bDDDa23D4D\n  rewarder                 0x32E68C4b8Edc6d1F16E99EbA826B292FDC18daDC\n  rewarderBeacon           0xd28467eDe84cEde6B05070779E39Eaff4988548C\n  rewardToken (PHAR)       0x13A466998Ce03Db73aBc2d4DF3bBD845Ed1f28E7\n  feedAsset (USDC/USD)     0xF096872672F44d6EBA71458D74fe67F9a77a23B9\n  feedPair  (USDT/USD)     0xEBE676ee90Fe1112671f19b6B7459bC678B67e8a\n  binStep                  1\n  rewarderImplCodehash     0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355\n  live beacon impl hash    0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355\n  name / symbol / decimals Peridot Pharaoh DLMM USDC/USDt / pdUSDC / 6\n  depositCap               200000000   (expect 200000000)\n  DEPOSIT_CAP_CEILING      200000000   (expect 200000000)\n  maxDeposit(Ledger)       0\n  guardParams legBandBps 50 maxFeedAge 93600 maxPoolOracleDevBps 60\n  guardParams cooldown 120 maxRebalancesPerDay 48 maxSwapBps 6000\n  guardParams maxRebalanceLossBps 50\n  guardState unsafe false latched false reasons 0   (expect false false 0)\n  bandState lower 0 upper 0 active 8388605\n  bandState hasBand false outOfRange false   (expect false false)\n  paused                   true\n  totalSupply / totalAssets 0 / 0   (stage 1: expect paused = true and an empty vault)\n  deployer 0xBd59900e51ABa6ecF0388219d243273DF2174588 nonce 2 (expect 2)\n  deployer balance (wei)   99978710710007509012\n  deployer USDC / vault shares 0 / 0\n  READ-BACK OK\n",
+  "runtimeCode": "proxy 0x586E8c79C54E335c1E909a162427e90a51935b6A   implementation 0xadfd8a262adcbefc6d4cda635819cc689426df40   validator(CREATE(impl,1)) 0x2db592b1F1cc547F2173D0F29780717c1B4e10C4   ProxyAdmin 0xd9ab0825ffc0a5d7b4f93ae94044b0b12328ae5c (CREATE(proxy,1) = 0xD9ab0825FfC0a5D7b4f93ae94044b0b12328AE5c)\nPharaohDlmmVault: runtime code equals the build output (24051 bytes; 4 immutable slot(s) masked and ASSERTED: 0xbebc200, 0x2db592b1f1cc547f2173d0f29780717c1b4e10c4)\nPharaohDlmmPairValidator: runtime code equals the build output (3680 bytes; 0 immutable slot(s) masked and ASSERTED: none)\nTransparentUpgradeableProxy: runtime code equals the build output (752 bytes; 1 immutable slot(s) masked and ASSERTED: 0xd9ab0825ffc0a5d7b4f93ae94044b0b12328ae5c)\nProxyAdmin: runtime code equals the build output (838 bytes; 0 immutable slot(s) masked and ASSERTED: none)\nall four contracts equal the build output and every immutable equals its expected value\n",
+  "readbackStage2": "== read-back (rehearsal), stage 2: read-only, no broadcast\nNo files changed, compilation skipped\nScript ran successfully.\n\n== Logs ==\n  == read-back, stage 2, chain 43114, block 100427901\n  vault (proxy)            0x586E8c79C54E335c1E909a162427e90a51935b6A\n  implementation           0xAdfd8A262adCbefc6d4cDA635819cC689426dF40\n  proxy admin (ProxyAdmin) 0xD9ab0825FfC0a5D7b4f93ae94044b0b12328AE5c\n  ProxyAdmin owner         0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12   (expect the Safe)\n  implementation.owner()   0x0000000000000000000000000000000000000000   (expect 0: initializers disabled)\n  validator CREATE(impl,1) 0x2db592b1F1cc547F2173D0F29780717c1B4e10C4   code bytes 3680\n  vault owner              0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12   (expect the Safe)\n  rebalancer               0x09F21a721B3443eb855B84f92bFf73dBd13C158a   (expect the keeper wallet)\n  asset                    0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E\n  pairToken                0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7\n  tokenX / tokenY          0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7 / 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E   assetIsX false\n  pair                     0x16888EE58E706C253b821EAA637ae9b2cFeA255C\n  router                   0xff2BEFC4ff86CB0f3e8D3d9D6200B7A05BF5D93d\n  factory                  0xEb480050b016f6c6d45203D2346B68bDDDa23D4D\n  rewarder                 0x32E68C4b8Edc6d1F16E99EbA826B292FDC18daDC\n  rewarderBeacon           0xd28467eDe84cEde6B05070779E39Eaff4988548C\n  rewardToken (PHAR)       0x13A466998Ce03Db73aBc2d4DF3bBD845Ed1f28E7\n  feedAsset (USDC/USD)     0xF096872672F44d6EBA71458D74fe67F9a77a23B9\n  feedPair  (USDT/USD)     0xEBE676ee90Fe1112671f19b6B7459bC678B67e8a\n  binStep                  1\n  rewarderImplCodehash     0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355\n  live beacon impl hash    0x91ac083cbb550e8aeb1def2053f468cea00cf113ce364067f3832e34c4193355\n  name / symbol / decimals Peridot Pharaoh DLMM USDC/USDt / pdUSDC / 6\n  depositCap               200000000   (expect 200000000)\n  DEPOSIT_CAP_CEILING      200000000   (expect 200000000)\n  maxDeposit(Ledger)       199000000\n  guardParams legBandBps 50 maxFeedAge 93600 maxPoolOracleDevBps 60\n  guardParams cooldown 120 maxRebalancesPerDay 48 maxSwapBps 6000\n  guardParams maxRebalanceLossBps 50\n  guardState unsafe false latched false reasons 0   (expect false false 0)\n  bandState lower 0 upper 0 active 8388605\n  bandState hasBand false outOfRange false   (expect false false)\n  paused                   false\n  seed holder 0x000000000000000000000000000000000000dEaD shares 1000000   (expect >= 1000000)\n  totalSupply 1000000 totalAssets 1000000\n  deployer 0xBd59900e51ABa6ecF0388219d243273DF2174588 nonce 2 (expect 2)\n  deployer balance (wei)   99978710710007509012\n  deployer USDC / vault shares 0 / 0\n  READ-BACK OK\n",
+  "exitToRecentreSec": 64.73,
+  "pharHarvested": "2522518306666506802",
+  "vaultEmpty": true,
+  "totalSeconds": 122.111
+}

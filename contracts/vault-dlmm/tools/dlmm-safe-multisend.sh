@@ -72,7 +72,8 @@ fi
 : "${ETH_RPC_URL:?ETH_RPC_URL must be set in the environment (read-only endpoint; never an argument)}"
 # ---- preconditions (read-only)
 [ "$(cast chain-id)" = 43114 ] || { echo "chain id is not 43114" >&2; exit 1; }
-[ "$(cast code "$MULTISEND" | wc -c)" -gt 10 ] || { echo "no code at MultiSendCallOnly $MULTISEND" >&2; exit 1; }
+# a delegatecall target: its identity is pinned by runtime-code hash (safe-global/safe-deployments v1.4.1 multi_send_call_only.json codeHash), not just by presence
+[ "$(cast keccak "$(cast code "$MULTISEND")")" = 0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939 ] || { echo "MultiSendCallOnly $MULTISEND is not the pinned v1.4.1 code: STOP" >&2; exit 1; }
 [ "$(cast call "$SAFE" 'getOwners()(address[])')" = "[$LEDGER]" ] || { echo "Safe owners are not exactly [the Ledger]" >&2; exit 1; }
 echo "Safe nonce before: $(cast call "$SAFE" 'nonce()(uint256)')"
 PAUSED="$(cast call "$V" 'paused()(bool)')"; SUPPLY="$(cast call "$V" 'totalSupply()(uint256)' | awk '{print $1}')"

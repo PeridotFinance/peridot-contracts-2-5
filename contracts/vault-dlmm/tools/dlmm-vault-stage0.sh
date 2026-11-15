@@ -22,7 +22,9 @@ chk "2  Safe threshold" "$(cast call $SAFE 'getThreshold()(uint256)')" 1
 chk "2  Safe version" "$(cast call $SAFE 'VERSION()(string)')" '"1.4.1"'
 echo "INFO  2  Safe nonce (record it): $(cast call $SAFE 'nonce()(uint256)')"
 echo "INFO  3  Ledger AVAX $(cast balance $LEDGER --ether)   Ledger USDC $(cast call $USDC 'balanceOf(address)(uint256)' $LEDGER | awk '{print $1}') raw   Safe USDC $(cast call $USDC 'balanceOf(address)(uint256)' $SAFE | awk '{print $1}') raw"
-[ "$(cast code $MULTISEND | wc -c)" -gt 10 ] && echo "PASS  MultiSendCallOnly has code at $MULTISEND" || { echo "FAIL  no code at MultiSendCallOnly"; FAIL=1; }
+# MultiSendCallOnly v1.4.1 is a DELEGATECALL target of the Safe: presence of code is not identity, so its runtime-code hash is pinned to the value in safe-global/safe-deployments
+# (src/assets/v1.4.1/multi_send_call_only.json, codeHash; chain 43114 listed as "canonical" at 0x9641d764...02e2)
+chk "MultiSendCallOnly v1.4.1 codehash at $MULTISEND" "$(cast keccak "$(cast code $MULTISEND)")" 0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939
 chk "4  pair tokenX (USDt)" "$(cast call $PAIR 'getTokenX()(address)')" $USDT
 chk "4  pair tokenY (USDC)" "$(cast call $PAIR 'getTokenY()(address)')" $USDC
 chk "5  bin step" "$(cast call $PAIR 'getBinStep()(uint16)')" 1

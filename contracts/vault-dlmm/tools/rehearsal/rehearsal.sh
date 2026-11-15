@@ -6,7 +6,8 @@
 #   in which AVALANCHE_MAINNET_RPC_URL / ETH_RPC_URL point at the LOCAL anvil. All output passes through a redaction of http(s) URLs.
 # - compile first (no lock), take the lock (mkdir, retry every 30 s), release it in EVERY exit path (trap); lock minutes go to <out-dir>/lock-minutes.log.
 # - kills only the anvil and keeper PIDs it started; removes the scratch dir (it holds a throwaway keystore, mode 600).
-# - exit 42 on any sign of an HTTP 429 / rate limit (stop, report, do not switch providers).
+# - exit 42 on any sign of an HTTP 429 / rate limit that reaches the harness (stop, report, do not switch providers). anvil runs --silent with its output discarded and retries
+#   rate limits internally, so a 429 it absorbs is NOT visible here.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; PROJ="$(cd "$HERE/../.." && pwd)"
 OUT="${1:?usage: rehearsal.sh <out-dir>}"; mkdir -p "$OUT"

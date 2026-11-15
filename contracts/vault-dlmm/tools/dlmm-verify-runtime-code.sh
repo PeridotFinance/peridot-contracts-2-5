@@ -12,10 +12,11 @@ VALIDATOR="$(cast compute-address "$IMPL" --nonce 1 | awk '{print $NF}')"
 PADMIN_CHECK="$(cast compute-address "$V" --nonce 1 | awk '{print $NF}')"
 echo "proxy $V   implementation $IMPL   validator(CREATE(impl,1)) $VALIDATOR   ProxyAdmin $ADMIN (CREATE(proxy,1) = $PADMIN_CHECK)"
 [ "$(echo "$ADMIN" | tr A-Z a-z)" = "$(echo "$PADMIN_CHECK" | tr A-Z a-z)" ] || { echo "the ProxyAdmin is not CREATE(proxy, 1)" >&2; exit 1; }
-check() { # name artifact-dir address expected-immutable-word-or-empty
+word() { local a="${1#0x}"; printf '%064s' "$(echo "$a" | tr A-Z a-z)" | tr ' ' 0; }
+check() { # name artifact-dir address expected-immutable-words (64 hex each; the SET of distinct immutable values must equal them)
   local code; code="$(cast code "$3")"
   node -e '
-const fs=require("fs");const [name,art,code,imm]=process.argv.slice(1);
+const fs=require("fs");const [name,art,code,...exp]=process.argv.slice(1);
 const j=JSON.parse(fs.readFileSync(`out/${art}.sol/${name}.json`,"utf8"));
 const want=j.deployedBytecode.object.replace(/^0x/,"").toLowerCase();const got=code.replace(/^0x/,"").toLowerCase();
 if(want.length!==got.length){console.log(`${name}: LENGTH DIFFERS build ${want.length/2} bytes, chain ${got.length/2} bytes`);process.exit(1);}
@@ -23,11 +24,14 @@ const refs=Object.values(j.deployedBytecode.immutableReferences||{}).flat();
 const masked=new Array(want.length).fill(false);const vals=[];
 for(const r of refs){for(let i=0;i<r.length*2;i++)masked[r.start*2+i]=true;vals.push(got.slice(r.start*2,(r.start+r.length)*2));}
 for(let i=0;i<want.length;i++){if(!masked[i]&&want[i]!==got[i]){console.log(`${name}: MISMATCH at byte ${Math.floor(i/2)}`);process.exit(1);}}
-console.log(`${name}: runtime code equals the build output (${got.length/2} bytes; ${refs.length} immutable slot(s) masked: ${[...new Set(vals)].map(v=>"0x"+v.replace(/^0+/,"")).join(", ")||"none"})`);
-' "$1" "$2" "$code"
+const distinct=[...new Set(vals)].sort();const want2=[...exp].map(x=>x.toLowerCase()).sort();
+if(JSON.stringify(distinct)!==JSON.stringify(want2)){console.log(`${name}: IMMUTABLES DIFFER: chain has [${distinct.map(v=>"0x"+v.replace(/^0+/,"")).join(", ")}] expected [${want2.map(v=>"0x"+v.replace(/^0+/,"")).join(", ")}]`);process.exit(1);}
+console.log(`${name}: runtime code equals the build output (${got.length/2} bytes; ${refs.length} immutable slot(s) masked and ASSERTED: ${distinct.map(v=>"0x"+v.replace(/^0+/,"")).join(", ")||"none"})`);
+' "$1" "$2" "$code" "${@:4}"
 }
-check PharaohDlmmVault PharaohDlmmVault "$IMPL"
+CEIL="$(printf '%064x' 200000000)"
+check PharaohDlmmVault PharaohDlmmVault "$IMPL" "$CEIL" "$(word "$VALIDATOR")"   # DEPOSIT_CAP_CEILING = 200000000 and VALIDATOR = CREATE(implementation, 1)
 check PharaohDlmmPairValidator PharaohDlmmPairValidator "$VALIDATOR"
-check TransparentUpgradeableProxy TransparentUpgradeableProxy "$V"
+check TransparentUpgradeableProxy TransparentUpgradeableProxy "$V" "$(word "$ADMIN")"   # the proxy's immutable admin = CREATE(proxy, 1)
 check ProxyAdmin ProxyAdmin "$ADMIN"
-echo "expected immutables: implementation 0xbebc200 (=200000000, leading zeros stripped) and the validator address $(echo "$VALIDATOR" | tr A-Z a-z | sed 's/^0x//'); proxy: the ProxyAdmin address $(echo "$ADMIN" | tr A-Z a-z | sed 's/^0x//')"
+echo "all four contracts equal the build output and every immutable equals its expected value"

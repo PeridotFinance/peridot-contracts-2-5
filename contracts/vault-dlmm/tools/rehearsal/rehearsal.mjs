@@ -103,9 +103,17 @@ async function step(name, fn, { fatal = true } = {}) {
   catch (e) { const ms = Date.now() - t0; results.steps.push({ name, ms, ok: false, error: String(e?.message || e).slice(0, 400) }); results.failures.push(`${name}: ${String(e?.message || e).slice(0, 300)}`); log(`!!! ${name} FAILED in ${(ms / 1000).toFixed(1)} s: ${String(e?.message || e).slice(0, 600)}`); if (fatal) throw e; }
 }
 const gasOf = async (tx, label) => { const r = await tx.wait(1); results.gas[label] = r.gasUsed.toNumber(); log(`   gas ${label}: ${r.gasUsed.toString()}`); if (r.status !== 1) throw new Error(`${label} reverted on chain`); return r; };
+const FALLBACK_SLOT = utils.id("fallback_manager.handler.address"), GUARD_SLOT = utils.id("guard_manager.guard.address");
+async function safeSnap() {
+  const slots = {}; for (let i = 0; i < 10; i++) if (i !== 5) slots[i] = await provider.getStorageAt(A.SAFE, i); // slot 5 is the nonce
+  slots.fallback = await provider.getStorageAt(A.SAFE, FALLBACK_SLOT); slots.guard = await provider.getStorageAt(A.SAFE, GUARD_SLOT);
+  const sf = new ethers.Contract(A.SAFE, ["function getOwners() view returns (address[])", "function getThreshold() view returns (uint256)", "function getModulesPaginated(address,uint256) view returns (address[],address)", "function nonce() view returns (uint256)"], provider);
+  return { slots, owners: (await sf.getOwners()).join(","), threshold: (await sf.getThreshold()).toString(), modules: (await sf.getModulesPaginated("0x0000000000000000000000000000000000000001", 10))[0].join(","), code: utils.keccak256(await provider.getCode(A.SAFE)), nonce: (await sf.nonce()).toNumber(), usdc: (await usdc_.balanceOf(A.SAFE)).toString() };
+}
 const asLedger = () => provider.getSigner(A.LEDGER);
 async function impersonate(addr, ethBalance = "0x56BC75E2D63100000") { await rpc("anvil_impersonateAccount", [addr]); await rpc("anvil_setBalance", [addr, ethBalance]); return provider.getSigner(addr); }
 const slotCache = {};
+const usdc_ = new ethers.Contract(A.USDC, ERC20_ABI, provider);
 async function setErc20Balance(token, who, amount) {
   const t = new ethers.Contract(token, ERC20_ABI, provider);
   const val = utils.hexZeroPad(BN(amount).toHexString(), 32);
@@ -247,6 +255,20 @@ async function main() {
       log(`   negative: one byte of the validator's code flipped -> exit ${neg2.code}: ${(neg2.out.match(/MISMATCH[^\n]*/) || ["(no mismatch line)"])[0]}`);
       if (neg2.code === 0) results.failures.push("runtime-code check accepted a tampered validator");
       await rpc("anvil_setCode", [validator, orig]);
+      // the immutables are ASSERTED: point the implementation's VALIDATOR immutable at another address (one byte) and the ceiling at another value
+      const implAddr = vc.out.match(/implementation (0x[0-9a-fA-F]{40})/)[1];
+      const art = JSON.parse(fs.readFileSync(path.join(PROJ, "out/PharaohDlmmVault.sol/PharaohDlmmVault.json"), "utf8"));
+      const groups = Object.values(art.deployedBytecode.immutableReferences);
+      const validatorRef = groups.find((g) => g.length === 1)[0], ceilRef = groups.find((g) => g.length > 1)[0];
+      const implCode = await provider.getCode(implAddr);
+      for (const [label, ref] of [["VALIDATOR immutable", validatorRef], ["DEPOSIT_CAP_CEILING immutable", ceilRef]]) {
+        const pos = 2 + (ref.start + ref.length - 1) * 2; const b = implCode.slice(pos, pos + 2);
+        await rpc("anvil_setCode", [implAddr, implCode.slice(0, pos) + (b === "ff" ? "00" : "ff") + implCode.slice(pos + 2)]);
+        const neg3 = run("bash", ["tools/dlmm-verify-runtime-code.sh", V], { env: { ...BASE_ENV } });
+        log(`   negative: ${label} of the implementation changed by one byte -> exit ${neg3.code}: ${(neg3.out.match(/IMMUTABLES DIFFER[^\n]*/) || neg3.out.match(/MISMATCH[^\n]*/) || ["(none)"])[0].slice(0, 220)}`);
+        if (neg3.code === 0) results.failures.push("runtime-code check accepted a changed " + label);
+        await rpc("anvil_setCode", [implAddr, implCode]);
+      }
     }
     // the deployer holds nothing: it cannot do anything owner-only
     const dsig = provider.getSigner(deployerAddr);
@@ -271,6 +293,7 @@ async function main() {
   const SEED = process.env.REH_SEED || "1000000";
   await step("S6 SAFE MultiSend [unpause, USDC.approve, deposit(seed, DEAD)] (tools/dlmm-safe-multisend.sh)", async () => {
     const msEnv = { ...BASE_ENV, VAULT: V, SEED };
+    const snapBefore = await safeSnap();
     const small = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: { ...msEnv, SEED: "999999" } });
     log(`   seed 999999 refused by the builder: exit ${small.code}: ${small.out.trim().split("\n")[0]}`);
     const b = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: msEnv });
@@ -293,6 +316,12 @@ async function main() {
     log(`   MultiSend wall time ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     log("   paused:", await vault.paused(), " seed shares at DEAD:", (await vault.balanceOf(A.DEAD)).toString(), " totalSupply:", (await vault.totalSupply()).toString(), " totalAssets:", (await vault.totalAssets()).toString());
     if (await vault.paused()) throw new Error("still paused");
+    {
+      const after = await safeSnap();
+      const same = JSON.stringify({ ...snapBefore, nonce: 0, usdc: 0 }) === JSON.stringify({ ...after, nonce: 0, usdc: 0 });
+      log(`   SAFE UNCHANGED by the delegatecall MultiSend: owners/threshold/singleton+storage slots 0-9 (except the nonce)/fallback handler/guard/modules/Safe code hash identical: ${same}; nonce ${snapBefore.nonce} -> ${after.nonce}; Safe USDC ${snapBefore.usdc} -> ${after.usdc}; owners ${after.owners}; threshold ${after.threshold}; modules [${after.modules}]; guard slot ${after.slots.guard}; fallback slot ${after.slots.fallback}`);
+      if (!same || after.nonce !== snapBefore.nonce + 1) throw new Error("the Safe's configuration changed during the MultiSend");
+    }
     const rb = ceremony(["verify", "rehearsal"], { ...VENV, STAGE: "2", SEED });
     console.log(indent(rb.out.split("\n").filter((l) => !/^\s*$/.test(l)).join("\n")));
     if (rb.code !== 0 || !/READ-BACK OK/.test(rb.out)) throw new Error("read-back stage 2 failed");
