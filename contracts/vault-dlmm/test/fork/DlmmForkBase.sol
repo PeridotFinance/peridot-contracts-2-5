@@ -42,6 +42,23 @@ abstract contract DlmmForkBase is Test {
     uint256 internal constant B_POOL = 16;
     uint256 internal constant B_REWARDER = 32;
 
+    /// explicit clock: with via-IR the optimizer may reuse a `block.timestamp` read across a `vm.warp`, so every test reads time through `_ts()` and moves it through `_warpBy` / `_warpTo`
+    uint256 internal clock;
+
+    function _ts() internal view returns (uint256) {
+        return clock;
+    }
+
+    function _warpBy(uint256 s) internal {
+        clock += s;
+        vm.warp(clock);
+    }
+
+    function _warpTo(uint256 t) internal {
+        clock = t;
+        vm.warp(clock);
+    }
+
     PharaohDlmmVault internal v;
     PharaohDlmmVault internal impl;
     IDLMMPair internal pair = IDLMMPair(POOL);
@@ -60,6 +77,7 @@ abstract contract DlmmForkBase is Test {
         }
         vm.createSelectFork("avalanche", forkBlock);
         require(block.chainid == 43114, "not Avalanche C-chain");
+        clock = block.timestamp;
         voter = IDLMMRewarder(REWARDER).owner();
         beacon = IDLMMVoter(voter).dlmmRewarderFactory();
         (, realAnsA,,,) = IChainlinkFeed(FEED_USDC).latestRoundData();
@@ -122,7 +140,7 @@ abstract contract DlmmForkBase is Test {
     function _openBand() internal {
         uint24 a = pair.getActiveId();
         vm.prank(KEEPER);
-        v.openBand(a, 0, 0, 0, 0, block.timestamp + 600);
+        v.openBand(a, 0, 0, 0, 0, _ts() + 600);
     }
 
     /// unpause, ALICE deposits `assets`, keeper opens the band at the live active id
@@ -145,7 +163,7 @@ abstract contract DlmmForkBase is Test {
         vm.startPrank(TRADER);
         IERC20(tin).approve(ROUTER, amountIn);
         out = IDLMMRouter(ROUTER).swapExactTokensForTokens(
-            amountIn, 0, IDLMMRouter.Path({pairBinSteps: steps, versions: vs, tokenPath: path}), TRADER, block.timestamp + 600
+            amountIn, 0, IDLMMRouter.Path({pairBinSteps: steps, versions: vs, tokenPath: path}), TRADER, _ts() + 600
         );
         vm.stopPrank();
     }
@@ -183,8 +201,8 @@ abstract contract DlmmForkBase is Test {
 
     /// both feeds at their live answers, fresh as of now (re-call after every warp: warping ages the real feeds)
     function _freshFeeds() internal {
-        _mockFeed(FEED_USDC, realAnsA, block.timestamp);
-        _mockFeed(FEED_USDT, realAnsP, block.timestamp);
+        _mockFeed(FEED_USDC, realAnsA, _ts());
+        _mockFeed(FEED_USDT, realAnsP, _ts());
     }
 
     function _guard() internal view returns (bool unsafe, bool latched, uint256 reasons) {
@@ -240,7 +258,7 @@ abstract contract DlmmForkBase is Test {
     function _rebalance(bool xForY, uint256 swapIn) internal {
         uint24 a = pair.getActiveId();
         vm.prank(KEEPER);
-        v.rebalance(a, 0, xForY, swapIn, 0, 0, 0, block.timestamp + 600);
+        v.rebalance(a, 0, xForY, swapIn, 0, 0, 0, _ts() + 600);
     }
 
     /// re-centre after the active id left the band: the vault then holds ONE token, so swap half of NAV into the other
@@ -296,7 +314,7 @@ abstract contract DlmmForkBase is Test {
             distributionY: below ? dist : zero,
             to: lp,
             refundTo: lp,
-            deadline: block.timestamp + 600
+            deadline: _ts() + 600
         });
         vm.startPrank(lp);
         IERC20(tok).approve(ROUTER, amount);

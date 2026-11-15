@@ -36,7 +36,7 @@ contract DlmmForkDepeg is DlmmForkBase {
         _approveBob(50e6);
 
         // ---- 1. no band yet: depeg -> openBand, deposit, mint blocked with GuardUnsafe(reasons)
-        _mockFeed(feed, ans, block.timestamp);
+        _mockFeed(feed, ans, _ts());
         (bool unsafe, bool latched, uint256 r) = v.guardState();
         console2.log("reasons at the depeg level (4/8 leg bit, 16 pool-vs-oracle may join):", r);
         assertTrue(unsafe, "unsafe");
@@ -49,7 +49,7 @@ contract DlmmForkDepeg is DlmmForkBase {
         uint24 a = pair.getActiveId();
         _expectUnsafe(r);
         vm.prank(KEEPER);
-        v.openBand(a, 0, 0, 0, 0, block.timestamp + 600);
+        v.openBand(a, 0, 0, 0, 0, _ts() + 600);
 
         // ---- 2. anyone may latch; event carries only latchable bits
         vm.expectEmit(true, false, false, true, address(v));
@@ -69,7 +69,7 @@ contract DlmmForkDepeg is DlmmForkBase {
         a = pair.getActiveId();
         vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardLatched.selector));
         vm.prank(KEEPER);
-        v.openBand(a, 0, 0, 0, 0, block.timestamp + 600);
+        v.openBand(a, 0, 0, 0, 0, _ts() + 600);
         (, uint256 rb,) = v.rebalanceAllowed();
         assertTrue(rb & 1024 != 0, "rebalanceAllowed: latched bit");
 
@@ -80,7 +80,7 @@ contract DlmmForkDepeg is DlmmForkBase {
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, KEEPER));
         vm.prank(KEEPER);
         v.clearGuard();
-        _mockFeed(feed, ans, block.timestamp); // depeg again
+        _mockFeed(feed, ans, _ts()); // depeg again
         uint256 r2 = _reasons();
         vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardStillUnsafe.selector, r2));
         vm.prank(SAFE);
@@ -105,20 +105,20 @@ contract DlmmForkDepeg is DlmmForkBase {
         (,,,, bool oor) = v.bandState();
         assertTrue(oor, "out of range");
         uint256 half = v.totalAssets() / 2;
-        _mockFeed(feed, ans, block.timestamp);
+        _mockFeed(feed, ans, _ts());
         r = _reasons();
         assertTrue(r & legBit != 0);
         a = pair.getActiveId();
         _expectUnsafe(r);
         vm.prank(KEEPER);
-        v.rebalance(a, 0, false, half, 0, 0, 0, block.timestamp + 600);
+        v.rebalance(a, 0, false, half, 0, 0, 0, _ts() + 600);
         vm.prank(BOB);
         v.tripGuard();
         _freshFeeds();
         a = pair.getActiveId();
         vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardLatched.selector));
         vm.prank(KEEPER);
-        v.rebalance(a, 0, false, half, 0, 0, 0, block.timestamp + 600);
+        v.rebalance(a, 0, false, half, 0, 0, 0, _ts() + 600);
         vm.prank(SAFE);
         v.clearGuard();
         _rebalance(false, half);
@@ -136,7 +136,7 @@ contract DlmmForkDepeg is DlmmForkBase {
     function _gradual(address feed, uint256 bit, uint256 otherBit, int256[] memory path) internal {
         for (uint256 i; i < path.length; ++i) {
             int256 ans = path[i];
-            _mockFeed(feed, ans, block.timestamp);
+            _mockFeed(feed, ans, _ts());
             uint256 r = _reasons();
             int256 d = ans > 1e8 ? ans - 1e8 : 1e8 - ans;
             bool expectBit = uint256(d) * 10_000 > 50 * 1e8; // legBandBps 50: strictly more than 0.50 % off
@@ -178,9 +178,9 @@ contract DlmmForkDepeg is DlmmForkBase {
         gp.legBandBps = 10;
         vm.prank(SAFE);
         v.setGuardParams(_toIface(gp));
-        _mockFeed(FEED_USDC, 99_900_000, block.timestamp);
+        _mockFeed(FEED_USDC, 99_900_000, _ts());
         assertEq(_reasons() & B_LEG_A, 0, "exactly 10 bps is inside");
-        _mockFeed(FEED_USDC, 99_899_999, block.timestamp);
+        _mockFeed(FEED_USDC, 99_899_999, _ts());
         assertTrue(_reasons() & B_LEG_A != 0, "10 bps + 1 is outside");
     }
 
@@ -204,8 +204,8 @@ contract DlmmForkDepeg is DlmmForkBase {
         _deposit(ALICE, 20e6);
         _approveBob(20e6);
         // both legs inside their 50 bp band, ratio off by ~80 bp: only bit 16
-        _mockFeed(FEED_USDC, 100_400_000, block.timestamp);
-        _mockFeed(FEED_USDT, 99_550_000, block.timestamp);
+        _mockFeed(FEED_USDC, 100_400_000, _ts());
+        _mockFeed(FEED_USDT, 99_550_000, _ts());
         uint256 r = _reasons();
         assertEq(r, B_POOL, "only bit 16");
         vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, B_POOL));
@@ -237,7 +237,7 @@ contract DlmmForkDepeg is DlmmForkBase {
 
     // ---------------------------------------------------------------- feed failures: stale (> 93,600 s), reverting, zero, negative, incomplete round, future timestamp
     function _failMode(address feed, uint256 mode) internal {
-        uint256 t = block.timestamp;
+        uint256 t = _ts();
         if (mode == 0) _mockFeed(feed, 1e8, t - 93_601);
         else if (mode == 1) _mockFeedReverts(feed);
         else if (mode == 2) _mockFeed(feed, 0, t);
@@ -348,7 +348,7 @@ contract DlmmForkExit is DlmmForkBase {
     // ---------------------------------------------------------------- latched guard under each depeg
     function _latchedExit(address feed, int256 ans, bool expectRedeemOk) internal {
         _state();
-        _mockFeed(feed, ans, block.timestamp);
+        _mockFeed(feed, ans, _ts());
         v.tripGuard();
         (, bool latched, uint256 r) = v.guardState();
         assertTrue(latched);
@@ -410,8 +410,8 @@ contract DlmmForkExit is DlmmForkBase {
     function _feedDown(address feed, uint8 which, uint256 mode) internal {
         _state();
         if (mode == 0) _mockFeedReverts(feed);
-        else if (mode == 1) _mockFeed(feed, 1e8, block.timestamp - 93_601);
-        else _mockFeed(feed, 0, block.timestamp);
+        else if (mode == 1) _mockFeed(feed, 1e8, _ts() - 93_601);
+        else _mockFeed(feed, 0, _ts());
         uint256 supply = v.totalSupply();
         (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
         assertTrue(x > 0 && y > 0);
@@ -488,7 +488,7 @@ contract DlmmForkExit is DlmmForkBase {
         console2.log("redeem preview / paid (all USDt sold through the pool)", prev, got);
         assertGt(got, 0);
         // with the pool dumped by a depeg the oracle floor bites: latch + oracle 0.98 -> USDC-out reverts, in kind still pays
-        _mockFeed(FEED_USDT, 98_000_000, block.timestamp);
+        _mockFeed(FEED_USDT, 98_000_000, _ts());
         v.tripGuard();
         (x, y) = _inKind(ALICE, 10e6);
         assertTrue(x > 0 && y == 0);
@@ -509,7 +509,7 @@ contract DlmmForkExit is DlmmForkBase {
         uint256 got = v.redeem(10e6, BOB, BOB);
         assertApproxEqRel(got, navNow * 10e6 / supply, 3e15);
         console2.log("redeem paid (no swap needed)", got);
-        _mockFeed(FEED_USDC, 98_000_000, block.timestamp);
+        _mockFeed(FEED_USDC, 98_000_000, _ts());
         v.tripGuard();
         vm.prank(BOB);
         got = v.redeem(10e6, BOB, BOB); // all USDC, no swap: nothing for the oracle to veto
@@ -529,7 +529,7 @@ contract DlmmForkExit is DlmmForkBase {
 
     function test_exit_deepUsdtDepeg_oracleFollows() public {
         _deepDown();
-        _mockFeed(FEED_USDT, 99_000_000, block.timestamp); // the feed follows the pool (~0.99)
+        _mockFeed(FEED_USDT, 99_000_000, _ts()); // the feed follows the pool (~0.99)
         v.tripGuard();
         (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
         console2.log("in kind USDt / USDC (100 % in the depegged USDt)", x, y);
@@ -563,7 +563,7 @@ contract DlmmForkExit is DlmmForkBase {
         _seedDepth(false, 21, 120, 4_000_000e6);
         _pushUpBig(a0 + 100, 300_000e6);
         console2.log("USDC sold: active id moved up by", pair.getActiveId() - a0);
-        _mockFeed(FEED_USDC, 99_000_000, block.timestamp);
+        _mockFeed(FEED_USDC, 99_000_000, _ts());
         v.tripGuard();
         (uint256 x, uint256 y) = _inKind(ALICE, 10e6);
         console2.log("in kind USDt / USDC (100 % in the depegged USDC)", x, y);
@@ -725,7 +725,7 @@ contract DlmmForkHook is DlmmForkBase {
         vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_BURN), "hook: revert");
         uint24 a = pair.getActiveId();
         uint256 half = v.totalAssets() / 2;
-        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, _ts() + 600)));
         assertFalse(ok, "rebalance blocked (it burns the band first)");
         // harvest only claims: unaffected
         (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.harvestRewards, ()));
@@ -788,9 +788,9 @@ contract DlmmForkHook is DlmmForkBase {
         vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_SWAP), "hook: swap revert");
         uint24 a = pair.getActiveId();
         uint256 half = v.totalAssets() / 2;
-        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, _ts() + 600)));
         assertFalse(ok, "rebalance with a swap blocked");
-        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, 0, 0, 0, 0, block.timestamp + 600)));
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, 0, 0, 0, 0, _ts() + 600)));
         console2.log("rebalance with swapIn = 0 under a reverting beforeSwap, ok:", ok);
         assertTrue(ok);
     }
@@ -808,7 +808,7 @@ contract DlmmForkHook is DlmmForkBase {
         vm.mockCallRevert(REWARDER, abi.encodeWithSelector(beforeMintSel), "hook: mint revert");
         uint24 a = pair.getActiveId();
         uint256 half = v.totalAssets() / 2;
-        (bool ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        (bool ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, _ts() + 600)));
         assertFalse(ok, "rebalance blocked at its re-add (the whole tx reverts: the band is NOT left burned)");
         (,,, bool hasBand,) = v.bandState();
         assertTrue(hasBand);
@@ -1050,7 +1050,7 @@ contract DlmmForkInit is DlmmForkBase {
     }
 
     function test_init_check13b_feedStaleOrRevertingAtDeployment() public {
-        _mockFeed(FEED_USDT, 1e8, block.timestamp - 93_601);
+        _mockFeed(FEED_USDT, 1e8, _ts() - 93_601);
         _initFails(13);
         _mockFeedReverts(FEED_USDC);
         _initFails(13);
@@ -1288,5 +1288,474 @@ contract DlmmForkHappy is DlmmForkBase {
         uint256 burned = v.withdraw(20e6, BOB, BOB);
         assertApproxEqAbs(burned, v.convertToShares(20e6), 2);
         console2.log("withdraw(20e6) burned shares", burned);
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (3) harvest: real PHAR claim on the real rewarder, the 111 s window
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract DlmmForkHarvest is DlmmForkBase {
+    function _ids() internal view returns (uint256[] memory ids) {
+        (uint24 lo, uint24 hi,,,) = v.bandState();
+        ids = new uint256[](uint256(hi) - lo + 1);
+        for (uint256 i; i < ids.length; ++i) ids[i] = uint256(lo) + i;
+    }
+
+    function _pending() internal view returns (uint256) {
+        return IDLMMRewarder(REWARDER).getPendingRewards(address(v), _ids());
+    }
+
+    function _harvest() internal returns (uint256 paid) {
+        uint256 before = _bal(PHAR, SAFE);
+        vm.prank(KEEPER);
+        v.harvestRewards();
+        paid = _bal(PHAR, SAFE) - before;
+        assertEq(_bal(PHAR, address(v)), 0, "nothing left in the vault");
+    }
+
+    function test_harvest_claimsRealPhar_toOwner() public {
+        _live(100e6);
+        _warpBy(600);
+        uint256 pend = _pending();
+        uint256 navBefore = v.totalAssets();
+        vm.recordLogs();
+        uint256 paid = _harvest();
+        Vm.Log[] memory l = vm.getRecordedLogs();
+        console2.log("MEASURED pending PHAR after 600 s / paid to the Safe", pend, paid);
+        assertGt(paid, 0, "PHAR is paid at the pin");
+        assertApproxEqRel(paid, pend, 5e16, "paid ~ pending (pending read just before; a few seconds of difference)");
+        assertEq(v.totalAssets(), navBefore, "PHAR is never in the share price");
+        bytes32 t0 = keccak256("PharHarvested(address,uint256,uint256,uint256)");
+        bool seen;
+        for (uint256 i; i < l.length; ++i) {
+            if (l[i].topics.length > 0 && l[i].topics[0] == t0) {
+                (uint256 amt, uint256 ts, uint256 ta) = abi.decode(l[i].data, (uint256, uint256, uint256));
+                assertEq(amt, paid);
+                assertEq(ts, v.totalSupply());
+                assertEq(ta, navBefore);
+                seen = true;
+            }
+        }
+        assertTrue(seen, "PharHarvested emitted");
+        assertEq(_pending(), 0, "claimed");
+    }
+
+    /// Claim at `dt` seconds after the band's bins were last minted (no state travel backwards: every case is a fresh test), then 300 s later again.
+    /// Logs pending (what the rewarder reports) and what is actually paid. The 111 s rule: a bin touched within the window forfeits its accrual.
+    function _forfeit(uint256 dt) internal returns (uint256 pend, uint256 paid, uint256 later) {
+        _live(100e6);
+        _warpBy(dt);
+        pend = _pending();
+        paid = _harvest();
+        _warpBy(300);
+        uint256 pend2 = _pending();
+        later = _harvest();
+        console2.log("claim at +s after the mint / pending before / paid:", dt, pend);
+        console2.log("   paid:", paid);
+        console2.log("   300 s later: pending / paid:", pend2, later);
+    }
+
+    // MEASURED: a claim inside the window pays 0 AND forfeits the accrual up to that moment: the claim 300 s later pays 5317684586061233 (300 s of accrual,
+    // the same as a first claim at +300), not the 300 + dt seconds a claim-free run would have paid. NOTE: repeated warps within one test make
+    // getPendingRewards non-linear in an unexplained way (reads at +100, +112, +200 then +300 gave 2.4x the single-warp value); only single-warp, one-claim-per-case figures are used.
+    function test_harvest_forfeit_010s() public { (, uint256 paid,) = _forfeit(10); assertEq(paid, 0, "inside 111 s: nothing paid"); }
+    function test_harvest_forfeit_060s() public { (, uint256 paid,) = _forfeit(60); assertEq(paid, 0); }
+    function test_harvest_forfeit_110s() public { (, uint256 paid,) = _forfeit(110); assertEq(paid, 0); }
+    function test_harvest_forfeit_112s() public { (, uint256 paid,) = _forfeit(112); assertGt(paid, 0, "outside the window: paid"); }
+    function test_harvest_forfeit_300s() public { (, uint256 paid,) = _forfeit(300); assertGt(paid, 0); }
+
+    /// PHAR earned on the OLD band's bins before a rebalance: is it still paid by harvestRewards (which claims only the CURRENT band's ids)?
+    function test_harvest_afterRebalance_oldBinRewards() public {
+        _live(100e6);
+        uint256[] memory oldIds = _ids();
+        _warpBy(600);
+        uint256 pendOld = IDLMMRewarder(REWARDER).getPendingRewards(address(v), oldIds);
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        _rebalanceAuto();
+        uint256 pendOldAfter = IDLMMRewarder(REWARDER).getPendingRewards(address(v), oldIds);
+        uint256[] memory newIds = _ids();
+        uint256 pendNew = IDLMMRewarder(REWARDER).getPendingRewards(address(v), newIds);
+        console2.log("pending on the OLD ids before / after the rebalance:", pendOld, pendOldAfter);
+        console2.log("pending on the NEW ids right after the rebalance:", pendNew);
+        _warpBy(600);
+        uint256 paid = _harvest();
+        uint256 stillOld = IDLMMRewarder(REWARDER).getPendingRewards(address(v), oldIds);
+        console2.log("harvest paid / pending on the old ids afterwards (unclaimed by harvestRewards):", paid, stillOld);
+        // old ids that are not part of the new band can only be claimed by claim(vault, ids): the vault never passes them
+        uint256 stranded;
+        for (uint256 i; i < oldIds.length; ++i) {
+            bool inNew;
+            for (uint256 j; j < newIds.length; ++j) if (newIds[j] == oldIds[i]) inNew = true;
+            if (!inNew) {
+                uint256[] memory one = new uint256[](1);
+                one[0] = oldIds[i];
+                stranded += IDLMMRewarder(REWARDER).getPendingRewards(address(v), one);
+            }
+        }
+        console2.log("PHAR still attributed to old ids that left the band (stranded by harvestRewards):", stranded);
+        // FINDING marker: assert the spec expectation that nothing earned is stranded
+        assertEq(stranded, 0, "FINDING if red: PHAR accrued on bins that left the band is not claimed by harvestRewards");
+    }
+
+    function test_harvest_noBand_idleOnly() public {
+        _unpause();
+        _deposit(ALICE, 50e6);
+        vm.prank(KEEPER);
+        (bool ok, bytes memory ret) = address(v).call(abi.encodeCall(v.harvestRewards, ()));
+        console2.log("harvestRewards with no band (empty id list), ok:", ok);
+        if (!ok) console2.logBytes4(_sel(ret));
+    }
+
+    function test_harvest_accessControl() public {
+        _live(100e6);
+        vm.expectRevert(PharaohDlmmVault.NotRebalancer.selector);
+        vm.prank(BOB);
+        v.harvestRewards();
+        vm.prank(SAFE);
+        v.harvestRewards(); // owner may
+        vm.prank(KEEPER);
+        v.harvestRewards();
+    }
+
+    /// harvesting works while paused / latched / with bad feeds (a harvest must not depend on the feeds)
+    function test_harvest_independentOfFeedsPauseGuard() public {
+        _live(100e6);
+        _warpBy(600);
+        _mockFeedReverts(FEED_USDC);
+        v.tripGuard();
+        vm.prank(SAFE);
+        v.pause();
+        vm.recordLogs();
+        uint256 paid = _harvest();
+        assertGt(paid, 0);
+        Vm.Log[] memory l = vm.getRecordedLogs();
+        bytes32 t0 = keccak256("PharHarvested(address,uint256,uint256,uint256)");
+        for (uint256 i; i < l.length; ++i) {
+            if (l[i].topics.length > 0 && l[i].topics[0] == t0) {
+                (,, uint256 ta) = abi.decode(l[i].data, (uint256, uint256, uint256));
+                assertEq(ta, 0, "totalAssets reported as 0 when a feed is bad");
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (4) rebalance through the real router
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract DlmmForkRebalance is DlmmForkBase {
+    function _live150() internal { _live(150e6); }
+
+    function _rebalanceLogged(bool xForY, uint256 swapIn) internal returns (uint256 sIn, uint256 sOut, uint256 nb, uint256 na) {
+        vm.recordLogs();
+        _rebalance(xForY, swapIn);
+        Vm.Log[] memory l = vm.getRecordedLogs();
+        bool found;
+        (found, sIn, sOut, nb, na) = _rebalancedEvent(l);
+        assertTrue(found, "Rebalanced emitted");
+    }
+
+    function test_rebalance_up_fullFlow() public {
+        _live150();
+        (uint24 lo0, uint24 hi0,,,) = v.bandState();
+        _pushUp(hi0 + 1);
+        (,,, bool hb, bool oor) = v.bandState();
+        assertTrue(hb && oor);
+        (bool ok, uint256 rb,) = v.rebalanceAllowed();
+        assertTrue(ok, "rebalanceAllowed true");
+        assertEq(rb, 0);
+        uint256 half = v.totalAssets() / 2;
+        (uint256 sIn, uint256 sOut, uint256 nb, uint256 na) = _rebalanceLogged(false, half);
+        console2.log("MEASURED up: swapIn / swapOut / NAV before / NAV after", sIn, sOut);
+        console2.log("                                         ", nb, na);
+        console2.log("MEASURED NAV loss ppm of this rebalance (can be negative = gain):", _ppm(nb, na));
+        assertGe(na * 10_000, nb * 9_950, "NAV loss bound (50 bp)");
+        (uint24 lo, uint24 hi, uint24 a, bool hasBand, bool oor2) = v.bandState();
+        assertTrue(hasBand);
+        assertFalse(oor2);
+        assertEq(lo, a - 1);
+        assertEq(hi, a + 1);
+        assertGt(a, hi0, "re-centred higher");
+        assertEq(v.lastRebalanceAt(), _ts());
+        assertEq(v.rebalancesToday(), 1);
+        lo0;
+        console2.log("MEASURED idle USDC / USDt after:", _bal(USDC, address(v)), _bal(USDT, address(v)));
+    }
+
+    function test_rebalance_down_fullFlow() public {
+        _live150();
+        (uint24 lo0,,,,) = v.bandState();
+        _pushDown(lo0 - 1);
+        uint256 half = v.totalAssets() / 2; // the vault holds only USDt: sell half of it (6 decimals both)
+        (uint256 sIn, uint256 sOut, uint256 nb, uint256 na) = _rebalanceLogged(true, half);
+        console2.log("MEASURED down: swapIn / swapOut / NAV before / NAV after", sIn, sOut);
+        console2.log("                                         ", nb, na);
+        console2.log("MEASURED NAV loss ppm:", _ppm(nb, na));
+        assertGe(na * 10_000, nb * 9_950);
+        (uint24 lo, uint24 hi, uint24 a,, bool oor) = v.bandState();
+        assertFalse(oor);
+        assertEq(lo, a - 1);
+        assertEq(hi, a + 1);
+    }
+
+    function test_rebalance_preconditions_revertOrder() public {
+        // no band
+        _unpause();
+        _deposit(ALICE, 100e6);
+        uint24 a = pair.getActiveId();
+        vm.expectRevert(IPharaohDlmmVault.NoBand.selector);
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, false, 0, 0, 0, 0, _ts() + 600);
+        _openBand();
+        (uint24 lo, uint24 hi,,,) = v.bandState();
+        // wrong caller
+        vm.expectRevert(PharaohDlmmVault.NotRebalancer.selector);
+        vm.prank(SAFE);
+        v.rebalance(a, 0, false, 0, 0, 0, 0, _ts() + 600);
+        // in range
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.NotOutOfRange.selector, a, lo, hi));
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, false, 0, 0, 0, 0, _ts() + 600);
+        // idSlippage > 2 / deadline
+        vm.expectRevert(IPharaohDlmmVault.ParamOutOfBounds.selector);
+        vm.prank(KEEPER);
+        v.rebalance(a, 3, false, 0, 0, 0, 0, _ts() + 600);
+        vm.expectRevert(abi.encodeWithSelector(PharaohDlmmVault.DeadlineExpired.selector, _ts() - 1));
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, false, 0, 0, 0, 0, _ts() - 1);
+        // paused
+        _pushUp(hi + 1);
+        a = pair.getActiveId();
+        vm.prank(SAFE);
+        v.pause();
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, false, 0, 0, 0, 0, _ts() + 600);
+        (, uint256 rb,) = v.rebalanceAllowed();
+        assertTrue(rb & 2048 != 0, "rebalanceAllowed: paused bit");
+    }
+
+    function test_rebalance_activeIdMoved() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.ActiveIdMoved.selector, a - 3, a, uint24(2)));
+        vm.prank(KEEPER);
+        v.rebalance(a - 3, 2, false, half, 0, 0, 0, _ts() + 600);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.ActiveIdMoved.selector, a + 1, a, uint24(0)));
+        vm.prank(KEEPER);
+        v.rebalance(a + 1, 0, false, half, 0, 0, 0, _ts() + 600);
+        // within the slippage it goes through
+        vm.prank(KEEPER);
+        v.rebalance(a - 1, 1, false, half, 0, 0, 0, _ts() + 600);
+    }
+
+    function test_rebalance_cooldown_thenAllowed() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        _rebalanceAuto();
+        uint256 t1 = _ts();
+        (, uint24 lo2,,,) = _bs();
+        lo2;
+        // push out again (downwards) at once
+        (uint24 l,,,,) = v.bandState();
+        _pushDown(l - 1);
+        (bool ok, uint256 rb, uint256 readyAt) = v.rebalanceAllowed();
+        assertFalse(ok);
+        assertTrue(rb & 256 != 0, "cooldown bit");
+        assertEq(readyAt, t1 + 120);
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CooldownActive.selector, t1 + 120));
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, true, half, 0, 0, 0, _ts() + 600);
+        _warpTo(t1 + 119);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.CooldownActive.selector, t1 + 120));
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, true, half, 0, 0, 0, _ts() + 600);
+        _warpTo(t1 + 120);
+        (ok, rb,) = v.rebalanceAllowed();
+        assertTrue(ok, "allowed exactly at lastRebalanceAt + cooldown");
+        _rebalance(true, half);
+        assertEq(v.rebalancesToday(), 2);
+    }
+
+    function _bs() internal view returns (uint24, uint24, uint24, bool, bool) {
+        return v.bandState();
+    }
+
+    /// daily cap: the hard minimum 4, alternating pushes, then DailyRebalanceCapReached; the next UTC day it works again
+    function test_rebalance_dailyCap() public {
+        // stay inside one UTC day
+        if (_ts() % 1 days > 1 days - 3_000) _warpBy(3_600);
+        _freshFeeds();
+        _live150();
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.maxRebalancesPerDay = 4;
+        g.rebalanceCooldown = 111;
+        vm.prank(SAFE);
+        v.setGuardParams(g);
+        for (uint256 i; i < 4; ++i) {
+            (uint24 lo, uint24 hi,,,) = v.bandState();
+            if (i % 2 == 0) _pushUp(hi + 1); else _pushDown(lo - 1);
+            _rebalanceAuto();
+            _warpBy(112);
+            _freshFeeds();
+        }
+        assertEq(v.rebalancesToday(), 4);
+        (uint24 lo2,,,,) = v.bandState();
+        _pushDown(lo2 - 1);
+        (bool ok, uint256 rb, uint256 readyAt) = v.rebalanceAllowed();
+        assertFalse(ok);
+        assertTrue(rb & 512 != 0, "daily cap bit");
+        assertEq(readyAt, (_ts() / 1 days + 1) * 1 days, "readyAt = next UTC midnight");
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        vm.expectRevert(IPharaohDlmmVault.DailyRebalanceCapReached.selector);
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, true, half, 0, 0, 0, _ts() + 600);
+        _warpTo(readyAt);
+        _freshFeeds();
+        assertEq(v.rebalancesToday(), 0, "counter rolls over at UTC midnight");
+        _rebalance(true, half);
+        assertEq(v.rebalancesToday(), 1);
+    }
+
+    function test_rebalance_swapTooLarge() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint256 nav = v.totalAssets();
+        uint256 tooBig = nav * 6000 / 10_000 + 1;
+        uint24 a = pair.getActiveId();
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.SwapTooLarge.selector, tooBig, nav * 6000 / 10_000));
+        vm.prank(KEEPER);
+        v.rebalance(a, 0, false, tooBig, 0, 0, 0, _ts() + 600);
+    }
+
+    /// loss bound with maxRebalanceLossBps at its hard minimum (5 bp): how the vault reacts as the pool is pushed further from the band before the keeper acts
+    function test_rebalance_lossBound_vs_howFarThePoolMoved() public {
+        _live150();
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.maxRebalanceLossBps = 5;
+        vm.prank(SAFE);
+        v.setGuardParams(g);
+        (, uint24 hi,,,) = v.bandState();
+        uint256[6] memory extra = [uint256(1), 2, 3, 4, 5, 6];
+        for (uint256 i; i < extra.length; ++i) {
+            uint256 snap = vm.snapshotState();
+            _pushUp(uint24(hi + extra[i]));
+            uint24 a = pair.getActiveId();
+            uint256 half = v.totalAssets() / 2;
+            vm.recordLogs();
+            vm.prank(KEEPER);
+            (bool ok, bytes memory ret) = address(v).call(abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, _ts() + 600)));
+            console2.log("active id above the old upper bin by / rebalance ok at a 5 bp loss bound:", a - hi, ok);
+            if (ok) {
+                (, , , uint256 nb, uint256 na) = _rebalancedEvent(vm.getRecordedLogs());
+                console2.log("   NAV loss ppm:", _ppm(nb, na));
+            } else {
+                console2.logBytes4(_sel(ret));
+            }
+            // MEASURED at the pin: up to 3 bins beyond the band the swap fits the 5 bp floor; from 4 bins the ROUTER's minimum-out check
+            // (LBRouter__InsufficientAmountOut, the floor derived from the same parameter) trips first. NavLossTooLarge was not reached in any scenario here.
+            if (extra[i] <= 3) assertTrue(ok, "within the 5 bp bound");
+            else {
+                assertFalse(ok, "beyond: the swap floor reverts");
+                assertEq(_sel(ret), bytes4(0x4feac00c), "LBRouter__InsufficientAmountOut (not NavLossTooLarge)");
+            }
+            vm.revertToState(snap);
+        }
+    }
+
+    // ---------------------------------------------------------------- one-sided inventory add (the band's dropped-bin path), both directions
+    function test_rebalance_oneSidedAdd_usdcOnly() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint256 nb0 = v.totalAssets();
+        (uint256 sIn,, uint256 nb, uint256 na) = _rebalanceLogged(false, 0);
+        assertEq(sIn, 0);
+        (uint24 lo, uint24 hi2, uint24 a, bool hasBand, bool oor) = v.bandState();
+        console2.log("one-sided USDC add: NAV before / after / ppm loss", nb, na);
+        console2.log("   ppm:", _ppm(nb, na));
+        assertEq(nb, nb0);
+        assertTrue(hasBand);
+        assertFalse(oor);
+        assertEq(lo, a - 1);
+        assertEq(hi2, a + 1);
+        assertGt(pair.balanceOf(address(v), a - 1), 0, "USDC below the active bin");
+        console2.log("LB shares per bin (-1, 0, +1):", pair.balanceOf(address(v), a - 1), pair.balanceOf(address(v), a));
+        console2.log("   +1:", pair.balanceOf(address(v), a + 1));
+        assertEq(pair.balanceOf(address(v), a + 1), 0, "no USDt: the +1 bin is empty");
+        assertGe(na * 10_000, nb * 9_950);
+        // the vault still exits and values correctly with an empty bin in its nominal band
+        uint256 sh = v.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(sh / 2, ALICE, ALICE);
+        assertGt(x + y, 0);
+    }
+
+    function test_rebalance_oneSidedAdd_usdtOnly() public {
+        _live150();
+        (uint24 lo0,,,,) = v.bandState();
+        _pushDown(lo0 - 1);
+        (,, uint256 nb, uint256 na) = _rebalanceLogged(true, 0);
+        (uint24 lo, uint24 hi, uint24 a, bool hasBand, bool oor) = v.bandState();
+        console2.log("one-sided USDt add: NAV before / after / ppm loss", nb, na);
+        console2.log("   ppm:", _ppm(nb, na));
+        assertTrue(hasBand);
+        assertFalse(oor);
+        assertEq(lo, a - 1);
+        assertEq(hi, a + 1);
+        assertEq(pair.balanceOf(address(v), a - 1), 0, "no USDC: the -1 bin is empty");
+        assertGt(pair.balanceOf(address(v), a + 1), 0);
+        assertGe(na * 10_000, nb * 9_950);
+        uint256 sh = v.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(sh / 2, ALICE, ALICE);
+        assertGt(x + y, 0);
+    }
+
+    /// a second rebalance right after a one-sided add still works once the pool leaves again (the empty-bin band is not a dead state)
+    function test_rebalance_afterOneSidedAdd_nextExit() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        _rebalance(false, 0);
+        _warpBy(121);
+        _freshFeeds();
+        (uint24 lo,,,,) = v.bandState();
+        _pushDown(lo - 1);
+        _rebalanceAuto();
+        (,,,, bool oor) = v.bandState();
+        assertFalse(oor);
+    }
+
+    function test_rebalance_tightAmountMins_revert() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        vm.prank(KEEPER);
+        vm.expectRevert(); // router: amountXMin above what the bins take
+        v.rebalance(a, 0, false, half, 0, type(uint128).max, 0, _ts() + 600);
+    }
+
+    function test_rebalance_keeperOnly() public {
+        _live150();
+        (, uint24 hi,,,) = v.bandState();
+        _pushUp(hi + 1);
+        uint24 a = pair.getActiveId();
+        vm.expectRevert(PharaohDlmmVault.NotRebalancer.selector);
+        vm.prank(ALICE);
+        v.rebalance(a, 0, false, 1, 0, 0, 0, _ts() + 600);
+        vm.expectRevert(PharaohDlmmVault.NotRebalancer.selector);
+        vm.prank(SAFE);
+        v.openBand(a, 0, 0, 0, 0, _ts() + 600);
     }
 }
