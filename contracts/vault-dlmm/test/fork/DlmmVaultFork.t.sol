@@ -621,3 +621,273 @@ contract DlmmForkExit is DlmmForkBase {
         assertEq(v.balanceOf(ALICE), before);
     }
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+// (7) FAILING HOOK on the REAL pair: what blocks, and that un-mocking restores it. This is the residual risk the operator accepts (spec section 3).
+// The pair calls the rewarder (hook flags 0x151 = BEFORE_SWAP | BEFORE_MINT | BEFORE_BURN | BEFORE_TRANSFER) which in turn reads the voter
+// (isAntiSybilEnabled, timeThresholdForGauge). Selectors MEASURED from a -vvvv trace of a real burn at the pin.
+// -----------------------------------------------------------------------------------------------------------------------------------------------------
+contract NoopHookImpl {
+    /// a beacon "upgrade" to code that answers every call with its own selector (what a hook returns) and does nothing
+    fallback() external {
+        assembly ("memory-safe") {
+            mstore(0, calldataload(0))
+            return(0, 32)
+        }
+    }
+}
+
+contract RevertingHookImpl {
+    fallback() external {
+        revert("broken implementation");
+    }
+}
+
+contract DlmmForkHook is DlmmForkBase {
+    bytes4 internal constant BEFORE_BURN = 0xea9db9d3; // beforeBurn(address,address,address,uint256[],uint256[])
+    bytes4 internal constant BEFORE_SWAP = 0xfeee3735; // beforeSwap(address,address,bool,bytes32)
+    bytes4 internal beforeMintSel;
+
+    uint256 internal aliceSh;
+    uint256 internal bobSh;
+
+    function setUp() public override {
+        super.setUp();
+        beforeMintSel = bytes4(keccak256("beforeMint(address,address,bytes32[],bytes32)"));
+    }
+
+    function _state() internal {
+        _unpause();
+        aliceSh = _deposit(ALICE, 100e6);
+        bobSh = _deposit(BOB, 50e6);
+        _openBand();
+    }
+
+    // external wrappers so that a revert can be caught
+    function seedExt(bool below) external { _seedDepth(below, 1, 1, 1_000e6); }
+    function swapExt(address a, address b, uint256 n) external { _swap(a, b, n); }
+
+    struct Row { bool burnInKind; bool redeemUsdc; bool swap; bool addLiq; bool deposit; }
+
+    /// one tiny attempt of each operation; no snapshots (mocks live outside the EVM state)
+    function _matrix(string memory label) internal returns (Row memory r) {
+        _fund(BOB, USDC, _bal(USDC, BOB) + 1e6);
+        (r.burnInKind,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (1e6, ALICE, ALICE)));
+        (r.redeemUsdc,) = _try(BOB, address(v), abi.encodeCall(v.redeem, (1e6, BOB, BOB)));
+        try this.swapExt(USDC, USDT, 100e6) { r.swap = true; } catch {}
+        try this.seedExt(true) { r.addLiq = true; } catch {}
+        vm.prank(BOB);
+        try v.deposit(1e6, BOB) { r.deposit = true; } catch {}
+        console2.log(label);
+        console2.log("  redeemInKind / redeem(USDC) / pool swap / addLiquidity / vault deposit:");
+        console2.log(r.burnInKind, r.redeemUsdc, r.swap);
+        console2.log(r.addLiq, r.deposit);
+    }
+
+    function test_hook_baseline_everythingWorks() public {
+        _state();
+        Row memory r = _matrix("baseline (no mock)");
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq && r.deposit);
+    }
+
+    /// the hook's beforeBurn reverts: EVERY burn reverts, hence redeemInKind, redeem, withdraw and rebalance. Deposits keep being accepted (the guard does not see it).
+    function test_hook_beforeBurnReverts_blocksEveryExit_unmockRestores() public {
+        _state();
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_BURN), "hook: revert");
+        // the guard does not detect it
+        (bool unsafe, bool latched, uint256 reasons) = v.guardState();
+        console2.log("guard reasons with a reverting beforeBurn (bit 32 reads linkage + codehash only):", reasons);
+        assertFalse(unsafe);
+        assertFalse(latched);
+        Row memory r = _matrix("beforeBurn reverts");
+        assertFalse(r.burnInKind, "redeemInKind blocked");
+        assertFalse(r.redeemUsdc, "redeem blocked");
+        assertTrue(r.swap, "pool swaps still work");
+        assertTrue(r.addLiq, "minting still works");
+        assertTrue(r.deposit, "UNFAVOURABLE: deposits are still accepted while every exit is blocked (guard bit 32 does not read the hook's behaviour)");
+        (bool ok, bytes memory ret) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        assertFalse(ok);
+        console2.log("redeemInKind revert data (the hook's own revert, bubbled):");
+        console2.logBytes(ret);
+        (ok,) = _try(BOB, address(v), abi.encodeCall(v.withdraw, (5e6, BOB, BOB)));
+        assertFalse(ok, "withdraw blocked");
+        // paused or not, owner or not: nothing the vault can do. The owner can only pause.
+        vm.prank(SAFE);
+        v.pause();
+        (ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        assertFalse(ok);
+        // rebalance (burn) is blocked as well
+        vm.prank(SAFE);
+        v.unpause();
+        (, uint24 hi,,,) = v.bandState();
+        vm.clearMockedCalls();
+        _pushUp(hi + 1);
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_BURN), "hook: revert");
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        assertFalse(ok, "rebalance blocked (it burns the band first)");
+        // harvest only claims: unaffected
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.harvestRewards, ()));
+        console2.log("harvestRewards under a reverting beforeBurn, ok:", ok);
+
+        // ---- un-mock: everything is restored
+        vm.clearMockedCalls();
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(10e6, ALICE, ALICE);
+        assertGt(x + y, 0, "redeemInKind works again once the hook works again");
+        vm.prank(BOB);
+        assertGt(v.redeem(5e6, BOB, BOB), 0);
+        _rebalance(false, v.totalAssets() / 2);
+    }
+
+    /// no band (idle USDC only): a failing hook does not block the exit at all (no pair burn is made)
+    function test_hook_burnReverts_idleOnlyVaultStillExits() public {
+        _unpause();
+        aliceSh = _deposit(ALICE, 100e6);
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_BURN), "hook: revert");
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(aliceSh, ALICE, ALICE);
+        assertEq(y, 100e6, "idle USDC comes back");
+        assertEq(x, 0);
+    }
+
+    /// the voter reads inside the hook: each one blocks what the real code path uses
+    function test_hook_voterReadsRevert_matrix() public {
+        _state();
+        vm.mockCallRevert(voter, abi.encodeWithSignature("isAntiSybilEnabled()"), "voter: revert");
+        Row memory r = _matrix("voter.isAntiSybilEnabled() reverts");
+        // MEASURED: the hook tolerates this revert on burn and swap (the vault's exits survive); it breaks MINT (openBand / rebalance re-add)
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap, "burn and swap survive a reverting isAntiSybilEnabled");
+        assertFalse(r.addLiq, "mint path reads isAntiSybilEnabled and reverts");
+        vm.clearMockedCalls();
+
+        vm.mockCallRevert(voter, abi.encodeWithSignature("timeThresholdForGauge(address)", REWARDER), "voter: revert");
+        r = _matrix("voter.timeThresholdForGauge(rewarder) reverts");
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq, "a reverting timeThresholdForGauge changes nothing (tolerated)");
+        vm.clearMockedCalls();
+        r = _matrix("after un-mocking");
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap && r.addLiq && r.deposit);
+    }
+
+    /// a reverting beforeSwap blocks the USDC-out exits and every swap, NOT the in-kind exit
+    function test_hook_beforeSwapReverts_inKindStillWorks() public {
+        _state();
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_SWAP), "hook: swap revert");
+        Row memory r = _matrix("beforeSwap reverts");
+        assertTrue(r.burnInKind, "redeemInKind has no swap: works");
+        assertFalse(r.redeemUsdc, "redeem swaps the USDt leg: blocked");
+        assertFalse(r.swap);
+        assertTrue(r.addLiq);
+        (bool ok,) = _try(BOB, address(v), abi.encodeCall(v.withdraw, (5e6, BOB, BOB)));
+        assertFalse(ok, "withdraw blocked");
+        // rebalance with a swap is blocked; with swapIn = 0 it only burns and mints and works
+        (, uint24 hi,,,) = v.bandState();
+        vm.clearMockedCalls();
+        _pushUp(hi + 1);
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(BEFORE_SWAP), "hook: swap revert");
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        assertFalse(ok, "rebalance with a swap blocked");
+        (ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, 0, 0, 0, 0, block.timestamp + 600)));
+        console2.log("rebalance with swapIn = 0 under a reverting beforeSwap, ok:", ok);
+        assertTrue(ok);
+    }
+
+    /// a reverting beforeMint blocks openBand/rebalance only; every exit works
+    function test_hook_beforeMintReverts_exitsWork() public {
+        _state();
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(beforeMintSel), "hook: mint revert");
+        Row memory r = _matrix("beforeMint reverts");
+        assertTrue(r.burnInKind && r.redeemUsdc && r.swap);
+        assertFalse(r.addLiq);
+        (, uint24 hi,,,) = v.bandState();
+        vm.clearMockedCalls();
+        _pushUp(hi + 1);
+        vm.mockCallRevert(REWARDER, abi.encodeWithSelector(beforeMintSel), "hook: mint revert");
+        uint24 a = pair.getActiveId();
+        uint256 half = v.totalAssets() / 2;
+        (bool ok,) = _try(KEEPER, address(v), abi.encodeCall(v.rebalance, (a, 0, false, half, 0, 0, 0, block.timestamp + 600)));
+        assertFalse(ok, "rebalance blocked at its re-add (the whole tx reverts: the band is NOT left burned)");
+        (,,, bool hasBand,) = v.bandState();
+        assertTrue(hasBand);
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(10e6, ALICE, ALICE);
+        assertGt(x + y, 0);
+    }
+
+    // ---------------------------------------------------------------- bit 32 (live, never latched): unlinked, hook parameter, beacon implementation change
+    function test_hook_unlinked_bit32() public {
+        _state();
+        vm.mockCall(REWARDER, abi.encodeCall(IDLMMRewarder.isLinked, ()), abi.encode(false));
+        uint256 r = _reasons();
+        assertEq(r, B_REWARDER, "only bit 32");
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, B_REWARDER));
+        vm.prank(BOB);
+        v.deposit(1e6, BOB);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, 0)); // not latchable
+        v.tripGuard();
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(10e6, ALICE, ALICE);
+        assertGt(x + y, 0, "exits are not gated by bit 32");
+        vm.prank(BOB);
+        assertGt(v.redeem(5e6, BOB, BOB), 0);
+        vm.clearMockedCalls();
+        assertEq(_reasons(), 0);
+    }
+
+    function test_hook_pairHookParameterChanged_bit32() public {
+        _state();
+        vm.mockCall(POOL, abi.encodeCall(IDLMMPair.getLBHooksParameters, ()), abi.encode(bytes32(uint256(0x151) << 160 | uint256(uint160(address(0xBAD))))));
+        assertEq(_reasons(), B_REWARDER);
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(10e6, ALICE, ALICE);
+        assertGt(x + y, 0);
+    }
+
+    /// Pharaoh upgrades the rewarder beacon to different code: the codehash pin trips bit 32 (entries blocked). Whether the exits survive depends on the new code.
+    function test_hook_beaconImplementationChanged_bit32() public {
+        _state();
+        address noop = address(new NoopHookImpl());
+        vm.mockCall(beacon, abi.encodeCall(IDLMMRewarderBeaconView.implementation, ()), abi.encode(noop));
+        assertEq(_reasons(), B_REWARDER, "codehash pin: only bit 32");
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, B_REWARDER));
+        vm.prank(BOB);
+        v.deposit(1e6, BOB);
+        (bool ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        assertTrue(ok, "a no-op implementation does not block the burn (MEASURED); only a failing one does (next test)");
+    }
+
+    /// the codehash pin DOES see an upgrade of the beacon to broken code: bit 32 stops deposits at once, but the burns are already broken (exits blocked)
+    function test_hook_beaconUpgradedToBrokenCode_bit32_stopsDeposits_exitsBlocked() public {
+        _state();
+        address bad = address(new RevertingHookImpl());
+        vm.mockCall(beacon, abi.encodeCall(IDLMMRewarderBeaconView.implementation, ()), abi.encode(bad));
+        assertEq(_reasons(), B_REWARDER);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, B_REWARDER));
+        vm.prank(BOB);
+        v.deposit(1e6, BOB);
+        (bool ok,) = _try(ALICE, address(v), abi.encodeCall(v.redeemInKind, (10e6, ALICE, ALICE)));
+        assertFalse(ok, "every burn reverts while the beacon points at broken code");
+        vm.clearMockedCalls();
+        vm.prank(ALICE);
+        (uint256 x, uint256 y) = v.redeemInKind(10e6, ALICE, ALICE);
+        assertGt(x + y, 0, "restored");
+    }
+
+    /// governance removes the router from the voter's authorised managers: mints through the router revert at the hook; burns are direct (no router)
+    function test_hook_routerDeauthorised_exitsStillWork() public {
+        _state();
+        vm.mockCall(voter, abi.encodeWithSignature("isAuthorizedDLMMManager(address)", ROUTER), abi.encode(false));
+        assertEq(_reasons(), 0, "NOT a guard bit (spec/DEVIATIONS): the vault cannot see it");
+        Row memory r = _matrix("router de-authorised");
+        assertTrue(r.deposit, "entries stay open: the vault cannot see the de-authorisation");
+        assertTrue(r.burnInKind, "in kind needs no router");
+        assertFalse(r.addLiq, "vault re-adds would fail too: addLiquidity from the router is vetoed");
+    }
+}
+
+interface IDLMMRewarderBeaconView {
+    function implementation() external view returns (address);
+}
