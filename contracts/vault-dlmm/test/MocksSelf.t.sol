@@ -282,3 +282,6 @@ contract MocksSelfFlippedTest is MocksSelfTest {
         return true;
     }
 }
+
+// DETECTOR CHECK (done by hand, 15 Nov): `vm.expectCall(feed, "", 0)` followed by one feed read FAILS with "expected call ... to be called 0 times, but was called 1 time",
+// so the count-0 assertions in Exits.t.sol are not vacuous; the control test there shows deposit/redeem do hit the feeds.
