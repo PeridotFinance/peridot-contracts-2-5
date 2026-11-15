@@ -31,9 +31,11 @@ contract FuzzTest is Base {
             } else if (op == 2) {
                 if (!_hasBand()) {
                     uint24 a = pair.getActiveId();
+                    uint256 navB = erc.totalAssets();
                     vm.prank(KEEPER);
                     try v.openBand(a, 1, 0, 0, 0, block.timestamp + 120) {
-                        assertLe(erc.totalAssets(), CAP, "openBand succeeded above the cap");
+                        // D6: openBand is not cap-bound; it must not CREATE value beyond its swap/entry loss accounting, and entries stay closed above the cap
+                        assertLe(erc.totalAssets(), navB + navB / 100 + 2, "openBand does not create value");
                     } catch {}
                 }
             } else if (op == 3) {

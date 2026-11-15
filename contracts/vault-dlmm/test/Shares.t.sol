@@ -170,6 +170,43 @@ contract SharesTest is Base {
         if (ok) assertGt(erc.balanceOf(BOB), 0, "no zero-share deposit");
     }
 
+    /// ACTUAL / FINDING (low, bounded by the cap): with the ERC-4626 virtual offset of 1 the entry price is (n+1)/(d+1). If the supply is dust while the vault holds
+    /// donated value, the next entrant prices against the offset, not the true ratio, and takes most of the donated value from the dust holder.
+    function test_dustSupplyEntryDilution_recorded() public {
+        _deposit(ALICE, 100e6);
+        uint256 s = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        erc.redeem(s - 1, ALICE, ALICE); // Alice keeps ONE share-wei
+        usdc.mint(address(v), 50e6); // a donation
+        uint256 aliceBefore = erc.convertToAssets(shares.balanceOf(ALICE));
+        _deposit(BOB, 100e6);
+        uint256 aliceAfter = erc.convertToAssets(shares.balanceOf(ALICE));
+        emit log_named_uint("dust holder value before the next entry (USDC wei)", aliceBefore);
+        emit log_named_uint("dust holder value after the next entry (USDC wei)", aliceAfter);
+        uint256 bobValue = erc.convertToAssets(shares.balanceOf(BOB));
+        emit log_named_uint("entrant value after (paid 100e6)", bobValue);
+        emit log_named_uint("NAV", erc.totalAssets());
+        // the stated values never exceed the NAV (the offset leaves part of the value unattributed, not over-attributed)
+        assertLe(bobValue + aliceAfter, erc.totalAssets());
+    }
+
+    /// ACTUAL (finding, low): the swap leg of redeem trades against the pool's active bin, which may hold part of the vault's own band at a bin price off the oracle;
+    /// the remaining holders then bear (bin price - oracle) x swap x vault share of the bin. Measured here with the vault's band inside the active bin.
+    function test_redeemSwapAgainstOwnBinsLeakIsTiny() public {
+        _deposit(ALICE, 100e6);
+        _deposit(BOB, 100e6);
+        _openBand();
+        (uint256 n0, uint256 d0) = _sp();
+        uint256 bobShares = shares.balanceOf(BOB);
+        vm.prank(BOB);
+        erc.redeem(bobShares, BOB, BOB);
+        (uint256 n1, uint256 d1) = _sp();
+        // remaining holder's value per share, parts per million
+        uint256 loss = n0 * d1 > n1 * d0 ? ((n0 * d1 - n1 * d0) * 1e6) / (n0 * d1) : 0;
+        emit log_named_uint("remaining holders' share price loss from the other holder's redeem (ppm)", loss);
+        assertLe(loss, 100, "bounded by 1 bp of the swapped amount (here at most 100 ppm)");
+    }
+
     // ------------------------------------------------------------------ ERC-4626 plumbing
     function test_redeemOnBehalfNeedsAllowance() public {
         _deposit(ALICE, 100e6);

@@ -204,13 +204,19 @@ contract CapTest is Base {
         emit log_named_bytes32("ACTUAL mint-over-cap selector", bytes32(_sel(ret)));
     }
 
-    // ------------------------------------------------------------------ openBand funding path
-    function test_openBandOverCapReverts() public {
+    // ------------------------------------------------------------------ openBand and the cap (main-thread decision D6: openBand has NO cap post-check)
+    /// The spec text (section 2) lists openBand's funding path as cap-bound; the main thread resolved D6 the other way (a favourable swap at NAV == cap must not make
+    /// openBand revert). Pinned here as the decided behaviour: a donation above the cap does not stop openBand, but every ENTRY stays closed.
+    function test_openBandAboveCapIsNotBlockedByTheCap_D6() public {
         _deposit(ALICE, 100e6);
-        usdc.mint(address(v), 101e6); // donation: totalAssets 201 > cap
+        usdc.mint(address(v), 101e6); // donation: NAV 201 > cap
         assertGt(erc.totalAssets(), 200e6);
-        bytes memory ret = _assertReverts(KEEPER, address(v), _openBandArgs());
-        assertEq(_sel(ret), IPharaohDlmmVault.CapExceeded.selector, "openBand funding path is cap-bound");
+        _openBand();
+        assertTrue(_hasBand());
+        assertEq(erc.maxDeposit(BOB), 0, "entries stay closed above the cap");
+        vm.prank(BOB);
+        vm.expectRevert();
+        erc.deposit(1e6, BOB);
     }
 
     function test_openBandAtCapWorks() public {

@@ -180,7 +180,9 @@ abstract contract Base is World {
     function _holdings() internal view returns (uint256 usdcAmt, uint256 usdtAmt) {
         usdcAmt = usdc.balanceOf(address(v));
         usdtAmt = usdt.balanceOf(address(v));
-        for (uint24 id = ID0 - 400; id <= ID0 + 400; ++id) {
+        // scan a window around the pair's current active id (the band only ever sits around where the active bin has been, inside the liquid range)
+        uint24 act = pair.getActiveId();
+        for (uint24 id = act - 40; id <= act + 40; ++id) {
             uint256 sh = pair.balanceOf(address(v), id);
             if (sh == 0) continue;
             uint256 sup = pair.totalSupply(id);

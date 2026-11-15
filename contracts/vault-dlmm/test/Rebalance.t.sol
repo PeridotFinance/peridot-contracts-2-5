@@ -389,6 +389,32 @@ contract RebalanceTest is Base {
         assertEq(v.rebalancesToday(), 1);
     }
 
+    /// ACTUAL (spec-silent, W2 DEVIATIONS: day = timestamp / 86400): the daily counter resets at UTC midnight, so up to twice the cap fits inside 24 h around a midnight.
+    function test_dailyCapResetsAtUtcMidnightNotRolling24h() public {
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.maxRebalancesPerDay = 4;
+        g.rebalanceCooldown = 111;
+        vm.prank(SAFE);
+        v.setGuardParams(g);
+        _fundAndOpen(150e6);
+        uint256 now_ = vm.getBlockTimestamp();
+        uint256 midnight = (now_ / 1 days + 1) * 1 days;
+        vm.warp(midnight - 600); // ten minutes before midnight
+        _refreshFeeds();
+        for (uint256 i; i < 4; ++i) {
+            _pushOut(i % 2 == 0);
+            _rebalance();
+            _warp(115);
+        }
+        assertEq(v.rebalancesToday(), 4);
+        vm.warp(midnight + 1);
+        _refreshFeeds();
+        assertEq(v.rebalancesToday(), 0, "counter reset by the calendar day");
+        _pushOut(true);
+        _rebalance(); // the 5th rebalance inside about 12 minutes
+        emit log_named_string("ACTUAL 5 rebalances within 12 minutes across UTC midnight with maxRebalancesPerDay = 4", "allowed");
+    }
+
     function test_rebalanceSwapTooLarge() public {
         _fundAndOpen(100e6);
         _pushOut(true);
