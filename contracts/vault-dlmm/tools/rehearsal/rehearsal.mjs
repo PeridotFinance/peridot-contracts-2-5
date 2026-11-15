@@ -450,11 +450,24 @@ async function main() {
     const tx = await s.execTransaction(to, 0, data, 0, 0, 0, 0, ZERO, ZERO, SIG, { gasLimit: 1_500_000 });
     return gasOf(tx, "Safe tx: " + label);
   };
+  const toolEnv = { ...BASE_ENV, SEND_MODE: "unlocked" };
+  const toolRun = (mode, sig, ...args) => run("bash", ["tools/dlmm-safe-call.sh", mode, V, sig, ...args.map(String)], { env: toolEnv });
+  const toolSend = (label, sig, ...args) => {
+    const r = toolRun("send", sig, ...args);
+    console.log(indent(r.out.split("\n").filter((l) => /^vault|^before|^simulation|^after|gasUsed/.test(l)).join("\n")));
+    if (r.code !== 0) throw new Error(`${label}: ${r.out.slice(-400)}`);
+    const gu = (r.out.match(/gasUsed\s+(\d+)/) || [])[1]; results.gas["Safe tx: " + label] = Number(gu);
+  };
+  const toolMustFail = (label, sig, ...args) => {
+    const r = toolRun("simulate", sig, ...args);
+    log(`   EXPECTED FAILURE ${r.code !== 0 ? "ok " : "!! (it passed) "} ${label} -> exit ${r.code}: ${(r.out.match(/simulation FAILED[^\n]*/) || [r.out.trim().split("\n").pop()])[0].slice(0, 120)} | ${(r.out.match(/inner call as the Safe[^\n]*/) || [""])[0].slice(0, 260)}`);
+    if (r.code === 0) results.failures.push(label + ": the simulation passed but must fail");
+  };
   await step("S11 PAUSE / ROLLBACK procedure on the fork", async () => {
     const bob = provider.getSigner(bobAddr);
     const abiv = (f, ...a) => vIface.encodeFunctionData(f, a);
     log("   -- 11a Safe pause()");
-    await safeExec(V, abiv("pause"), "pause()");
+    toolSend("pause()", "pause()");
     log("   paused:", await vault.paused(), " maxDeposit(Bob):", (await vault.maxDeposit(bobAddr)).toString());
     await expectRevert("deposit while paused", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
     await expectRevert("keeper rebalance/openBand while paused", () => vault.connect(provider.getSigner(keeperW.address)).callStatic.openBand(8388608, 0, 0, 0, 0, 9999999999));
@@ -465,23 +478,28 @@ async function main() {
     const rp2 = await vault.connect(bob).redeem(1000, bobAddr, bobAddr, { gasLimit: 3_000_000 });
     await gasOf(rp2, "REAL redeem(1000, USDC out) while PAUSED");
     log("   -- 11b Safe unpause()");
-    await safeExec(V, abiv("unpause"), "unpause()");
+    toolSend("unpause()", "unpause()");
     log("   paused:", await vault.paused());
     log("   -- 11c close the cap: setDepositCap(1), then restore 200000000");
-    await safeExec(V, abiv("setDepositCap", 1), "setDepositCap(1)");
+    toolSend("setDepositCap(1)", "setDepositCap(uint256)", 1);
     log("   maxDeposit(Bob):", (await vault.maxDeposit(bobAddr)).toString());
     await expectRevert("deposit with cap 1", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
-    await safeExec(V, abiv("setDepositCap", 0), "setDepositCap(0)  (zero-cap behaviour: closed, NOT unlimited as in R3)");
+    toolSend("setDepositCap(0) (zero-cap behaviour: closed, NOT unlimited as in R3)", "setDepositCap(uint256)", 0);
     log("   cap 0: maxDeposit(Bob):", (await vault.maxDeposit(bobAddr)).toString());
     await expectRevert("deposit with cap 0", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
-    await safeExec(V, abiv("setDepositCap", 200_000_000), "setDepositCap(200000000)");
+    toolSend("setDepositCap(200000000)", "setDepositCap(uint256)", 200000000);
     log("   depositCap:", (await vault.depositCap()).toString());
-    await expectRevert("setDepositCap(200000001) above the ceiling", async () => { const s = safe.connect(asLedger()); await s.callStatic.execTransaction(V, 0, abiv("setDepositCap", 200_000_001), 0, 0, 0, 0, ZERO, ZERO, SIG); const tx = await s.execTransaction(V, 0, abiv("setDepositCap", 200_000_001), 0, 0, 0, 0, ZERO, ZERO, SIG, { gasLimit: 1_500_000 }); const r = await tx.wait(); if (r.status !== 1) throw new Error("inner call failed (Safe returns success=false? tx status 0)"); });
+    toolMustFail("setDepositCap(200000001) above the ceiling", "setDepositCap(uint256)", 200000001);
+    log("   -- 11c2 re-tune the guard: setGuardParams legBandBps 75 (bounds 10..200), a cooldown of 111 is refused (new lower bound 112), then restore the defaults");
+    toolSend("setGuardParams(legBandBps 75)", "setGuardParams((uint16,uint32,uint16,uint32,uint16,uint16,uint16))", "(75,93600,60,120,48,6000,50)");
+    log("   guardParams legBandBps now", (await new ethers.Contract(V, ["function guardParams() view returns (uint16,uint32,uint16,uint32,uint16,uint16,uint16)"], provider).guardParams()).map(String).join(","));
+    toolMustFail("setGuardParams with cooldown 111 (below the bound 112)", "setGuardParams((uint16,uint32,uint16,uint32,uint16,uint16,uint16))", "(50,93600,60,111,48,6000,50)");
+    toolSend("setGuardParams(defaults restored)", "setGuardParams((uint16,uint32,uint16,uint32,uint16,uint16,uint16))", "(50,93600,60,120,48,6000,50)");
     log("   -- 11d revoke the keeper: setRebalancer(Ledger), then restore");
-    await safeExec(V, abiv("setRebalancer", A.LEDGER), "setRebalancer(Ledger)");
+    toolSend("setRebalancer(Ledger)", "setRebalancer(address)", A.LEDGER);
     log("   rebalancer:", await vault.rebalancer());
     await expectRevert("old keeper harvestRewards is not owner-gated; keeper rebalance reverts NotRebalancer", () => vault.connect(provider.getSigner(keeperW.address)).callStatic.rebalance(8388608, 0, true, 0, 0, 0, 0, 9999999999));
-    await safeExec(V, abiv("setRebalancer", keeperW.address), "setRebalancer(keeper)");
+    toolSend("setRebalancer(keeper)", "setRebalancer(address)", keeperW.address);
     log("   rebalancer restored:", await vault.rebalancer());
     log("   -- 11e guard latch: the USDT/USD feed answer is overridden with a mock (anvil_setCode of a storage-less FixedFeed; fork only)");
     const realCode = await provider.getCode(A.FEED_USDT);
@@ -496,7 +514,8 @@ async function main() {
     const tg = await vault.connect(provider.getSigner(strangerAddr)).tripGuard();
     await gasOf(tg, "tripGuard (anyone)");
     log("   after tripGuard: guardState =", (await vault.guardState()).map(String).join(","));
-    await expectRevert("Safe clearGuard while the feed is still out of band", () => safe.connect(asLedger()).callStatic.execTransaction(V, 0, abiv("clearGuard"), 0, 0, 0, 0, ZERO, ZERO, SIG).then(async () => { const tx = await safe.connect(asLedger()).execTransaction(V, 0, abiv("clearGuard"), 0, 0, 0, 0, ZERO, ZERO, SIG, { gasLimit: 1_500_000 }); const r = await tx.wait(); if (r.status !== 1) throw new Error("inner call failed; tx status 0"); }));
+    toolMustFail("Safe clearGuard while the feed is still out of band", "clearGuard()");
+    toolMustFail("the tool refuses a function outside the whitelist (transferOwnership)", "transferOwnership(address)", A.LEDGER);
     // exits are never gated by the latch or the bad feed: redeemInKind works, redeem (USDC out) may revert on the oracle
     const e2 = await vault.connect(bob).callStatic.redeemInKind(1000, bobAddr, bobAddr);
     log("   exits under the latch and the out-of-band feed: redeemInKind(1000) simulation ->", e2.map(String).join("/"));
@@ -505,7 +524,7 @@ async function main() {
     await rpc("anvil_setCode", [A.FEED_USDT, realCode]); // the real feed back
     log("   real feed code restored; guardState =", (await vault.guardState()).map(String).join(","), "(latched stays true until the owner clears it)");
     await expectRevert("deposit while latched, feed healthy again", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
-    await safeExec(V, abiv("clearGuard"), "clearGuard()");
+    toolSend("clearGuard()", "clearGuard()");
     log("   after clearGuard: guardState =", (await vault.guardState()).map(String).join(","), " maxDeposit(Bob):", (await vault.maxDeposit(bobAddr)).toString());
     log("   renounceOwnership by the Safe:");
     await expectRevert("Safe renounceOwnership (W2 disables it; if this does NOT revert the vault can be orphaned)", async () => { const s = safe.connect(asLedger()); await s.callStatic.execTransaction(V, 0, abiv("renounceOwnership"), 0, 0, 0, 0, ZERO, ZERO, SIG); const tx = await s.execTransaction(V, 0, abiv("renounceOwnership"), 0, 0, 0, 0, ZERO, ZERO, SIG, { gasLimit: 1_500_000 }); const r = await tx.wait(); if (r.status !== 1) throw new Error("inner call failed"); });
