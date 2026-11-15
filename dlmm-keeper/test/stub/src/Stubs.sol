@@ -42,6 +42,13 @@ contract StubPair {
     function totalSupply(uint256 id) external view returns (uint256) { return bins[uint24(id)].supply; }
     function balanceOf(address a, uint256 id) external view returns (uint256) { return shares[a][id]; }
     function getPriceFromId(uint24) external view returns (uint256) { return (uint256(1) << 128) * priceNum / priceDen; }
+    bool public hookRevert;
+    function setHookRevert(bool b) external { hookRevert = b; }
+    /// the exit probe simulates burn(vault, vault, ...) from the vault; a failing Pharaoh hook is a revert here
+    function burn(address, address, uint256[] calldata, uint256[] calldata) external view returns (bytes32[] memory out) {
+        require(!hookRevert, "hook: anti-sybil");
+        out = new bytes32[](1);
+    }
     function getSwapOut(uint128 amountIn, bool swapForY) external view returns (uint128, uint128, uint128) {
         uint256 gross = swapForY ? uint256(amountIn) * priceNum / priceDen : uint256(amountIn) * priceDen / priceNum;
         uint256 fee = gross * feeBps / 10000;
@@ -82,6 +89,21 @@ contract StubVault {
     function setFailMode(uint8 m) external { failMode = m; }
     function setBand(uint24 lo, uint24 up, bool has) external { lowerId = lo; upperId = up; hasBand = has; }
     function setRebalancer(address r) external { rebalancer = r; }
+    address public feedAsset; address public feedPair; address public asset; address public pairToken;
+    event BandOpened(uint24 lowerId, uint24 upperId, uint24 activeId, uint256 amountX, uint256 amountY);
+    error BandExists();
+    function setWiring(address fa, address fp, address a, address p) external { feedAsset = fa; feedPair = fp; asset = a; pairToken = p; }
+    function openBand(uint24 expectedActiveId, uint24, uint256 swapMinOut, uint256, uint256, uint256 deadline) external {
+        require(msg.sender == rebalancer, "not rebalancer");
+        if (hasBand) revert BandExists();
+        if (latched) revert GuardLatched();
+        if (reasons & 15 != 0) revert GuardUnsafe(reasons);
+        require(block.timestamp <= deadline, "expired");
+        uint24 a = pair.getActiveId();
+        lowerId = a - 1; upperId = a + 1; hasBand = true;
+        lastExpected = expectedActiveId; lastSwapMinOut = swapMinOut;
+        emit BandOpened(lowerId, upperId, a, 1, 1);
+    }
 
     function bandState() external view returns (uint24, uint24, uint24, bool, bool) {
         uint24 a = pair.getActiveId();

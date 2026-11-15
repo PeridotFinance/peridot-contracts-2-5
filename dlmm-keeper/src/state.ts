@@ -19,13 +19,13 @@ export interface HaltRecord {
   trip?: string;
 }
 export interface PendingMarker {
-  kind: "rebalance" | "tripGuard";
+  kind: "rebalance" | "tripGuard" | "openBand";
   at: number;
   tx?: string;
 }
 export interface SendRecord {
   ts: number;
-  kind: "rebalance" | "tripGuard";
+  kind: "rebalance" | "tripGuard" | "openBand";
   tx: string;
   outcome: "ok" | "reverted";
 }
@@ -54,9 +54,11 @@ export interface KeeperState {
   /** vault.lastRebalanceAt as of the last time the keeper looked after its own send (null until first observed): a different value later = someone else rebalanced */
   lastRebalanceSeen: number | null;
   lastGasCheckAt: number;
+  /** the exit probe (README): set while a simulated burn of the vault's own band shares REVERTS. Not a HALT: it blocks re-centring only and clears itself when the probe passes. */
+  exitProbe: null | { since: number; why: string };
   alerts?: AlertStateJson;
 }
-export const emptyState = (vault: string): KeeperState => ({ schemaVersion: 1, vault: vault.toLowerCase(), pending: null, exit: null, backoff: null, sends: [], lastRebalanceSeen: null, lastGasCheckAt: 0 });
+export const emptyState = (vault: string): KeeperState => ({ schemaVersion: 1, vault: vault.toLowerCase(), pending: null, exit: null, backoff: null, sends: [], lastRebalanceSeen: null, lastGasCheckAt: 0, exitProbe: null });
 
 export class StateError extends Error {}
 

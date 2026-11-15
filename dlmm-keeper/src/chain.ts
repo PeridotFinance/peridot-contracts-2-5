@@ -1,12 +1,14 @@
 // READS. Everything the keeper reads from the chain goes through here: ONE Multicall3 eth_call per poll (getActiveId + bandState + guardState), one more per attempt
 // (everything the plan needs, at one block), plus the quote calls. This module has no signer and sends nothing.
 import { BigNumber, providers, utils } from "ethers";
-import { ERC20_ABI, FEED_ABI, MULTICALL3_ABI, PAIR_ABI, VAULT_ABI } from "./abi";
+import { ERC20_ABI, FEED_ABI, MULTICALL3_ABI, PAIR_ABI, VAULT_ABI, VAULT_EXTRA_ABI } from "./abi";
 import type { KeeperConfig } from "./config";
 import type { FeedReading } from "./sanity";
 import type { Quote } from "./plan";
+import { revertData } from "./errors";
+import { safeError } from "./mask";
 
-export const vaultIface = new utils.Interface(VAULT_ABI);
+export const vaultIface = new utils.Interface([...VAULT_ABI, ...VAULT_EXTRA_ABI]);
 export const pairIface = new utils.Interface(PAIR_ABI);
 const feedIface = new utils.Interface(FEED_ABI);
 const erc20Iface = new utils.Interface(ERC20_ABI);
@@ -146,6 +148,12 @@ export async function readAct(provider: providers.Provider, cfg: KeeperConfig, b
     { target: cfg.feeds.asset, iface: feedIface, fn: "decimals" }, // 14
     { target: cfg.feeds.pair, iface: feedIface, fn: "latestRoundData" }, // 15
     { target: cfg.feeds.pair, iface: feedIface, fn: "decimals" }, // 16
+    { target: V, iface: vaultIface, fn: "pair" }, // 17
+    { target: V, iface: vaultIface, fn: "rebalancer" }, // 18
+    { target: V, iface: vaultIface, fn: "feedAsset" }, // 19
+    { target: V, iface: vaultIface, fn: "feedPair" }, // 20
+    { target: V, iface: vaultIface, fn: "asset" }, // 21
+    { target: V, iface: vaultIface, fn: "pairToken" }, // 22
   ];
   const base = calls.length;
   for (const id of ids) {
@@ -153,6 +161,17 @@ export async function readAct(provider: providers.Provider, cfg: KeeperConfig, b
   }
   const r = await batch(provider, cfg.multicall3, calls, block);
   const poll: Poll = { activeId: Number(need(r[0], "pair.getActiveId")[0]), band: toBand(need(r[1], "vault.bandState")), guard: toGuard(need(r[2], "vault.guardState")) };
+  // the vault's own wiring must be the configured one, and the keeper wallet must be its rebalancer (a rotation or a wrong config HALTS: kind wiring)
+  const same = (a: unknown, b: string): boolean => String(a).toLowerCase() === b.toLowerCase();
+  const wiring: Array<[string, unknown, string]> = [
+    ["vault.pair()", need(r[17], "vault.pair")[0], cfg.pair],
+    ["vault.rebalancer()", need(r[18], "vault.rebalancer")[0], cfg.keeper.address],
+    ["vault.feedAsset()", need(r[19], "vault.feedAsset")[0], cfg.feeds.asset],
+    ["vault.feedPair()", need(r[20], "vault.feedPair")[0], cfg.feeds.pair],
+    ["vault.asset()", need(r[21], "vault.asset")[0], cfg.assetToken],
+    ["vault.pairToken()", need(r[22], "vault.pairToken")[0], cfg.pairToken],
+  ];
+  for (const [n, got, want] of wiring) if (!same(got, want)) throw new WiringError(`${n} is ${String(got)}, the configuration says ${want}`);
   const al = need(r[3], "vault.rebalanceAllowed");
   const gp = need(r[4], "vault.guardParams")[0] as utils.Result;
   const bins: BinReading[] = ids.map((id, k) => {
@@ -213,8 +232,67 @@ export function bandInventory(bins: BinReading[]): { x: bigint; y: bigint } {
 /** the quote function for plan.ts: pair.getSwapOut at the pinned block */
 export function pairQuote(provider: providers.Provider, cfg: KeeperConfig, block: BlockTag): Quote {
   return async (swapXForY, amountIn) => {
-    const out = await provider.call({ to: cfg.pair, data: pairIface.encodeFunctionData("getSwapOut", [amountIn.toString(), swapXForY]) }, block);
+    const out = await provider.call({ to: cfg.quoter ?? cfg.pair, data: pairIface.encodeFunctionData("getSwapOut", [amountIn.toString(), swapXForY]) }, block);
     const v = pairIface.decodeFunctionResult("getSwapOut", out);
     return { amountInLeft: bi(v[0]), amountOut: bi(v[1]) };
   };
+}
+
+// ---------------------------------------------------------------- the EXIT PROBE
+export type ProbeResult = { status: "ok" } | { status: "failed"; why: string } | { status: "inconclusive"; why: string };
+/**
+ * Whether the vault can still BURN its band shares (the first step of every exit, redeemInKind included). A failing Pharaoh hook (rewarder beforeBurn, or the voter's
+ * isAntiSybilEnabled / timeThresholdForGauge) makes pair.burn revert while guardState() still reads 0 and deposits stay open.
+ * Approach: an eth_call of pair.burn(vault, vault, [id], [balance]) with `from` = the vault: the pair requires from == msg.sender (or an approval), so no shares of a holder
+ * and no state override are needed; the call runs the whole burn path incl. the hook and is never mined. It burns the vault's WHOLE balance of its most valuable band bin
+ * (a minimal share amount would pay 0 and revert ZeroAmountsOut for the wrong reason). Zero-amount reverts or no shares are INCONCLUSIVE, any other revert is a FAILURE.
+ */
+export async function probeExit(provider: providers.Provider, cfg: KeeperConfig, ids: number[], block: BlockTag): Promise<ProbeResult> {
+  if (ids.length === 0) return { status: "inconclusive", why: "no band" };
+  const calls: Call[] = [];
+  for (const id of ids) calls.push({ target: cfg.pair, iface: pairIface, fn: "balanceOf", args: [cfg.vault, id] }, { target: cfg.pair, iface: pairIface, fn: "totalSupply", args: [id] }, { target: cfg.pair, iface: pairIface, fn: "getBin", args: [id] });
+  const r = await batch(provider, cfg.multicall3, calls, block);
+  let best: { id: number; bal: bigint; value: bigint } | undefined;
+  ids.forEach((id, k) => {
+    const bal = bi(need(r[k * 3], `probe balanceOf(${id})`)[0]);
+    const sup = bi(need(r[k * 3 + 1], `probe totalSupply(${id})`)[0]);
+    const bin = need(r[k * 3 + 2], `probe getBin(${id})`);
+    if (bal === 0n || sup === 0n) return;
+    const value = (bal * (bi(bin[0]) + bi(bin[1]))) / sup;
+    if (!best || value > best.value) best = { id, bal, value };
+  });
+  if (!best || best.value === 0n) return { status: "inconclusive", why: "the vault holds no band shares worth a raw unit" };
+  try {
+    const ret = await provider.call({ from: cfg.vault, to: cfg.pair, data: pairIface.encodeFunctionData("burn", [cfg.vault, cfg.vault, [best.id], [best.bal.toString()]]) }, block);
+    // a revert can come back as a plain result (see callVoid): only a result that DECODES as burn's bytes32[] is a pass
+    try {
+      pairIface.decodeFunctionResult("burn", ret);
+    } catch {
+      throw Object.assign(new Error("burn simulation returned revert data"), { data: ret });
+    }
+    return { status: "ok" };
+  } catch (e) {
+    const data = revertData(e);
+    const msg = String((e as Error)?.message ?? e);
+    if (!data && /rate.?limit|429|timeout|network|ECONN|ETIMEDOUT|SERVER_ERROR|header not found/i.test(msg)) throw e; // an endpoint problem is a failed cycle, not a hook failure
+    if (data) {
+      try {
+        const frag = pairIface.getError(data.slice(0, 10));
+        if (frag.name === "LBPair__ZeroAmount" || frag.name === "LBPair__ZeroAmountsOut") return { status: "inconclusive", why: `${frag.name} on bin ${best.id}` };
+      } catch {
+        /* not a pair error */
+      }
+    }
+    return { status: "failed", why: data ? `burn of bin ${best.id} reverted with ${data.slice(0, 74)}` : `burn of bin ${best.id} reverted: ${safeError(e)}` };
+  }
+}
+
+/**
+ * eth_call of a function that RETURNS NOTHING (rebalance, openBand, tripGuard). ethers v5 hands the revert data of a reverted eth_call back as an ordinary RESULT for some node
+ * error shapes (MEASURED on anvil: a reverting pair.burn came back as 0x08c379a0...), so a "successful" simulation is only one that returned EXACTLY "0x". Anything else is thrown as a
+ * revert with that data, so classifyRevert decodes it and nothing is ever sent on the strength of a reverted simulation.
+ */
+export async function callVoid(provider: providers.Provider, tx: { from: string; to: string; data: string }): Promise<void> {
+  const ret = await provider.call(tx);
+  if (ret !== "0x" && ret !== "") throw Object.assign(new Error("simulation returned revert data"), { data: ret });
 }

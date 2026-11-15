@@ -21,11 +21,11 @@ test("key material is touched only by signer.ts; sending only by txkit.ts throug
   assert.match(read("signer.ts"), /DLMM_KEEPER_KEYSTORE_PASSWORD_FILE/);
   assert.match(read("signer.ts"), /DLMM_KEEPER_KEYSTORE_PATH/);
 });
-test("the keeper sends only two things: rebalance(...) and tripGuard(); both go through makeSender", () => {
+test("the keeper sends only three things: rebalance(...), openBand(...) and tripGuard(); all go through makeSender", () => {
   const t = stripComments(read("keeper.ts"));
   assert.equal((t.match(/makeSender\(/g) ?? []).length, 2);
   // (lastRebalanceAt is a read used by the read-back)
-  assert.deepEqual([...new Set([...t.matchAll(/encodeFunctionData\("(\w+)"/g)].map((m) => m[1]))].sort(), ["lastRebalanceAt", "rebalance", "tripGuard"]);
+  assert.deepEqual([...new Set([...t.matchAll(/encodeFunctionData\("(\w+)"/g)].map((m) => m[1]))].sort(), ["lastRebalanceAt", "openBand", "rebalance", "tripGuard"]);
 });
 test("the RPC URL is read from the environment in ONE place and is not a CLI argument anywhere in the project", () => {
   const hits = fs.readdirSync(SRC).filter((f) => /process\.env\.AVALANCHE|env\.AVALANCHE|AVALANCHE_MAINNET_RPC_URL/.test(stripComments(read(f))));

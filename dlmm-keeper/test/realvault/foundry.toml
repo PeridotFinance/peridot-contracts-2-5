@@ -1,0 +1,20 @@
+# Compiles the REAL vault (contracts/vault-dlmm/src) together with W4's mocks and OpenZeppelin's TransparentUpgradeableProxy for the keeper's anvil end-to-end test.
+# Own project (never contracts/vault-dlmm/foundry.toml, never contracts/foundry.toml); same compiler settings as the vault. FOUNDRY_OUT / FOUNDRY_CACHE_PATH point to a temp dir.
+# Needs contracts/lib/{forge-std,openzeppelin-contracts,openzeppelin-contracts-upgradeable} (gitignored symlinks to RobinhoodVaults/lib).
+[profile.default]
+src = "src"
+solc_version = "0.8.35"
+evm_version = "osaka"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+offline = true
+allow_paths = ["../../../contracts"]
+ignored_error_codes = [3628, 2072, 5667, 2018]
+remappings = [
+  "vault/=../../../contracts/vault-dlmm/",
+  "forge-std/=../../../contracts/lib/forge-std/src/",
+  "@openzeppelin/contracts/=../../../contracts/lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=../../../contracts/lib/openzeppelin-contracts-upgradeable/contracts/",
+]
