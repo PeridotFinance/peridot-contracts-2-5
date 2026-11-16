@@ -7,13 +7,13 @@ Base: commit `b5540678` (Merge feat/dlmm-vault-fork into integration). Branch `f
 
 | | count |
 |---|---|
-| hand mutants (one change each) | 200 (167 on `PharaohDlmmVault.sol` M01..M167, 33 on `PharaohDlmmPairValidator.sol` V01..V14c) |
-| killed by the 419 pre-existing tests | 119 |
+| hand mutants (one change each) | 200 (note: M19 and M20 are the same mutation written two ways; 167 on `PharaohDlmmVault.sol` M01..M167, 33 on `PharaohDlmmPairValidator.sol` V01..V14c) |
+| killed by the 419 pre-existing unit tests (the 94 fork tests were not run against any mutant) | 119 |
 | killed only by the new tests (`test/Mutation.t.sol`) | 72 |
 | equivalent (argued in the table, not killable) | 9 |
 | survived, unexplained | 0 |
 
-**Final score: 191 / (200 - 9) = 100.0 % of the non-equivalent mutants killed** (95.5 % of all 200). The pre-existing suite alone scored 119 / (200 - 9) = 62.3 %.
+**Final score: 191 / (200 - 9) = 100.0 % of the non-equivalent mutants killed** (95.5 % of all 200). The pre-existing **unit** suite alone scored 119 / (200 - 9) = 62.3 %; the fork suite (94 tests, which also covers the 14 init checks, `ActiveIdMoved`, the loss bound and one-sided adds on the real pool) was not exercised against mutants, so part of the 72 may already have been caught there.
 No kill rests on a fuzz or invariant test alone: every kill has at least one deterministic failing unit test (checked on the table). M07 is killed because the deployment in `setUp` reverts (the mutated ceiling 199_999_999 is below the 200_000_000 cap the suites initialise with); M04 and M50 are killed by `test_setDepositCapBounds`.
 
 ## Method
@@ -33,7 +33,7 @@ No kill rests on a fuzz or invariant test alone: every kill has at least one det
 `first = 1911880305644076833487114229076, income = 35271246637922355855, amt = 12539887258264965128491181840794683951595290493545185096511`
 fails `assertGe(n1 * d0, n0 * d1, "share price did not fall on deposit")` with `3495705172959232 < 3495705172960626` (a shortfall of 1394 on 3.5e15, 4e-10 relative).
 DERIVED, not separately proven: with the OZ virtual offset (`totalAssets() + 1`, `totalSupply() + 1`) the minted shares round to more than the exact price when the share price is above 1 (income inside the bins), so the share price can fall by a rounding amount; the assertion has no tolerance.
-It is a test-precision issue (one unit or 1e-9 relative of tolerance would fix it), not a vault defect. Effect on this report: the persisted failure made that one test fail for every later mutant in the same scratch copy, so those first-pass kills were **discarded** and all 81 mutants whose only killer was this test were re-run with a clean cache (14 killed, 67 survived and were then handled by the new tests). The table below never lists this test.
+Reproduced at both the optimizer-off and the real config (optimizer 200) by calling the test body with the three recorded arguments from a throwaway subclass (not committed). It is a test-precision issue (one unit or 1e-9 relative of tolerance would fix it), not a vault defect. Effect on this report: the persisted failure made that one test fail for every later mutant in the same scratch copy, so those first-pass kills were **discarded** and all 81 mutants whose only killer was this test were re-run with a clean cache (14 killed, 67 survived and were then handled by the new tests). The table below never lists this test.
 
 ## New tests (`contracts/vault-dlmm/test/Mutation.t.sol`, 61 test functions, 122 tests with the Flipped twins)
 
@@ -271,7 +271,7 @@ M11, M93, M110, M128, M129, M156, M157, M158, V01b. The reason is in the "killed
 | M153 | `PharaohDlmmVault.sol:696` | bit 32: hook != rewarder not detected | `MutationTest::test_bit32_hookElsewhereWhileIsLinkedStillTrue` | KILLED (new test) |
 | M154 | `PharaohDlmmVault.sol:698` | bit 32: rewarder.isLinked() == false not detected | `W2SmokeTest::test_exitsIgnoreGuardPauseFeedAndPin` | KILLED |
 | M155 | `PharaohDlmmVault.sol:702` | bit 32: beacon implementation codehash change not detected | `GuardTest::test_bit32_clearsWhenRelinked`, `GuardTest::test_bit32_implementationCodehashChanged` | KILLED |
-| M156 | `PharaohDlmmVault.sol:700` | bit 32: failed beacon read not detected | a failed beacon read leaves `impl = address(0)`, whose codehash is 0, which differs from the pinned (non-zero, enforced by validator check 1) codehash: bit 32 is set either way | EQUIVALENT |
+| M156 | `PharaohDlmmVault.sol:700` | bit 32: failed beacon read not detected | a failed beacon read leaves `impl = address(0)`, whose codehash is 0 (no account) or keccak256("") (funded empty account); neither can equal the pinned codehash, which is non-zero (validator check 1) and taken from a contract with code, so bit 32 is set either way | EQUIVALENT |
 | M157 | `PharaohDlmmVault.sol:696` | bit 32: failed hook read not detected | a failed hook read leaves the hook word 0, which differs from the (non-zero) rewarder: bit 32 is set either way | EQUIVALENT |
 | M158 | `PharaohDlmmVault.sol:678` | bit 16: failed getActiveId read not a deviation | a failed `getActiveId` read leaves word 0, i.e. id 0, which is more than 4096 bins from 2^23 and returns `true` on the next line: deviation either way | EQUIVALENT |
 | M159 | `PharaohDlmmVault.sol:278` | redeemInKind: pays msg.sender instead of receiver | `MutationTest::test_redeemInKindPaysTheReceiverNotTheCaller` | KILLED (new test) |
