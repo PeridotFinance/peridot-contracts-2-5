@@ -27,7 +27,10 @@ No kill rests on a fuzz or invariant test alone: every kill has at least one det
 - Fork tests (94, shared lock, RPC): **none was needed**. Every mutant was either killed by a unit/mock test or is equivalent, so no fork run was made, no lock was taken and no endpoint was touched.
 - Full suite at the end, real config, plain `forge test` in the worktree: **541 passed, 0 failed, 7 skipped** (the 7 fork suites skip without `DLMM_FORK_BLOCK`).
 
-## Finding in the existing suite (not changed here)
+## Finding in the existing suite (not changed here) -- VERDICT (round 2): a missing tolerance in the test, not a vault defect
+
+With the OZ virtual offset, shares = floor(a (S+1)/(N+1)); the exact bound is D = N s - a S <= a (N-S)/(N+1) (D = 0 when N <= S). Recorded input: D = 1394, bound 1480, holders lose 1.3e-5 raw units. Worst case found (idle donation to price 100x at the 1e6 minimum supply): about 31 raw units, funded by the donor. Repeated tiny deposits bleed at most about 200 (p-1) raw units in total under the cap. Not profitable after gas. Tests: `testFuzz_depositPriceDropIsBoundedByTheVirtualOffset`, `test_recordedFlakyInputIsInsideTheBound`.
+
 
 `FuzzTest::testFuzz_depositShareValueNeverExceedsAssets` (and its Flipped twin) **fails on the unmutated source** for a rare input, found during the first (unseeded) sweep and then replayed by forge from `cache/fuzz/failures`:
 `first = 1911880305644076833487114229076, income = 35271246637922355855, amt = 12539887258264965128491181840794683951595290493545185096511`
@@ -2273,4 +2276,544 @@ M11, M93, M110, M128, M129, M156, M157, M158, V01b. The reason is in the "killed
 @@ -74 +74 @@
 -        if (assetDecimals > 18 || pairDecimals > 18) revert IPharaohDlmmVault.PairValidationFailed(14);
 +        if (assetDecimals > 19 || pairDecimals > 19) revert IPharaohDlmmVault.PairValidationFailed(14);
+```
+
+
+---
+
+# Round 2: the post-review code (source at HEAD `2862896d`)
+
+Scope: exactly the code added or changed by the review fixes: `MIN_SUPPLY` / `_requireMinSupply` (deposit and mint), the balance-delta payout in `_payOutAsset`, `renounceOwnership` disabled, cooldown bound 112, the `harvestRewards` claim delta and forward-whole logic,
+the post-swap `_poolDeviates` re-check in `openBand` and in `rebalance` (each swap direction), and the future-`updatedAt` feed rule. Same method as round 1 (scratch copies, optimizer off, `FOUNDRY_FUZZ_SEED=0x2a`, clean fuzz cache before each mutant).
+
+| | count |
+|---|---|
+| mutants | 46 (all on `PharaohDlmmVault.sol`) |
+| killed by the suite as it stood (W4 tests and round-1 tests included) | 37 |
+| killed only by the new round-2 tests | 8 |
+| equivalent | 1 (S09) |
+| survived, unexplained | 0 |
+
+**Score: 45 / (46 - 1) = 100 % of the non-equivalent mutants.**
+
+New round-2 tests in `test/Mutation.t.sol`: `MutationPayoutTest` (+ Flipped) with a `LyingRouter` that performs the real swap but reports a different amount (B01: the vault must pay the USDC balance delta, checked with an overstating, an understating and an honest router),
+`test_harvestWithNothingToForwardDoesNotTransferZero` (H05), `test_renounceOwnershipDisabledForOwnerAndUnauthorisedForOthers` (R02, exact selectors through `_assertRevertsWith`; a bare `vm.expectRevert` before a low-level `call` did NOT catch the wrong selector, so do not write it that way),
+`test_mintMinSupplyIsMeasuredInSharesNotAssets` (S12), `test_supplyBelowMinimumReportsTheResultingSupply` (S14), `test_openBandPostSwapRecheckUsesTheRightPriceOrder` and `test_rebalancePostSwapRecheckUsesTheRightPriceOrder` (P13, P14: pool at oracle ratio 1.003, a 40 bp bound),
+`test_openBandRechecksThePoolAfterAUsdtToUsdcSwap` (P10: the vault's own USDt -> USDC swap lands the active id 30 bins away at a 20 bp bound). Also changed: the daily-cap/readyAt test now uses cooldown 112 (the old 111 is refused since the bound moved).
+
+Boundaries covered: MIN_SUPPLY 1e6 (S01, S03) and 1e6-1 (S02), the supply == 0 case (S08), cooldown 112 accepted and 111 refused (C01, C02), the exit paths unaffected by the minimum (S10, S11).
+
+Final run on the unmutated source (clean `cache/fuzz` and `cache/invariant`, real config): **609 passed, 0 failed, 7 skipped** (the fork suites). Runtime size of `PharaohDlmmVault` 24,051 B, margin 525 B (no vault change).
+
+## Table (round 2)
+
+| id | file:line | change | killed by | status |
+|---|---|---|---|---|
+| S01 | `PharaohDlmmVault.sol:45` | MIN_SUPPLY 1e6 -> 1e6+1 (supply exactly 1e6 refused) | `FuzzTest::testFuzz_depositShareValueNeverExceedsAssets`, `MutationTest::testFuzz_depositPriceDropIsBoundedByTheVirtualOffset`, `SharesTest::test_firstDepositorInflationAttackIsRefused` (+3 more) | KILLED |
+| S02 | `PharaohDlmmVault.sol:45` | MIN_SUPPLY 1e6 -> 1e6-1 (supply 1e6-1 allowed) | `SharesTest::test_firstDepositorInflationAttackIsRefused` | KILLED |
+| S03 | `PharaohDlmmVault.sol:241` | min-supply interval end: `<` to `<=` (supply exactly 1e6 refused) | `FuzzTest::testFuzz_depositShareValueNeverExceedsAssets`, `MutationTest::testFuzz_depositPriceDropIsBoundedByTheVirtualOffset`, `SharesTest::test_firstDepositorInflationAttackIsRefused` (+3 more) | KILLED |
+| S04 | `PharaohDlmmVault.sol:223` | deposit: min-supply check removed | `FuzzTest::testFuzz_depositNeverExceedsMaxDeposit`, `SharesTest::test_dustSupplyEntryDilution_nowRefused`, `SharesTest::test_entryRefusedWhileSupplyIsBelowMinimum_butAllowedWhenItLandsAboveIt` (+4 more) | KILLED |
+| S05 | `PharaohDlmmVault.sol:231` | mint: min-supply check removed | `SharesTest::test_firstDepositorInflationAttackIsRefused`, `W2SmokeTest::test_minSupplyBlocksDustAttackerButNotExits` | KILLED |
+| S06 | `PharaohDlmmVault.sol:240` | min-supply: existing supply ignored | `FuzzTest::testFuzz_depositNeverExceedsMaxDeposit`, `FuzzTest::testFuzz_depositShareValueNeverExceedsAssets`, `MutationTest::testFuzz_depositPriceDropIsBoundedByTheVirtualOffset` (+3 more) | KILLED |
+| S07 | `PharaohDlmmVault.sol:240` | min-supply: minted shares ignored | `CapTest::test_depositOverCapReverts`, `CapTest::test_depositUpToCapExactly`, `CapTest::test_maxDepositTracksHeadroom` (+3 more) | KILLED |
+| S08 | `PharaohDlmmVault.sol:241` | min-supply: supply == 0 case (first depositor) exempt | `FuzzTest::testFuzz_depositNeverExceedsMaxDeposit`, `SharesTest::test_firstDepositorInflationAttackIsRefused`, `W2SmokeTest::test_fourWeiAttackerScenarioNoLongerProfits` (+1 more) | KILLED |
+| S09 | `PharaohDlmmVault.sol:241` | min-supply: lower interval end s == 0 excluded explicitly (s >= 1 on every entry) | `s = totalSupply() + minted` is at least `minted`, and both `deposit` and `mint` refuse zero shares first, so `s == 0` never reaches the check | EQUIVALENT |
+| S10 | `PharaohDlmmVault.sol:288` | redeemInKind gated by the min-supply rule | `ExitsTest::test_inKind_100PercentInTheDepeggedLeg`, `ExitsTest::test_inKind_lastHolderLeavesNothingBehind`, `ExitsTest::test_inKind_withEveryConditionAtOnce` (+5 more) | KILLED |
+| S11 | `PharaohDlmmVault.sol:302` | redeem/withdraw gated by the min-supply rule | `ExitsTest::test_control_depositAndRedeemDoReadTheFeeds`, `SharesTest::test_dustSupplyEntryDilution_nowRefused`, `SharesTest::test_exitsWorkWithSupplyBelowMinimum_redeemAndWithdraw` (+3 more) | KILLED |
+| S12 | `PharaohDlmmVault.sol:231` | mint: min-supply measured in assets, not shares | `MutationTest::test_mintMinSupplyIsMeasuredInSharesNotAssets` | KILLED (new test) |
+| S13 | `PharaohDlmmVault.sol:222` | deposit: min-supply measured in assets, not shares | `SharesTest::test_dustSupplyEntryDilution_nowRefused`, `SharesTest::test_w10F1_attackerFourWeiSharesPlusDonation` | KILLED |
+| S14 | `PharaohDlmmVault.sol:241` | min-supply: error reports the minted shares, not the resulting supply | `MutationTest::test_supplyBelowMinimumReportsTheResultingSupply` | KILLED (new test) |
+| B01 | `PharaohDlmmVault.sol:309` | payout: router's returned amount instead of the balance delta | `MutationPayoutTest::test_redeemPaysTheBalanceDeltaWhenTheRouterOverstates`, `MutationPayoutTest::test_redeemPaysTheBalanceDeltaWhenTheRouterUnderstates` | KILLED (new test) |
+| B02 | `PharaohDlmmVault.sol:311` | payout: whole USDC balance instead of the delta | `ExitsTest::test_control_depositAndRedeemDoReadTheFeeds`, `ExitsTest::test_hook_mintHookDown_exitsWorkButBandOpsFail`, `ExitsTest::test_redeem_worksWithPauseAndLatch` (+4 more) | KILLED |
+| B03 | `PharaohDlmmVault.sol:309` | payout: balance read after the swap (delta always 0) | `ExitsTest::test_redeem_depeggedLegWithAValidFeedStillExits`, `ExitsTest::test_redeem_worksWithPauseAndLatch`, `SharesTest::test_redeemAndWithdrawPayExactlyTheReceiverBalanceDelta` (+3 more) | KILLED |
+| B04 | `PharaohDlmmVault.sol:311` | payout: `=` instead of `+=` (idle USDC slice dropped) | `ExitsTest::test_redeem_worksWithPauseAndLatch`, `SharesTest::test_redeemAndWithdrawPayExactlyTheReceiverBalanceDelta`, `SharesTest::test_redeemWithBandPaysAboutTheNav` (+2 more) | KILLED |
+| B05 | `PharaohDlmmVault.sol:309` | payout: balance-before read from the wrong token | `ExitsTest::test_control_depositAndRedeemDoReadTheFeeds`, `ExitsTest::test_hook_mintHookDown_exitsWorkButBandOpsFail`, `ExitsTest::test_redeem_depeggedLegWithAValidFeedStillExits` (+3 more) | KILLED |
+| R01 | `PharaohDlmmVault.sol:765` | renounceOwnership works again | `SharesTest::test_renounceOwnershipDisabled`, `W2SmokeTest::test_renounceOwnershipDisabled` | KILLED |
+| R02 | `PharaohDlmmVault.sol:765` | renounceOwnership: onlyOwner removed | `MutationTest::test_renounceOwnershipDisabledForOwnerAndUnauthorisedForOthers` | KILLED (new test) |
+| R03 | `PharaohDlmmVault.sol:766` | renounceOwnership reverts with the wrong error | `SharesTest::test_renounceOwnershipDisabled`, `W2SmokeTest::test_renounceOwnershipDisabled` | KILLED |
+| C01 | `PharaohDlmmVault.sol:788` | cooldown lower bound 112 -> 111 | `GuardTest::test_setGuardParamsBounds_rebalanceCooldown`, `W2SmokeTest::test_cooldownLowerBound112` | KILLED |
+| C02 | `PharaohDlmmVault.sol:788` | cooldown lower bound 112 -> 113 | `FuzzTest::testFuzz_guardParamsBounds`, `GuardTest::test_setGuardParamsBounds_rebalanceCooldown`, `MutationTest::test_rebalanceAllowedReadyAtIsTheLaterOfCooldownAndNextDay` (+3 more) | KILLED |
+| H01 | `PharaohDlmmVault.sol:592` | harvest event amount: whole balance, not the claim delta | `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar`, `W2SmokeTest::test_harvestEventAmountIsTheClaimOnly` | KILLED |
+| H02 | `PharaohDlmmVault.sol:590` | harvest: balance-before read after the claim (delta always 0) | `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar`, `W2SmokeTest::test_harvestEventAmountIsTheClaimOnly` | KILLED |
+| H03 | `PharaohDlmmVault.sol:594` | harvest forwards only the claimed delta (donated PHAR stays) | `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar`, `W2SmokeTest::test_harvestEventAmountIsTheClaimOnly` | KILLED |
+| H04 | `PharaohDlmmVault.sol:593` | harvest forwards only the pre-claim balance | `SharesTest::test_harvestRewards`, `SharesTest::test_harvestWorksWithDeadFeedsPausedAndLatched`, `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar` (+2 more) | KILLED |
+| H05 | `PharaohDlmmVault.sol:594` | harvest: zero-balance guard removed | `MutationTest::test_harvestWithNothingToForwardDoesNotTransferZero` | KILLED (new test) |
+| H06 | `PharaohDlmmVault.sol:597` | harvest event reports the forwarded whole balance | `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar`, `W2SmokeTest::test_harvestEventAmountIsTheClaimOnly` | KILLED |
+| H07 | `PharaohDlmmVault.sol:594` | harvest forwards to msg.sender | `SharesTest::test_harvestRewards`, `SharesTest::test_pharHarvestedAmountIgnoresDonatedPhar`, `W2SmokeTest::test_harvestAndParams` (+1 more) | KILLED |
+| P01 | `PharaohDlmmVault.sol:409` | openBand: post-swap pool/oracle re-check removed | `PostSwapTest::test_openBand_postSwapRevertCarriesBit16AndLeavesNoState`, `PostSwapTest::test_openBand_recheckAlone_followsTheParameter`, `PostSwapTest::test_openBand_recheckAlone_oneSignOfTheSkewIsPushedOver` (+1 more) | KILLED |
+| P02 | `PharaohDlmmVault.sol:454` | rebalance: post-swap pool/oracle re-check removed | `PostSwapTest::test_rebalance_recheckAlone_down`, `PostSwapTest::test_rebalance_recheckAlone_up`, `PostSwapTest::test_rebalance_wideSwapIsRefusedByTheRecheck_down` (+1 more) | KILLED |
+| P03 | `PharaohDlmmVault.sol:409` | openBand: re-check inverted | `CapTest::test_openBandAboveCapIsNotBlockedByTheCap_D6`, `CapTest::test_openBandAtCapWorks`, `ExitsTest::test_control_depositAndRedeemDoReadTheFeeds` (+7 more) | KILLED |
+| P04 | `PharaohDlmmVault.sol:454` | rebalance: re-check inverted | `ExitsTest::test_hook_mintHookDown_exitsWorkButBandOpsFail`, `MutationTest::test_rebalanceAllowedReadyAtIsTheLaterOfCooldownAndNextDay`, `MutationTest::test_rebalanceDeadline` (+5 more) | KILLED |
+| P07 | `PharaohDlmmVault.sol:454` | rebalance: re-check only when swapping X for Y | `PostSwapTest::test_rebalance_recheckAlone_up`, `PostSwapTest::test_rebalance_wideSwapIsRefusedByTheRecheck_up` | KILLED |
+| P08 | `PharaohDlmmVault.sol:454` | rebalance: re-check only when swapping Y for X | `PostSwapTest::test_rebalance_recheckAlone_down`, `PostSwapTest::test_rebalance_wideSwapIsRefusedByTheRecheck_down` | KILLED |
+| P09 | `PharaohDlmmVault.sol:409` | openBand: re-check skipped after the USDC -> USDt swap | `PostSwapTest::test_openBand_postSwapRevertCarriesBit16AndLeavesNoState`, `PostSwapTest::test_openBand_recheckAlone_followsTheParameter`, `PostSwapTest::test_openBand_recheckAlone_oneSignOfTheSkewIsPushedOver` (+1 more) | KILLED |
+| P10 | `PharaohDlmmVault.sol:409` | openBand: re-check skipped after the USDt -> USDC swap | `MutationTest::test_openBandRechecksThePoolAfterAUsdtToUsdcSwap` | KILLED (new test) |
+| P11 | `PharaohDlmmVault.sol:409` | openBand: re-check reverts GuardUnsafe(0) instead of bit 16 | `PostSwapTest::test_openBand_postSwapRevertCarriesBit16AndLeavesNoState`, `PostSwapTest::test_openBand_recheckAlone_oneSignOfTheSkewIsPushedOver` | KILLED |
+| P12 | `PharaohDlmmVault.sol:454` | rebalance: re-check reverts GuardUnsafe(0) instead of bit 16 | `PostSwapTest::test_rebalance_recheckAlone_down`, `PostSwapTest::test_rebalance_recheckAlone_up`, `PostSwapTest::test_rebalance_wideSwapIsRefusedByTheRecheck_down` (+1 more) | KILLED |
+| P13 | `PharaohDlmmVault.sol:409` | openBand: re-check with the prices swapped | `MutationTest::test_openBandPostSwapRecheckUsesTheRightPriceOrder` | KILLED (new test) |
+| P14 | `PharaohDlmmVault.sol:454` | rebalance: re-check with the prices swapped | `MutationTest::test_rebalancePostSwapRecheckUsesTheRightPriceOrder` | KILLED (new test) |
+| F01 | `PharaohDlmmVault.sol:690` | feed: future updatedAt check removed | `W2SmokeTest::test_futureUpdatedAtFeedIsBad` | KILLED |
+| F02 | `PharaohDlmmVault.sol:690` | feed: updatedAt == block.timestamp treated as bad | `CapTest::setUp`, `ExitsTest::setUp`, `FuzzTest::setUp` (+4 more) | KILLED |
+| F03 | `PharaohDlmmVault.sol:690` | feed: future updatedAt accepted as fresh (pre-fix code) | `W2SmokeTest::test_futureUpdatedAtFeedIsBad` | KILLED |
+
+## Diffs (round 2)
+
+### S01 MIN_SUPPLY 1e6 -> 1e6+1 (supply exactly 1e6 refused)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -45 +45 @@
+-    uint256 private constant MIN_SUPPLY = 1e6;
++    uint256 private constant MIN_SUPPLY = 1e6 + 1;
+```
+
+### S02 MIN_SUPPLY 1e6 -> 1e6-1 (supply 1e6-1 allowed)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -45 +45 @@
+-    uint256 private constant MIN_SUPPLY = 1e6;
++    uint256 private constant MIN_SUPPLY = 1e6 - 1;
+```
+
+### S03 min-supply interval end: `<` to `<=` (supply exactly 1e6 refused)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -241 +241 @@
+-        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
++        if (s <= MIN_SUPPLY) revert SupplyBelowMinimum(s);
+```
+
+### S04 deposit: min-supply check removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -223 +222,0 @@
+-        _requireMinSupply(shares);
+```
+
+### S05 mint: min-supply check removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -232 +231,0 @@
+-        _requireMinSupply(shares);
+```
+
+### S06 min-supply: existing supply ignored
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -240 +240 @@
+-        uint256 s = totalSupply() + mintedShares;
++        uint256 s = mintedShares;
+```
+
+### S07 min-supply: minted shares ignored
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -240 +240 @@
+-        uint256 s = totalSupply() + mintedShares;
++        uint256 s = totalSupply();
+```
+
+### S08 min-supply: supply == 0 case (first depositor) exempt
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -241 +241 @@
+-        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
++        if (totalSupply() != 0 && s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
+```
+
+### S09 min-supply: lower interval end s == 0 excluded explicitly (s >= 1 on every entry)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -241 +241 @@
+-        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
++        if (s != 0 && s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
+```
+
+### S10 redeemInKind gated by the min-supply rule
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -288,0 +289 @@
++        _requireMinSupply(0);
+```
+
+### S11 redeem/withdraw gated by the min-supply rule
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -302,0 +303 @@
++        _requireMinSupply(0);
+```
+
+### S12 mint: min-supply measured in assets, not shares
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -232 +232 @@
+-        _requireMinSupply(shares);
++        _requireMinSupply(assets);
+```
+
+### S13 deposit: min-supply measured in assets, not shares
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -223 +223 @@
+-        _requireMinSupply(shares);
++        _requireMinSupply(assets);
+```
+
+### S14 min-supply: error reports the minted shares, not the resulting supply
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -241 +241 @@
+-        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(s);
++        if (s < MIN_SUPPLY) revert SupplyBelowMinimum(mintedShares);
+```
+
+### B01 payout: router's returned amount instead of the balance delta
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -309,3 +309 @@
+-            uint256 balBefore = IERC20(asset()).balanceOf(address(this));
+-            _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+-            paid += IERC20(asset()).balanceOf(address(this)) - balBefore;
++            paid += _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+```
+
+### B02 payout: whole USDC balance instead of the delta
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -311 +311 @@
+-            paid += IERC20(asset()).balanceOf(address(this)) - balBefore;
++            paid += IERC20(asset()).balanceOf(address(this));
+```
+
+### B03 payout: balance read after the swap (delta always 0)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -308,0 +309 @@
++            _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+@@ -310 +310,0 @@
+-            _swap(pairToken, IERC20(asset()), pairAmt, _md(expectedOut, BPS - _gp.maxRebalanceLossBps, BPS), block.timestamp);
+```
+
+### B04 payout: `=` instead of `+=` (idle USDC slice dropped)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -311 +311 @@
+-            paid += IERC20(asset()).balanceOf(address(this)) - balBefore;
++            paid = IERC20(asset()).balanceOf(address(this)) - balBefore;
+```
+
+### B05 payout: balance-before read from the wrong token
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -309 +309 @@
+-            uint256 balBefore = IERC20(asset()).balanceOf(address(this));
++            uint256 balBefore = pairToken.balanceOf(address(this));
+```
+
+### R01 renounceOwnership works again
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -765,2 +765,2 @@
+-    function renounceOwnership() public view override onlyOwner {
+-        revert RenounceDisabled();
++    function renounceOwnership() public override onlyOwner {
++        _transferOwnership(address(0));
+```
+
+### R02 renounceOwnership: onlyOwner removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -765 +765 @@
+-    function renounceOwnership() public view override onlyOwner {
++    function renounceOwnership() public view override {
+```
+
+### R03 renounceOwnership reverts with the wrong error
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -766 +766 @@
+-        revert RenounceDisabled();
++        revert ZeroAddress();
+```
+
+### C01 cooldown lower bound 112 -> 111
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -788 +788 @@
+-                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 112
++                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 111
+```
+
+### C02 cooldown lower bound 112 -> 113
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -788 +788 @@
+-                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 112
++                || p.maxPoolOracleDevBps < 20 || p.maxPoolOracleDevBps > 300 || p.rebalanceCooldown < 113
+```
+
+### H01 harvest event amount: whole balance, not the claim delta
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -592 +592 @@
+-        uint256 amount = phar.balanceOf(address(this)) - balBefore; // PHAR claimed in THIS call (donated PHAR does not inflate the event)
++        uint256 amount = phar.balanceOf(address(this)); // PHAR claimed in THIS call (donated PHAR does not inflate the event)
+```
+
+### H02 harvest: balance-before read after the claim (delta always 0)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -589,0 +590 @@
++        IDLMMRewarder(rewarder).claim(address(this), ids);
+@@ -591 +591,0 @@
+-        IDLMMRewarder(rewarder).claim(address(this), ids);
+```
+
+### H03 harvest forwards only the claimed delta (donated PHAR stays)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -594 +594 @@
+-        if (whole != 0) phar.safeTransfer(owner(), whole); // the whole balance is forwarded, as in R3
++        if (amount != 0) phar.safeTransfer(owner(), amount); // the whole balance is forwarded, as in R3
+```
+
+### H04 harvest forwards only the pre-claim balance
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -593 +593 @@
+-        uint256 whole = phar.balanceOf(address(this));
++        uint256 whole = balBefore;
+```
+
+### H05 harvest: zero-balance guard removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -594 +594 @@
+-        if (whole != 0) phar.safeTransfer(owner(), whole); // the whole balance is forwarded, as in R3
++        phar.safeTransfer(owner(), whole); // the whole balance is forwarded, as in R3
+```
+
+### H06 harvest event reports the forwarded whole balance
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -597 +597 @@
+-        emit PharHarvested(address(phar), amount, totalSupply(), ok ? nav : 0);
++        emit PharHarvested(address(phar), whole, totalSupply(), ok ? nav : 0);
+```
+
+### H07 harvest forwards to msg.sender
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -594 +594 @@
+-        if (whole != 0) phar.safeTransfer(owner(), whole); // the whole balance is forwarded, as in R3
++        if (whole != 0) phar.safeTransfer(msg.sender, whole); // the whole balance is forwarded, as in R3
+```
+
+### P01 openBand: post-swap pool/oracle re-check removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +408,0 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P02 rebalance: post-swap pool/oracle re-check removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +453,0 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P03 openBand: re-check inverted
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +409 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (!_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P04 rebalance: re-check inverted
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +454 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (!_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P07 rebalance: re-check only when swapping X for Y
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +454 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (swapXForY && _poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P08 rebalance: re-check only when swapping Y for X
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +454 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (!swapXForY && _poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P09 openBand: re-check skipped after the USDC -> USDt swap
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +409 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (aAmt <= pv + 1 && _poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P10 openBand: re-check skipped after the USDt -> USDC swap
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +409 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (pv <= aAmt + 1 && _poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P11 openBand: re-check reverts GuardUnsafe(0) instead of bit 16
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +409 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (_poolDeviates(pa, pp)) revert GuardUnsafe(0); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P12 rebalance: re-check reverts GuardUnsafe(0) instead of bit 16
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +454 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (_poolDeviates(pa, pp)) revert GuardUnsafe(0); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P13 openBand: re-check with the prices swapped
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -409 +409 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (_poolDeviates(pp, pa)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### P14 rebalance: re-check with the prices swapped
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -454 +454 @@
+-        if (_poolDeviates(pa, pp)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
++        if (_poolDeviates(pp, pa)) revert GuardUnsafe(POOL_ORACLE_DEVIATION); // re-check after the vault's own inventory swap (W10 F2)
+```
+
+### F01 feed: future updatedAt check removed
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -690 +690 @@
+-            if (updatedAt > block.timestamp || block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
++            if (block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
+```
+
+### F02 feed: updatedAt == block.timestamp treated as bad
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -690 +690 @@
+-            if (updatedAt > block.timestamp || block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
++            if (updatedAt >= block.timestamp || block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
+```
+
+### F03 feed: future updatedAt accepted as fresh (pre-fix code)
+
+```diff
+--- a/PharaohDlmmVault.sol
++++ b/PharaohDlmmVault.sol
+@@ -690 +690 @@
+-            if (updatedAt > block.timestamp || block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
++            if (updatedAt <= block.timestamp && block.timestamp - updatedAt > maxAge) continue; // a future updatedAt is bad, not fresh
 ```
