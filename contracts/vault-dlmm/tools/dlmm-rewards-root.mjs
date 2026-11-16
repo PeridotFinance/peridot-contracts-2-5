@@ -65,11 +65,23 @@ function pseudoRandom(salt) { _seed = (Math.imul(_seed ^ (salt + 1), 0x85ebca6b)
 
 // ---------------------------------------------------------------------------------------------------------------------------------- chain sources
 /** A source answers: getHead(), getLogs({fromBlock,toBlock}) (the vault's Transfer + PharHarvested logs), getTimestamp(block). */
+/** `--local-rpc` accepts ONLY a plain http loopback URL with an explicit port (a LOCAL anvil fork for the rehearsal): no credentials, no path, no other host. */
+export function isLoopbackUrl(url) {
+  let u; try { u = new URL(url); } catch { return false; }
+  return u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) && u.port !== '' && u.username === '' && u.password === '' && (u.pathname === '/' || u.pathname === '') && u.search === '' && u.hash === '';
+}
 export class RpcSource {
-  constructor({ url = PUBLIC_RPC, vault = VAULT } = {}) {
-    if (url !== PUBLIC_RPC) throw new Error('only the public endpoint is allowed');
+  constructor({ url = PUBLIC_RPC, vault = VAULT, allowLocal = false } = {}) {
+    if (url !== PUBLIC_RPC && !(allowLocal && isLoopbackUrl(url))) throw new Error('only the public endpoint is allowed (the rehearsal may use --local-rpc with a loopback http://127.0.0.1:PORT)');
+    this.local = url !== PUBLIC_RPC;
     this.provider = new ethers.providers.StaticJsonRpcProvider({ url, timeout: 30000 }, { chainId: CHAIN_ID, name: 'avalanche' });
     this.vault = vault;
+  }
+  /** `--local-rpc` only: the endpoint must be an anvil node (it answers anvil_nodeInfo) on chain 43114 (a fork of the live chain). A real node is refused. */
+  async assertLocalAnvil() {
+    try { await this.provider.send('anvil_nodeInfo', []); } catch { throw new Error('--local-rpc is for a LOCAL anvil fork only: the endpoint did not answer anvil_nodeInfo'); }
+    const id = Number(await this.provider.send('eth_chainId', []));
+    if (id !== CHAIN_ID) throw new Error(`--local-rpc: the local node's chain id is ${id}, not ${CHAIN_ID} (it must be an anvil fork of the live chain)`);
   }
   async getHead() { return this.provider.getBlockNumber(); }
   async getLogs({ fromBlock, toBlock }) {
@@ -415,7 +427,7 @@ export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, o
 }
 
 /** The manifest of an epoch: the metadata an operator publishes next to the data file. `uri` is a free string the operator fills in (never on chain). */
-export function buildManifest({ epoch, text, uri = '', git = null }) {
+export function buildManifest({ epoch, text, uri = '', git = null, extra = null }) {
   const i = epoch.inputs; const t = epoch.totals;
   return {
     schema: MANIFEST_SCHEMA,
@@ -429,11 +441,12 @@ export function buildManifest({ epoch, text, uri = '', git = null }) {
     dataFile: 'epoch.json', leavesFile: 'epoch.json', dataHash: sha(text), root: epoch.root,
     uri,
     publishEpochArguments: { root: epoch.root, total: t.publishTotal, fromBlock: i.startBlock, toBlock: i.endBlock, dataHash: sha(text) },
+    ...(extra ?? {}),
   };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------- orchestration
-export async function generate({ source: rawSource, cacheFile = null, args, previous = null, log = () => {}, sleep = sleepReal, git = null }) {
+export async function generate({ source: rawSource, cacheFile = null, args, previous = null, log = () => {}, sleep = sleepReal, git = null, manifestExtra = null }) {
   const source = withBackoff(rawSource, { sleep, log });
   const { epochId, userBps, vault, scanFrom, minAmount, chunk, sleepMs } = args;
   const allow = (args.allowContract ?? []).map(addr); const explicit = (args.exclude ?? []).map(addr);
@@ -492,7 +505,7 @@ export async function generate({ source: rawSource, cacheFile = null, args, prev
     window: { t0, t1 }, harvest, weightsRes, splitRes, opening, exclusions, codeChecks,
   });
   const text = toJson(epoch);
-  return { epoch, text, manifest: buildManifest({ epoch, text, uri: args.uri ?? '', git }) };
+  return { epoch, text, manifest: buildManifest({ epoch, text, uri: args.uri ?? '', git, extra: manifestExtra }) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------- CLI
@@ -518,11 +531,14 @@ const HELP = `dlmm-rewards-root.mjs: time-weighted PHAR split of the Pharaoh DLM
     --min-amount WEI        drop leaves below this (default 1)           --vault ADDR      default ${VAULT}
     --start-block N         with --first-epoch only: another first start block   --cache-dir DIR   resumable cache (default ./rewards-cache)
     --chunk N               blocks per getLogs call (default ${DEFAULT_CHUNK})   --sleep-ms N      pause between chunks   --fixture FILE   offline: events from a fixture
-  Network: only ${PUBLIC_RPC} (hard-wired; no environment variable is read, no URL is printed).
+    --local-rpc URL         REHEARSAL ONLY: read from a LOCAL anvil fork instead (http://127.0.0.1:PORT or http://localhost:PORT, nothing else; refused unless the node answers
+                            anvil_nodeInfo and has chain id 43114). Needs an explicit --cache-dir and --out-dir (a fork's data never lands in the real cache or epochs/), and
+                            the manifest gets "rehearsalEndpoint": "local-anvil": such an epoch is NOT publishable.
+  Network: only ${PUBLIC_RPC} (hard-wired; no environment variable is read, no URL is printed), or with --local-rpc a loopback anvil.
 `;
 
 export function parseArgs(argv) {
-  const a = { userBps: 9000, exclude: [], allowContract: [], extraPhar: 0n, minAmount: 1n, vault: VAULT, chunk: DEFAULT_CHUNK, sleepMs: 0, cacheDir: './rewards-cache', firstEpoch: false, uri: '', force: false };
+  const a = { userBps: 9000, exclude: [], allowContract: [], extraPhar: 0n, minAmount: 1n, vault: VAULT, chunk: DEFAULT_CHUNK, sleepMs: 0, cacheDir: './rewards-cache', cacheDirGiven: false, firstEpoch: false, uri: '', force: false };
   const need = (i, name) => { if (i + 1 >= argv.length) throw new Error(`${name} needs a value`); return argv[i + 1]; };
   const int = (v, name) => { if (!/^\d+$/.test(v)) throw new Error(`${name} must be a non-negative integer`); return Number(v); };
   const wei = (v, name) => { if (!/^\d+$/.test(v)) throw new Error(`${name} is an integer in wei`); return BigInt(v); };
@@ -542,7 +558,8 @@ export function parseArgs(argv) {
       case '--exclude': a.exclude.push(addr(need(i++, k))); break;
       case '--min-amount': a.minAmount = wei(need(i++, k), k); break;
       case '--vault': a.vault = addr(need(i++, k)); break;
-      case '--cache-dir': a.cacheDir = need(i++, k); break;
+      case '--cache-dir': a.cacheDir = need(i++, k); a.cacheDirGiven = true; break;
+      case '--local-rpc': a.localRpc = need(i++, k); break;
       case '--chunk': a.chunk = int(need(i++, k), k); if (a.chunk < 1) throw new Error('--chunk must be >= 1'); break;
       case '--sleep-ms': a.sleepMs = int(need(i++, k), k); break;
       case '--out-dir': a.outDir = need(i++, k); break;
@@ -558,6 +575,11 @@ export function parseArgs(argv) {
   if (a.firstEpoch === (a.previousManifest !== undefined)) throw new Error('give exactly one of --first-epoch / --previous-manifest');
   if (a.startBlock !== undefined && !a.firstEpoch) throw new Error('--start-block is only for --first-epoch');
   if (a.userBps > 10000) throw new Error('--user-bps must be 0..10000');
+  if (a.localRpc !== undefined) {
+    if (!isLoopbackUrl(a.localRpc)) throw new Error('--local-rpc must be a plain http loopback URL with a port (http://127.0.0.1:PORT)');
+    if (a.fixture) throw new Error('--local-rpc and --fixture are exclusive');
+    if (!a.cacheDirGiven || a.outDir === undefined) throw new Error('--local-rpc needs an explicit --cache-dir and --out-dir (a rehearsal must not touch ./rewards-cache or epochs/)');
+  }
   return a;
 }
 
@@ -565,12 +587,19 @@ export async function main(argv, { git = undefined } = {}) {
   const args = parseArgs(argv);
   if (args.help) { process.stdout.write(HELP); return 0; }
   const log = (m) => process.stderr.write(`${redact(m)}\n`);
-  let source; let cacheFile;
+  let source; let cacheFile; let manifestExtra = null;
   if (args.fixture) { source = new FixtureSource(JSON.parse(readFileSync(args.fixture, 'utf8'))); cacheFile = null; }
+  else if (args.localRpc) {
+    source = new RpcSource({ url: args.localRpc, vault: args.vault, allowLocal: true });
+    await source.assertLocalAnvil();
+    cacheFile = resolve(args.cacheDir, `scan-${CHAIN_ID}-${lc(args.vault)}.json`);
+    manifestExtra = { rehearsalEndpoint: 'local-anvil' };
+    log('LOCAL ANVIL (REHEARSAL): this output is not publishable (manifest.rehearsalEndpoint is set)');
+  }
   else { source = new RpcSource({ vault: args.vault }); cacheFile = resolve(args.cacheDir, `scan-${CHAIN_ID}-${lc(args.vault)}.json`); }
   const previous = args.previousManifest ? JSON.parse(readFileSync(args.previousManifest, 'utf8')) : null;
   const gitInfo = git !== undefined ? git : gitState();
-  const { epoch, text, manifest } = await generate({ source, cacheFile, args, previous, log, git: gitInfo });
+  const { epoch, text, manifest } = await generate({ source, cacheFile, args, previous, log, git: gitInfo, manifestExtra });
   const dir = resolve(args.outDir ?? join('epochs', String(args.epochId)));
   const dataFile = join(dir, 'epoch.json');
   if (existsSync(dataFile) && readFileSync(dataFile, 'utf8') !== text && !args.force) throw new Error(`${dataFile} exists and differs (a published epoch file must not change): use another --out-dir or --force`);

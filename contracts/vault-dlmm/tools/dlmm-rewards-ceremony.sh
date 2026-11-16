@@ -30,14 +30,15 @@ CEREMONY: PHAR rewards distributor (design A). Every Safe step = ONE Ledger conf
    A3  tools/dlmm-rewards-ceremony.sh deploy live            (pre-flight: chain, Safe 1-of-1, vault owner = Safe, vault.rewardToken() == PHAR; ONE tx; writes ceremony/dlmm-rewards-addresses.live.env)
    A4  DISTRIBUTOR=<address> EXPECT_OWNER_SAFE=true tools/dlmm-rewards-ceremony.sh verify live      (owner = Safe, PHAR, 1 day, 180 days, epochCount 0)
    A5  record the address, the runtime codehash and the source sha256 in the handoff; delete the deployer key
- B. EACH EPOCH (see docs/deployment-handoffs/avalanche-dlmm-vault-rewards-distribution.md section 6, the exact order)
-   B1  Safe: vault.harvestRewards()                          tools/dlmm-safe-call.sh send $VAULT 'harvestRewards()'   (read back PharHarvested, PHAR balance of the Safe)
-   B2  off chain: cast call $DIST 'epochCount()(uint256)'  ->  node tools/dlmm-rewards-root.mjs ...  ->  publish report + proofs publicly; a second person re-runs it
-   B3  Safe: PHAR.approve(distributor, total)   (exact)       tools/dlmm-rewards-safe-call.sh send approve ...
-   B4  Safe: distributor.publishEpoch(root, total)            tools/dlmm-rewards-safe-call.sh send publish ...         (read back epochInfo, balances, allowance 0)
-   B5  inside 24 h only, if anything is wrong: Safe: cancelEpoch(id), then regenerate for the NEW id
-   B6  after claimOpensAt: claims are open (anyone can submit; PHAR goes to the account in the leaf)
-   B7  after publishedAt + 180 days: Safe: sweepUnclaimed(id)  tools/dlmm-rewards-safe-call.sh send sweep ...
+ B. EACH EPOCH (docs/deployment-handoffs/avalanche-dlmm-vault-rewards-ceremony.md part B, the exact order; harvest DAILY, publish WEEKLY)
+   B1  daily: vault.harvestRewards() by the keeper (harvest block of dlmm-keeper) or by the Safe: tools/dlmm-harvest.sh simulate|send  (read back PharHarvested, the Safe's PHAR)
+   B2  weekly: cast call $DIST 'epochCount()(uint256)'  ->  node tools/dlmm-rewards-root.mjs ...  (gitDirty must be false)  ->  commit epochs/<id>/ (kept at least 180 days)
+   B3  second recompute by a FRESH subagent from the published inputs only (docs/deployment-handoffs/avalanche-dlmm-rewards-second-recompute.md): MATCH or stop
+   B4  Safe: PHAR.approve(distributor, total)   (exact)       tools/dlmm-rewards-safe-call.sh simulate|send approve ...
+   B5  Safe: distributor.publishEpoch(root, total, from, to, dataHash)   tools/dlmm-rewards-safe-call.sh simulate|send publish ...   (read back epochInfo, balances, allowance 0)
+   B6  inside 24 h only, if anything is wrong: Safe: cancelEpoch(id), then regenerate for the NEW id
+   B7  after claimOpensAt: claims are open (anyone can submit; PHAR goes to the account in the leaf)
+   B8  after publishedAt + 180 days: Safe: sweepUnclaimed(id)  tools/dlmm-rewards-safe-call.sh simulate|send sweep ...
 LIST
   exit 0
 fi
