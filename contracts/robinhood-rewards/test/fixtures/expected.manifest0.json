@@ -1,0 +1,48 @@
+{
+  "schema": "peridot-robinhood-ram-manifest/1",
+  "epochId": 0,
+  "chainId": 4663,
+  "vault": "0x67e7742922f4CC88C545e5aB5Df402b22DB4830b",
+  "pair": "0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435",
+  "rewardToken": "0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802",
+  "startBlock": 1000,
+  "endBlock": 2500,
+  "startTimestamp": 1800000000,
+  "endTimestamp": 1800003000,
+  "heldTxHashes": [
+    "0x966d6335df23312ed482cba404179ed2d1f89d6373b08fda55870c943ede458b",
+    "0xa8a9d85c70e178fb4a9dc8f9ec3eea1829e0c01c1ef2e03b967657420791f29d",
+    "0xe01511f8885269ad186b029630571f37ec89a89e772523062f44c126a26cdc85",
+    "0x264f10d4fea00dca8305d01dcc9b99577475f7c86aa6e3a7b8e0bb1ba823382d"
+  ],
+  "heldSum": "97000000000000000",
+  "extraReward": "0",
+  "userBps": 9000,
+  "protocolRecipient": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "publishTotal": "97000000000000000",
+  "leafCount": 6,
+  "forwardExternalRewardArguments": {
+    "pairId": "0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435",
+    "token": "0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802",
+    "receiver": "<distributor>",
+    "amount": "97000000000000000"
+  },
+  "generator": {
+    "name": "robinhood-ram-root",
+    "version": "1.0.0"
+  },
+  "gitCommit": "fixture",
+  "gitDirty": false,
+  "exclusionListHash": "0x0253a78a28b73f1e20cc310029e15263b0ca9b93d87a2441b38bd866e37edb29",
+  "dataFile": "epoch.json",
+  "dataHash": "0xf7b732c3dbf0ed906388c2c0db21455a1b9746d199741828d41abc942f9b83dc",
+  "root": "0x3ae07c2d94449a76b49da02cf07bbec0c9b2f21c4928442e4ffd042c71bda8fe",
+  "uri": "",
+  "publishEpochArguments": {
+    "root": "0x3ae07c2d94449a76b49da02cf07bbec0c9b2f21c4928442e4ffd042c71bda8fe",
+    "total": "97000000000000000",
+    "fromBlock": 1000,
+    "toBlock": 2500,
+    "dataHash": "0xf7b732c3dbf0ed906388c2c0db21455a1b9746d199741828d41abc942f9b83dc"
+  }
+}

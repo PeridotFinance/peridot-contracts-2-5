@@ -1,0 +1,473 @@
+{
+  "schema": "peridot-robinhood-ram-epoch/1",
+  "generator": {
+    "name": "robinhood-ram-root",
+    "version": "1.0.0"
+  },
+  "inputs": {
+    "chainId": 4663,
+    "vault": "0x67e7742922f4CC88C545e5aB5Df402b22DB4830b",
+    "pair": "0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435",
+    "rewardToken": "0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802",
+    "markets": [
+      {
+        "name": "rpSPY",
+        "address": "0x14CC6fE0AE856B736fAb6678619cEd3d4738EA8B"
+      },
+      {
+        "name": "rpUSDGs",
+        "address": "0x2117c202F356399C9aE2D395D4e155785015ac6B"
+      }
+    ],
+    "epochId": 0,
+    "firstEpoch": true,
+    "previousEpochId": null,
+    "scanFromBlock": 1000,
+    "startBlock": 1000,
+    "endBlock": 2500,
+    "startTimestamp": 1800000000,
+    "endTimestamp": 1800003000,
+    "durationSeconds": 3000,
+    "userBps": 9000,
+    "protocolRecipient": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+    "extraReward": "0",
+    "minAmount": "1",
+    "allowContracts": [],
+    "explicitExcludes": [],
+    "rule": "held RAM split between markets by side principal USD at the preceding PairCheckpoint (usdg*1e12 vs benchmark+pnl-usdg*1e12); userBps of each market over time-weighted pToken supply; rest to protocolRecipient",
+    "held": [
+      {
+        "txHash": "0x966d6335df23312ed482cba404179ed2d1f89d6373b08fda55870c943ede458b",
+        "block": 1050,
+        "logIndex": 4,
+        "amount": "7000000000000000",
+        "checkpoint": null,
+        "stockUSD18": "0",
+        "usdgUSD18": "0",
+        "toStockMarket": "0",
+        "toDollarMarket": "0",
+        "unattributed": "7000000000000000"
+      },
+      {
+        "txHash": "0xa8a9d85c70e178fb4a9dc8f9ec3eea1829e0c01c1ef2e03b967657420791f29d",
+        "block": 1800,
+        "logIndex": 16,
+        "amount": "30000000000000000",
+        "checkpoint": {
+          "txHash": "0xa8a9d85c70e178fb4a9dc8f9ec3eea1829e0c01c1ef2e03b967657420791f29d",
+          "block": 1800,
+          "logIndex": 15,
+          "benchmarkUSD18": "13000000000000000000",
+          "pnlUSD18": "0",
+          "stockPrincipal": "10000000000000000",
+          "usdgPrincipal": "5000000"
+        },
+        "stockUSD18": "8000000000000000000",
+        "usdgUSD18": "5000000000000000000",
+        "toStockMarket": "18461538461538461",
+        "toDollarMarket": "11538461538461539",
+        "unattributed": "0"
+      },
+      {
+        "txHash": "0xe01511f8885269ad186b029630571f37ec89a89e772523062f44c126a26cdc85",
+        "block": 2000,
+        "logIndex": 20,
+        "amount": "20000000000000000",
+        "checkpoint": {
+          "txHash": "0x042e3dd02bec105c261d82e4f4b882b2e6e90bfb2ca3ca6c4954d3734095fc71",
+          "block": 1900,
+          "logIndex": 19,
+          "benchmarkUSD18": "14000000000000000000",
+          "pnlUSD18": "-1000000000000000000",
+          "stockPrincipal": "10000000000000000",
+          "usdgPrincipal": "5000000"
+        },
+        "stockUSD18": "8000000000000000000",
+        "usdgUSD18": "5000000000000000000",
+        "toStockMarket": "12307692307692307",
+        "toDollarMarket": "7692307692307693",
+        "unattributed": "0"
+      },
+      {
+        "txHash": "0x264f10d4fea00dca8305d01dcc9b99577475f7c86aa6e3a7b8e0bb1ba823382d",
+        "block": 2500,
+        "logIndex": 22,
+        "amount": "40000000000000000",
+        "checkpoint": {
+          "txHash": "0x264f10d4fea00dca8305d01dcc9b99577475f7c86aa6e3a7b8e0bb1ba823382d",
+          "block": 2500,
+          "logIndex": 21,
+          "benchmarkUSD18": "19000000000000000000",
+          "pnlUSD18": "1000000000000000000",
+          "stockPrincipal": "15000000000000000",
+          "usdgPrincipal": "8000000"
+        },
+        "stockUSD18": "12000000000000000000",
+        "usdgUSD18": "8000000000000000000",
+        "toStockMarket": "24000000000000000",
+        "toDollarMarket": "16000000000000000",
+        "unattributed": "0"
+      }
+    ]
+  },
+  "totals": {
+    "heldSum": "97000000000000000",
+    "publishTotal": "97000000000000000",
+    "toStockMarket": "54769230769230768",
+    "toDollarMarket": "35230769230769232",
+    "unattributed": "7000000000000000",
+    "holdersTotal": "40052443679627236",
+    "protocol": {
+      "bpsPart": "9000000000000001",
+      "excludedHolders": "40947556320372758",
+      "roundingAndDust": "5",
+      "unattributed": "7000000000000000",
+      "extraReward": "0",
+      "asHolder": "5372040383717170",
+      "leafTotal": "62319596704089934"
+    },
+    "leafCount": 6
+  },
+  "markets": [
+    {
+      "name": "rpSPY",
+      "address": "0x14CC6fE0AE856B736fAb6678619cEd3d4738EA8B",
+      "reward": "54769230769230768",
+      "pool": "49292307692307691",
+      "protocolPart": "5476923076923077",
+      "paidToHolders": "30032263859447416",
+      "excludedSlice": "19260043832860272",
+      "dust": "0",
+      "rounding": "3",
+      "totalWeight": "1926900000000",
+      "supplyAtEnd": "755000000",
+      "noSupply": false,
+      "holders": [
+        {
+          "address": "0x0000000000000000000000000000000000000B0b",
+          "openingShares": "0",
+          "closingShares": "0",
+          "weight": "80000000000",
+          "averageShares": "26666666",
+          "amount": "2046491574749398",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x0000000000000000000000000000000000007702",
+          "openingShares": "0",
+          "closingShares": "50000000",
+          "weight": "104000000000",
+          "averageShares": "34666666",
+          "amount": "2660439047174217",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x000000000000000000000000000000000000c0DE",
+          "openingShares": "0",
+          "closingShares": "200000000",
+          "weight": "440000000000",
+          "averageShares": "146666666",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "contract",
+          "unpaidSlice": "11255703661121689"
+        },
+        {
+          "address": "0x000000000000000000000000000000000000dEaD",
+          "openingShares": "0",
+          "closingShares": "100000000",
+          "weight": "298000000000",
+          "averageShares": "99333333",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "dead-seed",
+          "unpaidSlice": "7623181115941508"
+        },
+        {
+          "address": "0x00000000000000000000000000000000000A11cE",
+          "openingShares": "0",
+          "closingShares": "200000000",
+          "weight": "580000000000",
+          "averageShares": "193333333",
+          "amount": "14837063916933136",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x00000000000000000000000000000000000ca401",
+          "openingShares": "0",
+          "closingShares": "100000000",
+          "weight": "200000000000",
+          "averageShares": "66666666",
+          "amount": "5116228936873495",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+          "openingShares": "0",
+          "closingShares": "100000000",
+          "weight": "210000000000",
+          "averageShares": "70000000",
+          "amount": "5372040383717170",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498",
+          "openingShares": "0",
+          "closingShares": "5000000",
+          "weight": "14900000000",
+          "averageShares": "4966666",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "timelock",
+          "unpaidSlice": "381159055797075"
+        }
+      ]
+    },
+    {
+      "name": "rpUSDGs",
+      "address": "0x2117c202F356399C9aE2D395D4e155785015ac6B",
+      "reward": "35230769230769232",
+      "pool": "31707692307692308",
+      "protocolPart": "3523076923076924",
+      "paidToHolders": "10020179820179820",
+      "excludedSlice": "21687512487512486",
+      "dust": "0",
+      "rounding": "2",
+      "totalWeight": "231000000000000",
+      "supplyAtEnd": "85000000000",
+      "noSupply": false,
+      "holders": [
+        {
+          "address": "0x0000000000000000000000000000000000000DA7",
+          "openingShares": "0",
+          "closingShares": "20000000000",
+          "weight": "50000000000000",
+          "averageShares": "16666666666",
+          "amount": "6863136863136863",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x000000000000000000000000000000000000dEaD",
+          "openingShares": "0",
+          "closingShares": "100000000",
+          "weight": "298000000000",
+          "averageShares": "99333333",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "dead-seed",
+          "unpaidSlice": "40904295704295"
+        },
+        {
+          "address": "0x00000000000000000000000000000000000A11cE",
+          "openingShares": "0",
+          "closingShares": "10000000000",
+          "weight": "23000000000000",
+          "averageShares": "7666666666",
+          "amount": "3157042957042957",
+          "status": "paid",
+          "excludedReason": null,
+          "unpaidSlice": "0"
+        },
+        {
+          "address": "0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498",
+          "openingShares": "0",
+          "closingShares": "49900000000",
+          "weight": "148702000000000",
+          "averageShares": "49567333333",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "timelock",
+          "unpaidSlice": "20411243556443556"
+        },
+        {
+          "address": "0x94696d767e65a75581145646960FA0eC886cE5d2",
+          "openingShares": "0",
+          "closingShares": "5000000000",
+          "weight": "9000000000000",
+          "averageShares": "3000000000",
+          "amount": "0",
+          "status": "excluded",
+          "excludedReason": "old-signer-never-paid",
+          "unpaidSlice": "1235364635364635"
+        }
+      ]
+    }
+  ],
+  "exclusions": {
+    "list": [
+      {
+        "market": "rpSPY",
+        "address": "0x000000000000000000000000000000000000c0DE",
+        "reason": "contract",
+        "weight": "440000000000",
+        "toProtocol": "11255703661121689"
+      },
+      {
+        "market": "rpSPY",
+        "address": "0x000000000000000000000000000000000000dEaD",
+        "reason": "dead-seed",
+        "weight": "298000000000",
+        "toProtocol": "7623181115941508"
+      },
+      {
+        "market": "rpSPY",
+        "address": "0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498",
+        "reason": "timelock",
+        "weight": "14900000000",
+        "toProtocol": "381159055797075"
+      },
+      {
+        "market": "rpUSDGs",
+        "address": "0x000000000000000000000000000000000000dEaD",
+        "reason": "dead-seed",
+        "weight": "298000000000",
+        "toProtocol": "40904295704295"
+      },
+      {
+        "market": "rpUSDGs",
+        "address": "0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498",
+        "reason": "timelock",
+        "weight": "148702000000000",
+        "toProtocol": "20411243556443556"
+      },
+      {
+        "market": "rpUSDGs",
+        "address": "0x94696d767e65a75581145646960FA0eC886cE5d2",
+        "reason": "old-signer-never-paid",
+        "weight": "9000000000000",
+        "toProtocol": "1235364635364635"
+      }
+    ],
+    "listHash": "0x0253a78a28b73f1e20cc310029e15263b0ca9b93d87a2441b38bd866e37edb29"
+  },
+  "codeChecks": [
+    {
+      "address": "0x0000000000000000000000000000000000000B0b",
+      "class": "eoa",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000DA7",
+      "class": "eoa",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000007702",
+      "class": "eoa-7702",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x000000000000000000000000000000000000c0DE",
+      "class": "contract",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x00000000000000000000000000000000000A11cE",
+      "class": "eoa",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x00000000000000000000000000000000000ca401",
+      "class": "eoa",
+      "checkedAt": "latest",
+      "allowed": false
+    },
+    {
+      "address": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "class": "eoa",
+      "checkedAt": "latest",
+      "allowed": false
+    }
+  ],
+  "checks": {
+    "leavesSumToPublishTotal": true,
+    "publishTotalIsHeldPlusExtra": true,
+    "marketSplitPartitionsHeld": true,
+    "holdersWithinPools": true,
+    "poolsWithinBps": true,
+    "protocolPartsAddUp": true,
+    "leavesUnique": true,
+    "noZeroLeaf": true,
+    "noLeafForAnExcludedHolderExceptTheProtocolRecipient": true,
+    "oldSignerHasNoLeaf": true,
+    "allProofsVerify": true
+  },
+  "root": "0x3ae07c2d94449a76b49da02cf07bbec0c9b2f21c4928442e4ffd042c71bda8fe",
+  "leaves": [
+    {
+      "account": "0x00000000000000000000000000000000000A11cE",
+      "amount": "17994106873976093",
+      "leaf": "0x175b1947fb4ab58acd0fed583b30960ce21e60e3282ac9b97b8adc39f7c8bb03",
+      "proof": [
+        "0x2c3f400f639be18b84ee3fe6d3cc7c6b5ea5c0360eac8cec70f336433f88674d",
+        "0x27ced422c1d2bff52826707973769d435ac51b4975ba0eb4e9f4bb5b4e3927ad",
+        "0x35c8da922ce3b618a35e967ca8548a9f26988b07f5915ed1cb35b42427de18a4"
+      ]
+    },
+    {
+      "account": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "amount": "62319596704089934",
+      "leaf": "0x2c3f400f639be18b84ee3fe6d3cc7c6b5ea5c0360eac8cec70f336433f88674d",
+      "proof": [
+        "0x175b1947fb4ab58acd0fed583b30960ce21e60e3282ac9b97b8adc39f7c8bb03",
+        "0x27ced422c1d2bff52826707973769d435ac51b4975ba0eb4e9f4bb5b4e3927ad",
+        "0x35c8da922ce3b618a35e967ca8548a9f26988b07f5915ed1cb35b42427de18a4"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000000DA7",
+      "amount": "6863136863136863",
+      "leaf": "0x69a0486e3f0407be8cce671549d7fb727bec6e8acec00ff1a4633b8244660a1a",
+      "proof": [
+        "0x718bdd844d400b5896478328b887733ed411efa1e0b035ca103138264e0d3781",
+        "0x9b6930bd5a68e79cb6d4e6cd7cafa902559c17d6d5cf6848859e9d77237cd253",
+        "0x35c8da922ce3b618a35e967ca8548a9f26988b07f5915ed1cb35b42427de18a4"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000007702",
+      "amount": "2660439047174217",
+      "leaf": "0x718bdd844d400b5896478328b887733ed411efa1e0b035ca103138264e0d3781",
+      "proof": [
+        "0x69a0486e3f0407be8cce671549d7fb727bec6e8acec00ff1a4633b8244660a1a",
+        "0x9b6930bd5a68e79cb6d4e6cd7cafa902559c17d6d5cf6848859e9d77237cd253",
+        "0x35c8da922ce3b618a35e967ca8548a9f26988b07f5915ed1cb35b42427de18a4"
+      ]
+    },
+    {
+      "account": "0x00000000000000000000000000000000000ca401",
+      "amount": "5116228936873495",
+      "leaf": "0x7fae497897f3923d3e641fdc5c68b8c915f368bea63570c900b49b6b02b931c8",
+      "proof": [
+        "0xbed7477bddf12a1ba591668fc64f480be9ce30f5969639804b106a62d4867df2",
+        "0xa4b44da2cd01581c02beb84c326ce2c21000020b35ec5b87a40b45fc030097e3"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000000B0b",
+      "amount": "2046491574749398",
+      "leaf": "0xbed7477bddf12a1ba591668fc64f480be9ce30f5969639804b106a62d4867df2",
+      "proof": [
+        "0x7fae497897f3923d3e641fdc5c68b8c915f368bea63570c900b49b6b02b931c8",
+        "0xa4b44da2cd01581c02beb84c326ce2c21000020b35ec5b87a40b45fc030097e3"
+      ]
+    }
+  ]
+}

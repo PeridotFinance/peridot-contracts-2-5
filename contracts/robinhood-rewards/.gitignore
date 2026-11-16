@@ -1,0 +1,5 @@
+out/
+cache/
+ram-rewards-cache/
+epochs/
+deployments/*.dryrun.json
