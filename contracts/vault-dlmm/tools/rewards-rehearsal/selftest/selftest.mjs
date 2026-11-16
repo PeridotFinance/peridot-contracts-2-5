@@ -101,8 +101,8 @@ async function main() {
     // THE WRAPPER END TO END: rehearsal.sh with the mock world playing the "live chain" upstream (the proxy forwards to it, a second anvil forks the proxy at head-4, the argv check runs, the
     // shared lock is taken and released). Needs the shared fork lock /tmp/pilot-fork.lock to be FREE (it is skipped, not waited for, when another job holds it).
     if (fs.existsSync("/tmp/pilot-fork.lock")) { console.log("SELFTEST SKIP wrapper mode: /tmp/pilot-fork.lock is held by another job"); return 0; }
-    const evidence = path.join(scratch, "wrapper-evidence");
-    const r = spawnSync("bash", [path.join(REH, "rehearsal.sh"), evidence], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+    const evidence = path.join(scratch, "rel-evidence"); // a RELATIVE out-dir, run from another directory: the wrapper must make it absolute
+    const r = spawnSync("bash", [path.join(REH, "rehearsal.sh"), "rel-evidence"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: scratch,
       env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: scratch, AVALANCHE_RPC: RPC, REH_SCAN_FROM: String(N0), ETHERS_DIR, REH_INT_TOOLS: INT_TOOLS, REH_PORT: String(await free()), REH_PROXY_PORT: String(await free()) } });
     const outTxt = r.stdout + r.stderr;
     const argv = (outTxt.match(/argv check: (\d+) of (\d+) processes carry the upstream endpoint/) || [])[1];
@@ -115,6 +115,7 @@ async function main() {
       ["the shared lock was released", !fs.existsSync("/tmp/pilot-fork.lock")],
       ["lock-minutes.log has acquire and release lines", /acquire/.test(fs.readFileSync(path.join(evidence, "lock-minutes.log"), "utf8")) && /release/.test(fs.readFileSync(path.join(evidence, "lock-minutes.log"), "utf8"))],
       ["no endpoint string is in the output", !outTxt.replace(/<url-redacted>/g, "").includes(RPC)],
+      ["a relative out-dir worked: pin-block.txt, argv-check.txt, upstream-status.json and the log are in it", ["pin-block.txt", "argv-check.txt", "upstream-status.json", "rehearsal-run.log"].every((f) => fs.existsSync(path.join(evidence, f)))],
       ["the scratch dir was removed", fs.readdirSync(scratch).filter((n) => n.startsWith("dlmm-rewards-reh.")).length === 0],
     ];
     for (const [t, ok] of checks) { console.log(`${ok ? "SELFTEST PASS" : "SELFTEST FAIL"} wrapper: ${t}`); if (!ok) bad++; }

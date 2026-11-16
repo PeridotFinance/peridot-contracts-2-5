@@ -269,7 +269,7 @@ async function main() {
   const pub = await step("S7 publishEpoch with the manifest's exact arguments, through the Safe", async () => sc(["send", ...pubArgs], { EXPECT_EPOCH_ID: "0" }));
   console.log(pub.out.split("\n").filter((l) => /^PUBLISH|DECODED|SIMULATION|ABOUT|^after|refus|FAILED/.test(l)).map((l) => "   | " + l.slice(0, 300)).join("\n"));
   const ei0 = await D.epochInfo(0);
-  const pubEvs = await D.queryFilter(D.filters.EpochPublished(0), 0, "latest");
+  const pubEvs = await D.queryFilter(D.filters.EpochPublished(0), pinBlock, "latest");
   const distPhar = await phar.balanceOf(dist);
   check("P18", wrongId.code !== 0 && pubSim.code === 0 && pub.code === 0 && (await D.epochCount()).eq(1) && ei0.status === STATUS.Open && ei0.root === pa.root && ei0.total.eq(pa.total) && ei0.fromBlock.eq(pa.fromBlock) && ei0.toBlock.eq(pa.toBlock)
     && ei0.dataHash === pa.dataHash && ei0.claimOpensAt.sub(ei0.publishedAt).eq(CLAIM_DELAY) && ei0.claimDeadline.sub(ei0.publishedAt).eq(CLAIM_DEADLINE) && distPhar.eq(pa.total) && (await phar.allowance(SAFE, dist)).isZero() && pubEvs.length === 1 && safeBeforeApprove.sub(await phar.balanceOf(SAFE)).eq(pa.total),

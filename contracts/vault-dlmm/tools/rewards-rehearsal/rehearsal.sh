@@ -20,6 +20,10 @@
 # - compile first (no lock), take the SHARED FORK LOCK /tmp/pilot-fork.lock (mkdir, retry every 30 s), release it in EVERY exit path (trap); lock minutes go to <out-dir>/lock-minutes.log.
 # - kills only the anvil and proxy PIDs it started; removes the throwaway scratch dir (it holds the scan caches and the epoch folders of the rehearsal: NOT publishable, never committed).
 #
+# UPSTREAM LOAD (read before running): the generator scans the vault's logs from REH_SCAN_FROM to the harvest block in REH_CHUNK=100 block pieces, TWICE (the second run has a fresh cache: the
+# determinism check), through anvil and the proxy to YOUR endpoint: about 2 x (head - REH_SCAN_FROM) / 100 eth_getLogs calls (a vault deployed 3 days ago on Avalanche is about 2 x 4,000 = 8,000
+# calls), plus a few hundred other reads. The proxy counts them in <out-dir>/upstream-status.json ("requests"). Set REH_SLEEP_MS=50 (pause between chunks of the generator) if your endpoint is
+# touchy; a 429 anywhere ends the run with exit 42: stop and report, do not switch provider.
 # EXIT CODES:  0 = REHEARSAL PASSED (every check PASS)   1 = the scenario ran to the end and at least one FAIL line was printed   2 = a fatal error or a bad input (see the last lines)
 #              3 = the sandbox refused (anvil/proxy did not come up, not chain 43114, the argv check found the endpoint)   42 = a 429 / rate limit was seen: STOP and report, do not switch
 #              provider   43 = the fork harvest paid 0 PHAR (nothing accrued in the warped day): the scenario cannot continue; REH_WARP_SECONDS=172800 and run again
@@ -29,7 +33,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; PROJ="$(cd "$HERE/../.." &
 REDACT() { sed -E 's#https?://[^[:space:]"]+#<url-redacted>#g'; }
 DRY=0; if [ "${1:-}" = "--dry" ]; then DRY=1; shift; fi
 OUT="${1:-}"
-if [ "$DRY" = 0 ]; then [ -n "$OUT" ] || { echo "usage: rehearsal.sh <out-dir>   |   rehearsal.sh --dry [<out-dir>]"; exit 2; }; mkdir -p "$OUT"; fi
+if [ "$DRY" = 0 ]; then [ -n "$OUT" ] || { echo "usage: rehearsal.sh <out-dir>   |   rehearsal.sh --dry [<out-dir>]"; exit 2; }; mkdir -p "$OUT" && OUT="$(cd "$OUT" && pwd)" || exit 2; fi   # (absolute: the script cd's to the project)
 INT_TOOLS="${REH_INT_TOOLS:-/Users/joshua/Peridot/.wt-dlmm-int/contracts/vault-dlmm/tools}"
 EXPECT_FIRST_START=100488395
 
