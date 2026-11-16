@@ -14,6 +14,8 @@ bytecode_hash = "none"
 cbor_metadata = true
 use_literal_content = true
 ignored_error_codes = [3628, 2072, 5667, 2018]
+# read-only access to the golden fixtures that tools/rewards-test/ generates and test/rewards/PharRewardsCrossCheck.t.sol checks against the contract
+fs_permissions = [{ access = "read", path = "./test/rewards/fixtures" }]
 remappings = [
   "forge-std/=lib/forge-std/src/",
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",

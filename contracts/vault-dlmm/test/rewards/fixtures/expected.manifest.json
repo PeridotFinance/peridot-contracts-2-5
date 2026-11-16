@@ -1,0 +1,40 @@
+{
+  "schema": "peridot-dlmm-rewards-manifest/2",
+  "epochId": 2,
+  "chainId": 43114,
+  "vault": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+  "startBlock": 2000,
+  "endBlock": 3000,
+  "startTimestamp": 1800002000,
+  "endTimestamp": 1800004000,
+  "harvestTxHashes": [
+    "0x3381a4538571e32e37ef51c8d0769e309482848f97dc3a98da538459e0d5bbf7",
+    "0x82e1f3f063ab955c459d4869c17b3f01390780aae46e90d0ab43d6f191355939",
+    "0x6928bbcc8e742201404526b30c9df2c273164ed6ed3721eeab553ea12b7fb1b4"
+  ],
+  "harvestSum": "1005000000000000000000",
+  "extraPhar": "0",
+  "pharTotal": "1005000000000000000000",
+  "userBps": 9000,
+  "publishTotal": "888035599078341013820",
+  "leafCount": 8,
+  "generator": {
+    "name": "dlmm-rewards-root",
+    "version": "2.0.0"
+  },
+  "gitCommit": "golden",
+  "gitDirty": false,
+  "exclusionListHash": "0x9e6681124fe4e1596a9c42082fef2d466ef6985276973fed958a297ed2156c3b",
+  "dataFile": "epoch.json",
+  "leavesFile": "epoch.json",
+  "dataHash": "0x6aa590d126f91c70da4140655e5e12611585dce73aa7850ff30c52428f16c5ff",
+  "root": "0x8dba19a5401341c88766e78c35160136534139fc53759438ddc9f466c9027d90",
+  "uri": "",
+  "publishEpochArguments": {
+    "root": "0x8dba19a5401341c88766e78c35160136534139fc53759438ddc9f466c9027d90",
+    "total": "888035599078341013820",
+    "fromBlock": 2000,
+    "toBlock": 3000,
+    "dataHash": "0x6aa590d126f91c70da4140655e5e12611585dce73aa7850ff30c52428f16c5ff"
+  }
+}

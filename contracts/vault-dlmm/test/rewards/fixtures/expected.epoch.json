@@ -1,0 +1,381 @@
+{
+  "schema": "peridot-dlmm-rewards-epoch/2",
+  "generator": {
+    "name": "dlmm-rewards-root",
+    "version": "2.0.0"
+  },
+  "inputs": {
+    "chainId": 43114,
+    "vault": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+    "epochId": 2,
+    "firstEpoch": true,
+    "previousEpochId": null,
+    "scanFromBlock": 1000,
+    "startBlock": 2000,
+    "endBlock": 3000,
+    "startTimestamp": 1800002000,
+    "endTimestamp": 1800004000,
+    "durationSeconds": 2000,
+    "userBps": 9000,
+    "harvest": {
+      "sum": "1005000000000000000000",
+      "count": 3,
+      "transactions": [
+        {
+          "txHash": "0x3381a4538571e32e37ef51c8d0769e309482848f97dc3a98da538459e0d5bbf7",
+          "block": 2050,
+          "logIndex": 0,
+          "amount": "600000000000000000000"
+        },
+        {
+          "txHash": "0x82e1f3f063ab955c459d4869c17b3f01390780aae46e90d0ab43d6f191355939",
+          "block": 2900,
+          "logIndex": 0,
+          "amount": "400000000000000000000"
+        },
+        {
+          "txHash": "0x6928bbcc8e742201404526b30c9df2c273164ed6ed3721eeab553ea12b7fb1b4",
+          "block": 3000,
+          "logIndex": 4,
+          "amount": "5000000000000000000"
+        }
+      ]
+    },
+    "extraPhar": "0",
+    "pharTotal": "1005000000000000000000",
+    "minAmount": "1",
+    "allowContracts": [
+      "0x0000000000000000000000000000000000c0De02"
+    ],
+    "explicitExcludes": []
+  },
+  "totals": {
+    "pool": "904500000000000000000",
+    "publishTotal": "888035599078341013820",
+    "leafCount": 8,
+    "totalWeight": "434000000000",
+    "supplyAtEnd": "211000000",
+    "stayWithSafe": {
+      "total": "116964400921658986180",
+      "safeShareOfBps": "100500000000000000000",
+      "excludedHoldersSlice": "16464400921658986173",
+      "roundingAndDust": "7"
+    },
+    "droppedDust": "0"
+  },
+  "exclusions": {
+    "list": [
+      {
+        "address": "0x000000000000000000000000000000000000dEaD",
+        "reason": "dead-seed",
+        "weight": "4000000000",
+        "returnedToSafe": "8336405529953917050"
+      },
+      {
+        "address": "0x0000000000000000000000000000000000C0De01",
+        "reason": "contract",
+        "weight": "3600000000",
+        "returnedToSafe": "7502764976958525345"
+      },
+      {
+        "address": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+        "reason": "vault",
+        "weight": "300000000",
+        "returnedToSafe": "625230414746543778"
+      }
+    ],
+    "listHash": "0x9e6681124fe4e1596a9c42082fef2d466ef6985276973fed958a297ed2156c3b",
+    "totalReturnedToSafe": "16464400921658986173"
+  },
+  "codeChecks": [
+    {
+      "address": "0x0000000000000000000000000000000000000B0b",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000E41",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000007702",
+      "class": "eoa-7702",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x000000000000000000000000000000000000dA0E",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x00000000000000000000000000000000000A11cE",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x00000000000000000000000000000000000ca401",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x00000000000000000000000000000000000f4A2C",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000C0De01",
+      "class": "contract",
+      "checkedAt": 3000,
+      "allowed": false
+    },
+    {
+      "address": "0x0000000000000000000000000000000000c0De02",
+      "class": "contract",
+      "checkedAt": 3000,
+      "allowed": true
+    },
+    {
+      "address": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "class": "eoa",
+      "checkedAt": 3000,
+      "allowed": false
+    }
+  ],
+  "checks": {
+    "sumLeavesLePool": true,
+    "poolLePharTimesBps": true,
+    "sumLeavesLePharTimesBps": true,
+    "weightsSumToSupplyIntegral": true,
+    "leavesUnique": true,
+    "allProofsVerify": true,
+    "noZeroAmountLeaf": true,
+    "noExcludedHolderHasALeaf": true,
+    "exclusionSliceMatches": true,
+    "balancesPartitionPharTotal": true
+  },
+  "root": "0x8dba19a5401341c88766e78c35160136534139fc53759438ddc9f466c9027d90",
+  "holders": [
+    {
+      "address": "0x0000000000000000000000000000000000000B0b",
+      "openingShares": "20000000",
+      "closingShares": "0",
+      "weight": "20000000000",
+      "averageShares": "10000000",
+      "amount": "41682027649769585253",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000E41",
+      "openingShares": "0",
+      "closingShares": "1000000",
+      "weight": "0",
+      "averageShares": "0",
+      "amount": "0",
+      "status": "zero",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000007702",
+      "openingShares": "0",
+      "closingShares": "1000000",
+      "weight": "500000000",
+      "averageShares": "250000",
+      "amount": "1042050691244239631",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x000000000000000000000000000000000000dA0E",
+      "openingShares": "0",
+      "closingShares": "17000000",
+      "weight": "30900000000",
+      "averageShares": "15450000",
+      "amount": "64398732718894009216",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x000000000000000000000000000000000000dEaD",
+      "openingShares": "1000000",
+      "closingShares": "6000000",
+      "weight": "4000000000",
+      "averageShares": "2000000",
+      "amount": "0",
+      "status": "excluded",
+      "excludedReason": "dead-seed",
+      "unpaidSlice": "8336405529953917050"
+    },
+    {
+      "address": "0x00000000000000000000000000000000000A11cE",
+      "openingShares": "29000000",
+      "closingShares": "14000000",
+      "weight": "33000000000",
+      "averageShares": "16500000",
+      "amount": "68775345622119815668",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x00000000000000000000000000000000000ca401",
+      "openingShares": "0",
+      "closingShares": "18000000",
+      "weight": "42600000000",
+      "averageShares": "21300000",
+      "amount": "88782718894009216589",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x00000000000000000000000000000000000f4A2C",
+      "openingShares": "1000000",
+      "closingShares": "2500000",
+      "weight": "3300000000",
+      "averageShares": "1650000",
+      "amount": "6877534562211981566",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000C0De01",
+      "openingShares": "0",
+      "closingShares": "3000000",
+      "weight": "3600000000",
+      "averageShares": "1800000",
+      "amount": "0",
+      "status": "excluded",
+      "excludedReason": "contract",
+      "unpaidSlice": "7502764976958525345"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000c0De02",
+      "openingShares": "0",
+      "closingShares": "2000000",
+      "weight": "1400000000",
+      "averageShares": "700000",
+      "amount": "2917741935483870967",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "openingShares": "149000000",
+      "closingShares": "146000000",
+      "weight": "294400000000",
+      "averageShares": "147200000",
+      "amount": "613559447004608294930",
+      "status": "paid",
+      "excludedReason": null,
+      "unpaidSlice": "0"
+    },
+    {
+      "address": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+      "openingShares": "0",
+      "closingShares": "500000",
+      "weight": "300000000",
+      "averageShares": "150000",
+      "amount": "0",
+      "status": "excluded",
+      "excludedReason": "vault",
+      "unpaidSlice": "625230414746543778"
+    }
+  ],
+  "leaves": [
+    {
+      "account": "0x00000000000000000000000000000000000f4A2C",
+      "amount": "6877534562211981566",
+      "leaf": "0x09d45c079dcd0979a34f6ac22e960c8b25aef11e6d80f9d1fa869c0046c7a1be",
+      "proof": [
+        "0x1f8d2011eec716307b79f44e608339e5ae2ae110386b0306845cc789b9648402",
+        "0xd50e57599834f25de24a66f2a328b50be46b84257dfc6c8a620666d3e2d9e5a6",
+        "0x29d2479df3b5907d17c3c7958d83ef76c7862025b30170630b5e377c18c4c667"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000000B0b",
+      "amount": "41682027649769585253",
+      "leaf": "0x1f8d2011eec716307b79f44e608339e5ae2ae110386b0306845cc789b9648402",
+      "proof": [
+        "0x09d45c079dcd0979a34f6ac22e960c8b25aef11e6d80f9d1fa869c0046c7a1be",
+        "0xd50e57599834f25de24a66f2a328b50be46b84257dfc6c8a620666d3e2d9e5a6",
+        "0x29d2479df3b5907d17c3c7958d83ef76c7862025b30170630b5e377c18c4c667"
+      ]
+    },
+    {
+      "account": "0x000000000000000000000000000000000000dA0E",
+      "amount": "64398732718894009216",
+      "leaf": "0x4a75b255b4b882666baf4741e0104e10a8254fb4b6170d3691c5cdeea9bc71f3",
+      "proof": [
+        "0x5ef41f9e0ebfeaad44c3d375fac444158689e415252179eab84fba17d432f402",
+        "0x43eb684b2fa3955e49dfd7a0d01a4b89d315a5764dc7826c1f3954d58c3149ea",
+        "0x29d2479df3b5907d17c3c7958d83ef76c7862025b30170630b5e377c18c4c667"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000007702",
+      "amount": "1042050691244239631",
+      "leaf": "0x5ef41f9e0ebfeaad44c3d375fac444158689e415252179eab84fba17d432f402",
+      "proof": [
+        "0x4a75b255b4b882666baf4741e0104e10a8254fb4b6170d3691c5cdeea9bc71f3",
+        "0x43eb684b2fa3955e49dfd7a0d01a4b89d315a5764dc7826c1f3954d58c3149ea",
+        "0x29d2479df3b5907d17c3c7958d83ef76c7862025b30170630b5e377c18c4c667"
+      ]
+    },
+    {
+      "account": "0x0000000000000000000000000000000000c0De02",
+      "amount": "2917741935483870967",
+      "leaf": "0x6a5367a3fc4dece732835f7537e4aa8b6b86fe70f6eb418fcbf930283964c4a3",
+      "proof": [
+        "0x847a759ee600f4cef1901341923bfd69a1017f3da4d8d608b49350ed1fab6df6",
+        "0x1f1e7d78a1f58eb8dff9f3dc6730caac4dc649bb4218d6c483153908604d62a4",
+        "0x3d96a95487fd2520d9ed8e01b2cddac4e20894c409814696df01868573a792c1"
+      ]
+    },
+    {
+      "account": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+      "amount": "613559447004608294930",
+      "leaf": "0x847a759ee600f4cef1901341923bfd69a1017f3da4d8d608b49350ed1fab6df6",
+      "proof": [
+        "0x6a5367a3fc4dece732835f7537e4aa8b6b86fe70f6eb418fcbf930283964c4a3",
+        "0x1f1e7d78a1f58eb8dff9f3dc6730caac4dc649bb4218d6c483153908604d62a4",
+        "0x3d96a95487fd2520d9ed8e01b2cddac4e20894c409814696df01868573a792c1"
+      ]
+    },
+    {
+      "account": "0x00000000000000000000000000000000000A11cE",
+      "amount": "68775345622119815668",
+      "leaf": "0xcc5e5b9e9eb31db59b9934837bd60c430457590f9446e8177c41b59c85b716f7",
+      "proof": [
+        "0xfebbceaebbcd34b1cae790c51e74faaf68662d813f0f8f09ea1e06292cad286b",
+        "0xce546dee9ac6d57d6859175793077dc768de76e09dead609912b09fb7c217926",
+        "0x3d96a95487fd2520d9ed8e01b2cddac4e20894c409814696df01868573a792c1"
+      ]
+    },
+    {
+      "account": "0x00000000000000000000000000000000000ca401",
+      "amount": "88782718894009216589",
+      "leaf": "0xfebbceaebbcd34b1cae790c51e74faaf68662d813f0f8f09ea1e06292cad286b",
+      "proof": [
+        "0xcc5e5b9e9eb31db59b9934837bd60c430457590f9446e8177c41b59c85b716f7",
+        "0xce546dee9ac6d57d6859175793077dc768de76e09dead609912b09fb7c217926",
+        "0x3d96a95487fd2520d9ed8e01b2cddac4e20894c409814696df01868573a792c1"
+      ]
+    }
+  ]
+}
