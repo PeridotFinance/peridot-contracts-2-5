@@ -237,3 +237,14 @@ Inherited, unverified until W2: ERC-4626 `Deposit` and `Withdraw`, ERC-20 `Trans
 6. ~~Whether deposits into an existing band are invested at once or sit idle~~: answered by W6, they sit idle until the next `openBand` or `rebalance` (section 3.2). Remaining: the probe holder address and who runs the probe server-side.
 7. Share `decimals()` and the USDt address (read-backs after deploy).
 8. Whether `convertToAssets` and `previewRedeem` revert when a feed reverts (assumed yes in this document).
+
+## 12. Deposit screen disclosure (PHAR distribution, design A)
+
+Operator decision: depositors receive most of the PHAR the vault harvests, through a separate distributor contract (`avalanche-dlmm-vault-rewards-distribution.md`; the vault itself is unchanged and still forwards the whole PHAR balance to the Safe). **Before deposits open, the deposit screen must show the four statements below, in plain words, visibly (not in a tooltip, not behind a link), before the deposit button is usable.** This section replaces the "keep the neutral wording" instruction of section 5.1 once the distributor is live; until then the neutral wording stays.
+
+1. **Share passed to depositors.** "Of the PHAR this vault harvests, **90 %** is passed to depositors in proportion to how many vault shares they held and for how long. The remaining **10 %** stays with the protocol Safe." The number is the `userBps` of the latest published distribution (default 90 %); it is set per distribution, shown with each distribution, and can differ between distributions.
+2. **How it is paid.** "PHAR is distributed in rounds. Each round is published, then waits **24 hours** before anyone can claim; **you claim it yourself**, it is not sent automatically. PHAR nobody claims returns to the Safe 180 days after publication."
+3. **Who is not paid.** "Shares held by smart contracts (for example lending pools or routers) and the 1 USDC launch seed are excluded; their part stays with the protocol Safe. If you hold your shares inside a contract you may not receive PHAR for them."
+4. **No promise.** "PHAR comes from a weekly vote and can be zero in any week. There is no APY and no promised amount. PHAR is paid in PHAR and its price is not guaranteed." (Rule 1 of section 0 still applies: no projected or annualised figure anywhere.)
+
+Claim screen read calls (distributor `DIST`, from the rewards document section 7): `epochCount()`, `epochInfo(id)`, `isClaimWindowOpen(id)`, `isClaimed(id, account)`, `verifyLeaf(id, account, amount, proof)`, and the writes `claim(id, account, amount, proof)` / `claimMany(...)`; the proofs come from the hosted `epoch.json` (`leaves[]`).

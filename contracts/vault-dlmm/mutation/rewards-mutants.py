@@ -21,7 +21,7 @@ M = [
  ("M10", "event claimOpensAt uses the deadline", "dataHash, block.timestamp, block.timestamp + CLAIM_DELAY, block.timestamp + CLAIM_DEADLINE", "dataHash, block.timestamp, block.timestamp + CLAIM_DEADLINE, block.timestamp + CLAIM_DEADLINE", None),
  ("M11", "cancelEpoch without onlyOwner", "function cancelEpoch(uint256 epochId) external onlyOwner nonReentrant", "function cancelEpoch(uint256 epochId) external nonReentrant", None),
  ("M12", "cancel window one second too long (> instead of >=)", "if (block.timestamp >= uint256(e.publishedAt) + CLAIM_DELAY) revert WindowOver();", "if (block.timestamp > uint256(e.publishedAt) + CLAIM_DELAY) revert WindowOver();", None),
- ("M13", "cancel allowed after the window (check removed)", "if (block.timestamp >= uint256(e.publishedAt) + CLAIM_DELAY) revert WindowOver();", "", None),
+ ("M13", "cancel allowed after the window (window check always passes)", "if (block.timestamp >= uint256(e.publishedAt) + CLAIM_DELAY) revert WindowOver();", "if (block.timestamp >= type(uint256).max) revert WindowOver();", None),
  ("M14", "cancel does not mark the epoch Cancelled", "e.status = Status.Cancelled;", "", None),
  ("M15", "cancel refunds nothing", "PHAR.safeTransfer(msg.sender, refund);", "", None),
  ("M16", "cancel marks the epoch Swept", "e.status = Status.Cancelled;", "e.status = Status.Swept;", None),
@@ -90,7 +90,7 @@ M = [
  ("M79", "epoch stores toBlock as fromBlock", "fromBlock: fromBlock,\n            toBlock: toBlock,", "fromBlock: fromBlock,\n            toBlock: fromBlock,", None),
  ("M80", "epoch does not store the data hash", "status: Status.Open,\n            dataHash: dataHash", "status: Status.Open,\n            dataHash: bytes32(0)", None),
  ("M81", "epochInfo does not return the data hash", "v.dataHash = e.dataHash;", "", None),
- ("M82", "epochInfo does not return the block range", "v.fromBlock = e.fromBlock;\n        v.toBlock = e.toBlock;", "", None),
+ ("M82", "epochInfo returns toBlock as the block range start", "v.fromBlock = e.fromBlock;\n        v.toBlock = e.toBlock;", "v.fromBlock = e.toBlock;\n        v.toBlock = e.fromBlock;", None),
  ("M83", "event emits the data hash as zero", "epochId, root, total, fromBlock, toBlock, dataHash, block.timestamp", "epochId, root, total, fromBlock, toBlock, bytes32(0), block.timestamp", None),
  ("M84", "event emits fromBlock twice", "epochId, root, total, fromBlock, toBlock, dataHash, block.timestamp", "epochId, root, total, fromBlock, fromBlock, dataHash, block.timestamp", None),]
 

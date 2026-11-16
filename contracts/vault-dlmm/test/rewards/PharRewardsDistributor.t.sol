@@ -744,6 +744,21 @@ contract PharRewardsDistributorTest is RewardsBase {
         assertEq(MerkleBuild.leaf(3, alice, 123), expect);
     }
 
+    function test_isClaimWindowOpenIsFalseForCancelledAndSweptEpochsInsideTheirTimeWindow() public {
+        Tree memory t = _tree5(0);
+        _publish(t);
+        vm.prank(safe);
+        d.cancelEpoch(0);
+        vm.warp(vm.getBlockTimestamp() + DELAY + 1); // inside [claimOpensAt, claimDeadline) by time, but the epoch is Cancelled
+        assertFalse(d.isClaimWindowOpen(0));
+        Tree memory t1 = _tree5(1);
+        _publish(t1);
+        vm.warp(vm.getBlockTimestamp() + DEADLINE);
+        vm.prank(safe);
+        d.sweepUnclaimed(1);
+        assertFalse(d.isClaimWindowOpen(1));
+    }
+
     function test_isClaimWindowOpenTracksStatus() public {
         Tree memory t = _tree5(0);
         _publish(t);
