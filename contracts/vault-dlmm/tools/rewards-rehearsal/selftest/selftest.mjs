@@ -97,6 +97,31 @@ async function main() {
     console.log(`CONTROL ${CONTROL}: exit ${r.status} (expected ${want}) ${r.status === want ? "OK" : "WRONG"}`);
     return r.status === want ? 0 : 1;
   }
+  if (process.env.SELFTEST_WRAPPER === "1") {
+    // THE WRAPPER END TO END: rehearsal.sh with the mock world playing the "live chain" upstream (the proxy forwards to it, a second anvil forks the proxy at head-4, the argv check runs, the
+    // shared lock is taken and released). Needs the shared fork lock /tmp/pilot-fork.lock to be FREE (it is skipped, not waited for, when another job holds it).
+    if (fs.existsSync("/tmp/pilot-fork.lock")) { console.log("SELFTEST SKIP wrapper mode: /tmp/pilot-fork.lock is held by another job"); return 0; }
+    const evidence = path.join(scratch, "wrapper-evidence");
+    const r = spawnSync("bash", [path.join(REH, "rehearsal.sh"), evidence], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: scratch, AVALANCHE_RPC: RPC, REH_SCAN_FROM: String(N0), ETHERS_DIR, REH_INT_TOOLS: INT_TOOLS, REH_PORT: String(await free()), REH_PROXY_PORT: String(await free()) } });
+    const outTxt = r.stdout + r.stderr;
+    const argv = (outTxt.match(/argv check: (\d+) of (\d+) processes carry the upstream endpoint/) || [])[1];
+    const checks = [
+      ["rehearsal.sh exits 0 on the mock world", r.status === 0],
+      ["the verdict line is REHEARSAL PASSED: 33 checks, 0 failures", /^REHEARSAL PASSED: 33 checks, 0 failures$/m.test(outTxt)],
+      ["the argv check ran and found 0 processes carrying the upstream", argv === "0"],
+      ["the proxy wrote its upstream status counts and saw no 429", /upstream HTTP status counts seen by the proxy: \{"requests":\d+,"errors":0,"upstreamStatus":\{"200":\d+\}\}/.test(outTxt)],
+      ["the fork pin is head - 4", /fork pin block: \d+/.test(outTxt)],
+      ["the shared lock was released", !fs.existsSync("/tmp/pilot-fork.lock")],
+      ["lock-minutes.log has acquire and release lines", /acquire/.test(fs.readFileSync(path.join(evidence, "lock-minutes.log"), "utf8")) && /release/.test(fs.readFileSync(path.join(evidence, "lock-minutes.log"), "utf8"))],
+      ["no endpoint string is in the output", !outTxt.replace(/<url-redacted>/g, "").includes(RPC)],
+      ["the scratch dir was removed", fs.readdirSync(scratch).filter((n) => n.startsWith("dlmm-rewards-reh.")).length === 0],
+    ];
+    for (const [t, ok] of checks) { console.log(`${ok ? "SELFTEST PASS" : "SELFTEST FAIL"} wrapper: ${t}`); if (!ok) bad++; }
+    if (bad) console.log(outTxt.split("\n").slice(-25).join("\n"));
+    console.log(bad === 0 ? "SELFTEST PASSED (wrapper mode)" : `SELFTEST FAILED (${bad})`);
+    return bad === 0 ? 0 : 1;
+  }
   // 5. the whole rehearsal against the doubles
   const resultsFile = path.join(scratch, "results.json");
   const keep = path.join(scratch, "evidence"); fs.mkdirSync(keep);
