@@ -1,13 +1,13 @@
-epoch 0: blocks (110177000, 115953246] = 634097 s, 17 RAM harvest event(s) = 110748405391358194 wei, user-bps 9000
-market split: rpSPY 62442077074407538, rpUSDGs 48306328316950656, unattributed 0
-  rpSPY: reward 62442077074407538, pool 56197869366966784, paid to holders 2032528564687356, excluded slice 54165340802279427
-  rpUSDGs: reward 48306328316950656, pool 43475695485255590, paid to holders 12254137296936586, excluded slice 31221558188319003
-holders 14286665861623942; protocol leaf 96461739529734252 to 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (bps part 11074840539135820, excluded 85386898990598430, rounding/dust 2, unattributed 0, extra 0)
+epoch 0: blocks (110177000, 115958327] = 634643 s, 17 RAM harvest event(s) = 115826645989746291 wei, user-bps 9000
+market split: rpSPY 63545188343436757, rpUSDGs 52281457646309534, unattributed 0
+  rpSPY: reward 63545188343436757, pool 57190669509093081, paid to holders 2067103695038411, excluded slice 55123565814054668
+  rpUSDGs: reward 52281457646309534, pool 47053311881678580, paid to holders 13252657341717371, excluded slice 33800654539961208
+holders 15319761036755782; protocol leaf 100506884952990509 to 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (bps part 11582664598974630, excluded 88924220354015876, rounding/dust 3, unattributed 0, extra 0)
 exclusions rpSPY:0x000000000000000000000000000000000000dEaD:dead-seed rpSPY:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock rpUSDGs:0x000000000000000000000000000000000000dEaD:dead-seed rpUSDGs:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock
-root 0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc
-leaves 2, PUBLISH TOTAL 110748405391358194
+root 0xb27e5fbcd4837043be60233737817d424e36176d7a0876029ebcdf5846b44238
+leaves 2, PUBLISH TOTAL 115826645989746291
 checks: leavesSumToPublishTotal=true publishTotalIsHeldPlusExtra=true marketSplitPartitionsHeld=true holdersWithinPools=true poolsWithinBps=true protocolPartsAddUp=true leavesUnique=true noZeroLeaf=true noLeafForAnExcludedHolderExceptTheProtocolRecipient=true oldSignerHasNoLeaf=true allProofsVerify=true
-forwardExternalReward(0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435, 0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802, <distributor>, 110748405391358194)
-dataHash 0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc
-publishEpoch(0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc, 110748405391358194, 110177000, 115953246, 0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc)
+forwardExternalReward(0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435, 0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802, <distributor>, 115826645989746291)
+dataHash 0xc3cd46b6de3e7916b96a4c0fe1ad06b5de1c62a5f8f247c001c0b177fb644d0e
+publishEpoch(0xb27e5fbcd4837043be60233737817d424e36176d7a0876029ebcdf5846b44238, 115826645989746291, 110177000, 115958327, 0xc3cd46b6de3e7916b96a4c0fe1ad06b5de1c62a5f8f247c001c0b177fb644d0e)
 wrote /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/deployments/rehearsal/epoch-0/epoch.json and /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/deployments/rehearsal/epoch-0/manifest.json

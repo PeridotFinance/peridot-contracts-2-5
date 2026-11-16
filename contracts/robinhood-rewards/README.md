@@ -133,7 +133,7 @@ slice goes to the protocol leaf and is listed per address with its reason in `ep
 | `0x27D44914976640bc9176AcF112D538513D04498d` | `extension` |
 | `0xdaF7672706076e9da1ad6104E0D43f9EeD6cA494` | `oracle-guard` |
 | rpSPY `0x14CC..EA8B`, rpUSDGs `0x2117..ac6B` | mint/burn sentinel of their own market; `market` as a holder of the other |
-| any other address with code at the end block (`eth_getCode` falls back to `latest`, recorded as `checkedAt`) | `contract`, unless `--allow-contract`. EIP-7702 designators (`0xef0100` + 20 bytes) count as EOAs. |
+| any other address with code (`eth_getCode` at `latest`, ALWAYS, because historical state is pruned; recorded as `checkedAt`) | `contract`, unless `--allow-contract`. EIP-7702 designators (`0xef0100` + 20 bytes) count as EOAs. |
 | `0x94696d767e65a75581145646960FA0eC886cE5d2` (old signer) | `old-signer-never-paid`. It is also refused as `--protocol-recipient` / `--allow-contract`. |
 | `--exclude ADDR` | `explicit` |
 
@@ -177,7 +177,7 @@ Run from `contracts/robinhood-rewards`:
   blocks on the public endpoint ("send one value per position"). Single-value filters were served over 5.7M blocks.
 - **Chunking.** Chunks are 2,000,000 blocks and halve on error. The first full scan from the vault's creation took
   about 28 s.
-- **Resumable cache.** The cache lives in `--cache-dir`.
+- **Resumable cache.** The cache lives in `--cache-dir`, for the public endpoint only. A fork scan is never cached.
 - **Network.** `--rpc-url` accepts only the public endpoint or a loopback `http://127.0.0.1` fork.
 - **Determinism.** The output is deterministic, so a second machine can compare `sha256 epoch.json`.
   `dataHash = keccak256(epoch.json)`.
@@ -215,37 +215,53 @@ Run from `contracts/robinhood-rewards`:
   - M66: saturation at `>=`, which also returns 0 at equality;
   - M73: `verifyLeaf` on an unknown epoch with root 0, which needs a keccak preimage of 0.
 
-  M37 (renounce enabled) did not compile in the first pass and was rewritten; the rewritten mutant is killed. M07, which
+  The tally is one full run of all 78 (73 killed, 4 equivalent, 1 invalid) plus a rerun of M18, M37 and M78 after their
+  equivalence notes were corrected (all three killed). M37 (renounce enabled) did not compile in the first pass and was
+  rewritten; the rewritten mutant is killed. M07, which
   re-adds the Avalanche `toBlock <= block.number` check, is killed by 20+ tests because every test publishes L2 heights
   above the L1-derived `block.number`.
 
 ## 7. Fork rehearsal (`tools/rehearse_ram_epoch.sh`, log `deployments/rehearsal/rehearsal.log`)
 
-**Setup.** Anvil fork of mainnet at L2 115953238. The Ledger, timelock, keeper, pool and throwaway deployer were unlocked
+**Setup.** Anvil fork of mainnet at L2 115958319. The Ledger, timelock, keeper, pool and throwaway deployer were unlocked
 on anvil only. The SPY feed was held by FreshFeedMock, and `accrualBlockNumber` (slot 9) was aligned before the mints.
+The script refuses to start if its port already answers.
 
 **Steps:**
 1. The test user minted 0.02 SPY into rpSPY and 100 USDG into rpUSDGs. The funds came from the Ramses SPY/USDG pool,
    on the fork only.
-2. After 21,600 s, keeper `0x9eaF..031E` ran `harvest`. It accrued about 0.0139 RAM, which brought
-   `externalRewards` to 0.110748 RAM.
+2. After 21,600 s, keeper `0x9eaF..031E` ran `harvest`. It accrued about 0.0190 RAM, which brought
+   `externalRewards` to 115,826,645,989,746,291 wei.
 3. Throwaway deploy: one creation, owner = Ledger. `verify` passed, and the old signer as deployer was refused.
-4. Root generation from the fork's events: epoch 0 = (110177000, 115953246], 17 harvests, 2 leaves. All checks were
-   `true`, and `dataHash == keccak256(epoch.json)`.
-5. The Ledger scheduled `forwardExternalReward(pair, RAM, DIST, 110748405391358194)` on the timelock:
+4. Root generation from the fork's events, with no cache: epoch 0 = (110177000, 115958327], 17 harvests, 2 leaves. All
+   checks were `true`, and `dataHash == keccak256(epoch.json)`. The **replayed supply equals `totalSupply()`** for both
+   markets, so the mint/burn sentinel assumption holds.
+5. The Ledger scheduled `forwardExternalReward(pair, RAM, DIST, 115826645989746291)` on the timelock:
    - an early execute was refused (`TimelockUnexpectedOperationState`);
    - a direct Ledger call was refused (`AccessControlUnauthorizedAccount`);
    - after 3,601 s the execute succeeded, moving all of `externalRewards` (0) into the distributor.
 6. Publish: a stranger was refused (`OwnableUnauthorizedAccount`); the **Ledger** published (`reserved == total`).
-   A claim inside the window was refused (`ClaimsNotOpen`).
-7. After 86,401 s, the user claimed **14,286,665,861,623,942 wei**. That is equal to the **independent Python
+   **`verifyLeaf` was true for every leaf.**
+7. **Cancel drill.**
+   - The Ledger cancelled epoch 0 inside the window, and the RAM was released to unallocated.
+   - The root was regenerated for id 1 with the end harvest **pinned** by tx hash. Accounts and amounts were identical.
+   - The Ledger republished as epoch 1 without a new forward, and `verifyLeaf` was true for every leaf.
+8. A claim inside the window was refused (`ClaimsNotOpen`).
+9. After 86,401 s, the user claimed **15,319,761,036,755,782 wei**. That is equal to the **independent Python
    recomputation from raw logs** (`tools/rehearsal_expected.py`).
-8. Bad claims were refused:
-   - a double claim (`AlreadyClaimed`);
-   - another account using the proof (`InvalidProof`);
-   - an unknown epoch (`EpochNotOpen`).
-9. A third party claimed the protocol leaf of **96,461,739,529,734,252 wei** for the Ledger. That is
-   10 % part 11,074,840,539,135,820 + excluded holders (0xdEaD, timelock) 85,386,898,990,598,430 + rounding 2.
-10. The depositor pools were 90 % of each market's RAM: 99,673,564,852,222,374 of 110,748,405,391,358,194.
+10. Bad claims were refused:
+    - a double claim (`AlreadyClaimed`);
+    - another account using the proof (`InvalidProof`);
+    - an unknown epoch (`EpochNotOpen`);
+    - the cancelled epoch 0 (`EpochNotOpen`).
+11. A third party claimed the protocol leaf of **100,506,884,952,990,509 wei** for the Ledger. That is
+    10 % part 11,582,664,598,974,630 + excluded holders (0xdEaD, timelock) 88,924,220,354,015,876 + rounding 3.
+12. The depositor pools were 90 % of each market's RAM: 104,243,981,390,771,661 of 115,826,645,989,746,291.
 
-**Result.** The distributor is empty and `reserved == 0`. **3 Ledger signatures** (schedule, execute, publish).
+**Result.** The distributor is empty and `reserved == 0`. **Ledger signatures: 3 on the normal path** (schedule,
+execute, publish) **+ 2 for the drill** (cancel, republish).
+
+**Not exercised on the fork:**
+- a second chained epoch (`--previous-manifest`); it is covered offline by the golden epoch 1 and the Foundry
+  cross-check;
+- the 180-day sweep; it is covered by the unit tests.

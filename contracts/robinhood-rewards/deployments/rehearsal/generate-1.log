@@ -1,0 +1,13 @@
+epoch 1: blocks (110177000, 115958327] = 634643 s, 17 RAM harvest event(s) = 115826645989746291 wei, user-bps 9000
+market split: rpSPY 63545188343436757, rpUSDGs 52281457646309534, unattributed 0
+  rpSPY: reward 63545188343436757, pool 57190669509093081, paid to holders 2067103695038411, excluded slice 55123565814054668
+  rpUSDGs: reward 52281457646309534, pool 47053311881678580, paid to holders 13252657341717371, excluded slice 33800654539961208
+holders 15319761036755782; protocol leaf 100506884952990509 to 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (bps part 11582664598974630, excluded 88924220354015876, rounding/dust 3, unattributed 0, extra 0)
+exclusions rpSPY:0x000000000000000000000000000000000000dEaD:dead-seed rpSPY:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock rpUSDGs:0x000000000000000000000000000000000000dEaD:dead-seed rpUSDGs:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock
+root 0x7f0bb402c73516e58463aafaeba83a10964be892b652f218acc7ffaa5242b412
+leaves 2, PUBLISH TOTAL 115826645989746291
+checks: leavesSumToPublishTotal=true publishTotalIsHeldPlusExtra=true marketSplitPartitionsHeld=true holdersWithinPools=true poolsWithinBps=true protocolPartsAddUp=true leavesUnique=true noZeroLeaf=true noLeafForAnExcludedHolderExceptTheProtocolRecipient=true oldSignerHasNoLeaf=true allProofsVerify=true
+forwardExternalReward(0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435, 0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802, <distributor>, 115826645989746291)
+dataHash 0x30f7c680fb03bf36a4dc35d43f323b1f855a8b7e69511f959e2293b5c136ac81
+publishEpoch(0x7f0bb402c73516e58463aafaeba83a10964be892b652f218acc7ffaa5242b412, 115826645989746291, 110177000, 115958327, 0x30f7c680fb03bf36a4dc35d43f323b1f855a8b7e69511f959e2293b5c136ac81)
+wrote /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/deployments/rehearsal/epoch-1/epoch.json and /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/deployments/rehearsal/epoch-1/manifest.json

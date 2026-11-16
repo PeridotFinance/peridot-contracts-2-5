@@ -125,13 +125,9 @@ export class RpcSource {
     }
     return out.sort(order);
   }
-  /** Code at `block`; the public endpoint prunes state after ~10 minutes, so it falls back to the latest code and says so. */
-  async getCode(address, block) {
-    try { return { code: await this.provider.getCode(address, block), at: block }; } catch (e) {
-      if (!/missing trie node|historical state|state .*(not available|pruned)|header not found|unknown block|not found|pruned/i.test(String(e?.message ?? e) + String(e?.body ?? ''))) throw e;
-      return { code: await this.provider.getCode(address, 'latest'), at: 'latest' };
-    }
-  }
+  /** Code at `latest`, ALWAYS: the public endpoint prunes state after ~10 minutes, so a historical read would succeed or
+   *  fail depending on when the generator runs and two machines would write different files. Recorded as checkedAt. */
+  async getCode(address) { return { code: await this.provider.getCode(address, 'latest'), at: 'latest' }; }
   async getTimestamp(n) {
     const b = await this.provider.send('eth_getBlockByNumber', [utils.hexValue(n), false]);
     if (!b) throw new Error(`block ${n} not found`);
@@ -615,8 +611,8 @@ export async function main(argv, { git = undefined } = {}) {
   if (args.fixture) source = new FixtureSource(JSON.parse(readFileSync(args.fixture, 'utf8')));
   else {
     source = new RpcSource({ url: args.rpcUrl });
-    const tag = args.rpcUrl === PUBLIC_RPC ? 'public' : 'fork';
-    cacheFile = resolve(args.cacheDir, `scan-${CHAIN_ID}-${tag}-${lc(VAULT)}.json`);
+    // a fork's post-fork blocks differ from mainnet and from any other fork: never cache a fork scan
+    cacheFile = args.rpcUrl === PUBLIC_RPC ? resolve(args.cacheDir, `scan-${CHAIN_ID}-public-${lc(VAULT)}.json`) : null;
   }
   const previous = args.previousManifest ? JSON.parse(readFileSync(args.previousManifest, 'utf8')) : null;
   const { epoch, text, manifest } = await generate({ source, cacheFile, args, previous, log, git: git !== undefined ? git : gitState() });

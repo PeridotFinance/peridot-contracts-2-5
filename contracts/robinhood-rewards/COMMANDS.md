@@ -1,6 +1,8 @@
 # RAM distribution: ceremony list (Robinhood Chain 4663)
 
-**NOT RUN.** The main thread reruns `tools/rehearse_ram_epoch.sh` as the gate before this list is sent.
+**NOT RUN.** The main thread reruns `tools/rehearse_ram_epoch.sh` as the gate before this list is sent. Use
+`OUT=<scratch dir> bash tools/rehearse_ram_epoch.sh`, so the committed evidence under `deployments/rehearsal/` is not
+overwritten. The script refuses to start if its port already answers.
 
 The operator runs only what is sent, in order, in the next market-hours window. Market hours matter only because the
 keeper's harvest checkpoint needs a fresh SPY feed; the distributor calls themselves need no feed.
@@ -64,8 +66,10 @@ Commit the journal and add a detached sha256.
 
 ```bash
 node tools/robinhood-ram-root.mjs --epoch-id $(cast call $DIST 'epochCount()(uint256)') --first-epoch --to-harvest last --out-dir epochs/0
-# later epochs: --previous-manifest epochs/<last published, not cancelled>/manifest.json --epoch-id <epochCount>
-sha256sum epochs/0/epoch.json            # second machine: identical
+export HTX=$(jq -r '.heldTxHashes[-1]' epochs/0/manifest.json)       # PIN the end harvest: the keeper keeps harvesting
+node tools/robinhood-ram-root.mjs --epoch-id 0 --first-epoch --to-harvest $HTX --out-dir epochs/0      # identical file (no "differs" error)
+# second machine, the same pinned command: sha256sum epochs/0/epoch.json is identical
+# later epochs: --previous-manifest epochs/<last published, not cancelled>/manifest.json --epoch-id <epochCount> --to-harvest <tx>
 ```
 
 Read the printed summary:
@@ -78,8 +82,12 @@ Read the printed summary:
 - `forwardExternalReward(...)` and `publishEpoch(...)` lines.
 
 Epoch 0 today is blocks (110177000, 115782882]: 16 harvests and 96,799,596,213,810,175 wei. It has ONE leaf, the
-Ledger, because only 0xdEaD and the timelock hold the markets. A harvest after that block extends `--to-harvest last`.
-Re-run the generator just before step 3 and use that output.
+Ledger, because only 0xdEaD and the timelock hold the markets.
+
+**Cut epoch 0 at the last harvest BEFORE the first depositor arrives.** The rule weights holding time inside the epoch,
+not accrual time. A depositor who arrives late in a long epoch is paid out of RAM harvested before they deposited. In
+the rehearsal, a 6 h holder in a 7.3-day epoch got 12.9 % of all RAM. Every harvest after the end block belongs to
+epoch 1.
 
 Host `epoch.json` and `manifest.json` before step 4, so the 24 h review can use them. Then check that
 `cast keccak 0x$(xxd -p epochs/0/epoch.json | tr -d '\n')` equals `manifest.dataHash`.
@@ -109,6 +117,9 @@ cast send $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $(jq -r .p
   $(jq -r .publishEpochArguments.fromBlock $A) $(jq -r .publishEpochArguments.toBlock $A) $(jq -r .publishEpochArguments.dataHash $A) --from $L --ledger
 cast call $DIST 'epochInfo(uint256)' 0      # status 1, root, total, claimOpensAt = publishedAt + 86400
 cast call $DIST 'reserved()(uint256)'       # == total;  unallocated() == 0
+# READ-BACK OF EVERY LEAF (mandatory): any false -> cancelEpoch inside the 24 h window (a wrong id/root is otherwise locked 180 days)
+E=epochs/0/epoch.json; for i in $(seq 0 $(( $(jq '.leaves|length' $E) - 1 ))); do
+  cast call $DIST 'verifyLeaf(uint256,address,uint256,bytes32[])(bool)' 0 $(jq -r ".leaves[$i].account" $E) $(jq -r ".leaves[$i].amount" $E) "$(jq -c ".leaves[$i].proof" $E | tr -d '"')"; done   # all true
 ```
 
 **24 h challenge window.** If anything is wrong, run `cast send $DIST 'cancelEpoch(uint256)' 0 --from $L --ledger`

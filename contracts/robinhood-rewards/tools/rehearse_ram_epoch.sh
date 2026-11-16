@@ -24,6 +24,7 @@ DEPLOYER=0x00000000000000000000000000000000DEC0DE21
 SPY_IN=${SPY_IN:-20000000000000000}; USDG_IN=${USDG_IN:-100000000}; ACCRUE=${ACCRUE:-21600}
 SIGS=0
 export ETH_RPC_TIMEOUT=900   # first touches of a forked contract fetch remote state slowly (cast default 45 s)
+cast block-number --rpc-url $F >/dev/null 2>&1 && { echo "STOPPED: port $P already answers (a leftover anvil); stop it or set PORT"; exit 1; }
 anvil --fork-url https://rpc.mainnet.chain.robinhood.com --port $P --silent --auto-impersonate --timeout 60000 --retries 8 >/dev/null 2>&1 &
 AP=$!
 trap '[ -n "${KEEP:-}" ] || kill $AP 2>/dev/null' EXIT
@@ -95,7 +96,7 @@ grep -q OLD_SIGNER_REFUSED <<< "$OLDOUT" && echo "  old signer as deployer: refu
 echo "== root generation from the fork's events (epoch 0: vault creation .. this harvest)"
 ID=$(cast call $DIST 'epochCount()(uint256)' --rpc-url $F | num)
 node tools/robinhood-ram-root.mjs --rpc-url $F --epoch-id $ID --first-epoch --to-harvest last --scan-to $END \
-  --cache-dir $OUT/cache --out-dir $OUT/epoch-$ID --force > $OUT/generate.log 2> $OUT/generate.err || { cat $OUT/generate.err | tail; stop "generate"; }
+  --out-dir $OUT/epoch-$ID --force > $OUT/generate.log 2> $OUT/generate.err || { cat $OUT/generate.err | tail; stop "generate"; }
 sed 's/^/  /' $OUT/generate.log | grep -v "^  wrote"
 M=$OUT/epoch-$ID/manifest.json; E=$OUT/epoch-$ID/epoch.json
 j(){ jq -r "$2" "$1"; }
@@ -103,6 +104,9 @@ AMOUNT=$(j $M .forwardExternalRewardArguments.amount); TOTAL=$(j $M .publishTota
 [ "$AMOUNT" = "$ER1" ] || stop "forward amount $AMOUNT != externalRewards $ER1"
 python3 -c "import json;e=json.load(open('$E'));assert not any(l['account'].lower()=='$OLD'.lower() for l in e['leaves']),'old signer has a leaf'" || stop "old signer leaf"
 [ "$(cast keccak "0x$(xxd -p $E | tr -d '\n')")" = "$(j $M .dataHash)" ] && echo "  dataHash == keccak256(epoch.json)" || stop "dataHash"
+for k in 0 1; do MA=$(j $E ".markets[$k].address"); SE=$(j $E ".markets[$k].supplyAtEnd"); TS=$(cast call $MA 'totalSupply()(uint256)' --rpc-url $F | num)
+  [ "$SE" = "$TS" ] && echo "  $(j $E ".markets[$k].name"): replayed supply $SE == totalSupply()" || stop "replayed supply $SE != totalSupply $TS of $MA"; done
+HTX=$(j $M '.heldTxHashes[-1]'); echo "  end harvest tx $HTX (later runs pin --to-harvest $HTX)"
 
 echo "== timelock: Ledger schedules forwardExternalReward, early execute refused, 3,601 s, Ledger executes"
 DATA=$(cast calldata 'forwardExternalReward(bytes32,address,address,uint256)' $PAIR $RAM $DIST $AMOUNT)
@@ -120,6 +124,27 @@ ROOT=$(j $M .publishEpochArguments.root); FB=$(j $M .publishEpochArguments.fromB
 reverts "OwnableUnauthorizedAccount(address)" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH --from $RANDO
 led "publishEpoch" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH
 echo "  reserved $(cast call $DIST 'reserved()(uint256)' --rpc-url $F | num), unallocated $(cast call $DIST 'unallocated()(uint256)' --rpc-url $F | num)"
+# read-back of every leaf against the published root (COMMANDS.md step 4): any false means cancel inside the window
+verify_all(){ local e=$1 id=$2 n i a m p; n=$(j $e '.leaves | length')
+  for i in $(seq 0 $((n-1))); do a=$(j $e ".leaves[$i].account"); m=$(j $e ".leaves[$i].amount"); p=$(jq -c ".leaves[$i].proof" $e | tr -d '"')
+    [ "$(cast call $DIST 'verifyLeaf(uint256,address,uint256,bytes32[])(bool)' $id $a $m "$p" --rpc-url $F)" = true ] || stop "verifyLeaf false for $a in epoch $id"; done
+  echo "  verifyLeaf true for all $n leaves of epoch $id"; }
+verify_all $E $ID
+
+if [ -z "${NO_CANCEL_DRILL:-}" ]; then
+  echo "== cancel drill: the Ledger cancels epoch $ID inside the window, the root is regenerated for the next id with the harvest PINNED, republished without a new forward"
+  led "cancelEpoch($ID) (drill)" $DIST 'cancelEpoch(uint256)' $ID
+  [ "$(cast call $DIST 'unallocated()(uint256)' --rpc-url $F | num)" = "$TOTAL" ] && echo "  released: unallocated == total, distributor RAM $(bal $RAM $DIST)" || stop "cancel release"
+  OLDID=$ID; OLDE=$E; ID=$(cast call $DIST 'epochCount()(uint256)' --rpc-url $F | num)
+  node tools/robinhood-ram-root.mjs --rpc-url $F --epoch-id $ID --first-epoch --to-harvest $HTX --scan-to $END \
+    --out-dir $OUT/epoch-$ID --force > $OUT/generate-$ID.log 2> $OUT/generate-$ID.err || { tail $OUT/generate-$ID.err; stop "regenerate"; }
+  M=$OUT/epoch-$ID/manifest.json; E=$OUT/epoch-$ID/epoch.json
+  [ "$(j $M .publishTotal)" = "$TOTAL" ] && [ "$(j $M .endBlock)" = "$TB" ] || stop "regenerated epoch differs in total/range"
+  python3 -c "import json;a=json.load(open('$OLDE'));b=json.load(open('$E'));assert [(l['account'],l['amount']) for l in sorted(a['leaves'],key=lambda x:x['account'])]==[(l['account'],l['amount']) for l in sorted(b['leaves'],key=lambda x:x['account'])]" && echo "  same accounts and amounts, new id $ID, root $(j $M .root)" || stop "regenerated amounts differ"
+  ROOT=$(j $M .publishEpochArguments.root); DH=$(j $M .dataHash)
+  led "publishEpoch($ID) (drill)" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH
+  verify_all $E $ID
+fi
 
 leaf(){ python3 -c "
 import json;e=json.load(open('$E'))
@@ -140,6 +165,9 @@ U1=$(bal $RAM $USER); echo "  user RAM $U0 -> $U1"; [ $((U1 - U0)) = "$UAMT" ] |
 reverts "AlreadyClaimed()" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF" --from $USER
 reverts "InvalidProof()" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $RANDO $UAMT "$UPROOF" --from $RANDO
 reverts "EpochNotOpen(uint8)" $DIST 'claim(uint256,address,uint256,bytes32[])' $((ID+1)) $USER $UAMT "$UPROOF"
+[ -n "${OLDID:-}" ] && { read OUAMT OUPROOF <<< "$(E=$OLDE; python3 -c "
+import json;e=json.load(open('$OLDE'));l=[x for x in e['leaves'] if x['account'].lower()=='$USER'.lower()][0];print(l['amount']+' ['+','.join(l['proof'])+']')")"
+  reverts "EpochNotOpen(uint8)" $DIST 'claim(uint256,address,uint256,bytes32[])' $OLDID $USER $OUAMT "$OUPROOF"; echo "  (the cancelled epoch $OLDID pays nothing)"; }
 L0=$(bal $RAM $L)
 cast rpc anvil_setBalance $RANDO 0x16345785D8A0000 --rpc-url $F >/dev/null
 send $RANDO "third party claims the protocol leaf for the Ledger" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $L $PAMT "$PPROOF"
@@ -154,4 +182,4 @@ print(f"  user {u} = {u*1e4/total:.2f} bps of total; protocol {p} = 10% part {e[
 print(f"  depositor pools (90% of each market's RAM): {pools} of {rewards}")
 EOF
 [ "$(bal $RAM $DIST)" = 0 ] && [ "$(cast call $DIST 'reserved()(uint256)' --rpc-url $F | num)" = 0 ] && echo "  distributor empty, reserved 0" || stop "distributor not empty"
-echo "REHEARSAL PASSED: Ledger signatures $SIGS (schedule, execute, publish); claims by the user and a third party"
+echo "REHEARSAL PASSED: Ledger signatures $SIGS = 3 of the normal path (schedule, execute, publish)${OLDID:+ + 2 of the cancel drill (cancel, republish)}; claims by the user and a third party"

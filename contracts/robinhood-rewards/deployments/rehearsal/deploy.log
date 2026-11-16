@@ -1,0 +1,33 @@
+No files changed, compilation skipped
+Script ran successfully.
+
+== Return ==
+d: contract MerkleRewardsDistributor 0x70CbEAA61d2fE8cec65c10F2C7A315b25B874b37
+
+== Logs ==
+  DISTRIBUTOR 0x70CbEAA61d2fE8cec65c10F2C7A315b25B874b37
+  journal /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/deployments/rehearsal/ram-distributor-rehearsal.json
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 4663
+
+Estimated gas price: 0.013762231 gwei
+
+Estimated total gas used for script: 1616895
+
+Estimated amount required: 0.000022252082492745 ETH
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/broadcast/DeployRamRewardsDistributor.s.sol/4663/run-latest.json
+
+Sensitive values saved to: /Users/joshua/Peridot/.wt-ram-rewards/contracts/robinhood-rewards/cache/DeployRamRewardsDistributor.s.sol/4663/run-latest.json
+

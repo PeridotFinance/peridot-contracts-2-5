@@ -1,4 +1,4 @@
-fork block 115953238
+fork block 115958319
 == pre-flight reads
   externalRewards[pair][RAM] 96799596213810175; vault RAM balance 96799596213810175
   rpSPY supply 105000000 (dead 100000000, timelock 5000000)
@@ -8,56 +8,68 @@ fork block 115953238
   donor SPY -> user 0x1 75438
   donor USDG -> user 0x1 65174
   (fork only) SPY feed held at its real last answer 74453190554 across the warps
-  (fork only) accrualBlockNumber (slot 9) of both markets set to the anvil block 115953240
+  (fork only) accrualBlockNumber (slot 9) of both markets set to the anvil block 115958321
   user approve SPY 0x1 63613
   user mint rpSPY 0x1 1074340
   user approve USDG 0x1 57976
   user mint rpUSDGs 0x1 834602
-  user rpSPY 100002931, rpUSDGs 500000400000
+  user rpSPY 100002923, rpUSDGs 500000400000
 == 21600 s pass, then the Ramses keeper harvests
   keeper harvest 0x1 743422
-  externalRewards 96799596213810175 -> 110748405391358194 (+13948809177548019 wei RAM)
+  externalRewards 96799596213810175 -> 115826645989746291 (+19027049775936116 wei RAM)
 == throwaway deploy (forge script, one creation)
   distributor 0x70CbEAA61d2fE8cec65c10F2C7A315b25B874b37 (owner 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD)
-  deployer spent 0.000007523090290708 ETH
+  deployer spent 0.000007488686479382 ETH
   verified 0x70CbEAA61d2fE8cec65c10F2C7A315b25B874b37
   old signer as deployer: refused (OLD_SIGNER_REFUSED)
 == root generation from the fork's events (epoch 0: vault creation .. this harvest)
-  epoch 0: blocks (110177000, 115953246] = 634097 s, 17 RAM harvest event(s) = 110748405391358194 wei, user-bps 9000
-  market split: rpSPY 62442077074407538, rpUSDGs 48306328316950656, unattributed 0
-    rpSPY: reward 62442077074407538, pool 56197869366966784, paid to holders 2032528564687356, excluded slice 54165340802279427
-    rpUSDGs: reward 48306328316950656, pool 43475695485255590, paid to holders 12254137296936586, excluded slice 31221558188319003
-  holders 14286665861623942; protocol leaf 96461739529734252 to 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (bps part 11074840539135820, excluded 85386898990598430, rounding/dust 2, unattributed 0, extra 0)
+  epoch 0: blocks (110177000, 115958327] = 634643 s, 17 RAM harvest event(s) = 115826645989746291 wei, user-bps 9000
+  market split: rpSPY 63545188343436757, rpUSDGs 52281457646309534, unattributed 0
+    rpSPY: reward 63545188343436757, pool 57190669509093081, paid to holders 2067103695038411, excluded slice 55123565814054668
+    rpUSDGs: reward 52281457646309534, pool 47053311881678580, paid to holders 13252657341717371, excluded slice 33800654539961208
+  holders 15319761036755782; protocol leaf 100506884952990509 to 0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD (bps part 11582664598974630, excluded 88924220354015876, rounding/dust 3, unattributed 0, extra 0)
   exclusions rpSPY:0x000000000000000000000000000000000000dEaD:dead-seed rpSPY:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock rpUSDGs:0x000000000000000000000000000000000000dEaD:dead-seed rpUSDGs:0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498:timelock
-  root 0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc
-  leaves 2, PUBLISH TOTAL 110748405391358194
+  root 0xb27e5fbcd4837043be60233737817d424e36176d7a0876029ebcdf5846b44238
+  leaves 2, PUBLISH TOTAL 115826645989746291
   checks: leavesSumToPublishTotal=true publishTotalIsHeldPlusExtra=true marketSplitPartitionsHeld=true holdersWithinPools=true poolsWithinBps=true protocolPartsAddUp=true leavesUnique=true noZeroLeaf=true noLeafForAnExcludedHolderExceptTheProtocolRecipient=true oldSignerHasNoLeaf=true allProofsVerify=true
-  forwardExternalReward(0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435, 0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802, <distributor>, 110748405391358194)
-  dataHash 0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc
-  publishEpoch(0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc, 110748405391358194, 110177000, 115953246, 0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc)
+  forwardExternalReward(0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435, 0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802, <distributor>, 115826645989746291)
+  dataHash 0xc3cd46b6de3e7916b96a4c0fe1ad06b5de1c62a5f8f247c001c0b177fb644d0e
+  publishEpoch(0xb27e5fbcd4837043be60233737817d424e36176d7a0876029ebcdf5846b44238, 115826645989746291, 110177000, 115958327, 0xc3cd46b6de3e7916b96a4c0fe1ad06b5de1c62a5f8f247c001c0b177fb644d0e)
   dataHash == keccak256(epoch.json)
+  rpSPY: replayed supply 205002923 == totalSupply()
+  rpUSDGs: replayed supply 550000400000 == totalSupply()
+  end harvest tx 0x42748cd541b77f1514fb575d3efc96ccb8a223c73f4135cc0e33ba253252ec22 (later runs pin --to-harvest 0x42748cd541b77f1514fb575d3efc96ccb8a223c73f4135cc0e33ba253252ec22)
 == timelock: Ledger schedules forwardExternalReward, early execute refused, 3,601 s, Ledger executes
-  Ledger 1: timelock schedule forwardExternalReward(110748405391358194) 0x1 58134
+  Ledger 1: timelock schedule forwardExternalReward(115826645989746291) 0x1 58134
   refused as expected: TimelockUnexpectedOperationState (0x5ead8eb5)
   refused as expected: AccessControlUnauthorizedAccount (0xe2517d3f)
   Ledger 2: timelock execute 0x1 101255
-  distributor RAM 110748405391358194, unallocated 110748405391358194, externalRewards 0
+  distributor RAM 115826645989746291, unallocated 115826645989746291, externalRewards 0
 == Ledger publishes
   refused as expected: OwnableUnauthorizedAccount (0x118cdaa7)
   Ledger 3: publishEpoch 0x1 170961
-  reserved 110748405391358194, unallocated 0
-  user leaf 14286665861623942, protocol (Ledger) leaf 96461739529734252
+  reserved 115826645989746291, unallocated 0
+  verifyLeaf true for all 2 leaves of epoch 0
+== cancel drill: the Ledger cancels epoch 0 inside the window, the root is regenerated for the next id with the harvest PINNED, republished without a new forward
+  Ledger 4: cancelEpoch(0) (drill) 0x1 35304
+  released: unallocated == total, distributor RAM 115826645989746291
+  same accounts and amounts, new id 1, root 0x7f0bb402c73516e58463aafaeba83a10964be892b652f218acc7ffaa5242b412
+  Ledger 5: publishEpoch(1) (drill) 0x1 153861
+  verifyLeaf true for all 2 leaves of epoch 1
+  user leaf 15319761036755782, protocol (Ledger) leaf 100506884952990509
   refused as expected: ClaimsNotOpen (0xef6eeb7e)
 == 86,401 s (challenge window), claims
-  independent recomputation (Python, raw logs): user should get 14286665861623942
-  user claim 0x1 98307
-  user RAM 0 -> 14286665861623942
+  independent recomputation (Python, raw logs): user should get 15319761036755782
+  user claim 0x1 98319
+  user RAM 0 -> 15319761036755782
   refused as expected: AlreadyClaimed (0x646cf558)
   refused as expected: InvalidProof (0x09bde339)
   refused as expected: EpochNotOpen (0x13faadb5)
-  third party claims the protocol leaf for the Ledger 0x1 88926
-  Ledger RAM 0 -> 96461739529734252
-  user 14286665861623942 = 1290.01 bps of total; protocol 96461739529734252 = 10% part 11074840539135820 + excluded 85386898990598430 + rounding 2
-  depositor pools (90% of each market's RAM): 99673564852222374 of 110748405391358194
+  refused as expected: EpochNotOpen (0x13faadb5)
+  (the cancelled epoch 0 pays nothing)
+  third party claims the protocol leaf for the Ledger 0x1 88938
+  Ledger RAM 0 -> 100506884952990509
+  user 15319761036755782 = 1322.65 bps of total; protocol 100506884952990509 = 10% part 11582664598974630 + excluded 88924220354015876 + rounding 3
+  depositor pools (90% of each market's RAM): 104243981390771661 of 115826645989746291
   distributor empty, reserved 0
-REHEARSAL PASSED: Ledger signatures 3 (schedule, execute, publish); claims by the user and a third party
+REHEARSAL PASSED: Ledger signatures 5 = 3 of the normal path (schedule, execute, publish) + 2 of the cancel drill (cancel, republish); claims by the user and a third party
