@@ -58,6 +58,7 @@ export const PAIR_ABI = [
   "function getTokenY() view returns (address)",
   "function getBinStep() view returns (uint16)",
   "function getPriceFromId(uint24 id) view returns (uint256)",
+  "function getLBHooksParameters() view returns (bytes32)",
   "function getSwapOut(uint128 amountIn, bool swapForY) view returns (uint128 amountInLeft, uint128 amountOut, uint128 fee)",
   // the exit probe simulates a burn of the vault's own shares (from == msg.sender, no approval needed)
   "function burn(address from, address to, uint256[] ids, uint256[] amountsToBurn) returns (bytes32[] amounts)",

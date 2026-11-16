@@ -14,7 +14,9 @@ import { providers } from "ethers";
 import { AlertManager, MemorySink, createSink } from "./alerts";
 import { ConfigError, findSecretsInConfigText, requireRpcUrlFromEnv, requireValidConfig } from "./config";
 import type { KeeperConfig } from "./config";
+import { checkWiring } from "./chain";
 import { keeperStep, verifySigner } from "./keeper";
+import { preflight } from "./preflight";
 import { mask, safeError } from "./mask";
 import { KeystoreSigner } from "./signer";
 import type { ExternalSigner } from "./signer";
@@ -23,7 +25,11 @@ import type { KeeperState } from "./state";
 
 const EX_CONFIG = 78;
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv.slice(2)): KeeperConfig {
+/**
+ * `partial`: the vault and the keeper wallet may still be the UNSET placeholder (the host is bootstrapped before the vault exists and the wallet is made ON the host);
+ * they are replaced by dummy non-zero addresses for the validation, and `placeholders` names what was replaced. Everything else is validated as always.
+ */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv.slice(2), partial = false): KeeperConfig & { placeholders?: string[] } {
   const i = argv.indexOf("--config");
   const file = (i >= 0 ? argv[i + 1] : undefined) ?? env.DLMM_KEEPER_CONFIG;
   if (!file) throw new Error("no configuration: set DLMM_KEEPER_CONFIG (or pass --config <file>); the checked-in template config/dlmm-keeper.example.json is REFUSED while it contains placeholders");
@@ -36,27 +42,35 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   } catch {
     throw new Error("the configuration file is not valid JSON");
   }
+  if (partial && raw && typeof raw === "object") {
+    const c = raw as Record<string, any>;
+    const placeholders: string[] = [];
+    if (String(c.vault).toUpperCase() === "UNSET") { c.vault = "0x00000000000000000000000000000000000000d1"; placeholders.push("vault"); }
+    if (c.keeper && String(c.keeper.address).toUpperCase() === "UNSET") { c.keeper.address = "0x00000000000000000000000000000000000000d2"; placeholders.push("keeper.address"); }
+    return { ...requireValidConfig(raw), placeholders };
+  }
   return requireValidConfig(raw);
 }
 
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const cmd = argv[0] ?? "";
-  if (!["check", "run", "open-band", "validate-config", "resume", "status"].includes(cmd)) {
-    console.error("usage: dlmm-keeper run [--dry-run] | open-band [--send] | check | status | resume | validate-config   (configuration: DLMM_KEEPER_CONFIG or --config <file>; secrets: environment only)");
+  if (!["check", "run", "open-band", "validate-config", "preflight", "resume", "status"].includes(cmd)) {
+    console.error("usage: dlmm-keeper run [--dry-run] | open-band [--send] | preflight | check | status | resume | validate-config   (configuration: DLMM_KEEPER_CONFIG or --config <file>; secrets: environment only)");
     return 2;
   }
   let cfg: KeeperConfig;
   try {
-    cfg = loadConfig();
+    cfg = loadConfig(process.env, process.argv.slice(2), cmd === "preflight" || (cmd === "validate-config" && process.argv.includes("--partial")));
   } catch (e) {
     console.error(e instanceof ConfigError ? e.message : `configuration refused: ${safeError(e)}`);
     console.error("the process did not start");
     return EX_CONFIG;
   }
   const nowS = (): number => Math.floor(Date.now() / 1000);
+  const placeholders = (cfg as KeeperConfig & { placeholders?: string[] }).placeholders ?? [];
   if (cmd === "validate-config") {
-    console.log("configuration valid");
+    console.log(placeholders.length ? `configuration valid, EXCEPT these placeholders (filled by the wire step): ${placeholders.join(", ")}` : "configuration valid");
     return 0;
   }
   // ---- offline commands: no RPC, no keystore
@@ -106,6 +120,13 @@ async function main(): Promise<number> {
     console.error(`start refused: the endpoint did not answer eth_chainId: ${safeError(e)}`);
     return EX_CONFIG;
   }
+  if (cmd === "preflight") {
+    const lines = await preflight(provider, cfg, nowS(), !placeholders.includes("vault"));
+    for (const l of lines) console.log(mask(`${l.level.padEnd(4)} ${l.text}`));
+    const fails = lines.filter((l) => l.level === "FAIL").length;
+    console.log(fails ? `PREFLIGHT: ${fails} CHECK(S) FAILED` : "PREFLIGHT: ALL CHECKS PASSED");
+    return fails ? 1 : 0;
+  }
   let signer: ExternalSigner | undefined;
   if (live) {
     try {
@@ -113,6 +134,20 @@ async function main(): Promise<number> {
       await verifySigner(signer, cfg, provider);
     } catch (e) {
       console.error(`start refused: keeper signer: ${safeError(e)}`);
+      return EX_CONFIG;
+    }
+  }
+  if (placeholders.length === 0) {
+    // the wiring is checked BEFORE anything runs: the unit refuses to start on a vault that is not the configured one or whose rebalancer is not this wallet
+    try {
+      const w = await checkWiring(provider, cfg);
+      const bad = w.filter((x) => x.level === "FAIL");
+      if (bad.length) {
+        for (const x of bad) console.error(mask(`start refused: wiring: ${x.text}`));
+        return EX_CONFIG;
+      }
+    } catch (e) {
+      console.error(`start refused: the wiring could not be read: ${safeError(e)}`);
       return EX_CONFIG;
     }
   }

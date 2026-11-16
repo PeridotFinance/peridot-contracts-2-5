@@ -38,6 +38,7 @@ contract StubPair {
     function getTokenX() external view returns (address) { return tokenX; }
     function getTokenY() external view returns (address) { return tokenY; }
     function getBinStep() external pure returns (uint16) { return 1; }
+    function getLBHooksParameters() external pure returns (bytes32) { return bytes32((uint256(0x151) << 160) | uint256(uint160(0x32E68C4b8Edc6d1F16E99EbA826B292FDC18daDC))); }
     function getBin(uint24 id) external view returns (uint128, uint128) { return (bins[id].x, bins[id].y); }
     function totalSupply(uint256 id) external view returns (uint256) { return bins[uint24(id)].supply; }
     function balanceOf(address a, uint256 id) external view returns (uint256) { return shares[a][id]; }
