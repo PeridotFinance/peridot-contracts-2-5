@@ -58,8 +58,8 @@ interface IBeaconRead {
 ///   VAULT (proxy), DEPLOYER, REBALANCER                      required
 ///   EXPECTED_IMPLEMENTATION                                  optional (the address the deploy printed)
 ///   STAGE                                                    1 (default) = after the deploy: paused, supply 0.
-///                                                            2 = after the Safe MultiSend: unpaused, supply == seed shares held by SEED_HOLDER.
-///   SEED (default 1000000), SEED_HOLDER (default 0x...dEaD)  stage 2 only
+///                                                            2 = after the Safe MultiSend: unpaused, seed shares at SEED_HOLDER, the rest at REST_HOLDER.
+///   SEED (default 1000000), SEED_HOLDER (default 0x...dEaD), REST (default 199000000), REST_HOLDER (default the Ledger)   stage 2 only
 ///   EXPECTED_DEPLOYER_NONCE                                  default 2 (implementation + proxy); 3 after the leftover-AVAX sweep
 /// The expected values are the ceremony's (spec sections 2 and 8): they are written here, not read from the vault.
 contract ReadBackPharaohDlmmVault is Script {
@@ -178,15 +178,20 @@ contract ReadBackPharaohDlmmVault is Script {
             console2.log("totalSupply / totalAssets 0 / 0   (stage 1: expect paused = true and an empty vault)");
         } else {
             uint256 seed = vm.envOr("SEED", uint256(1_000_000));
+            uint256 rest = vm.envOr("REST", uint256(199_000_000));
             address holder = vm.envOr("SEED_HOLDER", DEAD);
+            address restHolder = vm.envOr("REST_HOLDER", LEDGER);
             require(seed >= 1_000_000, "SEED < 1 USDC: the first-depositor window (W10 F1) is not closed");
             require(!paused_, "stage 2: the vault must be UNPAUSED");
             console2.log("seed holder %s shares %s   (expect >= %s)", holder, v.balanceOf(holder), seed);
+            console2.log("rest holder %s shares %s   (expect >= %s)", restHolder, v.balanceOf(restHolder), rest);
             require(v.balanceOf(holder) >= seed, "stage 2: the seed shares are not at the seed holder");
-            require(v.totalSupply() >= seed, "stage 2: supply below the seed");
-            console2.log("totalSupply %s totalAssets %s", v.totalSupply(), v.totalAssets());
+            require(v.balanceOf(restHolder) >= rest, "stage 2: the rest shares are not at the rest holder");
+            require(v.totalSupply() >= seed + rest, "stage 2: supply below seed + rest");
+            console2.log("totalSupply %s totalAssets %s (the cap is full when seed + rest = 200000000)", v.totalSupply(), v.totalAssets());
             require(IErc20Read(USDC).allowance(SAFE, vault) == 0, "stage 2: a USDC allowance from the Safe to the vault is left");
-            require(IErc20Read(USDC).balanceOf(SAFE) == 0, "stage 2: the Safe still holds USDC");
+            // printed, not asserted: anyone may send the Safe USDC; compare it with its value before the funding step
+            console2.log("Safe USDC balance (raw)  %s   (0 unless someone sent the Safe USDC meanwhile)", IErc20Read(USDC).balanceOf(SAFE));
         }
 
         // ---- the deployer holds nothing

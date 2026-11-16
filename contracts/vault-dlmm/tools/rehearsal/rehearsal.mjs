@@ -170,15 +170,32 @@ async function main() {
   const traderAddr = Wallet.createRandom().address;
   const strangerAddr = Wallet.createRandom().address;
   await step("S1 actors, funding (anvil_setBalance / anvil_setStorageAt, fork only)", async () => {
-    for (const a of [deployerAddr, bobAddr, traderAddr, strangerAddr]) await impersonate(a);
+    await impersonate(deployerAddr, "0x0"); // the deployer starts with NOTHING: the Ledger funds it through tools/dlmm-ledger-step.sh (step S1b)
+    for (const a of [bobAddr, traderAddr, strangerAddr]) await impersonate(a);
     await impersonate(A.LEDGER, "0x8AC7230489E80000"); // 10 AVAX
-    await rpc("anvil_setBalance", [keeperW.address, "0xDE0B6B3A7640000"]); // 1 AVAX
+    // the keeper wallet starts with nothing too (funded in S1b)
     await setErc20Balance(A.USDC, A.LEDGER, 300_000_000);
     await setErc20Balance(A.USDC, bobAddr, 300_000_000);
     await setErc20Balance(A.USDC, traderAddr, 3_000_000_000_000);
     await setErc20Balance(A.USDT, traderAddr, 3_000_000_000_000);
     log("   deployer (fresh, keyless, impersonated):", deployerAddr, " keeper (throwaway):", keeperW.address, " bob:", bobAddr);
     log("   deployer nonce", await provider.getTransactionCount(deployerAddr), " Safe USDC", fmt6(await usdc.balanceOf(A.SAFE)));
+  });
+
+  const stepEnv = { ...BASE_ENV, SEND_MODE: "unlocked", DEPLOYER: deployerAddr, KEEPER_WALLET: keeperW.address };
+  const ledgerStep = (mode, name, extra = {}) => run("bash", ["tools/dlmm-ledger-step.sh", mode, name], { env: { ...stepEnv, ...extra } });
+  await step("S1b Ledger funds the deployer (0.3 AVAX) and the keeper wallet (1 AVAX) with tools/dlmm-ledger-step.sh (simulation first)", async () => {
+    for (const name of ["fund-deployer", "fund-keeper"]) {
+      const r = ledgerStep("send", name);
+      console.log(indent(r.out.split("\n").filter((l) => /^STEP|signer|to |decoded|simulation|ABOUT|after|AVAX/.test(l)).join("\n")));
+      if (r.code !== 0) throw new Error(name + " failed: " + r.out.slice(-400));
+    }
+    log("   deployer AVAX", utils.formatEther(await provider.getBalance(deployerAddr)), " keeper AVAX", utils.formatEther(await provider.getBalance(keeperW.address)));
+    const bad = ledgerStep("simulate", "fund-keeper", { KEEPER_WALLET: A.SAFE });
+    log(`   fund-keeper to the Safe refused: exit ${bad.code}: ${bad.out.trim().split("\n").pop()}`);
+    const bad2 = ledgerStep("simulate", "fund-safe-usdc", { USDC_TOTAL: "5000" });
+    log(`   fund-safe-usdc 5000 (more than the Ledger holds) -> simulation exit ${bad2.code}: ${bad2.out.trim().split("\n").pop().slice(0, 140)}`);
+    if (bad.code === 0 || bad2.code === 0) results.failures.push("a bad ledger step was not refused");
   });
 
   const ENV = { ...BASE_ENV, DEPLOYER: deployerAddr, REBALANCER: keeperW.address, EXPECTED_REWARDER_IMPL_CODEHASH: EXPECT_HASH };
@@ -222,7 +239,7 @@ async function main() {
     const txs = bc.receipts.map((x, i) => ({ hash: x.transactionHash, gasUsed: parseInt(x.gasUsed, 16), gasPrice: parseInt(x.effectiveGasPrice || "0x0", 16), kind: bc.transactions[i].contractName || bc.transactions[i].function || "?", addr: x.contractAddress }));
     results.gas.deployImplementation = txs[0].gasUsed; results.gas.deployProxyInit = txs[1].gasUsed;
     log("   deploy transactions:", JSON.stringify(txs));
-    log(`   deploy wall time ${secs.toFixed(1)} s; deployer nonce now ${await provider.getTransactionCount(deployerAddr)}; deployer AVAX spent ${utils.formatEther(utils.parseEther("100").sub(await provider.getBalance(deployerAddr)))} (balance was 100 AVAX; gas price ${txs[0].gasPrice} wei)`);
+    log(`   deploy wall time ${secs.toFixed(1)} s; deployer nonce now ${await provider.getTransactionCount(deployerAddr)}; deployer AVAX spent ${utils.formatEther(utils.parseEther("0.3").sub(await provider.getBalance(deployerAddr)))} (funded 0.3 AVAX; gas price ${txs[0].gasPrice} wei)`);
     results.deployTxs = txs;
     return { env, secs };
   });
@@ -277,6 +294,12 @@ async function main() {
     await expectRevert("deployer calls setRebalancer()", () => vault.connect(dsig).callStatic.setRebalancer(deployerAddr));
     const padmin = new ethers.Contract(PADMIN, ["function upgradeAndCall(address,address,bytes)", "function owner() view returns (address)"], provider);
     await expectRevert("deployer calls ProxyAdmin.upgradeAndCall()", () => padmin.connect(dsig).callStatic.upgradeAndCall(V, deployerAddr, "0x"));
+    {
+      const sw = ledgerStep("send", "sweep-deployer");
+      console.log(indent(sw.out.split("\n").filter((l) => /^STEP|signer|decoded|simulation|ABOUT|after|AVAX/.test(l)).join("\n")));
+      if (sw.code !== 0) throw new Error("sweep failed: " + sw.out.slice(-400));
+      log("   deployer AVAX after the sweep:", utils.formatEther(await provider.getBalance(deployerAddr)), " nonce", await provider.getTransactionCount(deployerAddr), "(3 = implementation, proxy, sweep)");
+    }
     log("   ProxyAdmin.owner() =", await padmin.owner(), " vault.owner() =", await vault.owner(), " paused =", await vault.paused());
   });
 
@@ -290,66 +313,64 @@ async function main() {
   });
 
   // ------------------------------------------------------------------ S6 the ONE atomic MultiSend: unpause + approve + seed deposit
-  const SEED = process.env.REH_SEED || "1000000";
-  await step("S6 SAFE MultiSend [unpause, USDC.approve, deposit(seed, DEAD)] (tools/dlmm-safe-multisend.sh)", async () => {
-    const msEnv = { ...BASE_ENV, VAULT: V, SEED };
+  const SEED = "1000000", REST = "199000000";
+  await step("S6 Ledger funds the Safe with 200 USDC (tools/dlmm-ledger-step.sh), then the SAFE MultiSend [unpause, approve 200, deposit(1, 0xdEaD), deposit(199, Ledger)] (tools/dlmm-safe-multisend.sh)", async () => {
+    const msEnv = { ...BASE_ENV, VAULT: V };
     const snapBefore = await safeSnap();
-    const small = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: { ...msEnv, SEED: "999999" } });
-    log(`   seed 999999 refused by the builder: exit ${small.code}: ${small.out.trim().split("\n")[0]}`);
+    const refusals = [["REST_RECEIVER = the dead address", { REST_RECEIVER: A.DEAD }], ["SEED_USDC=6 (over 5)", { SEED_USDC: "6", REST_USDC: "100" }], ["SEED_USDC=0", { SEED_USDC: "0" }], ["total above the cap", { REST_USDC: "200" }]];
+    for (const [label, e] of refusals) { const r = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: { ...msEnv, ...e } }); log(`   refused: ${label} -> exit ${r.code}: ${r.out.trim().split("\n")[0].slice(0, 150)}`); if (r.code === 0) results.failures.push("multisend accepted: " + label); }
+    const ov = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: { ...msEnv, SEED_USDC: "6", REST_USDC: "100", OVERRIDE_DEAD_ALLOW: "yes" } });
+    log(`   with OVERRIDE_DEAD_ALLOW=yes the 6/100 split builds: exit ${ov.code}`);
+    if (ov.code !== 0) results.failures.push("override did not allow");
     const b = run("bash", ["tools/dlmm-safe-multisend.sh", "build"], { env: msEnv });
-    console.log(indent(b.out.split("\n").slice(0, 9).join("\n")));
-    // precondition: the Safe holds no USDC; the simulation must refuse
+    console.log(indent(b.out.split("\n").slice(0, 12).join("\n")));
     const s0 = run("bash", ["tools/dlmm-safe-multisend.sh", "simulate"], { env: msEnv });
     log(`   simulate BEFORE the Ledger funds the Safe: exit ${s0.code}: ${s0.out.trim().split("\n").pop()}`);
     if (s0.code === 0) results.failures.push("multisend simulate passed with an unfunded Safe");
-    // step 0: Ledger -> Safe transfer
-    const tx0 = await usdc.connect(asLedger()).transfer(A.SAFE, SEED);
-    await gasOf(tx0, "step0 Ledger USDC.transfer(Safe, seed)");
+    // step 2a: Ledger -> Safe, 200 USDC, with the mandatory simulation
+    const f = ledgerStep("send", "fund-safe-usdc");
+    console.log(indent(f.out.split("\n").filter((l) => /^STEP|signer|to |decoded|simulation|ABOUT|after|Safe USDC|gasUsed/.test(l)).join("\n")));
+    if (f.code !== 0) throw new Error("fund-safe-usdc failed: " + f.out.slice(-400));
+    results.gas["step 2a Ledger USDC.transfer(Safe, 200)"] = Number((f.out.match(/gasUsed\s+(\d+)/) || [])[1]);
     const sim = run("bash", ["tools/dlmm-safe-multisend.sh", "simulate"], { env: msEnv });
-    console.log(indent(sim.out));
+    console.log(indent(sim.out.split("\n").filter((l) => /SAFE NONCE|SIMULATION|vault paused/.test(l)).join("\n")));
     if (sim.code !== 0) throw new Error("simulate failed");
     const t0 = Date.now();
     const snd = run("bash", ["tools/dlmm-safe-multisend.sh", "send"], { env: { ...msEnv, SEND_MODE: "unlocked" } });
-    console.log(indent(snd.out.split("\n").filter((l) => /gasUsed|transactionHash|status|Safe nonce|paused|seed shares/.test(l)).join("\n")));
+    console.log(indent(snd.out.split("\n").filter((l) => /SAFE NONCE|SIMULATION|ABOUT|gasUsed|transactionHash|status|Safe nonce after/.test(l)).join("\n")));
     if (snd.code !== 0) throw new Error("send failed: " + snd.out.slice(-600));
     const gu = (snd.out.match(/gasUsed\s+(\d+)/) || [])[1]; if (gu) results.gas.safeMultiSend = Number(gu);
     log(`   MultiSend wall time ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-    log("   paused:", await vault.paused(), " seed shares at DEAD:", (await vault.balanceOf(A.DEAD)).toString(), " totalSupply:", (await vault.totalSupply()).toString(), " totalAssets:", (await vault.totalAssets()).toString());
+    log("   paused:", await vault.paused(), " shares at DEAD:", (await vault.balanceOf(A.DEAD)).toString(), " shares at Ledger:", (await vault.balanceOf(A.LEDGER)).toString(), " totalSupply:", (await vault.totalSupply()).toString(), " totalAssets:", (await vault.totalAssets()).toString(), " maxDeposit:", (await vault.maxDeposit(bobAddr)).toString());
     if (await vault.paused()) throw new Error("still paused");
+    if (!(await vault.balanceOf(A.DEAD)).eq(SEED) || !(await vault.balanceOf(A.LEDGER)).eq(REST) || !(await vault.totalAssets()).eq(200_000_000)) throw new Error("split is not 1 to the dead address and 199 to the Ledger with totalAssets 200");
     {
       const after = await safeSnap();
       const same = JSON.stringify({ ...snapBefore, nonce: 0, usdc: 0 }) === JSON.stringify({ ...after, nonce: 0, usdc: 0 });
       log(`   SAFE UNCHANGED by the delegatecall MultiSend: owners/threshold/singleton+storage slots 0-9 (except the nonce)/fallback handler/guard/modules/Safe code hash identical: ${same}; nonce ${snapBefore.nonce} -> ${after.nonce}; Safe USDC ${snapBefore.usdc} -> ${after.usdc}; owners ${after.owners}; threshold ${after.threshold}; modules [${after.modules}]; guard slot ${after.slots.guard}; fallback slot ${after.slots.fallback}`);
       if (!same || after.nonce !== snapBefore.nonce + 1) throw new Error("the Safe's configuration changed during the MultiSend");
     }
-    const rb = ceremony(["verify", "rehearsal"], { ...VENV, STAGE: "2", SEED });
+    const rb = ceremony(["verify", "rehearsal"], { ...VENV, STAGE: "2", SEED, REST, EXPECTED_DEPLOYER_NONCE: "3" });
     console.log(indent(rb.out.split("\n").filter((l) => !/^\s*$/.test(l)).join("\n")));
     if (rb.code !== 0 || !/READ-BACK OK/.test(rb.out)) throw new Error("read-back stage 2 failed");
     results.readbackStage2 = rb.out;
   });
 
-  // ------------------------------------------------------------------ S7 deposits: Ledger, second user up to the cap
-  let ledgerShares, bobShares, ledgerDep = BN(100_000_000), bobDep;
-  await step("S7 deposits: Ledger 100 USDC, Bob up to the cap", async () => {
-    await (await usdc.connect(asLedger()).approve(V, ledgerDep)).wait();
-    const t1 = await vault.connect(asLedger()).deposit(ledgerDep, A.LEDGER);
-    await gasOf(t1, "deposit Ledger (first real deposit, idle)");
-    ledgerShares = await vault.balanceOf(A.LEDGER);
-    const lv = await vault.convertToAssets(ledgerShares);
-    results.ppm.depositLedger = ppmOf(ledgerDep, lv);
-    log(`   Ledger shares ${ledgerShares} worth ${fmt6(lv)} USDC for ${fmt6(ledgerDep)} -> loss ${results.ppm.depositLedger} ppm`);
+  // ------------------------------------------------------------------ S7 the cap is full: no outside deposit fits; a second holder is made by a share transfer
+  let ledgerShares, bobShares;
+  await step("S7 cap full: outside deposits revert; Ledger shares 199 -> 100 + 99 to a second holder (ERC-20 transfer) for the exit test", async () => {
     const bob = provider.getSigner(bobAddr);
-    const room = await vault.maxDeposit(bobAddr);
-    log("   maxDeposit(Bob) =", room.toString(), " totalAssets =", (await vault.totalAssets()).toString());
-    await expectRevert("Bob deposits maxDeposit + 1", () => vault.connect(bob).callStatic.deposit(room.add(1), bobAddr));
-    bobDep = room;
-    const t2 = await vault.connect(bob).deposit(bobDep, bobAddr, { gasLimit: 3_000_000 });
-    await gasOf(t2, "deposit Bob (up to the cap, idle)");
-    bobShares = await vault.balanceOf(bobAddr);
-    const bv = await vault.convertToAssets(bobShares);
-    results.ppm.depositBob = ppmOf(bobDep, bv);
-    log(`   Bob shares ${bobShares} worth ${fmt6(bv)} USDC for ${fmt6(bobDep)} -> loss ${results.ppm.depositBob} ppm; totalAssets ${(await vault.totalAssets()).toString()} (cap 200000000); maxDeposit now ${(await vault.maxDeposit(bobAddr)).toString()}`);
-    await expectRevert("Bob deposits 1 more raw unit at the cap", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
+    await (await usdc.connect(bob).approve(V, ethers.constants.MaxUint256)).wait();
+    log("   maxDeposit(Bob) =", (await vault.maxDeposit(bobAddr)).toString(), " totalAssets =", (await vault.totalAssets()).toString());
+    await expectRevert("Bob deposits 1 USDC into the full vault", () => vault.connect(bob).callStatic.deposit(1_000_000, bobAddr));
+    await expectRevert("Bob deposits 1 raw unit into the full vault", () => vault.connect(bob).callStatic.deposit(1, bobAddr));
+    const lv = await vault.convertToAssets(await vault.balanceOf(A.LEDGER));
+    results.ppm.depositLedger = ppmOf(BN(199_000_000), lv);
+    log(`   Ledger's 199 USDC deposit is worth ${fmt6(lv)} USDC right after the MultiSend -> loss ${results.ppm.depositLedger} ppm (the seed deposit first, then the rest: both 1:1)`);
+    const tx = await new ethers.Contract(V, ["function transfer(address,uint256) returns (bool)"], provider).connect(asLedger()).transfer(bobAddr, 99_000_000);
+    await gasOf(tx, "ERC-20 transfer of 99 shares Ledger -> second holder");
+    ledgerShares = await vault.balanceOf(A.LEDGER); bobShares = await vault.balanceOf(bobAddr);
+    log(`   Ledger ${ledgerShares} shares, second holder ${bobShares} shares, dead ${(await vault.balanceOf(A.DEAD)).toString()}`);
   });
 
   // ------------------------------------------------------------------ S8 keeper: config, check, open-band (live)
