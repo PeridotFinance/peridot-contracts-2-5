@@ -104,7 +104,12 @@ contract FuzzTest is Base {
         uint256 s = _deposit(BOB, amt);
         assertLe(erc.convertToAssets(s), amt, "minted shares are worth at most the assets paid");
         (uint256 n1, uint256 d1) = (erc.totalAssets(), shares.totalSupply());
-        assertGe(n1 * d0, n0 * d1, "share price did not fall on deposit");
+        // the price can dip only by rounding, only above par, and by at most D <= a*(N-S)/(N+1) (OZ virtual offset 1; W7 verdict 16 Nov)
+        if (n0 * s > amt * d0) {
+            assertGt(n0, d0, "a price dip is possible only above par");
+            assertLe((n0 * s - amt * d0) * (n0 + 1), amt * (n0 - d0), "price dip within the virtual-offset rounding bound");
+        }
+        n1; d1;
     }
 
     function testFuzz_roundTripNeverProfits(uint256 amt, bool withBand) public {
