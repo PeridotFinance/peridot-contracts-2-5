@@ -106,10 +106,10 @@ def run_one(args):
     if s.count(old) != 1: return (mid, desc, "BADSPEC", f"old text occurs {s.count(old)} times", eq)
     open(p, "w").write(s.replace(old, new))
     env = dict(os.environ, FOUNDRY_FUZZ_SEED="0x2a")
-    r = subprocess.run(["forge", "test", "--match-path", "test/rewards/*", "-q"], cwd=d, env=env, capture_output=True, text=True)
+    r = subprocess.run(["forge", "test", "--match-path", "test/rewards/*"], cwd=d, env=env, capture_output=True, text=True)
     out = r.stdout + r.stderr
     if r.returncode == 0: res = "SURVIVED"; who = ""
-    elif "Compiler run failed" in out or "Error (" in out or "error[" in out: res = "INVALID"; who = out.strip().splitlines()[-1][:120] if out.strip() else ""
+    elif "Compiler run failed" in out or "Compilation failed" in out: res = "INVALID"; who = out.strip().splitlines()[-1][:120] if out.strip() else ""
     else:
         res = "KILLED"; who = ", ".join(sorted(set(re.findall(r"\]\s+((?:test|invariant)\w*)\(", "\n".join(l for l in out.splitlines() if "FAIL" in l)))))[:160]
     shutil.rmtree(d, ignore_errors=True)
