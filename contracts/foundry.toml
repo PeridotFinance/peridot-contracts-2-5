@@ -66,3 +66,18 @@ via_ir = true
 optimizer = true
 optimizer_runs = 1
 fs_permissions = [{ access = "read-write", path = "./deployments" }, { access = "read", path = "./out-orders" }]
+
+# SPY 2x margin on the live Robinhood isolated-margin stack (feat/spy-margin). Same compiler settings as the live
+# Robinhood margin/order contracts and the boosted delegate (0.8.26, via-IR, optimizer runs 1, cancun).
+[profile.robinhood_spy]
+src = "contracts/margin/spy"
+test = "test/spy"
+script = "script/spy"
+out = "out-spy"
+cache_path = "cache-spy"
+solc_version = "0.8.26"
+evm_version = "cancun"
+via_ir = true
+optimizer = true
+optimizer_runs = 1
+fs_permissions = [{ access = "read-write", path = "./deployments/spy-margin" }, { access = "read", path = "./out-spy" }]
