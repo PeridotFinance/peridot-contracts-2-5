@@ -52,3 +52,5 @@ deployments/range-rehearsal.json
 cache-spy/
 out-spy/
 .scratch/
+deployments/spy-margin/*rehearsal*
+deployments/spy-margin/*.nvda-before.txt
