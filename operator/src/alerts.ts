@@ -32,11 +32,17 @@ const rank: Record<Severity, number> = { info: 0, warn: 1, crit: 2 };
 
 export class AlertManager {
   private active = new Map<string, Active>();
+  /** consecutive failed deliveries; while the sink is "down" no send is attempted until sinkDownUntil (exponential back-off 30 s .. 15 min) */
+  private failures = 0;
+  private sinkDownUntil = 0;
+  private readonly nowMs: () => number;
   constructor(
     private readonly sink: AlertSink,
     private readonly escalationSeconds: number[],
     restore?: AlertStateJson,
+    opts: { nowMs?: () => number } = {},
   ) {
+    this.nowMs = opts.nowMs ?? (() => Date.now());
     if (restore) for (const [k, v] of Object.entries(restore.active)) this.active.set(k, v);
   }
 
@@ -44,10 +50,34 @@ export class AlertManager {
     return { active: Object.fromEntries(this.active) };
   }
 
-  /** Send a message that is NOT de-duplicated (one per payment). Text is masked. */
+  /**
+   * Delivery NEVER throws. A failing sink (Telegram HTTP 429, DNS, timeout, a hung connection) must not break a cycle, and must not skip the code that
+   * follows a sent transaction. On failure: the (masked) failure and the alert itself go to the process log (so the journal still has it), and sends are
+   * paused with exponential back-off (30 s, 60 s, ... 15 min) instead of hammering a failing endpoint every cycle. Returns whether the sink accepted it.
+   */
+  private async deliver(m: AlertMessage, oneShot = false): Promise<boolean> {
+    if (this.nowMs() < this.sinkDownUntil) {
+      // a raise / process finding is retried after the back-off (state rolled back), so it is not repeated in the log; a one-shot notice is dropped, so it is logged here
+      if (oneShot) console.log(mask(JSON.stringify({ alert: m, delivery: "dropped: sink in back-off" })));
+      return false;
+    }
+    try {
+      await this.sink.send(m);
+      this.failures = 0;
+      return true;
+    } catch (e) {
+      this.failures++;
+      this.sinkDownUntil = this.nowMs() + Math.min(900_000, 30_000 * 2 ** (this.failures - 1));
+      console.error(mask(`alert delivery failed (${this.failures} in a row, next attempt in ${Math.round((this.sinkDownUntil - this.nowMs()) / 1000)} s): ${e instanceof Error ? e.message : String(e)}`));
+      console.log(mask(JSON.stringify({ alert: m, delivery: "failed" })));
+      return false;
+    }
+  }
+
+  /** Send a message that is NOT de-duplicated (one per payment). Text is masked. Never throws; a dropped one is in the process log. */
   async notify(msg: AlertMessage): Promise<AlertMessage> {
     const m = { ...msg, text: mask(msg.text) };
-    await this.sink.send(m);
+    await this.deliver(m, true);
     return m;
   }
 
@@ -56,27 +86,33 @@ export class AlertManager {
     const cur = this.active.get(key);
     if (!cur) return;
     this.active.delete(key);
-    await this.sink.send({ kind: "resolved", key, severity: cur.severity, text: mask(`resolved: ${key}`), audience: "monitor-operator", ageSeconds: nowSeconds - cur.firstSeen });
+    await this.deliver({ kind: "resolved", key, severity: cur.severity, text: mask(`resolved: ${key}`), audience: "monitor-operator", ageSeconds: nowSeconds - cur.firstSeen }, true);
   }
 
-  /** Raise one finding WITHOUT touching the others (used when a cycle failed and nothing else can be judged). */
+  /** Raise one finding WITHOUT touching the others (used when a cycle failed and nothing else can be judged). A raise whose delivery failed is retried by the next call. */
   async raise(f: Finding, nowSeconds: number): Promise<AlertMessage[]> {
     const cur = this.active.get(f.key);
     if (cur && rank[cur.severity] >= rank[f.severity]) return [];
+    const prev = cur ? cur.severity : undefined;
     if (!cur) this.active.set(f.key, { firstSeen: nowSeconds, severity: f.severity, escalationsSent: 0 });
     else cur.severity = f.severity;
     const m: AlertMessage = { kind: cur ? "severity-up" : "new", key: f.key, severity: f.severity, text: mask(f.message), audience: f.audience };
-    await this.sink.send(m);
+    if (!(await this.deliver(m))) {
+      if (prev === undefined) this.active.delete(f.key);
+      else this.active.get(f.key)!.severity = prev;
+      return [];
+    }
     return [m];
   }
 
-  /** `info` findings are recorded in the report but never sent. */
+  /** `info` findings are recorded in the report but never sent. A finding whose delivery failed stays "not yet announced" and is retried by the next call. */
   async process(findings: Finding[], nowSeconds: number): Promise<AlertMessage[]> {
     const sent: AlertMessage[] = [];
-    const emit = async (m: AlertMessage) => {
+    const emit = async (m: AlertMessage): Promise<boolean> => {
       const safe = { ...m, text: mask(m.text) };
-      sent.push(safe);
-      await this.sink.send(safe);
+      const ok = await this.deliver(safe, m.kind === "resolved");
+      if (ok) sent.push(safe);
+      return ok;
     };
     const seen = new Set<string>();
     for (const f of findings) {
@@ -85,19 +121,23 @@ export class AlertManager {
       const cur = this.active.get(f.key);
       if (!cur) {
         this.active.set(f.key, { firstSeen: nowSeconds, severity: f.severity, escalationsSent: 0 });
-        await emit({ kind: "new", key: f.key, severity: f.severity, text: f.message, audience: f.audience });
+        if (!(await emit({ kind: "new", key: f.key, severity: f.severity, text: f.message, audience: f.audience }))) this.active.delete(f.key);
         continue;
       }
       if (rank[f.severity] > rank[cur.severity]) {
+        const prev = cur.severity;
         cur.severity = f.severity;
-        await emit({ kind: "severity-up", key: f.key, severity: f.severity, text: f.message, audience: f.audience });
+        if (!(await emit({ kind: "severity-up", key: f.key, severity: f.severity, text: f.message, audience: f.audience }))) cur.severity = prev;
       }
       if (f.escalates) {
         const age = nowSeconds - cur.firstSeen;
         while (cur.escalationsSent < this.escalationSeconds.length && age >= this.escalationSeconds[cur.escalationsSent]!) {
           const t = this.escalationSeconds[cur.escalationsSent]!;
           cur.escalationsSent++;
-          await emit({ kind: "escalation", key: f.key, severity: "crit", text: `STILL UNRESOLVED after ${Math.round(t / 3600)} h: ${f.message}`, audience: f.audience, escalationSeconds: t, ageSeconds: age });
+          if (!(await emit({ kind: "escalation", key: f.key, severity: "crit", text: `STILL UNRESOLVED after ${Math.round(t / 3600)} h: ${f.message}`, audience: f.audience, escalationSeconds: t, ageSeconds: age }))) {
+            cur.escalationsSent--;
+            break;
+          }
         }
       }
     }
@@ -123,20 +163,38 @@ export class StdoutSink implements AlertSink {
     console.log(JSON.stringify({ alert: msg }));
   }
 }
-type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number }>;
+type FetchInit = { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal };
+type FetchLike = (url: string, init: FetchInit) => Promise<{ ok: boolean; status: number }>;
+
+/** One HTTP POST with a hard timeout (default 10 s): an AbortController for fetch AND a timer race, so a transport that ignores the signal cannot hang a cycle either. */
+export async function postWithTimeout(fetchFn: FetchLike, url: string, init: Omit<FetchInit, "signal">, timeoutMs: number): Promise<{ ok: boolean; status: number }> {
+  const ac = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      ac.abort();
+      reject(new Error(`alert delivery timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fetchFn(url, { ...init, signal: ac.signal }), deadline]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export class TelegramSink implements AlertSink {
-  constructor(private readonly token: string, private readonly chatId: string, private readonly fetchFn: FetchLike = fetch as unknown as FetchLike) {}
+  constructor(private readonly token: string, private readonly chatId: string, private readonly fetchFn: FetchLike = fetch as unknown as FetchLike, private readonly timeoutMs: number = 10_000) {}
   async send(msg: AlertMessage): Promise<void> {
     const text = `[${msg.severity.toUpperCase()}] ${msg.kind} (${msg.audience})\n${msg.text}`;
-    const r = await this.fetchFn(`https://api.telegram.org/bot${this.token}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: this.chatId, text }) });
+    const r = await postWithTimeout(this.fetchFn, `https://api.telegram.org/bot${this.token}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: this.chatId, text }) }, this.timeoutMs);
     if (!r.ok) throw new Error(`telegram delivery failed with HTTP ${r.status}`); // the URL (which contains the token) is never part of the message
   }
 }
 export class WebhookSink implements AlertSink {
-  constructor(private readonly url: string, private readonly fetchFn: FetchLike = fetch as unknown as FetchLike) {}
+  constructor(private readonly url: string, private readonly fetchFn: FetchLike = fetch as unknown as FetchLike, private readonly timeoutMs: number = 10_000) {}
   async send(msg: AlertMessage): Promise<void> {
-    const r = await this.fetchFn(this.url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) });
+    const r = await postWithTimeout(this.fetchFn, this.url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) }, this.timeoutMs);
     if (!r.ok) throw new Error(`webhook delivery failed with HTTP ${r.status}`);
   }
 }
