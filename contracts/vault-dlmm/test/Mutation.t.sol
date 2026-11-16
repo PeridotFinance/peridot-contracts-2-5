@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {Vm} from "forge-std/Vm.sol";
 import {Base, IVaultAdmin} from "./Base.t.sol";
 import {MockLBPair} from "./mocks/MockLBPair.sol";
+import {MockRouter} from "./mocks/MockRouter.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IPharaohDlmmVault} from "../src/IPharaohDlmmVault.sol";
 
@@ -704,6 +706,105 @@ contract MutationTest is Base {
             )
         );
     }
+
+    // ------------------------------------------------------------------ post-review code (W7 round 2)
+    // R02: renounceOwnership is disabled for the owner and still owner-gated (a stranger gets the Ownable error, not RenounceDisabled)
+    function test_renounceOwnershipDisabledForOwnerAndUnauthorisedForOthers() public {
+        bytes memory cd = abi.encodeWithSignature("renounceOwnership()");
+        _assertRevertsWith(SAFE, address(v), cd, bytes4(keccak256("RenounceDisabled()")));
+        _assertRevertsWith(ATTACKER, address(v), cd, OWNABLE_UNAUTH);
+        assertEq(adm.owner(), SAFE, "owner unchanged");
+    }
+
+    // H05: a harvest with nothing to forward makes no zero-value transfer (a token that reverts on zero transfers must not block the harvest)
+    function test_harvestWithNothingToForwardDoesNotTransferZero() public {
+        vm.mockCallRevert(address(phar), abi.encodeWithSignature("transfer(address,uint256)", SAFE, uint256(0)), "zero transfer");
+        vm.prank(KEEPER);
+        v.harvestRewards();
+    }
+
+    // S12: mint measures the resulting supply in SHARES (price above 1: 1000 shares cost 1_001_000 assets, which must not pass as supply)
+    function test_mintMinSupplyIsMeasuredInSharesNotAssets() public {
+        usdc.mint(address(v), 1000); // idle donation before the first deposit: totalAssets 1000, supply 0, price ~1001 per share
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("SupplyBelowMinimum(uint256)")), 1000));
+        erc.mint(1000, BOB);
+    }
+
+    // S14: the error reports the RESULTING supply (existing + minted), not the minted amount
+    function test_supplyBelowMinimumReportsTheResultingSupply() public {
+        _deposit(ALICE, 2e6);
+        vm.prank(ALICE);
+        erc.redeem(2e6 - 100, ALICE, ALICE); // supply 100: exits may leave it below the minimum
+        assertEq(shares.totalSupply(), 100);
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("SupplyBelowMinimum(uint256)")), 1100));
+        erc.deposit(1000, BOB);
+    }
+
+    // P13: the post-swap pool/oracle re-check uses the right price order (pool at the oracle ratio 1.003: safe; the inverted ratio 0.997 would trip a 40 bp bound)
+    function _skewPoolToTheOracle() internal returns (uint24 id) {
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.maxPoolOracleDevBps = 40;
+        vm.prank(SAFE);
+        v.setGuardParams(g);
+        if (usdcIsX) feedUsdc.setAnswer(1.003e8);
+        else feedUsdt.setAnswer(1.003e8); // oracle ratio X per Y read as Y per X = 1.003
+        id = ID0 + 30; // 1.0001^30 = 1.003
+        pair.forceActiveId(id);
+        usdc.mint(address(pair), 1_000_000e6);
+        usdt.mint(address(pair), 1_000_000e6);
+        pair.addToBin(id, uint128(1_000_000e6), uint128(1_000_000e6)); // depth at the skewed price
+        assertEq(_reasons(), 0, "fixture: guard quiet at the skewed price");
+    }
+
+    function test_openBandPostSwapRecheckUsesTheRightPriceOrder() public {
+        _deposit(ALICE, 100e6);
+        uint24 id = _skewPoolToTheOracle();
+        vm.prank(KEEPER);
+        v.openBand(id, 1, 0, 0, 0, block.timestamp + 120);
+        (,,, bool has,) = v.bandState();
+        assertTrue(has);
+    }
+
+    function test_rebalancePostSwapRecheckUsesTheRightPriceOrder() public {
+        _fundAndOpen(100e6);
+        uint24 id = _skewPoolToTheOracle();
+        vm.prank(KEEPER);
+        v.rebalance(id, 1, true, 10e6, 0, 0, 0, block.timestamp + 120);
+        (uint24 lo,,,,) = v.bandState();
+        assertEq(lo, id - 1);
+    }
+
+    // P10: openBand re-checks the pool after ITS OWN USDt -> USDC swap (the swap lands the active id 30 bins away, 30 bp off the oracle: bit 16 at a 20 bp bound)
+    function test_openBandRechecksThePoolAfterAUsdtToUsdcSwap() public {
+        IPharaohDlmmVault.GuardParams memory g = v.guardParams();
+        g.maxPoolOracleDevBps = 20;
+        g.maxRebalanceLossBps = 300;
+        vm.prank(SAFE);
+        v.setGuardParams(g);
+        usdt.mint(address(v), 100e6); // idle USDt only: half of it is sold for USDC
+        uint24 a = pair.getActiveId();
+        bool up = usdcIsX; // selling USDt: it is Y when USDC is X (buys X: id rises), else X (sells into Y: id falls)
+        for (uint24 i; i <= 5; ++i) {
+            uint24 id = up ? a + i : a - i;
+            uint256 bal = pair.balanceOf(WHALE, id);
+            if (bal == 0) continue;
+            uint256[] memory ids = new uint256[](1);
+            uint256[] memory amts = new uint256[](1);
+            ids[0] = id;
+            amts[0] = bal;
+            vm.prank(WHALE);
+            pair.burn(WHALE, WHALE, ids, amts);
+        }
+        uint24 stone = up ? a + 30 : a - 30;
+        usdc.mint(address(pair), 1_000_000e6);
+        if (usdcIsX) pair.addToBin(stone, uint128(1_000_000e6), 0);
+        else pair.addToBin(stone, 0, uint128(1_000_000e6));
+        vm.prank(KEEPER);
+        vm.expectRevert(abi.encodeWithSelector(IPharaohDlmmVault.GuardUnsafe.selector, uint256(16)));
+        v.openBand(a, 1, 0, 0, 0, block.timestamp + 120);
+    }
 }
 
 /// @notice initialize-time validation: one fixture per check of PharaohDlmmPairValidator (and per half of the compound checks), each asserting the EXACT check number
@@ -949,6 +1050,95 @@ contract MutationInitFlippedTest is MutationInitTest {
 }
 
 contract MutationFlippedTest is MutationTest {
+    function _flipped() internal pure override returns (bool) {
+        return true;
+    }
+}
+
+/// @notice a router that performs the real swap but reports a different amount out (an honest-balance check: the vault must pay what its USDC balance gained)
+contract LyingRouter {
+    MockRouter public immutable real;
+    address public immutable factoryAddr;
+    int256 public lie;
+
+    constructor(MockRouter r, address f, int256 l) {
+        real = r;
+        factoryAddr = f;
+        lie = l;
+    }
+
+    function getFactory() external view returns (address) {
+        return factoryAddr;
+    }
+
+    function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, MockRouter.Path memory path, address to, uint256 deadline)
+        external
+        returns (uint256 out)
+    {
+        IERC20(path.tokenPath[0]).transferFrom(msg.sender, address(this), amountIn);
+        IERC20(path.tokenPath[0]).approve(address(real), amountIn);
+        out = real.swapExactTokensForTokens(amountIn, amountOutMin, path, to, deadline);
+        out = lie >= 0 ? out + uint256(lie) : out - uint256(-lie);
+    }
+}
+
+/// @notice B01..B05: `redeem` pays the USDC balance delta of the swap, never the router's returned amount
+contract MutationPayoutTest is Base {
+    function setUp() public virtual {
+        _deployWorld();
+    }
+
+    /// returns (paid to the receiver, vault USDC before, vault USDC after, shares redeemed, supply before)
+    function _redeemHalf(int256 lie) internal returns (uint256 paid, uint256 before_, uint256 after_, uint256 sh, uint256 supply) {
+        LyingRouter lr = new LyingRouter(router, address(factory), lie);
+        voter.setManager(address(lr), true);
+        IPharaohDlmmVault.InitParams memory p = _initParams();
+        p.router = address(lr);
+        address proxy = _deployVaultWith(p);
+        vm.prank(SAFE);
+        IVaultAdmin(proxy).unpause();
+        _mintTokens(ALICE, 100e6, 0);
+        vm.startPrank(ALICE);
+        usdc.approve(proxy, type(uint256).max);
+        IERC4626Min(proxy).deposit(100e6, ALICE);
+        vm.stopPrank();
+        usdt.mint(proxy, 50e6); // idle USDt: the payout has a pair leg to swap
+        sh = IERC20(proxy).balanceOf(ALICE) / 2;
+        supply = IERC20(proxy).totalSupply();
+        before_ = usdc.balanceOf(proxy);
+        uint256 bob = usdc.balanceOf(BOB);
+        vm.prank(ALICE);
+        paid = IERC4626Min(proxy).redeem(sh, BOB, ALICE);
+        after_ = usdc.balanceOf(proxy);
+        assertEq(usdc.balanceOf(BOB) - bob, paid, "the receiver got exactly what redeem returned");
+    }
+
+    function _check(int256 lie) internal {
+        (uint256 paid, uint256 before_, uint256 after_, uint256 sh, uint256 supply) = _redeemHalf(lie);
+        // the vault keeps exactly the other holders' share of its idle USDC; every USDC the swap really delivered went to the receiver
+        assertEq(after_, before_ - (before_ * sh) / supply, "vault USDC after = before - idle slice");
+        assertGt(paid, (before_ * sh) / supply, "the swap leg was paid");
+    }
+
+    function test_redeemPaysTheBalanceDeltaWhenTheRouterOverstates() public {
+        _check(1000);
+    }
+
+    function test_redeemPaysTheBalanceDeltaWhenTheRouterUnderstates() public {
+        _check(-1);
+    }
+
+    function test_redeemPaysTheBalanceDeltaWhenTheRouterIsHonest() public {
+        _check(0);
+    }
+}
+
+interface IERC4626Min {
+    function deposit(uint256 assets, address receiver) external returns (uint256);
+    function redeem(uint256 shares, address receiver, address owner) external returns (uint256);
+}
+
+contract MutationPayoutFlippedTest is MutationPayoutTest {
     function _flipped() internal pure override returns (bool) {
         return true;
     }
