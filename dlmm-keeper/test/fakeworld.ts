@@ -193,6 +193,7 @@ function dispatch(w: World, to: string, data: string, from?: string): string {
       case "getTokenX": return enc(pr, f.name, [w.tokenX]);
       case "getTokenY": return enc(pr, f.name, [w.tokenY]);
       case "getBinStep": return enc(pr, f.name, [1]);
+      case "getLBHooksParameters": return enc(pr, f.name, [utils.hexZeroPad("0x0151" + "0".repeat(20) + "32e68c4b8edc6d1f16e99eba826b292fdc18dadc".slice(0, 0), 32)]);
       case "getBin": { const b = w.bins.get(Number(a[0])); return enc(pr, f.name, [b?.rx ?? 0n, b?.ry ?? 0n]); }
       case "balanceOf": return enc(pr, f.name, [w.bins.get(Number(a[1]))?.bal ?? 0n]);
       case "totalSupply": return enc(pr, f.name, [w.bins.get(Number(a[0]))?.supply ?? 0n]);

@@ -220,3 +220,40 @@ test("anvil e2e CLI `check` (main.ts): the RPC comes from the environment only, 
   assert.equal(Number(await w.vault.rebalanceCount()), 0);
   void Wallet;
 });
+
+test("anvil e2e CLI `preflight` and the start-up wiring refusal: all checks pass against a wired vault; with the placeholder vault only the vault-independent checks run; a vault whose rebalancer is another wallet is REFUSED to start (78) and fails preflight", { skip }, async () => {
+  const w = await deployWorld(anvil, (c) => (c.mode = "dry-run"));
+  const cli = (args: string[], cfg: object): Promise<{ code: number | null; out: string; err: string }> =>
+    new Promise((resolve) => {
+      const f = path.join(w.dir, `c-${Math.random().toString(36).slice(2)}.json`);
+      fs.writeFileSync(f, JSON.stringify(cfg));
+      const c = spawn("node", [path.join(__dirname, "..", "..", "src", "main.js"), ...args, "--config", f], { env: { PATH: process.env.PATH, AVALANCHE_MAINNET_RPC_URL: anvil.url } });
+      let out = "";
+      let err = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.stderr.on("data", (d) => (err += d));
+      c.on("close", (code) => resolve({ code, out, err }));
+    });
+  const ok = await cli(["preflight"], w.cfg);
+  assert.equal(ok.code, 0, ok.out + ok.err);
+  assert.match(ok.out, /PREFLIGHT: ALL CHECKS PASSED/);
+  assert.match(ok.out, /PASS vault\.rebalancer\(\) == the keeper wallet/);
+  assert.ok(!ok.out.includes(anvil.url));
+  const noVault = await cli(["preflight"], { ...w.cfg, vault: "UNSET", keeper: { address: "UNSET" } });
+  assert.equal(noVault.code, 0, noVault.out + noVault.err);
+  assert.match(noVault.out, /not wired yet/);
+  const partial = await cli(["validate-config", "--partial"], { ...w.cfg, vault: "UNSET", keeper: { address: "UNSET" } });
+  assert.equal(partial.code, 0);
+  assert.match(partial.out, /EXCEPT these placeholders .*vault, keeper\.address/);
+  const strict = await cli(["validate-config"], { ...w.cfg, vault: "UNSET" });
+  assert.equal(strict.code, 78);
+  // the vault's rebalancer is another wallet: the keeper refuses to start and preflight fails
+  const bad = { ...w.cfg, keeper: { address: w.vault.address } };
+  const r1 = await cli(["run"], bad);
+  assert.equal(r1.code, 78);
+  assert.match(r1.err, /wiring: vault\.rebalancer\(\) == the keeper wallet/);
+  const r2 = await cli(["preflight"], bad);
+  assert.equal(r2.code, 1);
+  assert.match(r2.out, /FAIL vault\.rebalancer\(\) == the keeper wallet is /);
+  assert.match(r2.out, /PREFLIGHT: 1 CHECK\(S\) FAILED/);
+});

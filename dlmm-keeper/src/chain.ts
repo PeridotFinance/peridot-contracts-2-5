@@ -296,3 +296,51 @@ export async function callVoid(provider: providers.Provider, tx: { from: string;
   const ret = await provider.call(tx);
   if (ret !== "0x" && ret !== "") throw Object.assign(new Error("simulation returned revert data"), { data: ret });
 }
+
+// ---------------------------------------------------------------- start-up wiring check
+export interface Check {
+  level: "PASS" | "FAIL" | "INFO";
+  text: string;
+}
+/** The vault's wiring against the configuration: pair, feeds, asset, pair token, and the keeper wallet == rebalancer(). Read-only. */
+export async function checkWiring(provider: providers.Provider, cfg: KeeperConfig): Promise<Check[]> {
+  const V = cfg.vault;
+  const r = await batch(provider, cfg.multicall3, [
+    { target: V, iface: vaultIface, fn: "pair" },
+    { target: V, iface: vaultIface, fn: "rebalancer" },
+    { target: V, iface: vaultIface, fn: "feedAsset" },
+    { target: V, iface: vaultIface, fn: "feedPair" },
+    { target: V, iface: vaultIface, fn: "asset" },
+    { target: V, iface: vaultIface, fn: "pairToken" },
+    { target: cfg.pair, iface: pairIface, fn: "getTokenX" },
+    { target: cfg.pair, iface: pairIface, fn: "getTokenY" },
+    { target: V, iface: vaultIface, fn: "guardState" },
+    { target: V, iface: vaultIface, fn: "bandState" },
+  ]);
+  const out: Check[] = [];
+  const val = (i: number): string | undefined => (r[i]?.success && r[i]!.value ? String(r[i]!.value![0]) : undefined);
+  const eq = (name: string, got: string | undefined, want: string): void => {
+    if (got === undefined) out.push({ level: "FAIL", text: `${name}: the call failed (is ${V} a vault?)` });
+    else if (got.toLowerCase() !== want.toLowerCase()) out.push({ level: "FAIL", text: `${name} is ${got}, the configuration says ${want}` });
+    else out.push({ level: "PASS", text: `${name} = ${got}` });
+  };
+  eq("vault.pair()", val(0), cfg.pair);
+  eq("vault.rebalancer() == the keeper wallet", val(1), cfg.keeper.address);
+  eq("vault.feedAsset()", val(2), cfg.feeds.asset);
+  eq("vault.feedPair()", val(3), cfg.feeds.pair);
+  eq("vault.asset()", val(4), cfg.assetToken);
+  eq("vault.pairToken()", val(5), cfg.pairToken);
+  const tx = val(6);
+  const ty = val(7);
+  const okTok = tx !== undefined && ty !== undefined && ((tx.toLowerCase() === cfg.pairToken.toLowerCase() && ty.toLowerCase() === cfg.assetToken.toLowerCase()) || (tx.toLowerCase() === cfg.assetToken.toLowerCase() && ty.toLowerCase() === cfg.pairToken.toLowerCase()));
+  out.push({ level: okTok ? "PASS" : "FAIL", text: `pair tokens X=${tx} Y=${ty} are the configured asset / pair token` });
+  if (r[8]?.success && r[8]!.value) {
+    const g = toGuard(r[8]!.value!);
+    out.push({ level: g.latched || g.reasons !== 0 ? "FAIL" : "PASS", text: `guardState: latched=${g.latched} reasons=${g.reasons}` });
+  } else out.push({ level: "FAIL", text: "vault.guardState() failed" });
+  if (r[9]?.success && r[9]!.value) {
+    const b = toBand(r[9]!.value!);
+    out.push({ level: "INFO", text: `bandState: hasBand=${b.hasBand} band=[${b.lowerId}, ${b.upperId}] active=${b.activeId}` });
+  }
+  return out;
+}
