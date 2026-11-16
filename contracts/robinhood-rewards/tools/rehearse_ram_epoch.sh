@@ -9,7 +9,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd); cd "$HERE"
 P=${PORT:-8731}; F=http://127.0.0.1:$P
-OUT=${OUT:-$HERE/deployments/rehearsal}; mkdir -p "$OUT"
+OUT=${OUT:-$HERE/deployments/rehearsal}; rm -rf "$OUT/cache"; mkdir -p "$OUT"   # a scan cache of an earlier fork must never be reused
 INK=/Users/joshua/Peridot/RobinhoodVaults/.wt-inkind/ramses-vaults
 export ETHERS_DIR=${ETHERS_DIR:-/Users/joshua/Peridot/peridot-contracts-2-5/contracts/node_modules/ethers}
 L=0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD; T=0x6797FB8Ce049B42C5BC2b42Bf76c6d15C7B12498
@@ -28,7 +28,7 @@ anvil --fork-url https://rpc.mainnet.chain.robinhood.com --port $P --silent --au
 AP=$!
 trap '[ -n "${KEEP:-}" ] || kill $AP 2>/dev/null' EXIT
 for i in $(seq 1 80); do cast block-number --rpc-url $F >/dev/null 2>&1 && break; sleep 0.5; done
-cast client --rpc-url $F | grep -qi anvil || { echo "STOPPED: not anvil"; exit 1; }
+grep -qi anvil <<< "$(cast client --rpc-url $F)" || { echo "STOPPED: not anvil"; exit 1; }
 [ "$(cast chain-id --rpc-url $F)" = 4663 ] || { echo "STOPPED: not chain 4663"; exit 1; }
 FORK=$(cast rpc anvil_nodeInfo --rpc-url $F | python3 -c 'import json,sys;print(json.load(sys.stdin)["forkConfig"]["forkBlockNumber"])')
 echo "fork block $FORK"
@@ -37,7 +37,9 @@ st(){ python3 -c "import json,sys;r=json.load(sys.stdin);print('  $1',r['status'
 # the pipeline runs in a subshell: stop is called HERE, in the main shell, so a failed send ends the rehearsal
 send(){ local who=$1 name=$2; shift 2; cast send "$@" --from $who --unlocked --rpc-url $F --timeout 900 --rpc-timeout 900 --json | st "$name" || stop "$name"; }
 led(){ local name=$1; shift; SIGS=$((SIGS+1)); send $L "Ledger $SIGS: $name" "$@"; }
-reverts(){ local want=$1; shift; local o; o=$(cast call "$@" --rpc-url $F 2>&1); echo "$o" | grep -q "$want" && echo "  refused as expected: $want" || stop "expected revert $want, got: $(echo "$o" | tail -1 | cut -c1-200)"; }
+# reverts 'ErrorName(types)' <cast call args>: the call must revert with that error (matched by name or by selector)
+reverts(){ local want=$1; shift; local o sel; sel=$(cast sig "$want"); o=$(cast call "$@" --rpc-url $F 2>&1) && stop "expected revert $want, the call succeeded"
+  { grep -q "${want%%(*}" <<< "$o" || grep -qi "$sel" <<< "$o"; } && echo "  refused as expected: ${want%%(*} ($sel)" || stop "expected revert $want, got: $(tail -1 <<< "$o" | cut -c1-200)"; }
 warp(){ cast rpc evm_increaseTime $1 --rpc-url $F >/dev/null; cast rpc evm_mine --rpc-url $F >/dev/null; }
 num(){ cut -d' ' -f1; }
 bal(){ cast call $1 'balanceOf(address)(uint256)' $2 --rpc-url $F | num; }
@@ -72,7 +74,7 @@ echo "  user rpSPY $(bal $RPSPY $USER), rpUSDGs $(bal $RPUSD $USER)"
 echo "== $ACCRUE s pass, then the Ramses keeper harvests"
 warp $ACCRUE
 cast rpc anvil_setBalance $K 0x16345785D8A0000 --rpc-url $F >/dev/null
-DL=$(( $(cast block --rpc-url $F -f timestamp) + 600 ))
+DL=$(( $(cast block --rpc-url $F -f timestamp) + 120 ))   # maxDeadlineDelay of the pair is below 600 s
 send $K "keeper harvest" $V 'harvest(bytes32,uint256)' $PAIR $DL --gas-limit 8000000
 ER1=$(cast call $V 'externalRewards(bytes32,address)(uint256)' $PAIR $RAM --rpc-url $F | num)
 HARVESTED=$((ER1 - ER0)); echo "  externalRewards $ER0 -> $ER1 (+$HARVESTED wei RAM)"
@@ -87,7 +89,8 @@ RAM_DEPLOYER=$DEPLOYER RAM_DISTRIBUTOR_JOURNAL=$JOURNAL forge script script/Depl
 DIST=$(python3 -c "import json;print(json.load(open('$JOURNAL'))['distributor'])"); echo "  distributor $DIST (owner $(cast call $DIST 'owner()(address)' --rpc-url $F))"
 echo "  deployer spent $(cast from-wei $((0x38D7EA4C68000 - $(cast balance $DEPLOYER --rpc-url $F)))) ETH"
 forge script script/DeployRamRewardsDistributor.s.sol:DeployRamRewardsDistributor --sig 'verify(string)' $JOURNAL --rpc-url $F 2>&1 | grep -E "verified|Error|revert" | head -2
-RAM_DEPLOYER=$OLD forge script script/DeployRamRewardsDistributor.s.sol:DeployRamRewardsDistributor --rpc-url $F --sender $OLD 2>&1 | grep -q OLD_SIGNER_REFUSED && echo "  old signer as deployer: refused (OLD_SIGNER_REFUSED)" || stop "old signer not refused"
+OLDOUT=$(RAM_DEPLOYER=$OLD forge script script/DeployRamRewardsDistributor.s.sol:DeployRamRewardsDistributor --rpc-url $F --sender $OLD 2>&1)
+grep -q OLD_SIGNER_REFUSED <<< "$OLDOUT" && echo "  old signer as deployer: refused (OLD_SIGNER_REFUSED)" || stop "old signer not refused"
 
 echo "== root generation from the fork's events (epoch 0: vault creation .. this harvest)"
 ID=$(cast call $DIST 'epochCount()(uint256)' --rpc-url $F | num)
@@ -95,26 +98,26 @@ node tools/robinhood-ram-root.mjs --rpc-url $F --epoch-id $ID --first-epoch --to
   --cache-dir $OUT/cache --out-dir $OUT/epoch-$ID --force > $OUT/generate.log 2> $OUT/generate.err || { cat $OUT/generate.err | tail; stop "generate"; }
 sed 's/^/  /' $OUT/generate.log | grep -v "^  wrote"
 M=$OUT/epoch-$ID/manifest.json; E=$OUT/epoch-$ID/epoch.json
-j(){ python3 -c "import json;d=json.load(open('$1'));print(eval('d$2'))"; }
-AMOUNT=$(j $M "['forwardExternalRewardArguments']['amount']"); TOTAL=$(j $M "['publishTotal']")
+j(){ jq -r "$2" "$1"; }
+AMOUNT=$(j $M .forwardExternalRewardArguments.amount); TOTAL=$(j $M .publishTotal)
 [ "$AMOUNT" = "$ER1" ] || stop "forward amount $AMOUNT != externalRewards $ER1"
 python3 -c "import json;e=json.load(open('$E'));assert not any(l['account'].lower()=='$OLD'.lower() for l in e['leaves']),'old signer has a leaf'" || stop "old signer leaf"
-[ "$(cast keccak "0x$(xxd -p $E | tr -d '\n')")" = "$(j $M "['dataHash']")" ] && echo "  dataHash == keccak256(epoch.json)" || stop "dataHash"
+[ "$(cast keccak "0x$(xxd -p $E | tr -d '\n')")" = "$(j $M .dataHash)" ] && echo "  dataHash == keccak256(epoch.json)" || stop "dataHash"
 
 echo "== timelock: Ledger schedules forwardExternalReward, early execute refused, 3,601 s, Ledger executes"
 DATA=$(cast calldata 'forwardExternalReward(bytes32,address,address,uint256)' $PAIR $RAM $DIST $AMOUNT)
 SALT=$(cast keccak "peridot-ram-forward-epoch-$ID")
 ZERO32=0x0000000000000000000000000000000000000000000000000000000000000000
 led "timelock schedule forwardExternalReward($AMOUNT)" $T 'schedule(address,uint256,bytes,bytes32,bytes32,uint256)' $V 0 $DATA $ZERO32 $SALT 3600
-reverts "TimelockUnexpectedOperationState" $T 'execute(address,uint256,bytes,bytes32,bytes32)' $V 0 $DATA $ZERO32 $SALT --from $L
-reverts "AccessControlUnauthorizedAccount" $V 'forwardExternalReward(bytes32,address,address,uint256)' $PAIR $RAM $DIST $AMOUNT --from $L
+reverts "TimelockUnexpectedOperationState(bytes32,bytes32)" $T 'execute(address,uint256,bytes,bytes32,bytes32)' $V 0 $DATA $ZERO32 $SALT --from $L
+reverts "AccessControlUnauthorizedAccount(address,bytes32)" $V 'forwardExternalReward(bytes32,address,address,uint256)' $PAIR $RAM $DIST $AMOUNT --from $L
 warp 3601
 led "timelock execute" $T 'execute(address,uint256,bytes,bytes32,bytes32)' $V 0 $DATA $ZERO32 $SALT --gas-limit 1000000
 echo "  distributor RAM $(bal $RAM $DIST), unallocated $(cast call $DIST 'unallocated()(uint256)' --rpc-url $F | num), externalRewards $(cast call $V 'externalRewards(bytes32,address)(uint256)' $PAIR $RAM --rpc-url $F | num)"
 
 echo "== Ledger publishes"
-ROOT=$(j $M "['publishEpochArguments']['root']"); FB=$(j $M "['publishEpochArguments']['fromBlock']"); TB=$(j $M "['publishEpochArguments']['toBlock']"); DH=$(j $M "['dataHash']")
-reverts "OwnableUnauthorizedAccount" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH --from $RANDO
+ROOT=$(j $M .publishEpochArguments.root); FB=$(j $M .publishEpochArguments.fromBlock); TB=$(j $M .publishEpochArguments.toBlock); DH=$(j $M .dataHash)
+reverts "OwnableUnauthorizedAccount(address)" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH --from $RANDO
 led "publishEpoch" $DIST 'publishEpoch(bytes32,uint256,uint64,uint64,bytes32)' $ROOT $TOTAL $FB $TB $DH
 echo "  reserved $(cast call $DIST 'reserved()(uint256)' --rpc-url $F | num), unallocated $(cast call $DIST 'unallocated()(uint256)' --rpc-url $F | num)"
 
@@ -125,7 +128,7 @@ print((l[0]['amount']+' ['+','.join(l[0]['proof'])+']') if l else 'none')"; }
 read UAMT UPROOF <<< "$(leaf $USER)"; read PAMT PPROOF <<< "$(leaf $L)"
 echo "  user leaf $UAMT, protocol (Ledger) leaf $PAMT"
 [ "$UAMT" != none ] || stop "the user has no leaf"
-reverts "ClaimsNotOpen" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF"
+reverts "ClaimsNotOpen(uint256)" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF"
 echo "== 86,401 s (challenge window), claims"
 warp 86401
 EXPECTED=$(python3 tools/rehearsal_expected.py $F $FB $TB $USER 9000) || stop "independent recomputation"
@@ -134,9 +137,9 @@ echo "  independent recomputation (Python, raw logs): user should get $EXPECTED"
 U0=$(bal $RAM $USER)
 send $USER "user claim" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF"
 U1=$(bal $RAM $USER); echo "  user RAM $U0 -> $U1"; [ $((U1 - U0)) = "$UAMT" ] || stop "user paid amount"
-reverts "AlreadyClaimed" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF" --from $USER
-reverts "InvalidProof" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $RANDO $UAMT "$UPROOF" --from $RANDO
-reverts "EpochNotOpen" $DIST 'claim(uint256,address,uint256,bytes32[])' $((ID+1)) $USER $UAMT "$UPROOF"
+reverts "AlreadyClaimed()" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $USER $UAMT "$UPROOF" --from $USER
+reverts "InvalidProof()" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $RANDO $UAMT "$UPROOF" --from $RANDO
+reverts "EpochNotOpen(uint8)" $DIST 'claim(uint256,address,uint256,bytes32[])' $((ID+1)) $USER $UAMT "$UPROOF"
 L0=$(bal $RAM $L)
 cast rpc anvil_setBalance $RANDO 0x16345785D8A0000 --rpc-url $F >/dev/null
 send $RANDO "third party claims the protocol leaf for the Ledger" $DIST 'claim(uint256,address,uint256,bytes32[])' $ID $L $PAMT "$PPROOF"
@@ -146,7 +149,7 @@ import json, sys
 e = json.load(open(sys.argv[1])); total, u, p = map(int, sys.argv[2:5])
 assert u + p == total, 'user + protocol != total (more leaves than expected?)'
 pools = sum(int(m['pool']) for m in e['markets']); rewards = sum(int(m['reward']) for m in e['markets'])
-assert pools * 10000 <= rewards * 9000 and pools * 10000 > rewards * 9000 - 20000, '90% pools'
+assert pools * 10000 <= rewards * 9000 and pools * 10000 >= rewards * 9000 - 20000, '90% pools'
 print(f"  user {u} = {u*1e4/total:.2f} bps of total; protocol {p} = 10% part {e['totals']['protocol']['bpsPart']} + excluded {e['totals']['protocol']['excludedHolders']} + rounding {e['totals']['protocol']['roundingAndDust']}")
 print(f"  depositor pools (90% of each market's RAM): {pools} of {rewards}")
 EOF

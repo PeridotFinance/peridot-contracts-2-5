@@ -45,7 +45,7 @@ M = [
  ("M34", "sweep deadline measured from CLAIM_DELAY", "uint256 deadline = uint256(e.publishedAt) + CLAIM_DEADLINE;\n        if (block.timestamp < deadline) revert DeadlineNotReached", "uint256 deadline = uint256(e.publishedAt) + CLAIM_DELAY;\n        if (block.timestamp < deadline) revert DeadlineNotReached", None),
  ("M35", "sweep does not release the reservation", "        e.status = Status.Swept;\n        reserved -= released;", "        e.status = Status.Swept;", None),
  ("M36", "sweep pays the owner (Avalanche behaviour)", "        reserved -= released;\n        emit EpochSwept", "        reserved -= released;\n        if (released != 0) REWARD_TOKEN.transfer(msg.sender, released);\n        emit EpochSwept", None),
- ("M37", "renounce enabled", "        revert RenounceDisabled();", "        _transferOwnership(address(0));", None),
+ ("M37", "renounce enabled", "function renounceOwnership() public pure override {\n        revert RenounceDisabled();", "function renounceOwnership() public override onlyOwner {\n        _transferOwnership(address(0));", None),
  ("M38", "claim without the reentrancy guard", "function claim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof) external nonReentrant", "function claim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof) external", None),
  ("M39", "claimMany without the reentrancy guard", "function claimMany(Claim[] calldata claims) external nonReentrant", "function claimMany(Claim[] calldata claims) external", None),
  ("M40", "claim opens one second early (< to <=) [inverted: late]", "if (block.timestamp < opensAt) revert ClaimsNotOpen(opensAt);", "if (block.timestamp <= opensAt) revert ClaimsNotOpen(opensAt);", None),

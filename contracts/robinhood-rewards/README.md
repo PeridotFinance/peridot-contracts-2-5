@@ -183,3 +183,69 @@ Run from `contracts/robinhood-rewards`:
   `dataHash = keccak256(epoch.json)`.
 - **Epochs.** Epochs run from harvest block to harvest block (`--to-harvest TX|N|last`). `--previous-manifest` chains the
   start block to the previous epoch's end.
+
+## 6. Evidence
+
+- **Foundry:** `forge test` gives 78 passed, in 6 suites:
+  - 49 unit tests, covering every window boundary at t-1/t/t+1, funding, cancel and republish without a forward, sweep
+    release, over-commit, ownership, renounce, and the L2 range above `block.number`;
+  - 8 odd-token tests (fee-on-transfer, over-delivering, false-returning, no-return, blacklisting, hook re-entrancy
+    into claim / claimMany / publish);
+  - 8 fuzz tests;
+  - 4 invariants: `reserved` equals the open obligations and is covered by the balance; tokens leave only through
+    claims and never to the owner; `claimed <= total` and matches the ghost accounting; no over-pay;
+  - 5 JS-vs-Solidity cross-check tests over two chained golden epochs;
+  - 4 deploy-script tests.
+- **Generator:** 17 offline tests (`node --test tools/test/robinhood-ram-root.test.mjs`). They include an independent
+  hand recomputation of five holders and the protocol leaf, the three checkpoint branches, the chained epoch, chunk
+  splitting on a range limit, the loopback-only RPC rule and old-signer refusal.
+- **Gas** (`forge test --isolate --match-test test_gasNumbers -vv`, each call its own transaction):
+
+  | Call | Gas |
+  | --- | --- |
+  | `publishEpoch` | 137k to 171k (the first epoch of a fresh contract is the highest) |
+  | `claim` | 87k (empty proof) to 104k (10 proof nodes) |
+  | `cancelEpoch` | 40k |
+  | `sweepUnclaimed` | 40k |
+
+- **Mutation round** (`mutation/mutants.py`, 78 hand mutants, fuzz seed 0x2a): **74 killed, 4 equivalent, 0 unexplained
+  survivors.** The equivalent mutants are:
+  - M26: cancel releases `total` instead of `total - claimed`, but `claimed` is always 0 inside the window;
+  - M58: effects after the transfer while the guard holds; M38/M39 show that the guard is what protects;
+  - M66: saturation at `>=`, which also returns 0 at equality;
+  - M73: `verifyLeaf` on an unknown epoch with root 0, which needs a keccak preimage of 0.
+
+  M37 (renounce enabled) did not compile in the first pass and was rewritten; the rewritten mutant is killed. M07, which
+  re-adds the Avalanche `toBlock <= block.number` check, is killed by 20+ tests because every test publishes L2 heights
+  above the L1-derived `block.number`.
+
+## 7. Fork rehearsal (`tools/rehearse_ram_epoch.sh`, log `deployments/rehearsal/rehearsal.log`)
+
+**Setup.** Anvil fork of mainnet at L2 115953238. The Ledger, timelock, keeper, pool and throwaway deployer were unlocked
+on anvil only. The SPY feed was held by FreshFeedMock, and `accrualBlockNumber` (slot 9) was aligned before the mints.
+
+**Steps:**
+1. The test user minted 0.02 SPY into rpSPY and 100 USDG into rpUSDGs. The funds came from the Ramses SPY/USDG pool,
+   on the fork only.
+2. After 21,600 s, keeper `0x9eaF..031E` ran `harvest`. It accrued about 0.0139 RAM, which brought
+   `externalRewards` to 0.110748 RAM.
+3. Throwaway deploy: one creation, owner = Ledger. `verify` passed, and the old signer as deployer was refused.
+4. Root generation from the fork's events: epoch 0 = (110177000, 115953246], 17 harvests, 2 leaves. All checks were
+   `true`, and `dataHash == keccak256(epoch.json)`.
+5. The Ledger scheduled `forwardExternalReward(pair, RAM, DIST, 110748405391358194)` on the timelock:
+   - an early execute was refused (`TimelockUnexpectedOperationState`);
+   - a direct Ledger call was refused (`AccessControlUnauthorizedAccount`);
+   - after 3,601 s the execute succeeded, moving all of `externalRewards` (0) into the distributor.
+6. Publish: a stranger was refused (`OwnableUnauthorizedAccount`); the **Ledger** published (`reserved == total`).
+   A claim inside the window was refused (`ClaimsNotOpen`).
+7. After 86,401 s, the user claimed **14,286,665,861,623,942 wei**. That is equal to the **independent Python
+   recomputation from raw logs** (`tools/rehearsal_expected.py`).
+8. Bad claims were refused:
+   - a double claim (`AlreadyClaimed`);
+   - another account using the proof (`InvalidProof`);
+   - an unknown epoch (`EpochNotOpen`).
+9. A third party claimed the protocol leaf of **96,461,739,529,734,252 wei** for the Ledger. That is
+   10 % part 11,074,840,539,135,820 + excluded holders (0xdEaD, timelock) 85,386,898,990,598,430 + rounding 2.
+10. The depositor pools were 90 % of each market's RAM: 99,673,564,852,222,374 of 110,748,405,391,358,194.
+
+**Result.** The distributor is empty and `reserved == 0`. **3 Ledger signatures** (schedule, execute, publish).

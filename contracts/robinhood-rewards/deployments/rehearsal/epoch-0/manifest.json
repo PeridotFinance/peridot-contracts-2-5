@@ -1,0 +1,61 @@
+{
+  "schema": "peridot-robinhood-ram-manifest/1",
+  "epochId": 0,
+  "chainId": 4663,
+  "vault": "0x67e7742922f4CC88C545e5aB5Df402b22DB4830b",
+  "pair": "0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435",
+  "rewardToken": "0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802",
+  "startBlock": 110177000,
+  "endBlock": 115953246,
+  "startTimestamp": 1794239580,
+  "endTimestamp": 1794873677,
+  "heldTxHashes": [
+    "0x602f862cc4d9e8e97df79e258819e6624f39cd626735433eddcc6db8a3e9ca48",
+    "0x0d4906da732417fab644cf417a862506c13e0471a18788211dbd43d6feea12ca",
+    "0x4bf6148439749756b635b865ebaf4b34090647b8da7d97070b7cd8d2562ee767",
+    "0x660cada878855b16221e8f7e40534d179c147b8d0f2b0ed38e4e340b2b84359a",
+    "0xbf3777627b42788be9d6fafa37b7e4d5e17782858a79100f1cd802ce9664cc3d",
+    "0x9c99ed7aac447e60b1f3b67651f8b08c637e6a3df5b2f9c26bd3a5a49cb2ecca",
+    "0xe849b229aa835f80eced2ef9cb233b23739a76eab263ddc0b89d1a544630d6d8",
+    "0xf29381043b41a389648bbfb0f19a442531f546f09529bcc9196b8c108f475dd5",
+    "0x6a9608d150ec00c4977c960ddff401f408a98d33386d20dec36c11c17eeef385",
+    "0x7b26de4a4fd129c31f49ea66ae18a9e36fd663818dea31ef953fc41329c79274",
+    "0x60b5dadf7b0022eedbc1dd196111b2165e61183f73e9c33431e1e55fec42b1aa",
+    "0x5d856cf72eeb9c8b02503ffb16940f8375d241de1b07efc1db64f4addd2a34e5",
+    "0x9d9660ccc6436624e7d4b9b45529ff6d2742ab9275c960cd1c86d952b63e7490",
+    "0xf1ff883c16700a654af0d2500c8e4ad5ab896e12a82ac8ab3c6246506d6866ee",
+    "0xe450ab0cb2ff535e071a317028dcc5674d81d09b2ff6e27ef630114c3c5d1067",
+    "0xbb3f50a9f6db230572e9e2c140aa566436c734e0409dec6179590319c27b045b",
+    "0x480913044af11cf5b7b9a41fc9e5788ea4db0af3793d751eef6b497b441a6e7f"
+  ],
+  "heldSum": "110748405391358194",
+  "extraReward": "0",
+  "userBps": 9000,
+  "protocolRecipient": "0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD",
+  "publishTotal": "110748405391358194",
+  "leafCount": 2,
+  "forwardExternalRewardArguments": {
+    "pairId": "0x8f81f5d84aa85b29b5114b8ca1a75266c4dc18785b703e8257ca66ecb4ba5435",
+    "token": "0x5173D45A1191eE33cBB7D8c7e65f21B04eD54802",
+    "receiver": "<distributor>",
+    "amount": "110748405391358194"
+  },
+  "generator": {
+    "name": "robinhood-ram-root",
+    "version": "1.0.0"
+  },
+  "gitCommit": "717049c04ec04cdc2d134f11733601a727bf2664",
+  "gitDirty": false,
+  "exclusionListHash": "0xde1898d715a37dbc6bb48786efbf503febbb8d3107fa971846dd17d4386dbb16",
+  "dataFile": "epoch.json",
+  "dataHash": "0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc",
+  "root": "0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc",
+  "uri": "",
+  "publishEpochArguments": {
+    "root": "0x7ba2f00e83cb24b09c5488de31089e1e20a405245788f689933ba4ccc332aafc",
+    "total": "110748405391358194",
+    "fromBlock": 110177000,
+    "toBlock": 115953246,
+    "dataHash": "0x2d2145292f33fa56a19e716272aa232109406370d093083c3b83e907a686a1bc"
+  }
+}
