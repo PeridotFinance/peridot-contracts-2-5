@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # FORK REHEARSAL wrapper (W8). Runs tools/rehearsal/rehearsal.mjs against a LOCAL anvil fork of Avalanche mainnet, under the SHARED FORK LOCK /tmp/pilot-fork.lock.
 #   usage:  AVALANCHE_RPC=<in your shell, never in a file>  [DLMM_FORK_BLOCK=<block>]  tools/rehearsal/rehearsal.sh <out-dir>
-# - the endpoint is read from the environment variable AVALANCHE_RPC (fallback AVALANCHE_MAINNET_RPC_URL) and reaches ONLY `anvil --fork-url` (and one `cast block-number`
-#   when DLMM_FORK_BLOCK is unset: pin = head - 4); it is never echoed, never written, and the node process, forge, cast and the keeper get a clean environment
-#   in which AVALANCHE_MAINNET_RPC_URL / ETH_RPC_URL point at the LOCAL anvil. All output passes through a redaction of http(s) URLs.
+# - the endpoint is read from the environment variable AVALANCHE_RPC (fallback AVALANCHE_MAINNET_RPC_URL). It is NEVER in an argument vector: a local pass-through proxy
+#   (rpc-proxy.mjs, upstream from ITS environment only) is the only holder, and anvil's --fork-url is the proxy's 127.0.0.1 address. The proxy also counts the upstream HTTP status
+#   codes (a 429 that anvil's own retries would hide is visible in <out-dir>/upstream-status.json). The node process, forge, cast and the keeper get a clean environment in
+#   which AVALANCHE_MAINNET_RPC_URL / ETH_RPC_URL point at the LOCAL anvil. All output passes through a redaction of http(s) URLs.
+# - ARGV CHECK: after anvil is up the wrapper counts the processes of this machine whose argument vector contains the exact upstream string (grep -F with the pattern read from a
+#   file descriptor, so the check does not put it in its own argv) and aborts unless the count is 0; the count is printed, the string never is.
 # - compile first (no lock), take the lock (mkdir, retry every 30 s), release it in EVERY exit path (trap); lock minutes go to <out-dir>/lock-minutes.log.
-# - kills only the anvil and keeper PIDs it started; removes the scratch dir (it holds a throwaway keystore, mode 600).
-# - exit 42 on any sign of an HTTP 429 / rate limit that reaches the harness (stop, report, do not switch providers). anvil runs --silent with its output discarded and retries
-#   rate limits internally, so a 429 it absorbs is NOT visible here.
+# - kills only the anvil, proxy and keeper PIDs it started; removes the scratch dir (it holds a throwaway keystore, mode 600).
+# - exit 42 on a 429 seen by the proxy or in the log (stop, report, do not switch providers).
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; PROJ="$(cd "$HERE/../.." && pwd)"
 OUT="${1:?usage: rehearsal.sh <out-dir>}"; mkdir -p "$OUT"
@@ -23,9 +25,10 @@ forge build --skip test 2>&1 | REDACT | tail -3
 [ -f out/FixedFeed.sol/FixedFeed.json ] || { echo "FixedFeed artifact missing (forge build)"; exit 2; }
 cp -R "$KEEPER_SRC" "$SCRATCH/dlmm-keeper" || exit 2   # copy: the keeper checkout stays untouched
 
-HELD=0; APID=""; T0=0
+HELD=0; APID=""; PPID_X=""; T0=0
 cleanup() {
   [ -n "$APID" ] && kill "$APID" 2>/dev/null
+  [ -n "$PPID_X" ] && kill "$PPID_X" 2>/dev/null
   [ -f "$SCRATCH/keeper.pid" ] && kill "$(cat "$SCRATCH/keeper.pid")" 2>/dev/null
   sleep 1
   rm -rf "$SCRATCH"
@@ -36,22 +39,35 @@ trap cleanup EXIT INT TERM HUP
 until mkdir "$LOCK" 2>/dev/null; do sleep 30; done
 HELD=1; T0=$(date +%s); echo "acquire $(date -u +%FT%TZ) epoch=$T0" >> "$STAMPS"
 
+# the proxy holds the upstream in ITS ENVIRONMENT only
+PPORT="${REH_PROXY_PORT:-18547}"
+REH_UPSTREAM="$UP" REH_PROXY_PORT="$PPORT" REH_PROXY_STATS="$OUT/upstream-status.json" node "$HERE/rpc-proxy.mjs" >/dev/null 2>&1 &
+PPID_X=$!
+PROXY_URL="http://127.0.0.1:$PPORT"
+for i in $(seq 1 20); do (exec 3<>"/dev/tcp/127.0.0.1/$PPORT") 2>/dev/null && break; sleep 0.5; done
 PIN="${DLMM_FORK_BLOCK:-}"
 if [ -z "$PIN" ]; then
-  HEAD="$(ETH_RPC_URL="$UP" cast block-number 2>/dev/null || true)"
-  case "$HEAD" in ''|*[!0-9]*) echo "could not read the head block: stopping (check the endpoint; if it is HTTP 429 stop and report)"; exit 3;; esac
+  HEAD="$(cast block-number --rpc-url "$PROXY_URL" 2>/dev/null || true)"
+  case "$HEAD" in ''|*[!0-9]*) echo "could not read the head block through the proxy: stopping (if the upstream says HTTP 429 stop and report)"; exit 3;; esac
   PIN=$((HEAD - 4))
 fi
 echo "fork pin block: $PIN" | tee "$OUT/pin-block.txt"
-anvil --fork-url "$UP" --fork-block-number "$PIN" --block-time 1 --silent --port "$PORT" --host 127.0.0.1 >/dev/null 2>&1 &
+anvil --fork-url "$PROXY_URL" --fork-block-number "$PIN" --block-time 1 --silent --port "$PORT" --host 127.0.0.1 >/dev/null 2>&1 &
 APID=$!
 export LOCAL_URL="http://127.0.0.1:$PORT"
 for i in $(seq 1 90); do ETH_RPC_URL="$LOCAL_URL" cast chain-id >/dev/null 2>&1 && break; sleep 1; done
 [ "$(ETH_RPC_URL="$LOCAL_URL" cast chain-id 2>/dev/null)" = 43114 ] || { echo "anvil did not come up with chain id 43114"; exit 3; }
 ETH_RPC_URL="$LOCAL_URL" cast rpc anvil_nodeInfo >/dev/null 2>&1 || { echo "the endpoint is not anvil: refusing"; exit 3; }
+# ARGV CHECK (see the header): how many processes carry the exact upstream string in their argument vector? must be 0
+NURL="$(ps -axo command= | grep -cF -f <(printf '%s' "$UP") || true)"
+NPROC="$(ps -axo command= | wc -l | tr -d ' ')"
+echo "argv check: $NURL of $NPROC processes carry the upstream endpoint in their argument vector (must be 0); anvil argv has a URL: $(ps -o command= -p "$APID" | grep -cE 'https?://' | tr -d ' ') (the proxy's 127.0.0.1 address only: $(ps -o command= -p "$APID" | grep -c '127.0.0.1:'))" | tee -a "$OUT/argv-check.txt"
+[ "$NURL" = 0 ] || { echo "ARGV CHECK FAILED: stopping"; exit 3; }
 
 env -i PATH="$PATH" HOME="$HOME" REH_KEEPER_DIR="$SCRATCH/dlmm-keeper" REH_PROJ="$PROJ" REH_SCRATCH="$SCRATCH" REH_RPC="$LOCAL_URL" REH_RESULTS="$OUT/results.json" \
   REH_SEED="${REH_SEED:-1000000}" node "$HERE/rehearsal.mjs" 2>&1 | REDACT | tee "$LOG"
 RC=${PIPESTATUS[0]}
-if grep -qiE "(HTTP|status|code|error)[^a-z0-9]{0,4}429|429 too many|rate.?limit|too many requests|compute units" "$LOG"; then echo "RATE LIMIT SEEN - stop fork work and report" >&2; RC=42; fi
+kill "$PPID_X" 2>/dev/null; sleep 1; PPID_X=""   # SIGTERM makes the proxy write its status counts
+echo "upstream HTTP status counts seen by the proxy: $(cat "$OUT/upstream-status.json" 2>/dev/null)" | tee -a "$LOG"
+if grep -qE '"429"' "$OUT/upstream-status.json" 2>/dev/null || grep -qiE "(HTTP|status|code|error)[^a-z0-9]{0,4}429|429 too many|rate.?limit|too many requests|compute units" "$LOG"; then echo "RATE LIMIT SEEN - stop fork work and report" >&2; RC=42; fi
 exit "$RC"

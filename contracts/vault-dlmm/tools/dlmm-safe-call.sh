@@ -26,17 +26,19 @@ EXEC='execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,addres
 [ "$(cast call "$SAFE" 'getOwners()(address[])')" = "[$LEDGER]" ] || { echo "Safe owners are not exactly [the Ledger]" >&2; exit 1; }
 [ "$(cast call "$V" 'owner()(address)' | tr A-Z a-z)" = "$(echo $SAFE | tr A-Z a-z)" ] || { echo "the vault's owner is not the Safe: wrong address?" >&2; exit 1; }
 DATA="$(cast calldata "$SIGN" "$@")"
-echo "vault $V  call $SIGN $*  calldata $DATA"
+echo "DECODED CALL: vault $V  $SIGN $*"
+echo "  calldata $DATA   (Safe execTransaction, operation 0 CALL, value 0, signer the Ledger via the Safe)"
 echo "before: paused=$(cast call "$V" 'paused()(bool)')  depositCap=$(cast call "$V" 'depositCap()(uint256)' | awk '{print $1}')  rebalancer=$(cast call "$V" 'rebalancer()(address)')  guardState=$(cast call "$V" 'guardState()(bool,bool,uint256)' | tr '\n' ' ')  safe nonce=$(cast call $SAFE 'nonce()(uint256)')"
 RES="$(cast call "$SAFE" "$EXEC(bool)" "$V" 0 "$DATA" 0 0 0 0 $Z $Z $SIG --from "$LEDGER" 2>&1)" || {
   echo "simulation FAILED: $RES" >&2
   echo "inner call as the Safe (the real revert reason; the Safe itself only says GS013): $(cast call "$V" "$DATA" --from "$SAFE" 2>&1 | tail -3 | tr '\n' ' ')" >&2
   exit 1
 }
-echo "simulation (must be true): $RES"
+echo "SIMULATION (eth_call from the Ledger, MANDATORY before signing; must be true): $RES"
 [ "$RES" = true ] || exit 1
 [ "$MODE_CMD" = send ] || exit 0
 GAS="${GAS_LIMIT:-1500000}"
+echo "ABOUT TO SIGN: Safe nonce $(cast call "$SAFE" 'nonce()(uint256)'), $SIGN $*, mode ${SEND_MODE:-ledger}"
 if [ "${SEND_MODE:-ledger}" = unlocked ]; then
   cast rpc anvil_nodeInfo >/dev/null 2>&1 || { echo "SEND_MODE=unlocked is for a LOCAL anvil fork only" >&2; exit 3; }
   cast send "$SAFE" "$EXEC" "$V" 0 "$DATA" 0 0 0 0 $Z $Z $SIG --unlocked --from "$LEDGER" --gas-limit "$GAS"
