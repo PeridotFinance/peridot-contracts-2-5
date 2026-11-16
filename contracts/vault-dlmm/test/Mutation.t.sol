@@ -476,23 +476,23 @@ contract MutationTest is Base {
     function test_rebalanceAllowedReadyAtIsTheLaterOfCooldownAndNextDay() public {
         IPharaohDlmmVault.GuardParams memory g = v.guardParams();
         g.maxRebalancesPerDay = 4;
-        g.rebalanceCooldown = 111;
+        g.rebalanceCooldown = 112;
         vm.prank(SAFE);
         v.setGuardParams(g);
         _fundAndOpen(150e6);
         uint256 midnight = (vm.getBlockTimestamp() / 1 days + 1) * 1 days;
-        vm.warp(midnight - 363);
+        vm.warp(midnight - 366);
         _refreshFeeds();
         for (uint256 i; i < 4; ++i) {
             _pushOut(i % 2 == 0);
             _rebalance();
-            if (i < 3) _warp(111);
+            if (i < 3) _warp(112);
         }
         uint256 last = v.lastRebalanceAt();
         assertEq(last, midnight - 30, "fixture: the 4th rebalance is 30 s before midnight");
         (, uint256 bits, uint256 readyAt) = v.rebalanceAllowed();
         assertEq(bits & 512, 512, "daily cap");
-        assertEq(readyAt, last + 111, "cooldown ends after midnight: that is the later time");
+        assertEq(readyAt, last + 112, "cooldown ends after midnight: that is the later time");
     }
 
     // ------------------------------------------------------------------ M138: maxDeposit / maxMint are zero while a live guard bit is set (no latch, no pause)
@@ -664,6 +664,45 @@ contract MutationTest is Base {
         (bool ok, bytes memory ret) = address(v).call(abi.encodeCall(IPharaohDlmmVault.openBand, (a, 1, 100e6, 0, 0, block.timestamp + 120)));
         assertFalse(ok, "the 50 USDC half swap cannot return 100");
         assertEq(_selOf(ret), ROUTER_INSUFFICIENT_OUT);
+    }
+
+    // ------------------------------------------------------------------ the "share price did not fall on deposit" flake (see mutation/MUTANTS.md): the exact bound
+    /// OZ's virtual offset prices a deposit at floor(a * (S+1) / (N+1)) shares (S = supply, N = totalAssets). With D = N*s - a*S (> 0 means the price fell):
+    /// D <= a * (N - S) / (N + 1), so D == 0 whenever N <= S, and the existing holders lose D / (S + s) asset units (< p - 1 raw units per deposit, p = N / S).
+    function _depositDrop(uint256 first, uint256 income, uint256 amt) internal returns (bool ran) {
+        first = bound(first, 1e6, 100e6);
+        income = bound(income, 0, 40e6);
+        amt = bound(amt, 1, 90e6);
+        _deposit(ALICE, first);
+        _openBand();
+        if (income != 0) {
+            uint24 a = pair.getActiveId();
+            usdc.mint(address(pair), income);
+            if (usdcIsX) pair.addToBin(a, uint128(income), 0);
+            else pair.addToBin(a, 0, uint128(income));
+        }
+        if (amt > erc.maxDeposit(BOB)) return false;
+        if (erc.previewDeposit(amt) == 0) return false;
+        (uint256 n0, uint256 d0) = (erc.totalAssets(), shares.totalSupply());
+        _deposit(BOB, amt);
+        (uint256 n1, uint256 d1) = (erc.totalAssets(), shares.totalSupply());
+        uint256 drop = n0 * d1 > n1 * d0 ? n0 * d1 - n1 * d0 : 0;
+        if (n0 > d0) assertLe(drop * (n0 + 1), amt * (n0 - d0), "drop <= a (N - S) / (N + 1)");
+        else assertEq(drop, 0, "no price drop when N <= S");
+        return true;
+    }
+
+    function testFuzz_depositPriceDropIsBoundedByTheVirtualOffset(uint256 first, uint256 income, uint256 amt) public {
+        _depositDrop(first, income, amt);
+    }
+
+    /// the input forge found on the unmutated source: the price falls by a rounding amount (product shortfall 1394 of 3.5e15), inside the bound
+    function test_recordedFlakyInputIsInsideTheBound() public {
+        assertTrue(
+            _depositDrop(
+                1911880305644076833487114229076, 35271246637922355855, 12539887258264965128491181840794683951595290493545185096511
+            )
+        );
     }
 }
 
