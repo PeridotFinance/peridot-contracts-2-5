@@ -2,11 +2,11 @@
 // getSwapOut), the two feeds, ERC-20 balances, Multicall3, receipts, fee data and a signer that "mines" transactions into it. The keeper's REAL encoding, decoding,
 // simulation, send and read-back code runs against it; `lies` make the world misbehave after a send.
 import { BigNumber, utils } from "ethers";
-import { ERC20_ABI, FEED_ABI, MULTICALL3_ABI, PAIR_ABI, VAULT_ABI } from "../src/abi";
+import { ERC20_ABI, FEED_ABI, MULTICALL3_ABI, PAIR_ABI, VAULT_ABI, VAULT_EXTRA_ABI } from "../src/abi";
 import type { ExternalSigner, SentTx, TxRequest } from "../src/signer";
 import { A } from "./fixtures";
 
-const vlt = new utils.Interface(VAULT_ABI);
+const vlt = new utils.Interface([...VAULT_ABI, ...VAULT_EXTRA_ABI]);
 const pr = new utils.Interface(PAIR_ABI);
 const fd = new utils.Interface(FEED_ABI);
 const erc = new utils.Interface(ERC20_ABI);
@@ -26,6 +26,15 @@ export interface World {
   band: { lowerId: number; upperId: number; hasBand: boolean };
   latched: boolean;
   reasons: number;
+  paused: boolean;
+  /** the vault's wiring getters (defaults = the configured values) */
+  wiring: { pair: string; rebalancer: string; feedAsset: string; feedPair: string; asset: string; pairToken: string };
+  /** pair.burn simulations from the vault: revert (a failing hook) / revert with ZeroAmountsOut (inconclusive) */
+  /** revert data comes back as an ordinary eth_call RESULT (what ethers v5 does for some node errors) */
+  revertAsResult: boolean;
+  hookRevert: boolean;
+  burnZero: boolean;
+  burnCalls: Array<{ from?: string; args: utils.Result }>;
   params: { legBandBps: number; maxFeedAge: number; maxPoolOracleDevBps: number; rebalanceCooldown: number; maxRebalancesPerDay: number; maxSwapBps: number; maxRebalanceLossBps: number };
   lastRebalanceAt: number;
   rebalancesToday: number;
@@ -59,13 +68,16 @@ export interface World {
   sent: Array<{ hash: string; to: string; fn: string; args: utils.Result }>;
   calls: { eth_call: number; sims: number; getBalance: number; getBlock: number };
   rebalanceCalls: Array<utils.Result>;
+  openBandCalls: Array<utils.Result>;
 }
 
 export function newWorld(): World {
   const w: World = {
     now: 1_800_000_000, block: 1000, blockLag: 2,
     activeId: 8_388_608, activeIdQueue: [], band: { lowerId: 8_388_607, upperId: 8_388_609, hasBand: true },
-    latched: false, reasons: 0,
+    latched: false, reasons: 0, paused: false,
+    wiring: { pair: A.pair, rebalancer: A.keeper, feedAsset: A.feedAsset, feedPair: A.feedPair, asset: A.usdc, pairToken: A.usdt },
+    revertAsResult: false, hookRevert: false, burnZero: false, burnCalls: [],
     params: { legBandBps: 50, maxFeedAge: 93_600, maxPoolOracleDevBps: 60, rebalanceCooldown: 120, maxRebalancesPerDay: 48, maxSwapBps: 6000, maxRebalanceLossBps: 50 },
     lastRebalanceAt: 0, rebalancesToday: 0,
     tokenX: A.usdt, tokenY: A.usdc, decX: 6, decY: 6,
@@ -75,7 +87,7 @@ export function newWorld(): World {
     feedPair: { answer: 99_934_000n, updatedAt: 1_800_000_000 - 5 * 3600, roundId: 7n, answeredInRound: 7n, decimals: 8 },
     priceNum: 99_960n, priceDen: 100_000n, quoteFeeBps: 3n,
     simRevert: [], minedRevert: false, keeperBalance: 10n ** 18n, gasPrice: 3_500_000_000n, lies: {},
-    txs: new Map(), sent: [], calls: { eth_call: 0, sims: 0, getBalance: 0, getBlock: 0 }, rebalanceCalls: [],
+    txs: new Map(), sent: [], calls: { eth_call: 0, sims: 0, getBalance: 0, getBlock: 0 }, rebalanceCalls: [], openBandCalls: [],
   };
   return w;
 }
@@ -125,10 +137,20 @@ function dispatch(w: World, to: string, data: string, from?: string): string {
       case "bandState": return enc(vlt, f.name, [w.band.lowerId, w.band.upperId, w.activeId, w.band.hasBand, w.band.hasBand && (w.activeId < w.band.lowerId || w.activeId > w.band.upperId)]);
       case "guardState": return enc(vlt, f.name, [w.latched || w.reasons !== 0, w.latched, w.reasons]);
       case "rebalanceAllowed": {
-        const out = w.activeId < w.band.lowerId || w.activeId > w.band.upperId;
-        const readyAt = w.lastRebalanceAt + w.params.rebalanceCooldown;
-        const ok = w.band.hasBand && out && !w.latched && w.reasons === 0 && w.now >= readyAt && w.rebalancesToday < w.params.maxRebalancesPerDay;
-        return enc(vlt, f.name, [ok, ok ? 0 : w.reasons, readyAt]);
+        // the REAL vault's bits: guard bits 1..32, 64 no band, 128 active in range, 256 cooldown, 512 daily cap, 1024 latched, 2048 paused
+        let bits = w.reasons;
+        if (w.paused) bits |= 2048;
+        if (w.latched) bits |= 1024;
+        if (!w.band.hasBand) bits |= 64;
+        else if (w.activeId >= w.band.lowerId && w.activeId <= w.band.upperId) bits |= 128;
+        const readyAt = w.lastRebalanceAt === 0 ? 0 : w.lastRebalanceAt + w.params.rebalanceCooldown;
+        if (w.now < readyAt) bits |= 256;
+        let ready2 = readyAt;
+        if (w.rebalancesToday >= w.params.maxRebalancesPerDay) {
+          bits |= 512;
+          ready2 = Math.max(readyAt, (Math.floor(w.now / 86_400) + 1) * 86_400);
+        }
+        return enc(vlt, f.name, [bits === 0, bits, ready2]);
       }
       case "guardParams": return enc(vlt, f.name, [[w.params.legBandBps, w.params.maxFeedAge, w.params.maxPoolOracleDevBps, w.params.rebalanceCooldown, w.params.maxRebalancesPerDay, w.params.maxSwapBps, w.params.maxRebalanceLossBps]]);
       case "rebalancesToday": return enc(vlt, f.name, [w.rebalancesToday]);
@@ -140,6 +162,22 @@ function dispatch(w: World, to: string, data: string, from?: string): string {
         const q = w.simRevert.shift();
         if (q) throw revertErr(q.name, q.args);
         if (w.simRevertAlways) throw revertErr(w.simRevertAlways.name, w.simRevertAlways.args);
+        return "0x";
+      }
+      case "pair": return enc(vlt, f.name, [w.wiring.pair]);
+      case "rebalancer": return enc(vlt, f.name, [w.wiring.rebalancer]);
+      case "feedAsset": return enc(vlt, f.name, [w.wiring.feedAsset]);
+      case "feedPair": return enc(vlt, f.name, [w.wiring.feedPair]);
+      case "asset": return enc(vlt, f.name, [w.wiring.asset]);
+      case "pairToken": return enc(vlt, f.name, [w.wiring.pairToken]);
+      case "openBand": {
+        const a = vlt.decodeFunctionData("openBand", data);
+        w.calls.sims++;
+        w.openBandCalls.push(a);
+        const q = w.simRevert.shift();
+        if (q) throw revertErr(q.name, q.args);
+        if (w.simRevertAlways) throw revertErr(w.simRevertAlways.name, w.simRevertAlways.args);
+        if (w.band.hasBand) throw revertErr("BandExists", []);
         return "0x";
       }
       case "tripGuard":
@@ -159,6 +197,12 @@ function dispatch(w: World, to: string, data: string, from?: string): string {
       case "balanceOf": return enc(pr, f.name, [w.bins.get(Number(a[1]))?.bal ?? 0n]);
       case "totalSupply": return enc(pr, f.name, [w.bins.get(Number(a[0]))?.supply ?? 0n]);
       case "getPriceFromId": return enc(pr, f.name, [(Q128 * w.priceNum) / w.priceDen]);
+      case "burn": {
+        w.burnCalls.push({ from, args: a });
+        if (w.hookRevert) throw Object.assign(new Error("execution reverted: hook"), { data: "0x08c379a0" + utils.defaultAbiCoder.encode(["string"], ["Pharaoh hook: anti-sybil"]).slice(2) });
+        if (w.burnZero) throw Object.assign(new Error("execution reverted"), { data: pr.encodeErrorResult("LBPair__ZeroAmountsOut", [1]) });
+        return enc(pr, f.name, [[utils.hexZeroPad("0x01", 32)]]);
+      }
       case "getSwapOut": { const r = swapOut(w, Boolean(a[1]), BigInt(a[0].toString())); return enc(pr, f.name, [r.left, r.out, 0n]); }
     }
   }
@@ -182,7 +226,14 @@ export class FakeProvider {
   async getNetwork(): Promise<{ chainId: number }> { return { chainId: 43114 }; }
   async call(tx: { from?: string; to: string; data: string }, _block?: unknown): Promise<string> {
     this.w.calls.eth_call++;
-    return dispatch(this.w, tx.to, tx.data, tx.from);
+    try {
+      return dispatch(this.w, tx.to, tx.data, tx.from);
+    } catch (e) {
+      // ethers v5 returns the revert data of some node error shapes as a plain RESULT (MEASURED on anvil): the keeper must not read that as a pass
+      const data = (e as { data?: string }).data;
+      if (this.w.revertAsResult && data) return data;
+      throw e;
+    }
   }
   async estimateGas(): Promise<BigNumber> { return BigNumber.from(500_000); }
   async getBalance(): Promise<BigNumber> { this.w.calls.getBalance++; return BigNumber.from(this.w.keeperBalance); }
@@ -224,6 +275,16 @@ export class FakeSigner implements ExternalSigner {
         w.rebalancesToday++;
         if (!w.lies.noEvent) {
           const ev = vlt.encodeEventLog(vlt.getEvent("Rebalanced"), [oldL, oldU, act - 1, act + 1, act, args.swapXForY, args.swapIn, args.swapMinOut, 1_000_000n, 999_900n]);
+          logs.push({ address: A.vault, topics: ev.topics, data: ev.data, logIndex: 0 });
+        }
+      }
+    } else if (f.name === "openBand") {
+      if (w.minedRevert) status = 0;
+      else {
+        const act = w.activeId;
+        if (!w.lies.wrongBand) w.band = { lowerId: act - 1, upperId: act + 1, hasBand: true };
+        if (!w.lies.noEvent) {
+          const ev = vlt.encodeEventLog(vlt.getEvent("BandOpened"), [act - 1, act + 1, act, 1_000_000n, 1_000_000n]);
           logs.push({ address: A.vault, topics: ev.topics, data: ev.data, logIndex: 0 });
         }
       }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { utils } from "ethers";
-import { VAULT_ABI } from "../src/abi";
+import { VAULT_ABI, VAULT_EXTRA_ABI } from "../src/abi";
 
 // The keeper's vault ABI must be the FROZEN interface contracts/vault-dlmm/src/IPharaohDlmmVault.sol, signature by signature.
 const SOL = path.join(__dirname, "..", "..", "..", "contracts", "vault-dlmm", "src", "IPharaohDlmmVault.sol");
@@ -41,4 +41,19 @@ test("every event and error in the keeper's ABI has the signature of the frozen 
 test("the keeper never calls anything outside the read list of spec section 6 plus rebalance and tripGuard", () => {
   const allowed = new Set(["bandState", "guardState", "rebalanceAllowed", "guardParams", "rebalancesToday", "lastRebalanceAt", "rebalance", "tripGuard"]);
   for (const f of Object.values(iface.functions)) assert.ok(allowed.has(f.name), f.name);
+});
+
+test("the REAL vault's additive surface (PharaohDlmmVault.sol, DEVIATIONS.md): every extra error has its declaration, every getter the keeper reads is a public variable, openBand and BandOpened are in the frozen interface", () => {
+  const impl = fs.readFileSync(path.join(__dirname, "..", "..", "..", "contracts", "vault-dlmm", "src", "PharaohDlmmVault.sol"), "utf8").replace(/\/\/.*$/gm, "");
+  const extra = new utils.Interface(VAULT_EXTRA_ABI);
+  for (const e of Object.values(extra.errors)) {
+    if (e.name === "EnforcedPause") continue; // OpenZeppelin Pausable
+    const m = impl.match(new RegExp(`error\\s+${e.name}\\s*\\(([^)]*)\\)`));
+    assert.ok(m, `error ${e.name} is declared in the vault`);
+    assert.equal(e.format(utils.FormatTypes.sighash), `${e.name}(${types(m![1]!)})`);
+  }
+  for (const g of ["pair", "rebalancer", "feedAsset", "feedPair", "pairToken"]) assert.ok(new RegExp(`\\b(address|IERC20)\\s+public\\s+${g}\\b`).test(impl), `${g} is a public variable of the vault`);
+  assert.ok(fromSol("function").get("openBand") === "openBand(uint24,uint24,uint256,uint256,uint256,uint256)");
+  assert.ok(fromSol("event").get("BandOpened") === "BandOpened(uint24,uint24,uint24,uint256,uint256)");
+  assert.equal(extra.getFunction("openBand").format(utils.FormatTypes.sighash), "openBand(uint24,uint24,uint256,uint256,uint256,uint256)");
 });

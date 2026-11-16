@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Base} from "./Base.t.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IPharaohDlmmVault} from "../src/IPharaohDlmmVault.sol";
 
 /// @notice Share accounting and rounding (ownership NAV, entry fairness), role gating, pause, harvest.
@@ -151,43 +152,250 @@ contract SharesTest is Base {
         assertGe(erc.convertToAssets(shares.balanceOf(ALICE)), aliceAfter - 1, "Alice keeps it");
     }
 
-    function test_firstDepositorInflationAttackIsBoundedByTheCap() public {
-        // attacker: 1 wei deposit then a donation up to the cap; victim deposits next
+    function test_firstDepositorInflationAttackIsRefused() public {
+        // attacker: 1 wei deposit then a donation up to the cap; victim deposits next. The 1-wei seed is now refused outright (minimum supply 1e6).
+        bytes memory ret = _assertReverts(ATTACKER, address(v), abi.encodeWithSignature("deposit(uint256,address)", 1, ATTACKER));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL);
+        ret = _assertReverts(ATTACKER, address(v), abi.encodeWithSignature("deposit(uint256,address)", 4, ATTACKER));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL);
+        ret = _assertReverts(ATTACKER, address(v), abi.encodeWithSignature("mint(uint256,address)", 4, ATTACKER));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL);
+        // boundary: 999,999 refused, 1,000,000 accepted
+        ret = _assertReverts(ATTACKER, address(v), abi.encodeWithSignature("deposit(uint256,address)", 999_999, ATTACKER));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL);
+        assertEq(abi.decode(_tail(ret), (uint256)), 999_999);
         vm.prank(ATTACKER);
-        erc.deposit(1, ATTACKER);
-        usdc.mint(address(v), 150e6); // donation (counts in NAV, only reduces headroom)
-        vm.prank(CAROL);
-        (bool ok, bytes memory ret) = address(v).call(abi.encodeWithSignature("deposit(uint256,address)", 40e6, CAROL));
-        if (ok) {
-            uint256 s = abi.decode(ret, (uint256));
-            assertGe(erc.convertToAssets(s) * 100, 40e6 * 99, "a victim that gets shares keeps >= 99 % of the value");
-        } else {
-            emit log_named_bytes32("ACTUAL victim deposit behind a donation reverts with", bytes32(_sel(ret)));
-        }
-        // a tiny victim deposit is rejected rather than minted at zero shares
-        vm.prank(BOB);
-        (ok, ret) = address(v).call(abi.encodeWithSignature("deposit(uint256,address)", 1e6, BOB));
-        if (ok) assertGt(erc.balanceOf(BOB), 0, "no zero-share deposit");
+        erc.deposit(1e6, ATTACKER);
+        assertEq(shares.totalSupply(), 1e6);
     }
 
-    /// ACTUAL / FINDING (low, bounded by the cap): with the ERC-4626 virtual offset of 1 the entry price is (n+1)/(d+1). If the supply is dust while the vault holds
-    /// donated value, the next entrant prices against the offset, not the true ratio, and takes most of the donated value from the dust holder.
-    function test_dustSupplyEntryDilution_recorded() public {
+    function _tail(bytes memory ret) internal pure returns (bytes memory out) {
+        out = new bytes(ret.length - 4);
+        for (uint256 i; i < out.length; ++i) out[i] = ret[i + 4];
+    }
+
+    /// W10 F1 scenario, all routes: the attacker gets 4 share-wei through the only door that stays open (an EXIT down to 4 wei), donates, and the victim enters.
+    function test_w10F1_attackerFourWeiSharesPlusDonation() public {
+        vm.prank(ATTACKER);
+        erc.deposit(5e6, ATTACKER);
+        uint256 s = shares.balanceOf(ATTACKER);
+        vm.prank(ATTACKER);
+        erc.redeem(s - 4, ATTACKER, ATTACKER);
+        assertEq(shares.totalSupply(), 4);
+        usdc.mint(ATTACKER, 150e6);
+        vm.prank(ATTACKER);
+        usdc.transfer(address(v), 150e6); // the donation
+        uint256[5] memory victimDeposits = [uint256(1), 1e3, 1e6, 20e6, 49e6]; // 49e6 is the whole remaining headroom
+        for (uint256 i; i < victimDeposits.length; ++i) {
+            uint256 snap = vm.snapshotState();
+            usdc.mint(CAROL, victimDeposits[i]);
+            uint256 before = usdc.balanceOf(CAROL);
+            vm.prank(CAROL);
+            (bool ok, bytes memory ret) = address(v).call(abi.encodeWithSignature("deposit(uint256,address)", victimDeposits[i], CAROL));
+            if (!ok) {
+                bytes4 sl = _sel(ret);
+                assertTrue(sl == MIN_SUPPLY_SEL || sl == bytes4(keccak256("ZeroShares()")) || sl == bytes4(keccak256("CapExceeded(uint256,uint256)")), "refused by the vault");
+                assertEq(usdc.balanceOf(CAROL), before, "nothing taken from the victim");
+            } else {
+                // if it ever passes, the victim must be whole to within rounding
+                uint256 val = erc.convertToAssets(shares.balanceOf(CAROL));
+                assertLe(victimDeposits[i] > val ? victimDeposits[i] - val : 0, 1000, "victim loss at most ~1000 wei");
+            }
+            vm.revertToState(snap);
+        }
+    }
+
+    /// the seed the ceremony uses: supply of exactly 1e6 share-wei held by the seeder; a donation to the cap; the victim's rounding loss is at most ~1000 wei
+    function test_w10F1_seedOf1e6SharesCostsTheVictimAtMost1000Wei() public {
+        vm.prank(ATTACKER);
+        erc.deposit(1e6, ATTACKER); // 1e6 shares
+        usdc.mint(address(v), 150e6); // donation to near the cap
+        for (uint256 k; k < 3; ++k) {
+            uint256 snap = vm.snapshotState();
+            uint256 amt = k == 0 ? 7_777_777 : k == 1 ? 40e6 : 48e6;
+            usdc.mint(CAROL, amt);
+            uint256 before = usdc.balanceOf(CAROL);
+            vm.prank(CAROL);
+            uint256 got = erc.deposit(amt, CAROL);
+            uint256 val = erc.convertToAssets(got);
+            uint256 paid = before - usdc.balanceOf(CAROL);
+            assertEq(paid, amt);
+            assertLe(paid > val ? paid - val : 0, 1000, "victim's loss at most ~1000 wei");
+            vm.revertToState(snap);
+        }
+    }
+
+    /// every exit path with the supply BELOW 1e6 (the minimum applies to entries only): in-kind, redeem, withdraw, partial and full, with a band and idle value
+    function _dustSupplyFixture() internal returns (uint256 left) {
+        _deposit(ALICE, 80e6);
+        _openBand();
+        _deposit(BOB, 20e6); // idle on top of the band
+        uint256 bobS = shares.balanceOf(BOB);
+        vm.prank(BOB);
+        v.redeemInKind(bobS, BOB, BOB);
+        uint256 s = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        v.redeemInKind(s - 400_000, ALICE, ALICE); // ALICE keeps 400,000 share-wei (supply 0.4 USDC of shares)
+        left = shares.totalSupply();
+        assertEq(left, 400_000);
+        assertLt(left, 1e6);
+    }
+
+    function test_exitsWorkWithSupplyBelowMinimum_inKind() public {
+        _dustSupplyFixture();
+        uint256 sh = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (uint256 a, uint256 b) = v.redeemInKind(sh / 2, ALICE, ALICE);
+        assertGt(a + b, 0);
+        sh = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (a, b) = v.redeemInKind(sh, ALICE, ALICE);
+        assertGt(a + b, 0);
+        assertEq(shares.totalSupply(), 0);
+    }
+
+    function test_exitsWorkWithSupplyBelowMinimum_redeemAndWithdraw() public {
+        _dustSupplyFixture();
+        uint256 nav = erc.totalAssets();
+        vm.prank(ALICE);
+        uint256 w = erc.withdraw(nav / 4, ALICE, ALICE);
+        assertGt(w, 0);
+        uint256 half = shares.balanceOf(ALICE) / 2;
+        vm.prank(ALICE);
+        uint256 out = erc.redeem(half, ALICE, ALICE);
+        assertGt(out, 0);
+        uint256 rest = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        out = erc.redeem(rest, ALICE, ALICE);
+        assertGt(out, 0);
+        assertEq(shares.totalSupply(), 0);
+    }
+
+    function test_exitsWorkWithSupplyBelowMinimum_underEveryAdverseCondition() public {
+        _dustSupplyFixture();
+        vm.prank(SAFE);
+        adm.pause();
+        feedUsdc.setRevertAll(true);
+        feedUsdt.setRevertAll(true);
+        uint256 sh = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        (uint256 a, uint256 b) = v.redeemInKind(sh, ALICE, ALICE);
+        assertGt(a + b, 0);
+    }
+
+    function test_entryRefusedWhileSupplyIsBelowMinimum_butAllowedWhenItLandsAboveIt() public {
+        _dustSupplyFixture();
+        // an entry that leaves the supply still below 1e6 is refused; one that lifts it to >= 1e6 is accepted
+        bytes memory ret = _assertReverts(BOB, address(v), abi.encodeWithSignature("deposit(uint256,address)", 100_000, BOB));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL);
+        vm.prank(BOB);
+        erc.deposit(5e6, BOB);
+        assertGe(shares.totalSupply(), 1e6);
+    }
+
+    // ------------------------------------------------------------------ balance-delta payout of redeem / withdraw (3726773c)
+    function test_redeemAndWithdrawPayExactlyTheReceiverBalanceDelta() public {
+        _deposit(ALICE, 100e6);
+        _openBand();
+        uint256 s = shares.balanceOf(ALICE);
+        uint256 before = usdc.balanceOf(CAROL);
+        vm.prank(ALICE);
+        uint256 out = erc.redeem(s / 2, CAROL, ALICE);
+        assertEq(usdc.balanceOf(CAROL) - before, out, "redeem returns exactly what the receiver gained");
+        before = usdc.balanceOf(CAROL);
+        uint256 burnedBefore = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        erc.withdraw(10e6, CAROL, ALICE);
+        assertGe(usdc.balanceOf(CAROL) - before, 10e6 * 99 / 100, "withdraw pays what the slice realised (about the requested amount)");
+        assertLt(shares.balanceOf(ALICE), burnedBefore);
+        // a stray USDC balance already in the vault is not paid to the redeemer
+        usdc.mint(address(v), 7e6);
+        before = usdc.balanceOf(ALICE);
+        uint256 rest = shares.balanceOf(ALICE);
+        vm.prank(ALICE);
+        out = erc.redeem(rest / 2, ALICE, ALICE);
+        assertEq(usdc.balanceOf(ALICE) - before, out);
+    }
+
+    // ------------------------------------------------------------------ PharHarvested amount ignores donated PHAR (3726773c)
+    bytes32 internal constant SIG_HARVEST = keccak256("PharHarvested(address,uint256,uint256,uint256)");
+
+    function _harvestAmountFromLogs() internal returns (uint256 amount, uint256 count) {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(v) && logs[i].topics[0] == SIG_HARVEST) {
+                (amount,,) = abi.decode(logs[i].data, (uint256, uint256, uint256));
+                count++;
+            }
+        }
+    }
+
+    function test_pharHarvestedAmountIgnoresDonatedPhar() public {
+        _deposit(ALICE, 100e6);
+        _openBand();
+        phar.mint(address(rewarder), 10e18);
+        rewarder.setPending(address(v), 4e18);
+        phar.mint(address(v), 50e18); // a donation of PHAR straight to the vault
+        vm.recordLogs();
+        vm.prank(KEEPER);
+        v.harvestRewards();
+        (uint256 amount, uint256 n) = _harvestAmountFromLogs();
+        assertEq(n, 1);
+        assertEq(amount, 4e18, "the event reports the PHAR claimed in this call only");
+        assertEq(phar.balanceOf(SAFE), 54e18, "the whole PHAR balance is still forwarded to the owner");
+        assertEq(phar.balanceOf(address(v)), 0);
+        // nothing pending: the event says zero even with a donation present
+        phar.mint(address(v), 9e18);
+        vm.recordLogs();
+        vm.prank(SAFE);
+        v.harvestRewards();
+        (amount, n) = _harvestAmountFromLogs();
+        assertEq(n, 1);
+        assertEq(amount, 0);
+        assertEq(phar.balanceOf(SAFE), 63e18);
+    }
+
+    // ------------------------------------------------------------------ renounceOwnership is disabled (3726773c)
+    function test_renounceOwnershipDisabled() public {
+        vm.prank(SAFE);
+        vm.expectRevert(bytes4(keccak256("RenounceDisabled()")));
+        IOwnableMin(address(v)).renounceOwnership();
+        assertEq(adm.owner(), SAFE);
+        // a non-owner still gets the Ownable error, not a state change
+        vm.prank(ATTACKER);
+        vm.expectRevert();
+        IOwnableMin(address(v)).renounceOwnership();
+        assertEq(adm.owner(), SAFE);
+        // the owner can still pause, set params, rotate the keeper afterwards
+        vm.prank(SAFE);
+        adm.pause();
+        // ownership transfer remains available (two-step handling is a ceremony matter)
+        vm.prank(SAFE);
+        IOwnableMin(address(v)).transferOwnership(BOB);
+        assertEq(adm.owner(), BOB);
+    }
+
+
+    bytes4 internal constant MIN_SUPPLY_SEL = bytes4(keccak256("SupplyBelowMinimum(uint256)"));
+
+    /// W4 finding 4 (dust supply with donated value) is now REFUSED by the vault (commit 3726773c, W10 F1): an entry may not leave the supply in (0, 1e6).
+    /// Same scenario as before (Alice keeps ONE share-wei, a donation, then Bob enters): Bob's deposit must revert SupplyBelowMinimum and nothing moves.
+    function test_dustSupplyEntryDilution_nowRefused() public {
         _deposit(ALICE, 100e6);
         uint256 s = shares.balanceOf(ALICE);
         vm.prank(ALICE);
-        erc.redeem(s - 1, ALICE, ALICE); // Alice keeps ONE share-wei
+        erc.redeem(s - 1, ALICE, ALICE); // exits are never subject to the minimum: Alice keeps ONE share-wei
+        assertEq(shares.totalSupply(), 1);
         usdc.mint(address(v), 50e6); // a donation
         uint256 aliceBefore = erc.convertToAssets(shares.balanceOf(ALICE));
-        _deposit(BOB, 100e6);
-        uint256 aliceAfter = erc.convertToAssets(shares.balanceOf(ALICE));
-        emit log_named_uint("dust holder value before the next entry (USDC wei)", aliceBefore);
-        emit log_named_uint("dust holder value after the next entry (USDC wei)", aliceAfter);
-        uint256 bobValue = erc.convertToAssets(shares.balanceOf(BOB));
-        emit log_named_uint("entrant value after (paid 100e6)", bobValue);
-        emit log_named_uint("NAV", erc.totalAssets());
-        // the stated values never exceed the NAV (the offset leaves part of the value unattributed, not over-attributed)
-        assertLe(bobValue + aliceAfter, erc.totalAssets());
+        uint256 navBefore = erc.totalAssets();
+        uint256 bobUsdc = usdc.balanceOf(BOB);
+        bytes memory ret = _assertReverts(BOB, address(v), abi.encodeWithSignature("deposit(uint256,address)", 100e6, BOB));
+        assertEq(_sel(ret), MIN_SUPPLY_SEL, "the entry that would leave a tiny supply is refused");
+        assertEq(erc.convertToAssets(shares.balanceOf(ALICE)), aliceBefore, "the dust holder is untouched");
+        assertEq(erc.totalAssets(), navBefore);
+        assertEq(usdc.balanceOf(BOB), bobUsdc);
+        assertEq(shares.balanceOf(BOB), 0);
     }
 
     /// ACTUAL (finding, low): the swap leg of redeem trades against the pool's active bin, which may hold part of the vault's own band at a bin price off the oracle;
@@ -381,6 +589,11 @@ contract SharesTest is Base {
         phar.mint(address(v), 1000e18);
         assertEq(erc.totalAssets(), n, "PHAR is not part of the NAV");
     }
+}
+
+interface IOwnableMin {
+    function renounceOwnership() external;
+    function transferOwnership(address) external;
 }
 
 contract SharesFlippedTest is SharesTest {

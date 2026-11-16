@@ -25,6 +25,8 @@ export interface KeeperConfig {
   pairToken: string;
   /** the two Chainlink USD feeds the vault reads (asset leg, pair leg): the keeper's SECOND, independent oracle check */
   feeds: { asset: string; pair: string };
+  /** optional: the contract answering getSwapOut(uint128,bool) (default = the pair, which has it on the live chain; the local mock pair does not) */
+  quoter?: string;
   /** Multicall3 address, or "none" (one eth_call per read: only for a local chain without Multicall3) */
   multicall3: string;
   keeper: { address: string };
@@ -71,6 +73,8 @@ export interface KeeperConfig {
     /** the condition must still hold after this many seconds before tripGuard is sent */
     tripDebounceSeconds: number;
   };
+  /** the exit-health probe: every N cycles a simulated burn of the vault's own band shares (hook failures block every exit while guardState reads 0) */
+  probe: { everyCycles: number };
   monitor: { statePath: string; haltPath: string };
   alerts: { channel: AlertChannel };
 }
@@ -140,6 +144,8 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
   const g = c.guard ?? {};
   if (typeof g.autoTripGuard !== "boolean") problems.push({ path: "guard.autoTripGuard", problem: "must be a boolean" });
   int(problems, "guard.tripDebounceSeconds", g.tripDebounceSeconds, 0, 600);
+  if (c.quoter !== undefined) addr(problems, "quoter", c.quoter);
+  int(problems, "probe.everyCycles", c.probe?.everyCycles, 1, 100_000);
   const m = c.monitor ?? {};
   if (isUnsetString(m.statePath)) problems.push({ path: "monitor.statePath", problem: "unset (placeholder)" });
   if (isUnsetString(m.haltPath)) problems.push({ path: "monitor.haltPath", problem: "unset (placeholder)" });

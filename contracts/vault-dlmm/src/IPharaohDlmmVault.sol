@@ -29,7 +29,7 @@ interface IPharaohDlmmVault {
         uint16 legBandBps;            // default 50   : each leg within 1.00 +- 0.50 %
         uint32 maxFeedAge;            // default 93_600 s (26 h; Chainlink stable feeds have a 24 h heartbeat)
         uint16 maxPoolOracleDevBps;   // default 60   : |pool price / oracle ratio - 1|, deposits and rebalance only
-        uint32 rebalanceCooldown;     // default 120 s (> the 111 s reward-forfeiture window)
+        uint32 rebalanceCooldown;     // default 120 s (bound 112..3600, above the 111 s reward-forfeiture window)
         uint16 maxRebalancesPerDay;   // default 48   (measured max in 30 d: 32)
         uint16 maxSwapBps;            // default 6000 : inventory swap <= 60 % of NAV
         uint16 maxRebalanceLossBps;   // default 50   : oracle-valued NAV after >= before * (1 - 0.50 %)

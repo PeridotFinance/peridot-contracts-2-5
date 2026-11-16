@@ -597,10 +597,12 @@ contract GuardTest is Base {
 
     function test_setGuardParamsBounds_rebalanceCooldown() public {
         IPharaohDlmmVault.GuardParams memory g = _gp();
-        g.rebalanceCooldown = 111;
+        g.rebalanceCooldown = 112; // bound raised to 112 after the independent review: strictly above the 111 s forfeiture window
         _assertParamOk(g);
         g.rebalanceCooldown = 3_600;
         _assertParamOk(g);
+        g.rebalanceCooldown = 111;
+        _assertParamBad(g, "cooldown 111 (equal to the forfeiture window: a touch exactly at the threshold still forfeits)");
         g.rebalanceCooldown = 110;
         _assertParamBad(g, "cooldown 110 (inside the 111 s forfeiture window)");
         g.rebalanceCooldown = 3_601;

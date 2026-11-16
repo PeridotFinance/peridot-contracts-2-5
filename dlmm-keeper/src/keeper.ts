@@ -11,14 +11,15 @@
 //   * read errors BEFORE a send are an ordinary failed cycle (alert, nothing was sent). Any error AFTER the pending marker HALTS.
 import { providers, utils } from "ethers";
 import type { AlertManager } from "./alerts";
-import { bandInventory, pairQuote, readAct, readPoll, vaultIface, WiringError } from "./chain";
+import { bandInventory, callVoid, pairQuote, probeExit, readAct, readPoll, vaultIface, WiringError } from "./chain";
+import type { BlockTag } from "./chain";
 import type { Act, Poll } from "./chain";
 import type { KeeperConfig } from "./config";
-import { DAY, LATCHABLE_MASK, LIVE_MASK, bitNames } from "./constants";
+import { DAY, LATCHABLE_MASK, LIVE_MASK, RB_DAILY_CAP, RB_IN_RANGE, RB_NO_BAND, RB_PAUSED, bitNames, rbNames } from "./constants";
 import { classifyRevert } from "./errors";
 import type { RevertClass } from "./errors";
 import { safeError } from "./mask";
-import { planSwap } from "./plan";
+import { planOpenBand, planSwap } from "./plan";
 import type { Plan } from "./plan";
 import { checkOracle } from "./sanity";
 import type { ExternalSigner } from "./signer";
@@ -42,6 +43,8 @@ export interface StepOptions {
   skipWait?: boolean;
   /** `check` writes NOTHING: a halt decision is reported but no HALT file is created */
   noHaltWrite?: boolean;
+  /** the `open-band` command: the same step, but the precondition is NO band and the transaction is openBand(...) sized from the vault's idle assets */
+  openBand?: boolean;
 }
 export type Status =
   | "halted" | "halting" | "no-band" | "in-range" | "recovered" | "exit-detected" | "waiting" | "backoff" | "cooldown" | "limit" | "stale" | "blocked" | "failed" | "dry-run" | "sent";
@@ -62,6 +65,9 @@ export async function verifySigner(signer: ExternalSigner, cfg: KeeperConfig, pr
   if ((await provider.getNetwork()).chainId !== cfg.chainId) throw new Error(`chain id is not ${cfg.chainId}`);
 }
 
+/** per-process probe cycle counters (keyed by the alert manager, which lives as long as the process) */
+const probeCycles = new WeakMap<object, number>();
+
 export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: StepOptions = {}): Promise<KeeperOutcome> {
   const { provider, cfg, alerts } = deps;
   const live = cfg.mode === "live" && !!deps.signer;
@@ -70,6 +76,8 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const tr = (m: string): void => deps.trace?.(m);
   const keeper = cfg.keeper.address;
+  const ob = !!opts.openBand;
+  const txKind = ob ? ("openBand" as const) : ("rebalance" as const);
   const out: KeeperOutcome = { state, status: "in-range", halted: false, sent: [], notes: [] };
   let st = state;
   const save = (): void => {
@@ -133,7 +141,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
       const data = vaultIface.encodeFunctionData("tripGuard", []);
       let gasLimit;
       try {
-        await provider.call({ from: keeper, to: cfg.vault, data });
+        await callVoid(provider, { from: keeper, to: cfg.vault, data });
         gasLimit = (await provider.estimateGas({ from: keeper, to: cfg.vault, data })).mul(13).div(10);
       } catch (e) {
         const c = classifyRevert(e);
@@ -179,6 +187,30 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     return done("failed");
   };
 
+  /**
+   * THE EXIT PROBE (chain.ts probeExit): a failing hook blocks every exit while guardState reads 0. A failed probe is NOT a HALT (nothing is wrong with the keeper, it
+   * clears itself when the hook recovers, the HALT latch would need a person): it raises a crit alert, sets st.exitProbe, BLOCKS re-centring (a burn would revert anyway)
+   * and the keeper keeps probing. Returns true when sending may go on.
+   */
+  const runProbe = async (block: BlockTag, ids: number[]): Promise<boolean> => {
+    const pr = await probeExit(provider, cfg, ids, block);
+    if (pr.status === "failed") {
+      if (!st.exitProbe) {
+        st = { ...st, exitProbe: { since: nowS(), why: pr.why } };
+        save();
+      }
+      out.notes.push(`EXIT PROBE FAILED: ${pr.why}`);
+      await alerts.raise({ key: "exit:probe", severity: "crit", message: `EXIT PROBE FAILED: pause deposits. A simulated burn of the vault's own band shares reverts (${pr.why}), so EVERY exit (redeem, redeemInKind) and every rebalance would revert while guardState still reads clean (a failing Pharaoh hook: rewarder beforeBurn or the voter). The owner should pause from the Safe now. The keeper stops re-centring and keeps probing`, audience: "keeper-operator" }, nowS());
+    } else if (pr.status === "ok") {
+      if (st.exitProbe) {
+        st = { ...st, exitProbe: null };
+        save();
+      }
+      await alerts.clear("exit:probe", nowS());
+    }
+    return !st.exitProbe;
+  };
+
   // ---------------------------------------------------------------- pending marker found: interrupted
   if (st.pending) return halt("pending-interrupted", `a ${st.pending.kind} started at ${st.pending.at} was interrupted (the process stopped between the marker and the read-back): check the keeper wallet's transactions and the vault's band before running \`dlmm-keeper resume\``);
 
@@ -214,45 +246,56 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
 
   // ---------------------------------------------------------------- 3. band and exit detection
   const b = poll.band;
-  if (!b.hasBand) {
-    await alerts.raise({ key: "band:none", severity: "warn", message: "the vault has no band (openBand has not been called): nothing to rebalance", audience: "keeper-operator" }, nowS());
+  if (ob) {
+    if (b.hasBand) {
+      out.notes.push(`open-band: the vault already has a band [${b.lowerId}, ${b.upperId}] (openBand would revert BandExists)`);
+      return done("blocked");
+    }
+  } else if (!b.hasBand) {
+    await alerts.raise({ key: "band:none", severity: "warn", message: "the vault has no band (openBand has not been called; run `dlmm-keeper open-band`): nothing to rebalance", audience: "keeper-operator" }, nowS());
     if (st.exit) {
       st = { ...st, exit: null };
       save();
     }
     return done("no-band");
   }
-  await alerts.clear("band:none", nowS());
-  const outOfRange = poll.activeId < b.lowerId || poll.activeId > b.upperId; // spec section 5: outside [lowerId, upperId]
-  if (!outOfRange) {
-    if (st.exit) {
-      await endEpisode();
-      out.notes.push(`the active bin ${poll.activeId} is back inside [${b.lowerId}, ${b.upperId}]: no rebalance`);
-      await alerts.notify({ kind: "action", key: "band:recovered", severity: "info", audience: "keeper-operator", text: `active bin ${poll.activeId} returned inside the band [${b.lowerId}, ${b.upperId}] before a rebalance was needed; nothing sent` });
-      return done("recovered");
+  if (!ob) {
+    await alerts.clear("band:none", nowS());
+    // the exit probe: every N cycles (the counter lives with the alert manager, i.e. the process)
+    const n = probeCycles.get(alerts) ?? 0;
+    probeCycles.set(alerts, n + 1);
+    if (n % cfg.probe.everyCycles === 0) await runProbe("latest", Array.from({ length: Math.min(b.upperId - b.lowerId + 1, cfg.limits.maxBandBins) }, (_, i) => b.lowerId + i));
+    const outOfRange = poll.activeId < b.lowerId || poll.activeId > b.upperId; // spec section 5: outside [lowerId, upperId]
+    if (!outOfRange) {
+      if (st.exit) {
+        await endEpisode();
+        out.notes.push(`the active bin ${poll.activeId} is back inside [${b.lowerId}, ${b.upperId}]: no rebalance`);
+        await alerts.notify({ kind: "action", key: "band:recovered", severity: "info", audience: "keeper-operator", text: `active bin ${poll.activeId} returned inside the band [${b.lowerId}, ${b.upperId}] before a rebalance was needed; nothing sent` });
+        return done("recovered");
+      }
+      return done("in-range");
     }
-    return done("in-range");
+    if (!st.exit || st.exit.lowerId !== b.lowerId || st.exit.upperId !== b.upperId) {
+      st = { ...st, exit: { since: nowS(), lowerId: b.lowerId, upperId: b.upperId } };
+      save();
+      out.notes.push(`band exit: active ${poll.activeId} outside [${b.lowerId}, ${b.upperId}]; waiting ${cfg.timing.exitWaitSeconds} s`);
+      await alerts.notify({ kind: "action", key: "band:exit", severity: "info", audience: "keeper-operator", text: `band exit: active bin ${poll.activeId} is outside [${b.lowerId}, ${b.upperId}]; the keeper waits ${cfg.timing.exitWaitSeconds} s, then re-reads` });
+      if (!opts.skipWait) return done("exit-detected");
+    }
+    const waited = nowS() - (st.exit?.since ?? nowS());
+    if (!opts.skipWait && waited < cfg.timing.exitWaitSeconds) return done("waiting");
   }
-  if (!st.exit || st.exit.lowerId !== b.lowerId || st.exit.upperId !== b.upperId) {
-    st = { ...st, exit: { since: nowS(), lowerId: b.lowerId, upperId: b.upperId } };
-    save();
-    out.notes.push(`band exit: active ${poll.activeId} outside [${b.lowerId}, ${b.upperId}]; waiting ${cfg.timing.exitWaitSeconds} s`);
-    await alerts.notify({ kind: "action", key: "band:exit", severity: "info", audience: "keeper-operator", text: `band exit: active bin ${poll.activeId} is outside [${b.lowerId}, ${b.upperId}]; the keeper waits ${cfg.timing.exitWaitSeconds} s, then re-reads` });
-    if (!opts.skipWait) return done("exit-detected");
-  }
-  const waited = nowS() - (st.exit?.since ?? nowS());
-  if (!opts.skipWait && waited < cfg.timing.exitWaitSeconds) return done("waiting");
 
   // ---------------------------------------------------------------- 4. gates of the keeper itself
   if (st.backoff && st.backoff.until > nowS()) return done("backoff");
   const rebalances24 = st.sends.filter((s) => s.kind === "rebalance" && s.ts > nowS() - DAY);
-  if (rebalances24.length >= cfg.limits.maxSendsPerDay) {
+  if (!ob && rebalances24.length >= cfg.limits.maxSendsPerDay) {
     await alerts.raise({ key: "limit:daily", severity: "warn", message: `${rebalances24.length} rebalance transactions in the last 24 h (limit ${cfg.limits.maxSendsPerDay}); the keeper sends no more until the oldest ages out`, audience: "keeper-operator" }, nowS());
     return done("limit");
   }
   await alerts.clear("limit:daily", nowS());
   const lastSend = rebalances24.reduce((m, s) => Math.max(m, s.ts), 0);
-  if (lastSend > 0 && nowS() - lastSend < cfg.timing.cooldownSeconds) return done("cooldown");
+  if (!ob && lastSend > 0 && nowS() - lastSend < cfg.timing.cooldownSeconds) return done("cooldown");
 
   // ---------------------------------------------------------------- 5. the attempt: re-read EVERYTHING at one pinned block
   const blk = await provider.getBlock("latest");
@@ -262,8 +305,8 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     return done("stale");
   }
   await alerts.clear("node:stale", nowS());
-  const width = b.upperId - b.lowerId + 1;
-  if (width < 1 || width > cfg.limits.maxBandBins) return fail(`the vault's band [${b.lowerId}, ${b.upperId}] is ${width} bins wide (limit ${cfg.limits.maxBandBins})`);
+  const width = ob ? 0 : b.upperId - b.lowerId + 1;
+  if (!ob && (width < 1 || width > cfg.limits.maxBandBins)) return fail(`the vault's band [${b.lowerId}, ${b.upperId}] is ${width} bins wide (limit ${cfg.limits.maxBandBins})`);
   const ids = Array.from({ length: width }, (_, i) => b.lowerId + i);
   let A: Act;
   try {
@@ -275,7 +318,8 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   const ag = A.poll.guard;
   if (ag.latched || (ag.reasons & LATCHABLE_MASK) !== 0) return halt("guard", `vault guard ${ag.latched ? "LATCHED" : "UNSAFE"} at the re-read: ${bitNames(ag.reasons)} (reasons=${ag.reasons})`, { reasons: ag.reasons, latched: ag.latched });
   const stillOut = A.poll.activeId < A.poll.band.lowerId || A.poll.activeId > A.poll.band.upperId;
-  if (!stillOut || !A.poll.band.outOfRange || !A.poll.band.hasBand) {
+  if (ob && A.poll.band.hasBand) return done("blocked");
+  if (!ob && (!stillOut || !A.poll.band.outOfRange || !A.poll.band.hasBand)) {
     await endEpisode();
     out.notes.push(`at the re-read the active bin ${A.poll.activeId} is inside [${A.poll.band.lowerId}, ${A.poll.band.upperId}] (vault outOfRange=${A.poll.band.outOfRange}): no send`);
     return done("recovered");
@@ -291,9 +335,33 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   } else if (A.lastRebalanceAt !== st.lastRebalanceSeen) {
     return halt("foreign-rebalance", `vault.lastRebalanceAt is ${A.lastRebalanceAt} but the keeper last saw ${st.lastRebalanceSeen} after its own send: the vault was rebalanced by someone else (a second keeper instance, or the rebalancer key is in other hands)`);
   }
-  if (!A.allowed.ok) {
+  if (!ob && !(await runProbe(blk.number, ids))) {
+    backoffSoft({ seconds: cfg.limits.retryBackoffSeconds }, "exit probe failed");
+    return done("blocked");
+  }
+  if (ob) {
+    // openBand has no cooldown and does not touch the daily counter; rebalanceAllowed's NO_BAND bit is the expected one. Anything else (paused, latched) blocks.
+    const rest = A.allowed.reasonBits & ~RB_NO_BAND & ~LIVE_MASK & ~LATCHABLE_MASK;
+    if (rest !== 0) {
+      out.notes.push(`open-band blocked: ${rbNames(rest)}`);
+      if ((rest & RB_PAUSED) !== 0) await alerts.raise({ key: "vault:paused", severity: "warn", message: "the vault is paused: openBand reverts until the owner unpauses it", audience: "keeper-operator" }, nowS());
+      return done("blocked");
+    }
+  } else if (!A.allowed.ok) {
+    if ((A.allowed.reasonBits & RB_PAUSED) !== 0) {
+      out.notes.push(`the vault is PAUSED (rebalanceAllowed bits ${rbNames(A.allowed.reasonBits)}): nothing is sent`);
+      await alerts.raise({ key: "vault:paused", severity: "warn", message: "the vault is paused (the owner's brake): the keeper sends nothing until it is unpaused", audience: "keeper-operator" }, nowS());
+      backoffSoft({ seconds: cfg.limits.retryBackoffSeconds }, "vault paused");
+      return done("blocked");
+    }
+    if ((A.allowed.reasonBits & (RB_IN_RANGE | RB_NO_BAND)) !== 0) {
+      await endEpisode();
+      out.notes.push(`rebalanceAllowed says ${rbNames(A.allowed.reasonBits)}: no send`);
+      return done("recovered");
+    }
     if (A.allowed.readyAt > blk.timestamp) {
-      out.notes.push(`rebalanceAllowed: not before ${A.allowed.readyAt} (cooldown / daily cap); reasonBits=${A.allowed.reasonBits}`);
+      out.notes.push(`rebalanceAllowed: not before ${A.allowed.readyAt} (${rbNames(A.allowed.reasonBits)}); reasonBits=${A.allowed.reasonBits}`);
+      if ((A.allowed.reasonBits & RB_DAILY_CAP) !== 0) await alerts.raise({ key: "limit:daily", severity: "warn", message: `the vault's daily rebalance cap (${A.params.maxRebalancesPerDay}) is reached; the vault allows the next rebalance at ${A.allowed.readyAt} (UTC midnight)`, audience: "keeper-operator" }, nowS());
       backoffSoft({ until: A.allowed.readyAt }, `vault not ready until ${A.allowed.readyAt}`);
       return done("cooldown");
     }
@@ -303,9 +371,9 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     return done("blocked");
   }
   await alerts.clear("rebalance:not-allowed", nowS());
-  // the vault's own limits, mirrored: the effective daily cap and cooldown are the stricter of the keeper's and the vault's
-  if (rebalances24.length >= A.params.maxRebalancesPerDay || A.rebalancesToday >= A.params.maxRebalancesPerDay) {
-    await alerts.raise({ key: "limit:daily", severity: "warn", message: `the vault's daily rebalance cap (${A.params.maxRebalancesPerDay}) is reached (vault says ${A.rebalancesToday} today, keeper sent ${rebalances24.length} in 24 h)`, audience: "keeper-operator" }, nowS());
+  // the vault's own daily cap resets at UTC midnight (NOT a rolling 24 h), so it is read from the vault (bit 512 above); the keeper's own rolling cap is separate
+  if (!ob && A.rebalancesToday >= A.params.maxRebalancesPerDay) {
+    await alerts.raise({ key: "limit:daily", severity: "warn", message: `the vault's daily rebalance cap (${A.params.maxRebalancesPerDay}) is reached (vault says ${A.rebalancesToday} today)`, audience: "keeper-operator" }, nowS());
     backoffSoft({ seconds: 600 }, "vault daily cap");
     return done("limit");
   }
@@ -323,11 +391,10 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   }
   await alerts.clear("oracle:keeper-check", nowS());
   const inv = bandInventory(A.bins);
-  const plan = await planSwap({
-    x: inv.x + A.idleX, y: inv.y + A.idleY, oracle18: sane.oracle18, maxSwapBps: A.params.maxSwapBps,
-    effLossBps: Math.min(cfg.rebalance.maxQuoteLossBps, A.params.maxRebalanceLossBps), swapSlippageBps: cfg.rebalance.swapSlippageBps, addSlippageBps: cfg.rebalance.addSlippageBps,
-    quote: pairQuote(provider, cfg, blk.number),
-  });
+  const common = { oracle18: sane.oracle18, maxSwapBps: A.params.maxSwapBps, effLossBps: Math.min(cfg.rebalance.maxQuoteLossBps, A.params.maxRebalanceLossBps), swapSlippageBps: cfg.rebalance.swapSlippageBps, addSlippageBps: cfg.rebalance.addSlippageBps, quote: pairQuote(provider, cfg, blk.number) };
+  const plan = ob
+    ? await planOpenBand({ ...common, x: A.idleX, y: A.idleY, assetIsX: A.tokenX.toLowerCase() === cfg.assetToken.toLowerCase() })
+    : await planSwap({ ...common, x: inv.x + A.idleX, y: inv.y + A.idleY });
   out.plan = plan;
   if (!plan.ok) {
     out.notes.push(`no plan: ${plan.code}: ${plan.reason}`);
@@ -335,18 +402,21 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     backoffSoft({ seconds: cfg.limits.retryBackoffSeconds }, `plan ${plan.code}`);
     return done("blocked");
   }
-  for (const k of ["empty", "depth", "quote-below-oracle", "bad-input"]) await alerts.clear(`plan:${k}`, nowS());
+  for (const k of ["empty", "depth", "quote-below-oracle", "bad-input", "swap-too-large"]) await alerts.clear(`plan:${k}`, nowS());
 
   // ---------------------------------------------------------------- 7. build and SIMULATE exactly what would be sent
   const deadline = Math.max(blk.timestamp, nowS()) + cfg.timing.deadlineSeconds;
-  const build = (expectedActiveId: number): string => vaultIface.encodeFunctionData("rebalance", [expectedActiveId, cfg.rebalance.idSlippage, plan.swapXForY, plan.swapIn.toString(), plan.swapMinOut.toString(), plan.amountXMin.toString(), plan.amountYMin.toString(), deadline]);
+  const build = (expectedActiveId: number): string =>
+    ob
+      ? vaultIface.encodeFunctionData("openBand", [expectedActiveId, cfg.rebalance.idSlippage, plan.swapMinOut.toString(), plan.amountXMin.toString(), plan.amountYMin.toString(), deadline])
+      : vaultIface.encodeFunctionData("rebalance", [expectedActiveId, cfg.rebalance.idSlippage, plan.swapXForY, plan.swapIn.toString(), plan.swapMinOut.toString(), plan.amountXMin.toString(), plan.amountYMin.toString(), deadline]);
   let expected = A.poll.activeId;
   let data = build(expected);
   let gasLimit;
   let adapted = false;
   for (;;) {
     try {
-      await provider.call({ from: keeper, to: cfg.vault, data });
+      await callVoid(provider, { from: keeper, to: cfg.vault, data });
       const est = await provider.estimateGas({ from: keeper, to: cfg.vault, data });
       gasLimit = est.mul(13).div(10);
       if (gasLimit.gt(cfg.limits.maxGasLimit)) return fail(`gas estimate ${est.toString()} x 1.3 is above the ceiling ${cfg.limits.maxGasLimit}`);
@@ -354,14 +424,17 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     } catch (err) {
       const cls: RevertClass = classifyRevert(err);
       out.notes.push(`simulation reverted: ${cls.name}${cls.detail ? ` (${cls.detail})` : ""}`);
-      if (cls.kind === "retry" && !adapted && cls.actualId !== undefined && Math.abs(cls.actualId - A.poll.activeId) <= cfg.rebalance.maxActiveIdShift) {
+      // the vault checks |active - expected| <= idSlippage BEFORE its swap and again AFTER it: the id that satisfies both is the midpoint, possible only while the swap moved the pool by <= 2 x idSlippage
+      if (cls.kind === "retry" && !adapted && cls.actualId !== undefined && Math.abs(cls.actualId - A.poll.activeId) <= Math.min(cfg.rebalance.maxActiveIdShift, 2 * cfg.rebalance.idSlippage)) {
         adapted = true;
-        expected = cls.actualId;
+        expected = Math.floor((cls.actualId + A.poll.activeId) / 2);
         data = build(expected);
         continue; // ONE more simulation with the id the vault reported
       }
+      if (cls.kind === "wiring") return halt("wiring", `the simulation reverted with ${cls.name}: ${cls.detail}`);
       if (cls.kind === "halt") return halt("guard", `the simulation reverted with ${cls.name} (${cls.detail})`, { ...(cls.reasons !== undefined ? { reasons: cls.reasons } : {}), latched: cls.name === "GuardLatched" });
       if (cls.kind === "benign") {
+        if (cls.name === "BandExists") return done("blocked");
         if (cls.name === "NotOutOfRange") {
           await endEpisode();
           return done("recovered");
@@ -378,10 +451,10 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   }
 
   // ---------------------------------------------------------------- 8. dry-run ends here
-  const summary = `rebalance(expected=${expected}, idSlip=${cfg.rebalance.idSlippage}, xForY=${plan.swapXForY}, in=${plan.swapIn}, minOut=${plan.swapMinOut}, xMin=${plan.amountXMin}, yMin=${plan.amountYMin}, deadline=${deadline}) gas~${gasLimit.toString()}`;
+  const summary = `${txKind}(expected=${expected}, idSlip=${cfg.rebalance.idSlippage}, xForY=${plan.swapXForY}, in=${plan.swapIn}, minOut=${plan.swapMinOut}, xMin=${plan.amountXMin}, yMin=${plan.amountYMin}, deadline=${deadline}) gas~${gasLimit.toString()}`;
   if (!live || !deps.signer) {
     out.notes.push(`DRY-RUN: simulation passed, NOT sent: ${summary}`);
-    backoffSoft({ seconds: cfg.timing.cooldownSeconds }, "dry-run");
+    if (!opts.skipWait) backoffSoft({ seconds: cfg.timing.cooldownSeconds }, "dry-run"); // (a one-shot `check` / `open-band` leaves no state behind)
     return done("dry-run");
   }
 
@@ -400,7 +473,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
     backoffSoft({ seconds: cfg.limits.retryBackoffSeconds }, "fee cap");
     return done("blocked");
   }
-  st = { ...st, pending: { kind: "rebalance", at: nowS() } };
+  st = { ...st, pending: { kind: txKind, at: nowS() } };
   save();
   tr(`send ${summary}`);
   let tx: { hash: string; blockNumber: number };
@@ -409,7 +482,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   } catch (err) {
     if (err instanceof TxReverted) {
       const ts = nowS();
-      st = { ...st, pending: null, sends: [...st.sends, { ts, kind: "rebalance" as const, tx: err.hash, outcome: "reverted" as const }].filter((s) => s.ts > ts - 7 * DAY) };
+      st = { ...st, pending: null, sends: [...st.sends, { ts, kind: txKind, tx: err.hash, outcome: "reverted" as const }].filter((s) => s.ts > ts - 7 * DAY) };
       save();
       out.sent.push(err.hash);
       await alerts.notify({ kind: "action", key: "rebalance:mined-revert", severity: "warn", audience: "keeper-operator", text: `rebalance ${err.hash} was mined and REVERTED after a passing simulation (gas spent). Backing off` });
@@ -421,18 +494,18 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
   }
   out.sent.push(tx.hash);
   try {
-    const problems = await readBack({ provider, cfg, tx, expectedLast: A.lastRebalanceAt, sleep });
+    const problems = await readBack({ provider, cfg, tx, expectedLast: A.lastRebalanceAt, sleep, ob });
     const ts = nowS();
     if (problems.issues.length) {
-      st = { ...st, pending: null, sends: [...st.sends, { ts, kind: "rebalance" as const, tx: tx.hash, outcome: "ok" as const }] };
+      st = { ...st, pending: null, sends: [...st.sends, { ts, kind: txKind, tx: tx.hash, outcome: "ok" as const }] };
       save();
       await alerts.notify({ kind: "action", key: "rebalance:readback", severity: "crit", audience: "keeper-operator", text: `rebalance ${tx.hash} mined (block ${tx.blockNumber}) but the READ-BACK FAILED: ${problems.issues.join("; ")}` });
       return halt("readback", `transaction ${tx.hash} mined but the read-back failed: ${problems.issues.join("; ")}`);
     }
-    st = { ...st, pending: null, exit: null, backoff: null, lastRebalanceSeen: problems.lastRebalanceAt, sends: [...st.sends, { ts, kind: "rebalance" as const, tx: tx.hash, outcome: "ok" as const }].filter((s) => s.ts > ts - 7 * DAY) };
+    st = { ...st, pending: null, exit: null, backoff: null, lastRebalanceSeen: ob ? st.lastRebalanceSeen : problems.lastRebalanceAt, sends: [...st.sends, { ts, kind: txKind, tx: tx.hash, outcome: "ok" as const }].filter((s) => s.ts > ts - 7 * DAY) };
     save();
     for (const k of ["attempt:failed", "rebalance:not-allowed", "oracle:keeper-check"]) await alerts.clear(k, ts);
-    await alerts.notify({ kind: "action", key: "rebalance:sent", severity: "info", audience: "keeper-operator", text: `REBALANCED ${tx.hash} block ${tx.blockNumber}: ${problems.eventText}` });
+    await alerts.notify({ kind: "action", key: "rebalance:sent", severity: "info", audience: "keeper-operator", text: `${ob ? "BAND OPENED" : "REBALANCED"} ${tx.hash} block ${tx.blockNumber}: ${problems.eventText}` });
     return done("sent");
   } catch (err) {
     return halt("readback", `transaction ${tx.hash} mined but the read-back could not be completed: ${safeError(err)}`);
@@ -440,7 +513,7 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, opts: Ste
 }
 
 /** Reads the receipt and the vault around it. Empty `issues` = every check passed. */
-async function readBack(p: { provider: providers.Provider; cfg: KeeperConfig; tx: { hash: string; blockNumber: number }; expectedLast: number; sleep: (ms: number) => Promise<void> }): Promise<{ issues: string[]; lastRebalanceAt: number; eventText: string }> {
+async function readBack(p: { provider: providers.Provider; cfg: KeeperConfig; tx: { hash: string; blockNumber: number }; expectedLast: number; sleep: (ms: number) => Promise<void>; ob: boolean }): Promise<{ issues: string[]; lastRebalanceAt: number; eventText: string }> {
   const { provider, cfg, tx } = p;
   const issues: string[] = [];
   let receipt = await provider.getTransactionReceipt(tx.hash);
@@ -451,19 +524,19 @@ async function readBack(p: { provider: providers.Provider; cfg: KeeperConfig; tx
   if (!receipt) return { issues: ["the receipt could not be read"], lastRebalanceAt: p.expectedLast, eventText: "" };
   if (receipt.status !== 1) issues.push("the receipt status is not 1");
   if (receipt.to?.toLowerCase() !== cfg.vault.toLowerCase()) issues.push("the receipt is not a call to the vault");
-  const topic = vaultIface.getEventTopic("Rebalanced");
+  const topic = vaultIface.getEventTopic(p.ob ? "BandOpened" : "Rebalanced");
   const ev = receipt.logs.find((l) => l.address.toLowerCase() === cfg.vault.toLowerCase() && l.topics[0] === topic);
   let eventText = "no Rebalanced event";
   let newLower = 0;
   let newUpper = 0;
   let activeId = 0;
-  if (!ev) issues.push("no Rebalanced event from the vault in the receipt");
+  if (!ev) issues.push(`no ${p.ob ? "BandOpened" : "Rebalanced"} event from the vault in the receipt`);
   else {
     const d = vaultIface.parseLog(ev).args;
-    newLower = Number(d.newLowerId);
-    newUpper = Number(d.newUpperId);
+    newLower = Number(p.ob ? d.lowerId : d.newLowerId);
+    newUpper = Number(p.ob ? d.upperId : d.newUpperId);
     activeId = Number(d.activeId);
-    eventText = `band [${Number(d.oldLowerId)},${Number(d.oldUpperId)}] -> [${newLower},${newUpper}] active ${activeId}, swap ${d.swapXForY ? "X->Y" : "Y->X"} in ${d.swapIn.toString()} out ${d.swapOut.toString()}, NAV ${d.navBefore.toString()} -> ${d.navAfter.toString()}`;
+    eventText = p.ob ? `band opened [${newLower},${newUpper}] active ${activeId}, amountX ${d.amountX.toString()} amountY ${d.amountY.toString()}` : `band [${Number(d.oldLowerId)},${Number(d.oldUpperId)}] -> [${newLower},${newUpper}] active ${activeId}, swap ${d.swapXForY ? "X->Y" : "Y->X"} in ${d.swapIn.toString()} out ${d.swapOut.toString()}, NAV ${d.navBefore.toString()} -> ${d.navAfter.toString()}`;
     if (!(newLower <= activeId && activeId <= newUpper)) issues.push(`the Rebalanced event's active id ${activeId} is outside its new band [${newLower}, ${newUpper}]`);
   }
   // a load-balanced node may not have the receipt's block yet: the state checks are retried (4 tries, 1 s apart) before they count as a mismatch
@@ -475,7 +548,7 @@ async function readBack(p: { provider: providers.Provider; cfg: KeeperConfig; tx
     if (!after.band.hasBand) stateIssues.push("the vault reports no band after the rebalance");
     else if (ev && (after.band.lowerId !== newLower || after.band.upperId !== newUpper)) stateIssues.push(`bandState [${after.band.lowerId}, ${after.band.upperId}] differs from the event's new band [${newLower}, ${newUpper}]`);
     lastR = await batchLast(provider, cfg);
-    if (lastR <= p.expectedLast) stateIssues.push(`vault.lastRebalanceAt ${lastR} did not advance past ${p.expectedLast}`);
+    if (!p.ob && lastR <= p.expectedLast) stateIssues.push(`vault.lastRebalanceAt ${lastR} did not advance past ${p.expectedLast}`);
     if (stateIssues.length === 0) break;
     if (i < 3) await p.sleep(1000);
   }

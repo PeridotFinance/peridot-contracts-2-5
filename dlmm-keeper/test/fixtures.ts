@@ -28,6 +28,7 @@ export function decidedConfig(dir = "/tmp/dlmm-keeper-test-unused"): KeeperConfi
     limits: { maxSendsPerCycle: 1, maxSendsPerDay: 48, maxConsecutiveFailures: 3, maxMinedRevertsPerDay: 2, maxFeeGwei: 100, maxGasLimit: 3_000_000, minWalletWei: "1000", gasPerRebalance: 1_000_000, minRebalancesCovered: 5, gasRunwayCheckSeconds: 300, retryBackoffSeconds: 30, retryBackoffMaxSeconds: 900, maxBandBins: 9 },
     rebalance: { idSlippage: 2, swapSlippageBps: 10, addSlippageBps: 50, maxQuoteLossBps: 40, maxPoolOracleDevBps: 50, keeperLegBandBps: 40, maxActiveIdShift: 4 },
     guard: { autoTripGuard: false, tripDebounceSeconds: 15 },
+    probe: { everyCycles: 20 },
     monitor: { statePath: `${dir}/state.json`, haltPath: `${dir}/HALT` },
     alerts: { channel: "log" },
   };

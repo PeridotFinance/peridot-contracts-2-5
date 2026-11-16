@@ -34,7 +34,7 @@ export class CountingProvider extends providers.StaticJsonRpcProvider {
   stateRequests = 0;
   async send(method: string, params: Array<unknown>): Promise<unknown> {
     this.requests++;
-    if (method !== "eth_getBlockByNumber" && method !== "eth_blockNumber") this.stateRequests++;
+    if (method !== "eth_getBlockByNumber" && method !== "eth_blockNumber" && !method.startsWith("evm_") && !method.startsWith("anvil_")) this.stateRequests++;
     return super.send(method, params);
   }
 }
@@ -53,6 +53,7 @@ const art = (name: string): { abi: any[]; bytecode: string; deployed: string } =
   const j = JSON.parse(fs.readFileSync(path.join(compileStubs(), "Stubs.sol", `${name}.json`), "utf8"));
   return { abi: j.abi, bytecode: j.bytecode.object, deployed: j.deployedBytecode.object };
 };
+export const stubArt = art;
 export const stubAbi = (name: string): any[] => art(name).abi;
 
 export interface Anvil {
@@ -125,6 +126,7 @@ export async function deployWorld(anvil: Anvil, mut?: (c: KeeperConfig) => void)
   const ACTIVE = 8_388_608;
   const pair = await dep("StubPair", usdt.address, usdc.address, ACTIVE);
   const vault = await dep("StubVault", pair.address, keeper.address, ACTIVE - 1, ACTIVE + 1);
+  await (await vault.setWiring(feedAsset.address, feedPair.address, usdc.address, usdt.address)).wait();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dlmm-anvil-"));
   const cfg = decidedConfig(dir);
   cfg.vault = vault.address;

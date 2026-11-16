@@ -366,7 +366,7 @@ contract RebalanceTest is Base {
     function test_rebalanceDailyCap() public {
         IPharaohDlmmVault.GuardParams memory g = v.guardParams();
         g.maxRebalancesPerDay = 4;
-        g.rebalanceCooldown = 111;
+        g.rebalanceCooldown = 112;
         vm.prank(SAFE);
         v.setGuardParams(g);
         _fundAndOpen(150e6);
@@ -393,7 +393,7 @@ contract RebalanceTest is Base {
     function test_dailyCapResetsAtUtcMidnightNotRolling24h() public {
         IPharaohDlmmVault.GuardParams memory g = v.guardParams();
         g.maxRebalancesPerDay = 4;
-        g.rebalanceCooldown = 111;
+        g.rebalanceCooldown = 112;
         vm.prank(SAFE);
         v.setGuardParams(g);
         _fundAndOpen(150e6);

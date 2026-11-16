@@ -2,6 +2,8 @@
 //   dlmm-keeper run [--dry-run]    the loop. mode comes from the configuration ("dry-run" is the default; "live" needs the keystore + password file in the environment);
 //                                  --dry-run forces dry-run whatever the configuration says. Dry-run reads, plans and SIMULATES; it never signs, never sends.
 //   dlmm-keeper check              ONE dry cycle that does not wait for the 60 s: prints a JSON report; writes nothing (no state, no HALT file)
+//   dlmm-keeper open-band [--send] the FIRST band from the vault's idle assets (the vault has no band yet). Same step as a rebalance: guard, oracle check, sizing, simulation, the same
+//                                  limits and halt rules. DRY unless `--send` is given AND the configuration says "live" (then the keystore is loaded and ONE openBand is sent).
 //   dlmm-keeper status             offline: prints the HALT record and the keeper's state (no RPC, no keystore)
 //   dlmm-keeper resume             THE ONLY WAY OUT OF A HALT: removes the HALT file (audit line appended to <haltPath>.log) and clears a pending marker. No RPC, no keystore.
 //   dlmm-keeper validate-config    only validate the configuration
@@ -40,8 +42,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const cmd = argv[0] ?? "";
-  if (!["check", "run", "validate-config", "resume", "status"].includes(cmd)) {
-    console.error("usage: dlmm-keeper run [--dry-run] | check | status | resume | validate-config   (configuration: DLMM_KEEPER_CONFIG or --config <file>; secrets: environment only)");
+  if (!["check", "run", "open-band", "validate-config", "resume", "status"].includes(cmd)) {
+    console.error("usage: dlmm-keeper run [--dry-run] | open-band [--send] | check | status | resume | validate-config   (configuration: DLMM_KEEPER_CONFIG or --config <file>; secrets: environment only)");
     return 2;
   }
   let cfg: KeeperConfig;
@@ -77,7 +79,13 @@ async function main(): Promise<number> {
     return 0;
   }
   const forceDry = argv.includes("--dry-run");
-  const live = cmd === "run" && cfg.mode === "live" && !forceDry;
+  const sendRequested = cmd === "run" || (cmd === "open-band" && argv.includes("--send"));
+  if (cmd === "open-band" && argv.includes("--send") && cfg.mode !== "live") {
+    console.error('open-band --send needs "mode": "live" in the configuration (dry-run is the default); nothing was sent');
+    return EX_CONFIG;
+  }
+  const live = sendRequested && cfg.mode === "live" && !forceDry;
+  const oneShot = cmd === "check" || cmd === "open-band";
   let sink;
   let rpcUrl: string;
   try {
@@ -119,12 +127,13 @@ async function main(): Promise<number> {
   const alerts = new AlertManager(sink, state.alerts);
   const persist = (s: KeeperState): void => {
     state = s;
-    if (cmd === "run") saveState(cfg.monitor.statePath, { ...s, alerts: alerts.toJson() });
+    if (cmd === "run" || (cmd === "open-band" && live)) saveState(cfg.monitor.statePath, { ...s, alerts: alerts.toJson() });
   };
   console.log(mask(JSON.stringify({ at: new Date().toISOString(), start: cmd, mode: effCfg.mode, vault: cfg.vault, keeper: cfg.keeper.address, halted: !!readHalt(cfg.monitor.haltPath) })));
 
   let cycles = 0;
   let stopping = false;
+  let lastStatus = "";
   let wasHalted = !!readHalt(cfg.monitor.haltPath);
   // a stop signal lets the current cycle finish (a transaction that was sent is read back and its marker cleared) and then ends the loop
   for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { stopping = true; });
@@ -135,14 +144,15 @@ async function main(): Promise<number> {
         state = loadState(cfg.monitor.statePath, cfg.vault);
         wasHalted = false;
       }
-      const o = await keeperStep({ provider, cfg: effCfg, signer, alerts, persist }, state, { skipWait: cmd === "check", noHaltWrite: cmd === "check" });
+      const o = await keeperStep({ provider, cfg: effCfg, signer, alerts, persist }, state, { skipWait: oneShot, noHaltWrite: cmd === "check" || (cmd === "open-band" && !live), openBand: cmd === "open-band" });
       state = o.state;
       wasHalted = o.halted;
+      lastStatus = o.status;
       // while the HALT file exists nothing is written: the state on disk is what `resume` will reset
-      if (cmd === "run" && o.status !== "halted") saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() });
+      if ((cmd === "run" || (cmd === "open-band" && live)) && o.status !== "halted") saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() });
       cycles++;
       const active = o.sent.length > 0 || o.notes.length > 0 || !["in-range", "halted"].includes(o.status);
-      if (active || cycles % 20 === 1 || cmd === "check") {
+      if (active || cycles % 20 === 1 || oneShot) {
         console.log(mask(JSON.stringify({ at: new Date().toISOString(), status: o.status, sent: o.sent, notes: o.notes, halted: o.halted, ...(o.halt ? { halt: o.halt } : {}), ...(o.plan ? { plan: JSON.parse(JSON.stringify(o.plan, (_k, v) => (typeof v === "bigint" ? v.toString() : v))) } : {}), ...(sink instanceof MemorySink ? { alerts: sink.messages.map((m) => ({ key: m.key, severity: m.severity, text: m.text })) } : {}) })));
       }
       return o.halted ? 1 : 0;
@@ -153,7 +163,10 @@ async function main(): Promise<number> {
       return 1;
     }
   };
-  if (cmd === "check") return once();
+  if (oneShot) {
+    const rc = await once();
+    return cmd === "open-band" ? (lastStatus === "dry-run" || lastStatus === "sent" ? 0 : 1) : rc;
+  }
   while (!stopping) {
     const rc = await once();
     if (rc === 0) await alerts.clear("cycle:failed", nowS());

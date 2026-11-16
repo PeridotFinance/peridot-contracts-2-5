@@ -30,6 +30,25 @@ export const VAULT_ABI = [
   "error PairValidationFailed(uint8 check)",
   "error NoBand()",
 ];
+/** Additive surface of the REAL vault (contracts/vault-dlmm/src/PharaohDlmmVault.sol, DEVIATIONS.md): getters, extra errors, the BandOpened event (frozen interface) and OZ's pause error. */
+export const VAULT_EXTRA_ABI = [
+  "function pair() view returns (address)",
+  "function rebalancer() view returns (address)",
+  "function feedAsset() view returns (address)",
+  "function feedPair() view returns (address)",
+  "function asset() view returns (address)",
+  "function pairToken() view returns (address)",
+  "function totalAssets() view returns (uint256)",
+  "function openBand(uint24 expectedActiveId, uint24 idSlippage, uint256 swapMinOut, uint256 amountXMin, uint256 amountYMin, uint256 deadline)",
+  "event BandOpened(uint24 lowerId, uint24 upperId, uint24 activeId, uint256 amountX, uint256 amountY)",
+  "error NotRebalancer()",
+  "error FeedInvalid(uint8 which)",
+  "error DeadlineExpired(uint256 deadline)",
+  "error BandExists()",
+  "error NothingToDeploy()",
+  "error ExitFailed()",
+  "error EnforcedPause()",
+];
 export const PAIR_ABI = [
   "function getActiveId() view returns (uint24)",
   "function getBin(uint24 id) view returns (uint128 binReserveX, uint128 binReserveY)",
@@ -40,6 +59,10 @@ export const PAIR_ABI = [
   "function getBinStep() view returns (uint16)",
   "function getPriceFromId(uint24 id) view returns (uint256)",
   "function getSwapOut(uint128 amountIn, bool swapForY) view returns (uint128 amountInLeft, uint128 amountOut, uint128 fee)",
+  // the exit probe simulates a burn of the vault's own shares (from == msg.sender, no approval needed)
+  "function burn(address from, address to, uint256[] ids, uint256[] amountsToBurn) returns (bytes32[] amounts)",
+  "error LBPair__ZeroAmount(uint24 id)",
+  "error LBPair__ZeroAmountsOut(uint24 id)",
 ];
 export const FEED_ABI = [
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
