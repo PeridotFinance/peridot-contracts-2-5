@@ -14,7 +14,17 @@ import {PErc20Delegate} from "../PErc20Delegate.sol";
  *      vault rather than being socialized across the lending market.
  *
  *      The vault is pinned to `underlying` when the implementation is installed. Conservative vault
- *      accounting and USD conversion are handled by PharaohVaultShareOracle.
+ *      accounting and USD conversion are handled by the share oracle (PharaohVaultShareOracle for the
+ *      two CL vaults, PharaohDlmmShareOracle for the DLMM USDC/USDt vault).
+ *
+ *      Two guards are added on top of the plain PErc20Delegate (both only ever make the market safer):
+ *        - FLASH LOANS OFF FROM BIRTH. `_becomeImplementation` sets `flashLoansPaused = true`, so a share market is
+ *          never flash-loanable between deployment and the first governance transaction.
+ *        - SEED-FIRST MINT. While the pToken supply is zero only the pToken admin may `mint`. The permanent seed
+ *          (minted by the admin and burned to the dead address) is therefore always the FIRST mint, whatever the
+ *          vault's own deposit headroom is: no outsider can mint 1 wei and donate shares in the window between the
+ *          controller listing the market and the seed. After the seed the pToken supply can never return to zero
+ *          (the dead balance cannot be redeemed), so the guard is inert from then on.
  */
 contract PharaohBoostedDelegate is PErc20Delegate {
     IERC4626 public pharaohVault;
@@ -23,6 +33,7 @@ contract PharaohBoostedDelegate is PErc20Delegate {
     error PharaohBoosted__InvalidConfiguration();
     error PharaohBoosted__InvalidVault();
     error PharaohBoosted__InsufficientVaultSeed();
+    error PharaohBoosted__SeedPending();
 
     event PharaohVaultConfigured(address indexed vault, address indexed asset, uint256 minimumVaultSupply);
 
@@ -36,6 +47,17 @@ contract PharaohBoostedDelegate is PErc20Delegate {
 
         (address vaultAddress, uint256 minimumVaultSupply) = abi.decode(data, (address, uint256));
         _configureVault(vaultAddress, minimumVaultSupply);
+        flashLoansPaused = true;
+    }
+
+    /**
+     * @notice Supplies vault shares. While nothing has been minted yet (pToken supply 0) only the admin may mint,
+     *         which makes the admin's permanent seed the first mint of the market.
+     */
+    function mint(uint256 mintAmount) external override returns (uint256) {
+        if (totalSupply == 0 && msg.sender != admin) revert PharaohBoosted__SeedPending();
+        mintInternal(mintAmount);
+        return NO_ERROR;
     }
 
     function vaultAsset() external view returns (address) {
