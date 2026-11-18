@@ -10,19 +10,22 @@ import {BpBase} from "./BpBase.sol";
 /// @notice Test 5: rollback = `controller._setPriceOracle(oldOracle)` in ONE transaction.
 ///
 ///         RESULT (what the tests below prove):
-///         A) Before any account has ENTERED the share market, the rollback is complete and harmless: the old oracle
+///         A) With NOBODY holding or having entered the share market, the rollback is complete and harmless: the old oracle
 ///            prices every existing market identically; the share market is simply priced 0 again (supply / redeem of
-///            un-entered suppliers still work; nobody can borrow or be liquidated against it because nobody uses it).
-///         B) AFTER an account has entered the share market, the old oracle returns 0 for the unknown pToken (it does NOT
-///            revert), and the controller treats price 0 as PRICE_ERROR for EVERY liquidity computation that includes the
-///            account. Every such account is FROZEN, with or without debt, in EVERY market (not only the share market):
-///            no new borrow, no redeem (including pWAVAX), no exitMarket, no pToken transfer, and NO LIQUIDATION of it.
-///            Still working: repayBorrow (own and third-party), mint, and everything for accounts that never entered the
-///            share market (including liquidation of pWAVAX-collateral accounts). Re-installing the wrapper in one tx
-///            unfreezes them. => ROLLBACK PRECONDITION: no account may have entered bpPHAR-USDC (check
-///            `getAssetsIn`/MarketEntered events); once anyone has, the safe response is NOT to roll back but to keep the
-///            wrapper (or any oracle that prices the share market) installed and, if needed, set the share CF to 0 and let
-///            users repay/exit.
+///            un-entered suppliers still work).
+///         B) The old oracle returns 0 (it does NOT revert) for the unknown pToken, and the controller treats price 0 as
+///            PRICE_ERROR for EVERY liquidity computation that includes an account that ENTERED the share market, WITH OR
+///            WITHOUT a balance (entering is free, needs no balance and cannot be blocked while the market is listed).
+///            Every such account is FROZEN in EVERY market (not only the share market) and is NOT LIQUIDATABLE: no new
+///            borrow, no redeem (incl. pWAVAX), no exitMarket, no pToken transfer, no liquidation of it. Still working:
+///            repayBorrow (own and `repayBorrowBehalf`), mint, and everything for accounts that never entered the share
+///            market (including liquidation of their pWAVAX-collateral debt). Re-installing the wrapper unfreezes everyone
+///            in one tx.
+///         CONSEQUENCE (not a precondition): "no account has entered" cannot be ENFORCED, because any account can enter bp
+///            in the block before the rollback tx lands. After a rollback, assume every debtor who chose to enter bp is
+///            unliquidatable until a pricing oracle is back. The rollback is therefore a break-glass action whose cost is
+///            "entered accounts frozen and unliquidatable", to be compared with the cost of leaving a faulty wrapper in place;
+///            check `MarketEntered` events for bp beforehand to know who would be affected.
 contract BpRollbackTest is BpBase {
     address internal constant DAVE = address(0xDA7E);
     address internal constant EVE = address(0xE5E);
@@ -149,6 +152,13 @@ contract BpRollbackTest is BpBase {
         (ok,) = _repayUsdc(ALICE, 10e6);
         assertTrue(ok, "partial repay works");
         _supplyShares(ALICE, 1e6); // mint works
+        // third-party repay on behalf of ALICE works too
+        usdc.mint(FRANK, 5e6);
+        vm.startPrank(FRANK);
+        usdc.approve(address(pUsdc), 5e6);
+        assertEq(pUsdc.repayBorrowBehalf(ALICE, 5e6), 0, "repayBorrowBehalf works");
+        vm.stopPrank();
+        assertEq(pUsdc.borrowBalanceStored(ALICE), 25e6);
         (ok,) = _repayUsdc(ALICE, type(uint256).max);
         assertTrue(ok, "full repay works");
         assertEq(pUsdc.borrowBalanceStored(ALICE), 0);
@@ -207,6 +217,34 @@ contract BpRollbackTest is BpBase {
         _rollForward();
         (ok,) = _liquidate(FRANK, ALICE, 10e6);
         assertTrue(ok, "liquidatable again after roll forward");
+    }
+
+    /// @dev The entry costs nothing: an account that holds NO bp enters it one block before the rollback and is then frozen
+    ///      and unliquidatable. Also shows the same account is liquidatable before the rollback.
+    function test_rollback_zeroBalanceEntrantBecomesUnliquidatable() external {
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _borrowUsdc(DAVE, 10e6);
+        assertTrue(ok);
+        _enter(DAVE, address(bp)); // zero bp balance, free
+        _mintUnderlyingP(pWavax, EVE, 10e18);
+        _enter(EVE, address(pWavax));
+        (ok,) = _borrowUsdc(EVE, 10e6);
+        assertTrue(ok);
+        avaxFeed.setRound(1e8, block.timestamp, 9, 9); // DAVE underwater
+        (, , uint256 shortfall) = controller.getAccountLiquidity(DAVE);
+        assertGt(shortfall, 0);
+        uint256 snap = vm.snapshotState();
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertTrue(ok, "liquidatable with the wrapper installed");
+        vm.revertToState(snap);
+        _rollback();
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertFalse(ok, "after the rollback a zero-balance entrant of bp is unliquidatable");
+        assertEq(_errCode(lastRevert), ERR_PRICE);
+        // an identical debtor who did NOT enter bp stays liquidatable
+        (ok,) = _liquidateSeizing(FRANK, EVE, 2e6, address(pWavax));
+        assertTrue(ok, "debtor that never entered bp is unaffected");
     }
 
     function test_rollbackAfterEntry_cfZeroDoesNotHelp_priceStillRequired() external {

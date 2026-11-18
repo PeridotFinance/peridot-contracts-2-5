@@ -89,6 +89,14 @@ contract BpDlmmVaultMock {
         emit Transfer(address(0), to, amount);
     }
 
+    /// @dev Test helper: destroy share base units (models vault redemptions shrinking totalSupply).
+    function burnShares(address from, uint256 amount) external {
+        require(balanceOf[from] >= amount, "balance");
+        balanceOf[from] -= amount;
+        totalSupply -= amount;
+        emit Transfer(from, address(0), amount);
+    }
+
     function approve(address spender, uint256 amount) external returns (bool) {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
@@ -300,21 +308,30 @@ abstract contract BpBase is Test {
         wrapper.registerVault(IERC4626(address(vault)), AggregatorV3Interface(address(usdcFeed)), USDC_MAX_AGE);
     }
 
-    /// @dev The ceremony, in the order that leaves no exploitable window (see BpMarket.test_listingOrder...):
-    ///      1 support (CF 0)  2 pause borrow  3 cap=1  4 pause flash loans  5 seed mint + burn to dead
-    ///      6 register vault in wrapper  7 swap controller oracle to the wrapper. CF stays 0.
+    /// @dev The ceremony order that survived BpListingOrderTest (see test_closedOrder_...). The key facts:
+    ///      * `_setMarketBorrowCaps` and `PToken._setFlashLoansPaused` work on an UNLISTED pToken, `_setBorrowPaused` does not;
+    ///      * any account may `enterMarkets([bp])` with a zero balance the moment bp is listed, and a listed market priced 0
+    ///        makes the controller return PRICE_ERROR for that account in EVERY market (no zero-balance skip), i.e. the
+    ///        account becomes unliquidatable. So bp must never be listed while the controller oracle prices it 0.
+    ///      Order: 1 flash loans paused  2 borrow cap = 1  3 register vault in wrapper  4 swap controller oracle to wrapper
+    ///      5 support market (CF 0)  6 pause borrow  7 seed mint + burn to dead. CF stays 0 until the fork gate passes.
+    ///      While bp is listed-but-unseeded (between 5 and 7) the cap of 1 already blocks share borrowing.
     function _listShareMarket() internal {
-        require(controller._supportMarket(PErc20(address(bp))) == 0, "list bp");
-        controller._setBorrowPaused(PToken(address(bp)), true);
+        _listShareMarketNoSeed();
+        _seedPermanent(SEED);
+    }
+
+    function _listShareMarketNoSeed() internal {
+        PErc20(address(bp))._setFlashLoansPaused(true);
         PToken[] memory ps = new PToken[](1);
         ps[0] = PToken(address(bp));
         uint256[] memory caps = new uint256[](1);
         caps[0] = 1;
         controller._setMarketBorrowCaps(ps, caps);
-        PErc20(address(bp))._setFlashLoansPaused(true);
-        _seedPermanent(SEED);
         _registerVaultInWrapper();
         require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0, "wrapper");
+        require(controller._supportMarket(PErc20(address(bp))) == 0, "list bp");
+        controller._setBorrowPaused(PToken(address(bp)), true);
     }
 
     function _seedPermanent(uint256 shares) internal {

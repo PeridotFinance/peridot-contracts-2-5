@@ -178,14 +178,18 @@ contract BpLiquidationTest is BpBase {
         assertEq(bp.balanceOf(ALICE), 100e6 * 5000 - 250_000_000_000 , "50 shares seized");
     }
 
-    function test_usdcDepeg_doesNotMoveHealth_shareAndDebtAreBothUsdc() external {
+    /// @dev MODEL-ONLY property. In this mock the share price is `pps * USDC/USD`, so a USDC feed move scales collateral and debt
+    ///      equally. The LIVE vault differs: its `totalAssets()` is marked by Chainlink with a 50 bp leg band and REVERTS when
+    ///      its feed guard trips, which the wrapper turns into price 0 (fail closed, see BpMarketTest). Do not read this test as
+    ///      "a USDC depeg cannot liquidate": a depeg beyond the vault guard freezes entered accounts instead.
+    function test_usdcFeedMove_ratioUnchangedInThisMockModel() external {
         _aliceAtMax();
         (, uint256 liquidityBefore, uint256 shortfallBefore) = controller.getAccountLiquidity(ALICE);
         usdcFeed.setRound(0.5e8, block.timestamp, 9, 9); // USDC at $0.50
         (, uint256 liquidity, uint256 shortfall) = controller.getAccountLiquidity(ALICE);
         assertEq(shortfall, shortfallBefore);
         assertEq(liquidity * 2, liquidityBefore + 0 * liquidity, "dollar amounts halve, the ratio does not move");
-        assertEq(shortfall, 0, "still healthy: the USDC feed cannot liquidate a USDC-vs-USDC-share position");
+        assertEq(shortfall, 0, "mock model: ratio unchanged (live vault guard behaves differently, see NatSpec)");
     }
 
     function test_liquidation_vaultPriceRise_noLiquidation_andNavDropsAre_theOnlyRisk() external {

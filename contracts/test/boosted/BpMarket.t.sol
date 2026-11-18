@@ -15,6 +15,9 @@ import {BpBase} from "./BpBase.sol";
 /// @notice Tests 2, 3, 6 and 8 of the bpPHAR-USDC list: supply/redeem/borrow-against-shares, fail-closed pricing,
 ///         the share market is not borrowable, CF 0 -> 50% at listing. Local stack, no fork.
 contract BpMarketTest is BpBase {
+    address internal constant FRANK = address(0xF7A);
+    address internal constant DAVE = address(0xDA7E);
+
     function setUp() public override {
         super.setUp();
         _listShareMarket(); // CF 0, borrow paused, cap 1, flash paused, seeded, wrapper installed
@@ -212,9 +215,9 @@ contract BpMarketTest is BpBase {
         assertEq(_errCode(ret), ERR_PRICE);
 
         // an account that never entered the share market is unaffected
-        _mintUnderlyingP(pWavax, DAVE(), 10e18);
-        _enter(DAVE(), address(pWavax));
-        (ok,) = _borrowUsdc(DAVE(), 1e6);
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (ok,) = _borrowUsdc(DAVE, 1e6);
         assertTrue(ok, "pWAVAX-only borrower still borrows USDC");
     }
 
@@ -278,6 +281,7 @@ contract BpMarketTest is BpBase {
             abi.encodeWithSignature("flashLoan(address,address,uint256,bytes)", address(this), address(vault), 1e6, "")
         );
         assertFalse(ok);
+        assertEq(_reason(ret), "FlashLoan: flash loans are paused");
     }
 
     function test_capOneAloneStopsBorrowing_ifThePauseWereLifted() external {
@@ -302,6 +306,40 @@ contract BpMarketTest is BpBase {
         (bool ok,) = _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.borrow.selector, 5e6));
         assertTrue(ok, "DOCUMENTED RISK: unpaused + cap 0 lends the shares to a pWAVAX holder");
         assertEq(vault.balanceOf(ALICE), 5e6);
+    }
+
+    /// @dev CONTAGION: entering bp costs nothing and needs no balance. While the share price is unavailable (vault read
+    ///      reverts), every account that entered bp is unliquidatable in ALL markets, including pure pWAVAX/pUSDC borrowers.
+    function test_zeroBalanceEntry_vaultReadReverts_makesPilotDebtorsUnliquidatable() external {
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _borrowUsdc(DAVE, 10e6);
+        assertTrue(ok);
+        _enter(DAVE, address(bp)); // zero bp balance
+        vault.setConvertReverts(true);
+        avaxFeed.setRound(1e8, block.timestamp, 9, 9);
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertFalse(ok, "unliquidatable while the DLMM vault read reverts");
+        assertEq(_errCode(lastRevert), ERR_PRICE);
+        (ok, ) = _try(DAVE, address(pWavax), abi.encodeWithSelector(PErc20.redeem.selector, 1));
+        assertFalse(ok, "and cannot redeem pWAVAX either");
+        (ok,) = _repayUsdc(DAVE, 10e6);
+        assertTrue(ok, "repay still works");
+    }
+
+    function test_zeroBalanceEntry_liquidationResumesWhenTheVaultReadRecovers() external {
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _borrowUsdc(DAVE, 10e6);
+        assertTrue(ok);
+        _enter(DAVE, address(bp));
+        vault.setConvertReverts(true);
+        avaxFeed.setRound(1e8, block.timestamp, 9, 9);
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertFalse(ok);
+        vault.setConvertReverts(false);
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertTrue(ok, "recovers with the vault");
     }
 
     // =================================================================== 8. CF 0 at listing, then 50%
@@ -338,9 +376,6 @@ contract BpMarketTest is BpBase {
         assertEq(controller._setCollateralFactor(PToken(address(bp)), 0.91e18), 6, "INVALID_COLLATERAL_FACTOR");
     }
 
-    function DAVE() internal pure returns (address) {
-        return address(0xDA7E);
-    }
 }
 
 /// @notice Listing order: every ceremony step is its own EOA transaction, so each prefix of the sequence is tested.
@@ -375,57 +410,104 @@ contract BpListingOrderTest is BpBase {
         vm.stopPrank();
     }
 
-    function test_afterSupportOnly_oldOraclePricesTheMarketAtZero_soNothingCanBeBorrowed() external {
+    address internal constant DAVE = address(0xDA7E);
+    address internal constant FRANK = address(0xF7A);
+
+    /// @dev DAVE borrows USDC against pWAVAX, enters bp with a ZERO balance (allowed for anyone once bp is listed), the AVAX
+    ///      price collapses, FRANK tries to liquidate DAVE (seizing pWAVAX). Returns whether the liquidation went through.
+    function _zeroBalanceEntryLiquidation() internal returns (bool liquidated, uint256 code) {
+        uint256 snap = vm.snapshotState();
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _try(DAVE, address(pUsdc), abi.encodeWithSelector(PErc20.borrow.selector, 10e6));
+        require(ok, "setup borrow");
+        address[] memory ms = new address[](1);
+        ms[0] = address(bp);
+        vm.prank(DAVE);
+        controller.enterMarkets(ms); // may return MARKET_NOT_LISTED (9) when bp is not listed: then nothing is entered
+        avaxFeed.setRound(1e8, block.timestamp, 9, 9); // AVAX $1: DAVE is deeply underwater
+        (liquidated,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        code = _errCode(lastRevert);
+        vm.revertToState(snap);
+    }
+
+    function _bpBorrowAttempt() internal returns (bool ok, bytes memory ret) {
+        uint256 snap = vm.snapshotState();
+        _mintUnderlyingP(pWavax, ALICE, 10e18);
+        _enter(ALICE, address(pWavax));
+        (ok, ret) = _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.borrow.selector, 1));
+        vm.revertToState(snap);
+    }
+
+    /// @dev ORDER A (the order the boosted-markets doc and the first draft of the ceremony use): support first, wrapper last.
+    ///      Between `_supportMarket` and the oracle swap bp is LISTED but priced 0 by the old oracle. Any account can enter
+    ///      it for free; the controller then returns PRICE_ERROR for that account in every market, so a debtor who enters
+    ///      bp cannot be liquidated until the wrapper is installed. The window is only as long as the ceremony, but it is real.
+    function test_orderA_supportBeforeWrapper_hasAnUnpricedWindow_zeroBalanceEntryBlocksLiquidation() external {
         require(controller._supportMarket(PErc20(address(bp))) == 0);
-        // borrow not paused, cap 0 (unlimited), flash loans open, OLD oracle active
-        assertFalse(controller.borrowGuardianPaused(address(bp)));
-        assertEq(controller.borrowCaps(address(bp)), 0);
+        controller._setBorrowPaused(PToken(address(bp)), true);
+        PErc20(address(bp))._setFlashLoansPaused(true);
+        (bool liquidated, uint256 code) = _zeroBalanceEntryLiquidation();
+        assertFalse(liquidated, "WINDOW: a zero-balance entrant of the unpriced listed market is unliquidatable");
+        assertEq(code, ERR_PRICE);
+        // wrapper installed: the window closes
+        _registerVaultInWrapper();
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0);
+        (liquidated,) = _zeroBalanceEntryLiquidation();
+        assertTrue(liquidated, "window closed after the swap");
+    }
+
+    function test_listedButUnpriced_shareBorrowFailsClosed() external {
+        require(controller._supportMarket(PErc20(address(bp))) == 0);
         vault.mintShares(BOB, 100e6);
         vm.startPrank(BOB);
         vault.approve(address(bp), 100e6);
-        bp.mint(100e6); // supply is open the moment the market is listed: the seed must follow immediately
+        bp.mint(100e6); // supply is open the moment the market is listed
         vm.stopPrank();
-        _mintUnderlyingP(pWavax, ALICE, 10e18);
-        _enter(ALICE, address(pWavax));
-        (bool ok, bytes memory ret) = _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.borrow.selector, 1e6));
+        (bool ok, bytes memory ret) = _bpBorrowAttempt();
         assertFalse(ok);
-        assertEq(_errCode(ret), ERR_PRICE, "old oracle: unknown pToken -> price 0 -> borrow fails closed");
+        assertEq(_errCode(ret), ERR_PRICE, "old oracle: unknown pToken -> price 0 -> share borrow fails closed");
     }
 
-    function test_wrongOrder_wrapperBeforePauseAndCap_letsAPWavaxHolderBorrowShares() external {
-        require(controller._supportMarket(PErc20(address(bp))) == 0);
-        _supplyShares(BOB, 100e6);
-        _registerVaultInWrapper();
-        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0);
-        _mintUnderlyingP(pWavax, ALICE, 10e18);
-        _enter(ALICE, address(pWavax));
-        (bool ok,) = _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.borrow.selector, 1e6));
-        assertTrue(ok, "WRONG ORDER: the wrapper must be installed AFTER pause + cap");
-    }
-
-    function test_correctOrder_everyPrefixIsClosed() external {
-        // 1 support
-        require(controller._supportMarket(PErc20(address(bp))) == 0);
-        // 2 pause borrow, 3 cap 1, 4 pause flash loans
-        controller._setBorrowPaused(PToken(address(bp)), true);
+    /// @dev ORDER B (closed): cap and flash pause work on an unlisted pToken, so set them first; install the wrapper while
+    ///      bp is still unlisted; only then support the market (it is born priced), then pause borrow and seed. After EVERY
+    ///      step: (a) a pWAVAX holder cannot borrow shares, (b) a zero-balance bp entrant is still liquidatable.
+    function test_closedOrder_capFlashWrapperFirst_thenSupportPauseSeed_everyPrefixIsClosed() external {
         PToken[] memory ps = new PToken[](1);
         ps[0] = PToken(address(bp));
         uint256[] memory caps = new uint256[](1);
         caps[0] = 1;
-        controller._setMarketBorrowCaps(ps, caps);
-        PErc20(address(bp))._setFlashLoansPaused(true);
-        // 5 seed
-        _seedPermanent(SEED);
-        // 6 register + 7 swap oracle: only now is the share market priced
-        _registerVaultInWrapper();
-        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0);
-        _supplyShares(BOB, 100e6);
-        _mintUnderlyingP(pWavax, ALICE, 10e18);
-        _enter(ALICE, address(pWavax));
-        (bool ok, bytes memory ret) = _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.borrow.selector, 1));
+
+        _assertClosed("0 start (unlisted)");
+        assertTrue(PErc20(address(bp))._setFlashLoansPaused(true)); // 1
+        _assertClosed("1 flash paused");
+        controller._setMarketBorrowCaps(ps, caps); // 2 (accepted for an unlisted pToken)
+        assertEq(controller.borrowCaps(address(bp)), 1);
+        _assertClosed("2 cap 1");
+        _registerVaultInWrapper(); // 3
+        _assertClosed("3 vault registered");
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0); // 4 (bp still unlisted)
+        _assertClosed("4 wrapper installed");
+        require(controller._supportMarket(PErc20(address(bp))) == 0); // 5 now listed AND priced
+        assertGt(_price(PToken(address(bp))), 0, "born priced");
+        (bool ok, bytes memory ret) = _bpBorrowAttempt();
         assertFalse(ok);
+        assertEq(_reason(ret), "market borrow cap reached", "listed, not yet paused: the cap of 1 alone stops share borrowing");
+        _assertClosed("5 supported (cap 1 only)");
+        controller._setBorrowPaused(PToken(address(bp)), true); // 6
+        (ok, ret) = _bpBorrowAttempt();
         assertEq(_reason(ret), "borrow is paused");
-        assertGt(_price(PToken(address(bp))), 0);
+        _assertClosed("6 paused");
+        _seedPermanent(SEED); // 7
+        _assertClosed("7 seeded");
+        assertEq(bp.balanceOf(DEAD), SEED * 5000);
+    }
+
+    function _assertClosed(string memory step) internal {
+        (bool ok,) = _bpBorrowAttempt();
+        assertFalse(ok, string.concat("share borrow must fail at step ", step));
+        (bool liquidated, uint256 code) = _zeroBalanceEntryLiquidation();
+        assertTrue(liquidated, string.concat("zero-balance entrant must stay liquidatable at step ", step, " code ", vm.toString(code)));
     }
 
     /// @dev Anyone can mint into the market between support and the seed. A front-runner who poisons the empty market

