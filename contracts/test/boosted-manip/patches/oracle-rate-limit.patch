@@ -1,24 +1,26 @@
 --- a/contracts/contracts/PharaohVaultShareOracle.sol
 +++ b/contracts/contracts/PharaohVaultShareOracle.sol
-@@ -20,6 +20,17 @@
+@@ -20,6 +20,19 @@
  contract PharaohVaultShareOracle is PriceOracle, Ownable {
      uint256 public constant MAX_STALENESS = 7 days;
  
-+    /// @notice OPTIONAL RATE LIMIT (see docs-manip/bp-dlmm-share-price-manipulation.md, section 7). The share price the controller reads may rise
-+    ///         by at most this many bp per hour above the last checkpoint (linear, never compounded); a fall is passed through at once.
-+    ///         Stateless callers get `min(spot, checkpoint x (1 + rate x elapsed))`, so a stale checkpoint only LOOSENS the cap (fails open to the old behaviour).
++    /// @notice OPTIONAL RATE LIMIT on ASSETS PER SHARE (`convertToAssets` of one whole share, asset units), not on the USD price: the wrapper's x asset/USD cancels against the borrowed
++    ///         asset's own price, so what drives borrow power is the asset-unit value, and it rises both when the pair-leg feed reads high and when the asset feed reads low.
++    ///         The value the controller sees may rise by at most MAX_RISE_BPS_PER_HOUR per hour of elapsed time since the last checkpoint, where the elapsed time is CLAMPED to
++    ///         MAX_ELAPSED (so an un-poked checkpoint keeps binding: it allows +24 % and no more). A fall is passed through at once. Doc: docs-manip/bp-dlmm-share-price-manipulation.md, section 6.
 +    uint256 public constant MAX_RISE_BPS_PER_HOUR = 100;
++    uint256 public constant MAX_ELAPSED = 24 hours;
 +
-+    /// @dev one storage slot per vault: USD per whole share (1e18) and the time it was stored
++    /// @dev one storage slot per vault
 +    struct Checkpoint {
-+        uint128 price18;
++        uint128 assetsPerShare;
 +        uint64 updatedAt;
 +    }
 +
      struct VaultConfig {
          AggregatorV3Interface assetUsdFeed;
          address asset;
-@@ -36,9 +47,11 @@
+@@ -36,9 +49,11 @@
  
      PriceOracle public immutable baseOracle;
      mapping(address vaultShare => VaultConfig config) public vaultConfigs;
@@ -26,16 +28,21 @@
  
      event VaultRegistered(address indexed vaultShare, address indexed asset, address indexed assetUsdFeed);
      event VaultRemoved(address indexed vaultShare);
-+    event CheckpointPoked(address indexed vaultShare, uint256 spotPrice18, uint256 storedPrice18);
++    event CheckpointPoked(address indexed vaultShare, uint256 spotAssetsPerShare, uint256 storedAssetsPerShare);
  
      constructor(address owner_, PriceOracle baseOracle_) Ownable(owner_) {
          if (owner_ == address(0) || address(baseOracle_) == address(0) || address(baseOracle_).code.length == 0) {
-@@ -101,15 +114,37 @@
-         if (_readAssetsPerWholeShare(vault, shareDecimals) == 0) revert PharaohOracle__InvalidVault();
+@@ -98,18 +113,42 @@
+             feedScale: uint64(10 ** (18 - feedDecimals))
+         });
+         if (_readAssetUsdPrice(config) == 0) revert PharaohOracle__InvalidFeed();
+-        if (_readAssetsPerWholeShare(vault, shareDecimals) == 0) revert PharaohOracle__InvalidVault();
++        uint256 initialAssetsPerShare = _readAssetsPerWholeShare(vault, shareDecimals);
++        if (initialAssetsPerShare == 0) revert PharaohOracle__InvalidVault();
  
          vaultConfigs[vaultShare] = config;
 +        checkpoints[vaultShare] =
-+            Checkpoint({price18: uint128(_shareUsdPrice18(vault, config)), updatedAt: uint64(block.timestamp)});
++            Checkpoint({assetsPerShare: uint128(initialAssetsPerShare), updatedAt: uint64(block.timestamp)});
          emit VaultRegistered(vaultShare, asset, address(assetUsdFeed));
      }
  
@@ -46,52 +53,55 @@
          emit VaultRemoved(vaultShare);
      }
  
-+    /// @notice Permissionless: moves the checkpoint to `min(spot, allowed)`. It can never raise the checkpoint faster than the rate and never stores 0
-+    ///         (a failed feed read leaves the checkpoint alone). Poke it hourly from any keeper; skipping pokes only loosens the cap.
++    /// @notice Permissionless: moves the checkpoint to `min(spot, allowed)` at `now`. A poke cannot raise it faster than the rate and stores nothing when any read fails.
++    ///         Poke it hourly from any keeper; skipping pokes keeps the old checkpoint (and its +24 % allowance), it never loosens further.
 +    function poke(address vaultShare) external {
 +        VaultConfig memory config = vaultConfigs[vaultShare];
 +        if (address(config.assetUsdFeed) == address(0)) revert PharaohOracle__InvalidVault();
-+        uint256 spot = _shareUsdPrice18(IERC4626(vaultShare), config);
-+        if (spot == 0) return;
++        IERC4626 vault = IERC4626(vaultShare);
++        if (_price(vault, config, false) == 0) return;
++        uint256 spot = _readAssetsPerWholeShare(vault, config.shareDecimals);
 +        uint256 stored = _limited(vaultShare, spot);
-+        checkpoints[vaultShare] = Checkpoint({price18: uint128(stored), updatedAt: uint64(block.timestamp)});
++        checkpoints[vaultShare] = Checkpoint({assetsPerShare: uint128(stored), updatedAt: uint64(block.timestamp)});
 +        emit CheckpointPoked(vaultShare, spot, stored);
 +    }
 +
-+    /// @notice Share price without the rate limit (diagnostics only; the controller never reads it).
++    /// @notice Share USD price without the rate limit (diagnostics only; the controller never reads it).
 +    function getRawShareUsdPrice(address vaultShare) external view returns (uint256) {
 +        VaultConfig memory config = vaultConfigs[vaultShare];
 +        if (address(config.assetUsdFeed) == address(0)) return 0;
-+        return _shareUsdPrice18(IERC4626(vaultShare), config);
++        return _price(IERC4626(vaultShare), config, false);
 +    }
 +
      function getUnderlyingPrice(PToken pToken) public view override returns (uint256) {
          address vaultShare = _marketUnderlying(address(pToken));
          VaultConfig memory config = vaultConfigs[vaultShare];
-@@ -119,6 +154,7 @@
- 
-         uint256 shareUsdPrice18 = _shareUsdPrice18(IERC4626(vaultShare), config);
-         if (shareUsdPrice18 == 0) return 0;
-+        shareUsdPrice18 = _limited(vaultShare, shareUsdPrice18);
- 
-         uint256 marketScale = 10 ** (18 - config.shareDecimals);
-         if (shareUsdPrice18 > type(uint256).max / marketScale) return 0;
-@@ -128,7 +164,17 @@
-     function getShareUsdPrice(address vaultShare) external view returns (uint256) {
-         VaultConfig memory config = vaultConfigs[vaultShare];
-         if (address(config.assetUsdFeed) == address(0)) return 0;
--        return _shareUsdPrice18(IERC4626(vaultShare), config);
-+        uint256 spot = _shareUsdPrice18(IERC4626(vaultShare), config);
-+        return spot == 0 ? 0 : _limited(vaultShare, spot);
-+    }
-+
-+    /// @dev min(spot, checkpoint x (1 + MAX_RISE_BPS_PER_HOUR x elapsed / 1h / 10_000)); spot when there is no checkpoint
-+    function _limited(address vaultShare, uint256 spot) private view returns (uint256) {
-+        Checkpoint memory c = checkpoints[vaultShare];
-+        if (c.updatedAt == 0 || c.price18 == 0) return spot;
-+        uint256 elapsed = block.timestamp > c.updatedAt ? block.timestamp - c.updatedAt : 0;
-+        uint256 cap = uint256(c.price18) + uint256(c.price18) * MAX_RISE_BPS_PER_HOUR * elapsed / (10_000 * 1 hours);
-+        return spot < cap ? spot : cap;
+@@ -132,6 +171,20 @@
      }
  
      function _shareUsdPrice18(IERC4626 vault, VaultConfig memory config) private view returns (uint256) {
++        return _price(vault, config, true);
++    }
++
++    /// @dev min(spot, checkpoint x (1 + MAX_RISE_BPS_PER_HOUR x min(elapsed, MAX_ELAPSED) / 1h / 10_000)); spot when there is no checkpoint
++    function _limited(address vaultShare, uint256 spot) private view returns (uint256) {
++        Checkpoint memory c = checkpoints[vaultShare];
++        if (c.updatedAt == 0 || c.assetsPerShare == 0) return spot;
++        uint256 elapsed = block.timestamp > c.updatedAt ? block.timestamp - c.updatedAt : 0;
++        if (elapsed > MAX_ELAPSED) elapsed = MAX_ELAPSED;
++        uint256 cap = uint256(c.assetsPerShare) + uint256(c.assetsPerShare) * MAX_RISE_BPS_PER_HOUR * elapsed / (10_000 * 1 hours);
++        return spot < cap ? spot : cap;
++    }
++
++    function _price(IERC4626 vault, VaultConfig memory config, bool limit) private view returns (uint256) {
+         address currentAsset;
+         try vault.asset() returns (address returnedAsset) {
+             currentAsset = returnedAsset;
+@@ -142,6 +195,7 @@
+ 
+         uint256 assetsPerWholeShare = _readAssetsPerWholeShare(vault, config.shareDecimals);
+         if (assetsPerWholeShare == 0) return 0;
++        if (limit) assetsPerWholeShare = _limited(address(vault), assetsPerWholeShare);
+ 
+         uint256 assetUsdPrice18 = _readAssetUsdPrice(config);
+         if (assetUsdPrice18 == 0) return 0;

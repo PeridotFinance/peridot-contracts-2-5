@@ -10,6 +10,7 @@ import {PharaohDlmmVault} from "../vault-src/PharaohDlmmVault.sol";
 import {IPharaohDlmmVault} from "../vault-src/IPharaohDlmmVault.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockRouter} from "./mocks/MockRouter.sol";
+import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
 
 import {SimpleFlashLoanVault} from "../../../contracts/margin/SimpleFlashLoanVault.sol";
 import {IERC3156FlashBorrower} from "../../../contracts/PTokenInterfaces.sol";
@@ -24,6 +25,7 @@ contract LenderHarness {
     IERC20 public immutable shares;
     PharaohVaultShareOracle public immutable oracle;
     address public immutable pShare;
+    MockChainlinkFeed public immutable usdcFeed;
     uint256 public immutable cfBps;
     uint256 public immutable cap;
     uint256 public immutable floor_;
@@ -31,7 +33,8 @@ contract LenderHarness {
     mapping(address => uint256) public collateral;
     mapping(address => uint256) public debt;
 
-    constructor(IERC20 usdc_, IERC20 shares_, PharaohVaultShareOracle o, address pShare_, uint256 cf, uint256 cap_, uint256 floor__) {
+    constructor(IERC20 usdc_, IERC20 shares_, PharaohVaultShareOracle o, address pShare_, uint256 cf, uint256 cap_, uint256 floor__, MockChainlinkFeed f) {
+        usdcFeed = f;
         usdc = usdc_;
         shares = shares_;
         oracle = o;
@@ -50,7 +53,9 @@ contract LenderHarness {
         collateral[msg.sender] += shareAmt;
         debt[msg.sender] += amt;
         totalBorrows += amt;
-        require(amt * 1e12 <= value18(collateral[msg.sender]) * cfBps / 10_000, "insufficient liquidity");
+        (, int256 a,,,) = usdcFeed.latestRoundData();
+        // borrow value in USD = amt x pUSDC price (the live USDC/USD feed, 1e18 per USDC-unit scaled by 1e12 for 6 decimals)
+        require(amt * uint256(a) * 1e10 / 1e6 <= value18(collateral[msg.sender]) * cfBps / 10_000, "insufficient liquidity");
         require(totalBorrows < cap, "market borrow cap reached");
         uint256 cash = usdc.balanceOf(address(this));
         require(cash >= amt && cash - amt >= floor_, "borrow cash floor");
@@ -67,6 +72,7 @@ contract FlashDonator is IERC3156FlashBorrower {
     LenderHarness public immutable lender;
     uint256 public donate;
     uint256 public borrowAmt;
+    uint256 public postBps = 10_000; // fraction of the shares posted as collateral
 
     constructor(SimpleFlashLoanVault f, IERC20 usdc_, address vault_, LenderHarness l) {
         flash = f;
@@ -81,9 +87,18 @@ contract FlashDonator is IERC3156FlashBorrower {
         IERC4626(vault).deposit(assets, address(this));
     }
 
-    function run(uint256 flashAmt, uint256 donate_, uint256 borrow_) external {
+    function redeemInKindAll(address to) external returns (uint256 ax, uint256 ay) {
+        uint256 s = vaultShares.balanceOf(address(this));
+        if (s == 0) return (0, 0);
+        try PharaohDlmmVault(vault).redeemInKind(s, to, address(this)) returns (uint256 x, uint256 y) {
+            return (x, y);
+        } catch {}
+    }
+
+    function run(uint256 flashAmt, uint256 donate_, uint256 borrow_, uint256 postBps_) external {
         donate = donate_;
         borrowAmt = borrow_;
+        postBps = postBps_;
         if (flashAmt == 0) {
             _body(0);
         } else {
@@ -100,7 +115,7 @@ contract FlashDonator is IERC3156FlashBorrower {
 
     function _body(uint256) private {
         if (donate != 0) usdc.transfer(vault, donate); // DONATION: a plain ERC-20 transfer to the vault address
-        uint256 s = vaultShares.balanceOf(address(this));
+        uint256 s = vaultShares.balanceOf(address(this)) * postBps / 10_000;
         if (s != 0) {
             vaultShares.approve(address(lender), s);
             lender.supplyAndBorrow(s, borrowAmt);
@@ -127,7 +142,7 @@ contract ShareManipTest is ManipBase {
         flash.depositLiquidity(address(usdc), 100e6);
         vm.stopPrank();
         // lender: pUSDC cash 274, cap 200 (strict <), floor 50, CF 50 %
-        lender = new LenderHarness(IERC20(address(usdc)), sh, shareOracle, address(pShare), CF_BPS, BORROW_CAP, CASH_FLOOR);
+        lender = new LenderHarness(IERC20(address(usdc)), sh, shareOracle, address(pShare), CF_BPS, BORROW_CAP, CASH_FLOOR, feedUsdc);
         usdc.mint(address(lender), POOL_CASH);
         atk = new FlashDonator(flash, IERC20(address(usdc)), proxyAddr, lender);
     }
@@ -145,13 +160,18 @@ contract ShareManipTest is ManipBase {
         uint256 ta;
     }
 
-    /// D = honest deposit made by the attacker first (0 = no shares, deposits closed); d = donation; flashAmt = part of d funded by the flash vault (0 when it could not be repaid)
+    /// D = honest deposit made by the attacker first (0 = no shares, deposits closed); d = donation; flashAmt = part of d funded by the flash vault (0 when it could not be repaid);
+    /// cBps = share of his shares he POSTS as collateral (the rest he keeps and exits in kind at the end: P = (D + f d)(1 - c(1 - CF)) - D - d)
     function _donationAttack(uint256 D, uint256 d, uint256 flashAmt) internal returns (Out memory o) {
+        return _donationAttackC(D, d, flashAmt, 10_000);
+    }
+
+    function _donationAttackC(uint256 D, uint256 d, uint256 flashAmt, uint256 cBps) internal returns (Out memory o) {
         if (D != 0) {
             usdc.mint(address(atk), D);
             atk.depositOwn(D);
         }
-        uint256 shares = sh.balanceOf(address(atk));
+        uint256 shares = sh.balanceOf(address(atk)) * cBps / 10_000;
         // the borrow the attacker can take AFTER the donation (the donation happens first inside the callback): same arithmetic as the lender, on a snapshot
         uint256 snap = vm.snapshotState();
         usdc.mint(proxyAddr, d);
@@ -164,14 +184,23 @@ contract ShareManipTest is ManipBase {
         uint256 own = d - flashAmt;
         usdc.mint(address(atk), own);
         o.borrowed = b;
-        atk.run(flashAmt, d, b);
+        atk.run(flashAmt, d, b, cBps);
         o.ta = _ta();
         uint256 lc = sh.balanceOf(address(lender));
         o.shareValueOracle = lender.value18(lc) / 1e12;
         (uint256 cu, uint256 ct) = lc == 0 ? (0, 0) : _inKindProbe(address(lender), lc);
         o.shareValueExit = _atFeeds(cu, ct);
-        // total outlay from the attacker's pocket = D (deposit) + own (part of the donation); he walks away from the shares
-        o.attackerPnl = int256(usdc.balanceOf(address(atk))) - int256(D) - int256(own);
+        // the attacker exits the shares he kept in kind (valued at the feeds)
+        uint256 keptValue;
+        {
+            uint256 kept = sh.balanceOf(address(atk));
+            if (kept != 0) {
+                (uint256 ku, uint256 kt) = _inKindProbe(address(atk), kept);
+                keptValue = _atFeeds(ku, kt);
+            }
+        }
+        // total outlay from the attacker's pocket = D (deposit) + own (part of the donation); the posted shares are abandoned to the lender
+        o.attackerPnl = int256(usdc.balanceOf(address(atk)) + keptValue) - int256(D) - int256(own);
         o.lenderLoss = lender.debt(address(atk)) > o.shareValueExit ? lender.debt(address(atk)) - o.shareValueExit : 0;
     }
 
@@ -242,12 +271,13 @@ contract ShareManipTest is ManipBase {
     }
 
     /// no donation size and no deposit size is profitable (formula: P = B - D - d, B <= CF * f * (TA + D + d), f = D/(TA + D) < 1, CF = 1/2)
-    function testFuzz_A4_donation_never_profits(uint256 D, uint256 d) public {
+    function testFuzz_A4_donation_never_profits(uint256 D, uint256 d, uint256 cBps) public {
         D = bound(D, 0, v.maxDeposit(address(atk)));
         d = bound(d, 0, 1_000_000_000e6);
+        cBps = bound(cBps, 0, 10_000); // partial collateral: the shares he keeps are exited in kind
         uint256 fl = d > 100e6 ? 100e6 : d;
-        Out memory o = _donationAttack(D, d, fl);
-        assertLe(o.attackerPnl, 0, "never profitable");
+        Out memory o = _donationAttackC(D, d, fl, cBps);
+        assertLe(o.attackerPnl, 6, "never profitable (6 wei of floor rounding in the exit valuation)");
         assertLe(o.lenderLoss, 2, "never a lender loss beyond 2 wei of dust (sub-share collateral cannot be exited in kind)");
         assertLe(o.shareValueOracle, o.shareValueExit + 6, "NAV is realisable in kind (+6 wei of floor rounding)");
     }
@@ -338,7 +368,7 @@ contract ShareManipTest is ManipBase {
         uint256 taAfter = _ta();
         console2.log("TA before donation-recentre / after push / after rebalance:", ta0, taPushed, taAfter);
         // the donated 5 USDt is now in the vault's bins or was swept by the market swaps; either way it is value, never a loss for holders
-        assertGe(taAfter + 2e5, ta0, "no NAV loss beyond the bounded re-centre cost");
+        assertGe(taAfter, ta0 + 4_900_000, "the donated 5 USDt was minted to the vault: TA rose by about 5 USDC");
     }
 
     // =============================================================================================================================
@@ -388,6 +418,56 @@ contract ShareManipTest is ManipBase {
         console2.log("wash 20 round trips of 5,000: attacker loss / vault NAV delta (wei):", loss);
         console2.logInt(dNav);
         assertLe(dNav, int256(loss), "fees paid by the attacker exceed what the vault earns from them");
+    }
+
+    /// the live pool sits about 10 bp from the oracle ratio (USDt discount): model it as the feed 10 bp off the pool in both directions and swap through the vault's bins
+    function test_C3_oracle_offset_10bp_both_signs() public {
+        int256[2] memory offs = [int256(99_900_000), int256(100_100_000)]; // USDT/USD feed 0.9990 and 1.0010 against a pool at par
+        uint256[3] memory sizes = [uint256(1_000e6), 60_000e6, 400_000e6];
+        int256 worst;
+        for (uint256 o = 0; o < 2; ++o) {
+            for (uint256 dir; dir < 2; ++dir) {
+                for (uint256 i; i < sizes.length; ++i) {
+                    uint256 snap = vm.snapshotState();
+                    feedUsdt.setAnswer(offs[o]);
+                    uint256 ta0 = _ta();
+                    _swapAs(address(0xA77AC), dir == 0, sizes[i]);
+                    int256 dNav = int256(_ta()) - int256(ta0);
+                    int256 bpx100 = dNav * 1_000_000 / int256(ta0); // bp x 100
+                    console2.log(o == 0 ? "feed 0.9990" : "feed 1.0010", dir == 0 ? "SELL USDC" : "SELL USDt", sizes[i]);
+                    console2.logInt(dNav);
+                    console2.logInt(bpx100);
+                    if (bpx100 > worst) worst = bpx100;
+                    // bound: offset (10 bp) x the share of NAV converted (<= 1) + band width (2 bp) + fee
+                    assertLt(dNav * 10_000 / int256(ta0), 13, "NAV move < 13 bp with a 10 bp oracle/pool offset");
+                    vm.revertToState(snap);
+                }
+            }
+        }
+        console2.log("worst NAV rise (bp x 100):");
+        console2.logInt(worst);
+    }
+
+    /// the USDC/USD leg: the wrapper's x USDC/USD cancels against pUSDC's own price (the guarded oracle reads the same feed), so USDC borrow power = CF x convertToAssets x ...;
+    /// a LOW USDC/USD answer raises convertToAssets (the USDt leg is valued pp/pa) while the USD share price FALLS
+    function test_F7_low_usdc_feed_raises_usdc_borrow_power_while_usd_price_falls() public {
+        uint256 shares = 16e6;
+        uint256 p0 = _shareMantissa();
+        uint256 bp0 = _borrowPower(shares);
+        uint256 ca0 = v.convertToAssets(1e6);
+        feedUsdc.setAnswer(50_000_000); // USDC/USD 0.50 (glitch)
+        uint256 p1 = _shareMantissa();
+        uint256 bp1 = _borrowPower(shares);
+        uint256 ca1 = v.convertToAssets(1e6);
+        console2.log("USD price mantissa before / after:", p0, p1);
+        console2.log("convertToAssets(1 share) before / after:", ca0, ca1);
+        console2.log("USDC borrow power of 16 shares before / after:", bp0, bp1);
+        assertLt(p1, p0, "the USD share price falls");
+        assertGt(ca1, ca0, "but assets per share rise (USDt leg valued pp/pa)");
+        assertGt(bp1, bp0, "so USDC borrow power rises: a limiter on the USD price alone would not bind");
+        // the vault guard flags the USDC leg out of band; only entries and re-centres stop
+        (, , uint256 r) = v.guardState();
+        assertTrue(r & 4 != 0, "ASSET_LEG_OUT_OF_BAND");
     }
 
     // =============================================================================================================================
@@ -489,23 +569,22 @@ contract ShareManipTest is ManipBase {
     // =============================================================================================================================
 
     function test_F1_usdt_depeg_overstatement_vs_cf_and_incentive() public {
-        // worst case composition: band out of range on the USDt side = 100 % USDt; or 50 / 50 after a re-centre
-        // overstatement ratio = real / oracle value = 1 - w x delta (USDt weight w, real discount delta; feed lagging at par)
+        // DERIVED (arithmetic on constants, no vault call): overstatement ratio r = realisable / oracle = 1 - w x delta (USDt weight w, real discount delta, feed lagging at par).
+        // two thresholds: (i) while the oracle still overstates, a liquidator keeps the shares and breaks even only if 1.08 x r >= 1 (r >= 0.926, overstatement <= 7.4 %);
+        // (ii) the lender is SOLVENT after the feed catches up while r >= CF x 1.08 = 0.54 (a max-borrowed position: debt = CF x oracle value; seized collateral = 1.08 x debt at the oracle)
         uint256[3] memory w = [uint256(5_000), 8_000, 10_000];
-        uint256[4] memory delta = [uint256(100), 500, 1_000, 4_000];
-        console2.log("USDt weight bp / real USDt discount bp / exit/oracle ratio bp / lender safe? (ratio*108% >= CF)");
+        uint256[5] memory delta = [uint256(100), 500, 1_000, 2_000, 4_000];
+        console2.log("USDt weight bp / real USDt discount bp / r bp / liquidation profitable (r*1.08>=1) / solvent (r >= 0.54)");
         for (uint256 i; i < w.length; ++i) {
             for (uint256 j; j < delta.length; ++j) {
-                uint256 ratio = 10_000 - w[i] * delta[j] / 10_000;
-                // a max-borrowed position has debt = CF x oracle value; after liquidation the seized collateral is worth 1.08 x repaid debt at the ORACLE price,
-                // so it pays the liquidator when real/oracle >= CF x 1.08 ... which is the threshold printed below
-                bool safe = ratio * 10_000 >= CF_BPS * LIQ_INCENTIVE_BPS;
-                console2.log(w[i], delta[j], ratio);
-                console2.log(safe ? "  safe" : "  BAD DEBT");
+                uint256 r = 10_000 - w[i] * delta[j] / 10_000;
+                bool liqOk = r * LIQ_INCENTIVE_BPS >= 10_000 * 10_000;
+                bool solvent = r * 10_000 >= CF_BPS * LIQ_INCENTIVE_BPS;
+                console2.log(w[i], delta[j], r);
+                console2.log(liqOk ? "  liquidation profitable" : (solvent ? "  liquidation UNPROFITABLE but solvent (waits for the feed)" : "  INSOLVENT: bad debt"));
             }
         }
-        // threshold: 1 - w delta = 0.5 x 1.08 = 0.54  ->  w delta <= 46 %
-        assertTrue((10_000 - 10_000 * 4_000 / 10_000) * 10_000 >= CF_BPS * LIQ_INCENTIVE_BPS, "w=100%, delta=40% still clears");
+        assertTrue((10_000 - 10_000 * 4_000 / 10_000) * 10_000 >= CF_BPS * LIQ_INCENTIVE_BPS, "w=100%, delta=40% is still solvent");
     }
 
     function test_F2_stale_feed_makes_the_share_price_zero_which_freezes_the_account() public {

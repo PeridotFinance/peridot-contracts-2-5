@@ -27,10 +27,18 @@ contract MockPTokenShare {
     }
 }
 
-/// @dev the existing guarded oracle stands in as a pure base: the share oracle never calls it for a registered share market
+/// @dev the existing GuardedAvalanchePriceOracle stands in for pUSDC: it reads the SAME Chainlink USDC/USD feed live (no peg clamp, R: contracts/margin/GuardedAvalanchePriceOracle.sol),
+///      so pUSDC is priced 10^(36-6) x answer / 1e8. The share oracle never calls it for the registered share market.
 contract MockBaseOracle is PriceOracle {
-    function getUnderlyingPrice(PToken) external pure override returns (uint256) {
-        return 1e30; // USDC at $1, 6 decimals: 10^(36-6)
+    AggregatorV3Interface public immutable feed;
+
+    constructor(AggregatorV3Interface f) {
+        feed = f;
+    }
+
+    function getUnderlyingPrice(PToken) external view override returns (uint256) {
+        (, int256 a,,,) = feed.latestRoundData();
+        return uint256(a) * 1e22; // 1e8 -> 1e30
     }
 }
 
@@ -108,7 +116,7 @@ abstract contract ManipBase is World {
         v.openBand(a, 1, 0, 0, 0, block.timestamp + 120);
 
         // the share-market oracle wrapper (REAL contract) in front of a base oracle
-        shareOracle = new PharaohVaultShareOracle(SAFE, new MockBaseOracle());
+        shareOracle = new PharaohVaultShareOracle(SAFE, new MockBaseOracle(AggregatorV3Interface(address(feedUsdc))));
         pShare = new MockPTokenShare(proxyAddr);
         vm.prank(SAFE);
         shareOracle.registerVault(IERC4626OZ(proxyAddr), AggregatorV3Interface(address(feedUsdc)), 90_000);
@@ -133,9 +141,16 @@ abstract contract ManipBase is World {
         return shares * _shareMantissa() / 1e18;
     }
 
-    /// max USDC (6 dec) borrowable against `shares` at CF, USDC priced by the base oracle at $1 (the harness mirrors Peridottroller.getHypotheticalAccountLiquidityInternal)
+    /// USD per USDC (1e18) as pUSDC is priced by the base oracle: the live USDC/USD feed answer
+    function _usdcUsd18() internal view returns (uint256) {
+        (, int256 a,,,) = feedUsdc.latestRoundData();
+        return uint256(a) * 1e10;
+    }
+
+    /// max USDC (6 dec) borrowable against `shares` at CF: value in USD (the wrapper) / the USDC price the controller uses for pUSDC. The wrapper's x USDC/USD cancels against pUSDC's own price,
+    /// so this is CF x convertToAssets(shares) x (1 + feed effects on the USDt leg); mirrors Peridottroller.getHypotheticalAccountLiquidityInternal
     function _borrowPower(uint256 shares) internal view returns (uint256) {
-        return _oracleValueUsd18(shares) * CF_BPS / 10_000 / 1e12;
+        return _oracleValueUsd18(shares) * CF_BPS / 10_000 * 1e6 / _usdcUsd18();
     }
 
     /// what the pro-rata in-kind exit of `shares` pays, valued at the feeds; reverts the state (snapshot) so it is a pure probe
