@@ -25,6 +25,7 @@ import { USDC } from "./constants";
 import { classifyMargin, evaluateMarginPositions, marginFindings, marginConfigIface, marginUnrecoverableUsd, readMarginPositions, readPairBonusBps } from "./margin";
 import type { MarginEval } from "./margin";
 import { ctrlIface } from "./chain";
+import { holdsShareCollateral, shareAlertOnlyText, shareMarketIndex } from "./share";
 
 export interface MonitorState {
   index: IndexState;
@@ -48,6 +49,10 @@ export interface AccountReport {
   collUsd: string;
   maxRecoveryUsd: string;
   shortfallUsd: string;
+  /** the account holds the vault-share (bpPHAR-USDC) collateral: the treasury keeper is ALERT-ONLY for it (present only when true) */
+  shareCollateral?: boolean;
+  /** with `shareCollateral`: the controller reports a shortfall for the account (the rule itself cannot, it has no reference price for the share market) */
+  shareShortfall?: boolean;
 }
 export interface CycleReport {
   blockNumber: number;
@@ -150,8 +155,15 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   let expectedTreasuryCall = 0n;
   let unknown = false;
   let divergence = false;
+  const shareIdx = shareMarketIndex(snap, cfg);
+  const holdsShare = (a: string): boolean => holdsShareCollateral(inputs.get(a), shareIdx);
   for (const [a, r] of results) {
     const name = VERDICT_NAMES[r.verdict]!;
+    if (holdsShare(a)) {
+      // vault-share collateral has no independent reference price: the rule cannot clear such an account, the treasury keeper is alert-only for it
+      const inp = inputs.get(a)!;
+      if (inp.debtUnits > 0n) findings.push({ key: `acct:${a}:share-collateral`, severity: inp.shortfall > 0n ? "crit" : "info", message: shareAlertOnlyText(a, inp.debtUnits, inp.shortfall > 0n), audience: "treasury-signers" });
+    }
     if (r.verdict === Verdict.LIQUIDATABLE_RECOVERABLE) findings.push({ key: `acct:${a}:${name}`, severity: "warn", message: `account ${a} is liquidatable and fully recoverable (debt USD ${fmt18(r.debtUsd)}, collateral USD ${fmt18(r.collUsd)}): liquidators act`, audience: "liquidators" });
     else if (r.verdict === Verdict.UNRECOVERABLE_LIQUIDATE_FIRST) {
       const call = r.debtUsd > r.maxRecoveryUsd ? r.debtUsd - r.maxRecoveryUsd : 0n;
@@ -161,7 +173,9 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
       expectedTreasuryCall += r.debtUnits;
       findings.push({ key: `acct:${a}:${name}`, severity: "crit", escalates: true, message: `DEFAULT: account ${a} is exhausted (collateral USD ${fmt18(r.collUsd)}), debt ${r.debtUnits} USDC units is unpaid. T0. Treasury repayment is due (repayBorrowBehalf with the full-repay sentinel, human-signed); the guardian decides on pausing borrowing and minting`, audience: "treasury-signers" });
     } else if (r.verdict === Verdict.PRICE_DIVERGENCE) divergence = true;
-    else if (r.verdict === Verdict.NO_REFERENCE_PRICE || r.verdict === Verdict.STALE_OR_ZERO_PRICE) unknown = true;
+    else if (r.verdict === Verdict.NO_REFERENCE_PRICE && holdsShare(a) && snap.reference.status === "ok") {
+      /* expected, not a failure: the missing reference is the share market's (the finding above says so); no unknown-price page */
+    } else if (r.verdict === Verdict.NO_REFERENCE_PRICE || r.verdict === Verdict.STALE_OR_ZERO_PRICE) unknown = true;
   }
   if (divergence) findings.push({ key: "price-divergence", severity: "crit", message: "oracle and reference price differ by more than the tolerance for a market an indebted account touches: the signature of an oracle failure (or a fast move the 30-minute TWAP has not caught up with). Nothing is paid. Consider pausing borrowing (guardian): a human decision", audience: "guardian" });
   let unknownPriceSince = state.unknownPriceSince;
@@ -187,7 +201,7 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
   for (const [a, r] of results) {
     const name = VERDICT_NAMES[r.verdict]!;
     counts[name] = (counts[name] ?? 0) + 1;
-    accountReports.push({ account: a, verdict: name, verdictCode: r.verdict, debtUnits: r.debtUnits.toString(), debtUsd: r.debtUsd.toString(), collUsd: r.collUsd.toString(), maxRecoveryUsd: r.maxRecoveryUsd.toString(), shortfallUsd: r.shortfallUsd.toString() });
+    accountReports.push({ account: a, verdict: name, verdictCode: r.verdict, debtUnits: r.debtUnits.toString(), debtUsd: r.debtUsd.toString(), collUsd: r.collUsd.toString(), maxRecoveryUsd: r.maxRecoveryUsd.toString(), shortfallUsd: r.shortfallUsd.toString(), ...(holdsShare(a) ? { shareCollateral: true, shareShortfall: inputs.get(a)!.shortfall > 0n } : {}) });
   }
   accountReports.sort((x, y) => (BigInt(y.shortfallUsd) > BigInt(x.shortfallUsd) ? 1 : BigInt(y.shortfallUsd) < BigInt(x.shortfallUsd) ? -1 : 0));
   const next: MonitorState = {

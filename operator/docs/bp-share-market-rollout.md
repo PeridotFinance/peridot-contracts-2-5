@@ -1,0 +1,52 @@
+# bpPHAR-USDC (DLMM vault-share market): operator, executor and treasury keeper rollout
+
+Prepared 18 Nov 2026 offline (no RPC, no docker, nothing signed or deployed). Branch `feat/bp-dlmm-keepers`, built on `fix/alert-sink-nonfatal-operator` (so the non-fatal alert sink is in the same build). All hosts stay on alerts channel `log` (journal JSON lines) until the Telegram bot exists.
+
+## What the new build does
+1. **Oracle allow-list.** `controller.oracle()` must be exactly one of {`deployment.oracle` = the old GuardedAvalanchePriceOracle, `deployment.oracleWrapper` = the wrapper (a config value, nothing hard-coded)}. Any other address still fails closed (the cycle throws, the monitor goes blind and pages). The same build runs before and after the swap. Without `oracleWrapper` in the config the behaviour is the old one (only the guarded oracle), so the wrapper address must be in the config BEFORE the swap. All price reads (`getUnderlyingPrice(pToken)` for every listed market) go to whatever `controller.oracle()` returned at the snapshot block; the keepers use no other oracle function (no `getPrice(asset)`, `marketAsset`, `source()`, `feeds(...)`).
+2. **Share collateral in the liquidator (executor, op1 and op2): SEIZE-AND-KEEP.** For an account in shortfall that holds the share pToken it repays USDC from its own inventory and calls `liquidateBorrow(borrower, repay, pShare)`; it KEEPS the seized pTokens (no redeem, no swap; the pWAVAX path with redeem and conversion is unchanged and still chosen for accounts without share collateral). Bounds per call: close factor, 92.4% of the collateral's oracle value, inventory, per-call cap, rolling 24 h cap, and a ceiling on the oracle value of share pTokens the operator already holds (it never sells them). Before anything is sent: `liquidateCalculateSeizeTokens` is checked against the borrower's balance (the repayment is cut to fit), and the value received (net of the pToken's `protocolSeizeShareMantissa`) must be at least the USDC repaid. Then: approve exactly the repayment, simulate, send, read back (USDC delta, event fields, pToken delta == event seize minus protocol share), reset the allowance, HALT on any mismatch. Seized pTokens are recorded in the round (`collateralPToken`, `keptCollateral`) and are never counted as USDC inventory. The alert text says what was seized and that it was kept.
+3. **Treasury keeper: ALERT-ONLY for share collateral.** It cannot price shares independently, so it never repays an account that holds the share pToken (excluded from the payable set, re-checked at execution, and the monitor raises `acct:<account>:share-collateral`, audience treasury-signers, text starting "... ALERT-ONLY: the treasury keeper cannot price vault shares independently ..."). Even without the config block the rule already returns NO_REFERENCE_PRICE for such accounts (no reference price exists for that market), so nothing could be paid; the block makes it explicit and loud. The monitor does not raise the 15-minute "unknown price" page for that expected condition. Other accounts: unchanged.
+
+## Config (public values only), additions to `config/hosts/<role>.json`
+Do NOT regenerate the host files with `deploy/make-host-configs.py` after adding these (it rebuilds them from the template and drops the additions).
+
+```json
+"deployment": {
+  "controller": "0xbE938cD7C25E0E4d0604Fa3F9f0a8b5b67b3D51A",
+  "pWavax": "0x12f1F4Fc057a76f473B781ce2Fa88E55ef8581B1",
+  "pUsdc": "0x0f7849CD9E54ffb027aacaEec82007cca9470098",
+  "oracle": "0x7BAB5406Cb4929f9b9492e1b2a43b65BF93AaFC0",
+  "oracleWrapper": "<WRAPPER ADDRESS after its deployment>",
+  "deploymentBlock": 99846691
+},
+"shareCollateral": {
+  "pToken": "<bpPHAR-USDC pToken>",
+  "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+  "liquidation": { "enabled": false, "maxRepayPerCallUsdc": 60, "dailyRepayCapUsdc": 100, "minRepayUsdc": 1, "retryCooldownSeconds": 30, "maxHeldValueUsdc": 200 }
+}
+```
+* op1 / op2: both blocks; set `liquidation.enabled` to `true` only at step 6 below. `maxHeldValueUsdc` (200) is the new ceiling on the share pTokens an operator may hold (flow caps alone do not bound a stock that is never sold): a proposal, not a measured value; the user decides it.
+* treasury keeper host: the same two blocks with `"liquidation": { "enabled": false }` (nothing else is needed there).
+* `underlying` is the vault share token (the ERC-4626 vault proxy); the executor turns the share route OFF and alerts crit if the market's `underlying()` differs.
+* The caps are per operator and separate from the margin caps: worst case per operator per 24 h is 100 USDC (margin) plus 100 USDC (share) of repayments. Say if one combined cap is wanted.
+* A config with the share block but a market not yet listed is valid: the route is simply inactive.
+
+## Order of operations
+0. Before touching a host, on that host: `docker tag pilot-operator:local pilot-operator:pre-bp-share` (keeps the running image reachable for a rollback; see Provenance).
+1. Deploy the wrapper (no controller change yet) and note its address. Listing ceremony items (pToken, seed, flags) may follow in whatever order the ceremony says, but the controller's `oracle()` must still be the old oracle until step 4.
+2. Put `oracleWrapper` (and the `shareCollateral` block, liquidation disabled) in `config/hosts/{op1,op2,keeper}.json`.
+3. Stage the NEW image and config on op1, op2 and the treasury keeper host, ONE host at a time, when its journal shows no in-flight transaction (a restart between transactions leaves a pending marker that halts the process): `deploy/stage-host.sh <op1|op2|keeper> <ip>` (builds `pilot-operator:local` on the Droplet from this tree and pushes the config; it starts nothing), then `ssh root@<ip> systemctl restart pilot`. Verify with `contracts/tools/grant-host-status.sh` (unit active, container up, fresh last log line, wallet balance) and read the journal: normal cycles, no `monitor cycle failed`, no `configuration refused`. All three hosts must be on the new build and config before step 4.
+4. The oracle swap ceremony (controller `_setPriceOracle(wrapper)` by the Ledger admin). Right after it, re-run the status script and confirm the next cycles on all three hosts are normal (no "neither the configured guarded oracle nor the configured oracle wrapper" in the journal). If any host shows that text, roll the oracle back (below) first, then fix the config.
+5. CF raise on the share market only after step 4 is verified on all three hosts.
+6. Before (or with) the CF raise: set `liquidation.enabled` to `true` on op1 and op2, stage the config only (`SKIP_BUILD=1 deploy/stage-host.sh <role> <ip>`), restart, check the journal.
+
+## Rollback
+* Oracle: one transaction setting the old oracle back. The new build accepts it (allow-list), so no host action is needed. A host still on the OLD build halts at the swap and recovers by itself once the old oracle is back (the cycle error is not sticky).
+* Share route: set `liquidation.enabled` to `false` and restart; the seized pTokens already held stay in the operator wallet (kept collateral is not recycled by any code path; a human decides).
+* Image: restore the old tag (`docker tag pilot-operator:pre-bp-share pilot-operator:local`, then `systemctl restart pilot`). **Not proven**: that tag swap, and the old image itself, have not been exercised.
+
+## Provenance and what was not done
+* The images on the hosts were built ON each Droplet (`bootstrap-droplet.sh` tars the local `operator/` tree and runs `docker build -t pilot-operator:local`); which commit or working tree each one came from is not recorded anywhere I could read, and the rebuild overwrites the tag. The new build includes the alert-sink patch because this branch is based on it. Whether the running hosts already carry that patch is unknown.
+* No image was built: docker is not available in this environment, and a build also needs the network (npm registry, node:22-slim). Not built, not run.
+* Verified offline: `npm test` (unit tests incl. an in-memory chain that runs the executor, monitor and keeper end to end). NOT run: `npm run test:fork` (needs anvil and an archive RPC), anything on mainnet, the real wrapper contract, the real `liquidateBorrow` against the new pToken (the fork rehearsal of the liquidation belongs to the contracts side).
+* Existing alert keys keep their names. New keys: `executor:share-*`, `acct:<account>:share-collateral`.

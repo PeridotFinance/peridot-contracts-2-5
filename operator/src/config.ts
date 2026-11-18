@@ -21,7 +21,12 @@ export interface OperatorEntry {
 export interface MonitorConfig {
   schemaVersion: 1;
   chainId: number;
-  deployment: { controller: string; pWavax: string; pUsdc: string; oracle: string; deploymentBlock: number };
+  /**
+   * `oracle` = the GuardedAvalanchePriceOracle the controller used when the pilot was listed. `oracleWrapper` (optional) = the wrapper that is put in front
+   * of it when the vault-share market is listed (it returns the guarded oracle's price for every existing pToken and adds the new one). The controller's
+   * `oracle()` must equal one of these two addresses (an ALLOW-LIST of exactly them, nothing else): the same build then runs before and after the swap.
+   */
+  deployment: { controller: string; pWavax: string; pUsdc: string; oracle: string; oracleWrapper?: string; deploymentBlock: number };
   pilot: {
     label: string;
     wavaxCollateralFactorBp: number; // 3000 = 30%
@@ -85,6 +90,26 @@ export interface MonitorConfig {
       minRepayUsdc: number;
       retryCooldownSeconds: number; // after a revert (another operator first, or the position recovered)
       insolventCooldownSeconds: number; // between re-checks of a position the break-even floor declines
+    };
+  };
+  /**
+   * The VAULT-SHARE market (bpPHAR-USDC: underlying = the share token of the DLMM USDC/USDt vault, 6 decimals; pToken 8 decimals). Optional.
+   * Present (any host): the monitor flags accounts holding this collateral and the TREASURY KEEPER is ALERT-ONLY for them (it cannot price vault shares
+   * independently, so it never repays such an account). `liquidation.enabled` (operators only): the executor liquidates such accounts as SEIZE-AND-KEEP:
+   * it repays USDC from its own inventory and KEEPS the seized pTokens (no redeem, no swap); the pWAVAX path is untouched.
+   */
+  shareCollateral?: {
+    pToken: string;
+    /** the share token the market is expected to wrap (market `underlying()` is checked against it; a mismatch disables the share path and alerts) */
+    underlying: string;
+    liquidation: {
+      enabled: boolean;
+      maxRepayPerCallUsdc: number; // on-chain bound of one call: the allowance is exactly the repayment, never above this
+      dailyRepayCapUsdc: number; // rolling 24 h, this operator, share collateral only
+      minRepayUsdc: number;
+      retryCooldownSeconds: number;
+      /** ceiling on the oracle value of the share pTokens this operator HOLDS (it never sells them): no new share liquidation once held value + the new seize would exceed it */
+      maxHeldValueUsdc: number;
     };
   };
   keeper: {
@@ -155,6 +180,15 @@ function num(problems: ConfigProblem[], path: string, v: unknown, lo: number, hi
   if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi) problems.push({ path, problem: `must be a number in [${lo}, ${hi}]` });
 }
 
+/** The oracle addresses the controller may use: the guarded oracle and, when configured, the wrapper. Nothing else is accepted (fail closed). */
+export function oracleAllowList(dep: Pick<MonitorConfig["deployment"], "oracle" | "oracleWrapper">): string[] {
+  return [dep.oracle, ...(dep.oracleWrapper ? [dep.oracleWrapper] : [])].map((a) => a.toLowerCase());
+}
+/** Throws unless `actual` (what `controller.oracle()` returned) is on the allow-list. */
+export function assertOracleAllowed(dep: Pick<MonitorConfig["deployment"], "oracle" | "oracleWrapper">, actual: string): void {
+  if (!oracleAllowList(dep).includes(actual.toLowerCase())) throw new Error(`controller oracle() ${actual} is neither the configured guarded oracle nor the configured oracle wrapper (configuration drift or an unexpected oracle swap): the process fails closed`);
+}
+
 /** Pure validation. Returns every problem (never just the first) so that an operator can fix them in one pass. */
 export function validateConfig(raw: unknown): { problems: ConfigProblem[]; config?: MonitorConfig } {
   const problems: ConfigProblem[] = [];
@@ -166,6 +200,10 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
   const d = c.deployment ?? {};
   for (const k of ["controller", "pWavax", "pUsdc", "oracle"]) addr(problems, `deployment.${k}`, d[k]);
   int(problems, "deployment.deploymentBlock", d.deploymentBlock, 1, 1_000_000_000);
+  if (d.oracleWrapper !== undefined) {
+    addr(problems, "deployment.oracleWrapper", d.oracleWrapper);
+    if (typeof d.oracleWrapper === "string" && typeof d.oracle === "string" && d.oracleWrapper.toLowerCase() === d.oracle.toLowerCase()) problems.push({ path: "deployment.oracleWrapper", problem: "must differ from deployment.oracle (the allow-list is the guarded oracle AND the wrapper)" });
+  }
 
   const p = c.pilot ?? {};
   if (isUnsetString(p.label)) problems.push({ path: "pilot.label", problem: "unset (placeholder)" });
@@ -273,6 +311,30 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
         if (typeof l.maxRepayPerCallUsdc === "number" && typeof l.dailyRepayCapUsdc === "number" && l.maxRepayPerCallUsdc > l.dailyRepayCapUsdc) problems.push({ path: "margin.liquidation.maxRepayPerCallUsdc", problem: "must not exceed dailyRepayCapUsdc" });
         if (typeof l.minRepayUsdc === "number" && typeof l.maxRepayPerCallUsdc === "number" && l.minRepayUsdc > l.maxRepayPerCallUsdc) problems.push({ path: "margin.liquidation.minRepayUsdc", problem: "must not exceed maxRepayPerCallUsdc" });
       }
+    }
+  }
+  if (c.shareCollateral !== undefined) {
+    const x = c.shareCollateral;
+    addr(problems, "shareCollateral.pToken", x?.pToken);
+    addr(problems, "shareCollateral.underlying", x?.underlying);
+    for (const k of ["pToken", "underlying"]) {
+      for (const other of ["pWavax", "pUsdc", "oracle", "oracleWrapper", "controller"]) {
+        if (typeof x?.[k] === "string" && typeof d[other] === "string" && x[k].toLowerCase() === d[other].toLowerCase()) problems.push({ path: `shareCollateral.${k}`, problem: `must differ from deployment.${other}` });
+      }
+    }
+    if (typeof x?.pToken === "string" && x.pToken === x?.underlying) problems.push({ path: "shareCollateral.underlying", problem: "must differ from shareCollateral.pToken" });
+    const l = x?.liquidation;
+    if (typeof l?.enabled !== "boolean") problems.push({ path: "shareCollateral.liquidation.enabled", problem: "must be a boolean" });
+    else if (l.enabled) {
+      if (c.executor?.enabled !== true) problems.push({ path: "shareCollateral.liquidation.enabled", problem: "the share-collateral step runs inside the liquidator executor: executor.enabled must be true" });
+      if (isUnsetString(d.oracleWrapper)) problems.push({ path: "shareCollateral.liquidation.enabled", problem: "the share market is priced only by the oracle wrapper: deployment.oracleWrapper must be set" });
+      int(problems, "shareCollateral.liquidation.maxRepayPerCallUsdc", l.maxRepayPerCallUsdc, 1, 1_000_000);
+      int(problems, "shareCollateral.liquidation.dailyRepayCapUsdc", l.dailyRepayCapUsdc, 1, 1_000_000);
+      int(problems, "shareCollateral.liquidation.minRepayUsdc", l.minRepayUsdc, 1, 1_000_000);
+      int(problems, "shareCollateral.liquidation.retryCooldownSeconds", l.retryCooldownSeconds, 1, 86_400);
+      int(problems, "shareCollateral.liquidation.maxHeldValueUsdc", l.maxHeldValueUsdc, 1, 1_000_000_000);
+      if (typeof l.maxRepayPerCallUsdc === "number" && typeof l.dailyRepayCapUsdc === "number" && l.maxRepayPerCallUsdc > l.dailyRepayCapUsdc) problems.push({ path: "shareCollateral.liquidation.maxRepayPerCallUsdc", problem: "must not exceed dailyRepayCapUsdc" });
+      if (typeof l.minRepayUsdc === "number" && typeof l.maxRepayPerCallUsdc === "number" && l.minRepayUsdc > l.maxRepayPerCallUsdc) problems.push({ path: "shareCollateral.liquidation.minRepayUsdc", problem: "must not exceed maxRepayPerCallUsdc" });
     }
   }
   {

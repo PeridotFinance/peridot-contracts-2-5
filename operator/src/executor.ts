@@ -26,6 +26,7 @@ import { feesWithin, makeSender, TxReverted } from "./txkit";
 import { classifyMargin, evaluateMarginPositions, liquidationErrorCode, LIQ_NOT_FUNDER, LIQ_REPAY_ABOVE_MAX, LIQ_VALUE_FLOOR, marginConfigIface, marginLiquidatorIface, MIN_SEIZE_VALUE_BPS, planMarginRepay, readMarginPositions, readPairBonusBps, repaidInWindow } from "./margin";
 import type { MarginRound } from "./margin";
 import { safeError } from "./mask";
+import { checkNetSeizeValue, chooseCollateralRoute, fitRepayToSeize, holdsShareCollateral, liquidatorSeizeTokens, pTokenValueUsdc, planShareRepay, shareMarketIndex, shareRepaidInWindow } from "./share";
 
 const erc20 = new utils.Interface(ERC20_ABI);
 const router = new utils.Interface(SWAP_ROUTER02_ABI);
@@ -44,6 +45,9 @@ export interface RoundRecord {
   swapBlocked?: string;
   /** set for a funded margin liquidation (`borrower` then names the position's margin account) */
   marginPositionId?: string;
+  /** set for a SEIZE-AND-KEEP liquidation of the vault-share market: the collateral pToken; the seized pTokens were KEPT (no redeem, no swap) and are NOT USDC inventory */
+  collateralPToken?: string;
+  keptCollateral?: boolean;
 }
 export type Stage = "liquidate" | "redeem" | "swap" | "margin";
 export interface ExecutorState {
@@ -234,6 +238,7 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
       .filter((c) => c.i && c.i.liquidityErr === 0n && c.i.shortfall > 0n && c.i.debtUnits > 0n)
       .sort((x, y) => (y.i.shortfall > x.i.shortfall ? 1 : y.i.shortfall < x.i.shortfall ? -1 : 0));
     const inventory = await bal(USDC, operator);
+    const share = await shareRouteState();
     for (const c of cands) {
       if ((st.cooldown[c.a] ?? 0) > nowS()) {
         out.skipped.push(`${c.a}: cooling down`);
@@ -242,6 +247,46 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
       const wm = c.i.markets[wIdx]!;
       const collateralUsdc = oracleValueUsdc((wm.pTokenBalance * wm.exchangeRate) / 10n ** 18n, pW, pU);
       const plan = planRepay({ debt: c.i.debtUnits, closeFactor: snap.closeFactor, collateralUsdc, inventory, minRepay: BigInt(cfg.executor.minRepayUsdc) * 1_000_000n });
+      // vault-share collateral (seize-and-keep): only for an account that holds the share pToken, and only while the route is active; every other account takes the path below unchanged
+      if (share && holdsShareCollateral(c.i, share.idx)) {
+        const sm = c.i.markets[share.idx]!;
+        const sp = planShareRepay({
+          debt: c.i.debtUnits,
+          closeFactor: snap.closeFactor,
+          liquidationIncentive: snap.liquidationIncentive,
+          collateralUsdc: pTokenValueUsdc(sm.pTokenBalance, sm.exchangeRate, share.price, pU),
+          inventory,
+          dailyCap: BigInt(share.lq.dailyRepayCapUsdc) * 1_000_000n,
+          repaidToday: shareRepaidInWindow(st.rounds, share.pToken, nowS()),
+          perCallCap: BigInt(share.lq.maxRepayPerCallUsdc) * 1_000_000n,
+          minRepay: BigInt(share.lq.minRepayUsdc) * 1_000_000n,
+          heldValueUsdc: share.heldValueUsdc,
+          maxHeldValueUsdc: BigInt(share.lq.maxHeldValueUsdc) * 1_000_000n,
+        });
+        const route = chooseCollateralRoute({ debt: c.i.debtUnits, closeFactor: snap.closeFactor, wavaxCollateralUsdc: collateralUsdc, wavaxRepay: plan.repay, shareRepay: sp.repay, shareActive: true });
+        if (route === "share") {
+          if (sp.bound === "inventory") {
+            out.unfunded = true;
+            await alerts.raise({ key: `executor:unfunded:${opName}`, severity: "warn", message: `operator ${opName}: USDC inventory ${inventory} limits the share-collateral repayment for ${c.a} to ${sp.repay}. Top the inventory up`, audience: "liquidators" }, nowS());
+          }
+          await alerts.clear(`executor:share-bounded:${opName}`, nowS());
+          const r = await shareRound(c.a, sp.repay, sm.pTokenBalance, sm.exchangeRate);
+          if (r === "halt") return { ...out, state: st, halted: true };
+          if (r === "skipped") continue;
+          out.round = r;
+          st = { ...st, rounds: [...st.rounds, r] };
+          deps.persist(st);
+          break; // one liquidation round per step
+        }
+        if (route === "none") {
+          out.skipped.push(`${c.a}: share collateral: ${sp.reason ?? "nothing to do"}`);
+          if (sp.repay === 0n && (sp.bound === "daily-cap" || sp.bound === "held-value" || sp.bound === "per-call-cap")) {
+            await alerts.raise({ key: `executor:share-bounded:${opName}`, severity: sp.bound === "daily-cap" || sp.bound === "held-value" ? "crit" : "warn", message: `operator ${opName} cannot liquidate ${c.a} through the vault-share collateral: ${sp.reason}. ${sp.bound === "daily-cap" ? "The daily share-repayment cap is used up; the other operator may act or raise it deliberately (config)" : sp.bound === "held-value" ? "The operator already holds shares up to its ceiling and never sells them; a human decides (raise the ceiling, or move the shares)" : ""}`, audience: "liquidators" }, nowS());
+          }
+          if (plan.repay === 0n) continue;
+        }
+        // route "wavax" (or "none" with a WAVAX plan): fall through to the unchanged path
+      }
       if (plan.unfunded) {
         out.unfunded = true;
         await alerts.raise({ key: `executor:unfunded:${opName}`, severity: "warn", message: `operator ${opName}: USDC inventory ${inventory} is below the repayment wanted for ${c.a}${plan.repay > 0n ? ` (partial liquidation of ${plan.repay})` : "; this account stays in shortfall"}. Top the inventory up`, audience: "liquidators" }, nowS());
@@ -439,6 +484,143 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
       return round;
     }
     return undefined;
+  }
+
+  // ---------------------------------------------------------------- vault-share collateral: SEIZE-AND-KEEP
+  // The share route exists only when configured and enabled, the market is listed with the expected underlying and the oracle (the wrapper) prices it. Anything
+  // else makes it inactive (never an error: the build runs before the listing, and an unpriced share market must not stop the pWAVAX path).
+  async function shareRouteState(): Promise<{ idx: number; pToken: string; price: bigint; lq: NonNullable<MonitorConfig["shareCollateral"]>["liquidation"]; heldValueUsdc: bigint } | undefined> {
+    const sc = cfg.shareCollateral;
+    if (!sc?.liquidation.enabled) return undefined;
+    const idx = shareMarketIndex(snap, cfg);
+    if (idx < 0) return undefined; // not listed yet
+    if (snap.markets[idx]!.underlying.toLowerCase() !== sc.underlying.toLowerCase()) {
+      await alerts.raise({ key: `executor:share-misconfigured:${opName}`, severity: "crit", message: `operator ${opName}: the share market ${sc.pToken} has underlying ${snap.markets[idx]!.underlying}, not the configured ${sc.underlying}: the share-collateral route is OFF (configuration drift)`, audience: "monitor-operator" }, nowS());
+      return undefined;
+    }
+    await alerts.clear(`executor:share-misconfigured:${opName}`, nowS());
+    const price = snap.oraclePrices[idx]!;
+    if (price === 0n) {
+      await alerts.raise({ key: `executor:share-price:${opName}`, severity: "warn", message: `operator ${opName}: the oracle returns no price for the share market ${sc.pToken} (stale or unreadable vault valuation): the share-collateral route is OFF until it does`, audience: "monitor-operator" }, nowS());
+      return undefined;
+    }
+    await alerts.clear(`executor:share-price:${opName}`, nowS());
+    const held = await bal(sc.pToken, operator);
+    return { idx, pToken: sc.pToken, price, lq: sc.liquidation, heldValueUsdc: pTokenValueUsdc(held, snap.markets[idx]!.exchangeRate, price, pU) };
+  }
+
+  /**
+   * One SEIZE-AND-KEEP round: repay USDC from the operator's own inventory, seize the share pTokens, KEEP them (no redeem, no swap). Simulate, send, read back,
+   * halt on any mismatch. The seized pTokens are recorded in the round and are NOT counted as USDC inventory.
+   */
+  async function shareRound(borrower: string, wantRepay: bigint, borrowerPTokens: bigint, exchangeRate: bigint): Promise<RoundRecord | "skipped" | "halt"> {
+    const sc = cfg.shareCollateral!;
+    const lq = sc.liquidation;
+    const sIdx = shareMarketIndex(snap, cfg);
+    const priceShare = snap.oraclePrices[sIdx]!;
+    const minRepay = BigInt(lq.minRepayUsdc) * 1_000_000n;
+    const cool = (): void => {
+      st = { ...st, cooldown: { ...st.cooldown, [borrower]: nowS() + lq.retryCooldownSeconds } };
+      deps.persist(st);
+    };
+    // 1. the seize amount the controller will compute, against the borrower's balance (the seize reverts above it); at most two refits
+    const calc = async (r: bigint): Promise<{ err: bigint; seize: bigint }> => {
+      const res = ctrlIface.decodeFunctionResult("liquidateCalculateSeizeTokens", await provider.call({ to: dep.controller, data: ctrlIface.encodeFunctionData("liquidateCalculateSeizeTokens", [dep.pUsdc, sc.pToken, r.toString()]) }));
+      return { err: BigInt(res[0].toString()), seize: BigInt(res[1].toString()) };
+    };
+    let repay = wantRepay;
+    let seize = 0n;
+    for (let i = 0; i < 3; i++) {
+      const c = await calc(repay);
+      if (c.err !== 0n) {
+        out.skipped.push(`${borrower}: share collateral: liquidateCalculateSeizeTokens returned error ${c.err}`);
+        cool();
+        return "skipped";
+      }
+      seize = c.seize;
+      if (seize <= borrowerPTokens) break;
+      repay = fitRepayToSeize({ repay, seizeTokens: seize, balance: borrowerPTokens, minRepay });
+      if (repay === 0n) {
+        out.skipped.push(`${borrower}: share collateral: the seize ${seize} exceeds the borrower's ${borrowerPTokens} pTokens and the fitted repayment is below the minimum`);
+        cool();
+        return "skipped";
+      }
+    }
+    if (seize > borrowerPTokens || seize === 0n) {
+      out.skipped.push(`${borrower}: share collateral: seize ${seize} against the borrower's ${borrowerPTokens} pTokens cannot be satisfied`);
+      cool();
+      return "skipped";
+    }
+    // 2. break-even floor for a collateral that will not be sold (value received, net of the protocol seize share, >= USDC repaid)
+    const protocolShare = BigInt(pIface.decodeFunctionResult("protocolSeizeShareMantissa", await provider.call({ to: sc.pToken, data: pIface.encodeFunctionData("protocolSeizeShareMantissa") }))[0].toString());
+    const net = checkNetSeizeValue({ repay, seizeTokens: seize, protocolSeizeShareMantissa: protocolShare, exchangeRate, priceShare, priceUsdc: pU });
+    if (!net.ok) {
+      out.skipped.push(`${borrower}: share collateral: the pTokens received are worth ${net.valueUsdc} USDC units at the oracle, below the ${repay} repaid: declined (break-even floor)`);
+      await alerts.raise({ key: `executor:share-declined:${opName}`, severity: "warn", message: `operator ${opName} DECLINES ${borrower}: the share pTokens it would receive (${net.liquidatorTokens}) are worth ${net.valueUsdc} USDC units at the oracle, below the ${repay} USDC units it would repay (break-even floor for a collateral it does not sell)`, audience: "liquidators" }, nowS());
+      cool();
+      return "skipped";
+    }
+    await alerts.clear(`executor:share-declined:${opName}`, nowS());
+    // 3. approve exactly the repayment, simulate, send, read back
+    const liqData = pIface.encodeFunctionData("liquidateBorrow", [borrower, repay.toString(), sc.pToken]);
+    const pBefore = await bal(sc.pToken, operator);
+    const usdcBefore = await bal(USDC, operator);
+    setPending("liquidate", borrower);
+    tr(`share: approve ${repay} USDC`);
+    await approve(USDC, dep.pUsdc, repay);
+    let gasLimit: BigNumber;
+    try {
+      const code = pIface.decodeFunctionResult("liquidateBorrow", await provider.call({ from: operator, to: dep.pUsdc, data: liqData }))[0] as BigNumber;
+      if (!code.eq(0)) throw new Error(`simulation returned error code ${code.toString()}`);
+      gasLimit = (await provider.estimateGas({ from: operator, to: dep.pUsdc, data: liqData })).mul(13).div(10);
+    } catch (e) {
+      await approve(USDC, dep.pUsdc, 0n);
+      setPending(null);
+      cool();
+      out.skipped.push(`${borrower}: share collateral: liquidation simulation failed (${safeError(e)}); allowance reset`);
+      return "skipped";
+    }
+    let tx;
+    try {
+      tr("share: send liquidation");
+      tx = await send(dep.pUsdc, liqData, gasLimit);
+    } catch (e) {
+      if (e instanceof TxReverted) {
+        await approve(USDC, dep.pUsdc, 0n);
+        setPending(null);
+        cool();
+        out.skipped.push(`${borrower}: share collateral: liquidation transaction reverted after a passing simulation (${e.hash}); allowance reset`);
+        return "skipped";
+      }
+      throw e;
+    }
+    const receipt = await provider.getTransactionReceipt(tx.hash);
+    const usdcAfter = await bal(USDC, operator, receipt.blockNumber);
+    const pAfter = await bal(sc.pToken, operator, receipt.blockNumber);
+    const ev = receipt.logs.filter((l) => l.address.toLowerCase() === dep.pUsdc.toLowerCase()).map((l) => { try { return pIface.parseLog(l); } catch { return undefined; } }).find((p) => p?.name === "LiquidateBorrow");
+    const problems: string[] = [];
+    if (usdcBefore - usdcAfter !== repay) problems.push(`USDC delta ${usdcBefore - usdcAfter} != repay ${repay}`);
+    if (pAfter <= pBefore) problems.push("no share pTokens received");
+    if (!ev) problems.push("no LiquidateBorrow event");
+    else {
+      if ((ev.args.borrower as string).toLowerCase() !== borrower.toLowerCase() || (ev.args.liquidator as string).toLowerCase() !== operator.toLowerCase()) problems.push("LiquidateBorrow names a different borrower or liquidator");
+      if ((ev.args.pTokenCollateral as string).toLowerCase() !== sc.pToken.toLowerCase()) problems.push("LiquidateBorrow names a different collateral market");
+      if (BigInt(ev.args.repayAmount.toString()) !== repay) problems.push(`event repay ${ev.args.repayAmount.toString()} != ${repay}`);
+      const expected = liquidatorSeizeTokens(BigInt(ev.args.seizeTokens.toString()), protocolShare);
+      if (pAfter - pBefore !== expected) problems.push(`pToken delta ${pAfter - pBefore} != the event's seized tokens net of the protocol share (${expected})`);
+    }
+    if ((await allowance(USDC, dep.pUsdc)) > 0n) await approve(USDC, dep.pUsdc, 0n);
+    const got = pAfter - pBefore;
+    const round: RoundRecord = { ts: nowS(), borrower, repay: repay.toString(), seizedPTokens: got.toString(), liquidateTx: tx.hash, collateralPToken: sc.pToken, keptCollateral: true };
+    const heldNow = pTokenValueUsdc(pAfter, exchangeRate, priceShare, pU);
+    await alerts.notify({ kind: "action", key: `executor:share-liquidation:${opName}`, severity: "warn", audience: "liquidators", text: `operator ${opName} LIQUIDATED ${borrower} (SEIZE-AND-KEEP, vault-share collateral): repaid ${repay} USDC units, SEIZED ${got} bpPHAR-USDC pTokens (${sc.pToken}, about ${net.valueUsdc} USDC units at the oracle) and KEPT them: no redeem, no swap. The operator now holds ${pAfter} of these pTokens (about ${heldNow} USDC units; not counted as USDC inventory) (${tx.hash}, block ${receipt.blockNumber})${problems.length ? `. READ-BACK PROBLEMS: ${problems.join("; ")}` : ""}` });
+    if (problems.length) {
+      st = { ...st, rounds: [...st.rounds, round] };
+      await halt(`share-collateral liquidation ${tx.hash} mined but read-back failed: ${problems.join("; ")}`);
+      return "halt";
+    }
+    setPending(null); // nothing to convert: the seized pTokens stay in the wallet
+    return round;
   }
 
   // ---------------------------------------------------------------- one liquidation round (+ redeem + conversion)

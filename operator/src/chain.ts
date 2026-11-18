@@ -2,6 +2,7 @@
 import { providers, utils } from "ethers";
 import { AVAX_FEED, AVAX_GUARD_SECONDS, UNIV3_POOL_WAVAX_USDC_500, USDC, USDC_FEED, USDC_GUARD_SECONDS, WAVAX } from "./constants";
 import { CONTROLLER_ABI, ERC20_ABI, FEED_ABI, MULTICALL3_ABI, ORACLE_ABI, PTOKEN_ABI } from "./abi";
+import { assertOracleAllowed } from "./config";
 import type { MonitorConfig } from "./config";
 import { big, multicall } from "./multicall";
 import type { Call, CallResult } from "./multicall";
@@ -56,6 +57,8 @@ export interface BlockSnapshot {
   blockTimestamp: number;
   liquidationIncentive: bigint;
   closeFactor: bigint;
+  /** the oracle `controller.oracle()` returned at this block (the guarded oracle or the configured wrapper: checked against the allow-list) */
+  oracleAddress?: string;
   markets: MarketStat[];
   oraclePrices: bigint[];
   usdcOraclePrice: bigint;
@@ -82,7 +85,7 @@ export async function readBlockSnapshot(ctx: Ctx, blockNumber: number): Promise<
     iface.decodeFunctionResult(fn, await provider.call({ to, data: iface.encodeFunctionData(fn, args) }, blockNumber));
   const marketsList = (await callAt(dep.controller, ctrlIface, "getAllMarkets"))[0] as string[];
   const oracleAddr = (await callAt(dep.controller, ctrlIface, "oracle"))[0] as string;
-  if (oracleAddr.toLowerCase() !== dep.oracle.toLowerCase()) throw new Error("controller oracle() differs from the configured oracle (configuration drift or oracle swap)");
+  assertOracleAllowed(dep, oracleAddr); // allow-list: the guarded oracle (before the swap) or the configured wrapper (after it); any other address fails closed
   // step B: one batch. Interest accrues first for every market; the reads that follow see the accrued state.
   const calls: Call[] = [];
   const idx: Record<string, number> = {};
@@ -174,6 +177,7 @@ export async function readBlockSnapshot(ctx: Ctx, blockNumber: number): Promise<
     blockTimestamp: blk.timestamp,
     liquidationIncentive,
     closeFactor,
+    oracleAddress: oracleAddr,
     markets,
     oraclePrices,
     usdcOraclePrice,

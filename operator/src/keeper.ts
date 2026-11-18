@@ -25,6 +25,7 @@ import type { CycleReport } from "./monitor";
 import type { ExternalSigner, TxRequest } from "./signer";
 import { USDC } from "./constants";
 import { safeError } from "./mask";
+import { holdsShareCollateral, shareAlertOnlyText, shareMarketIndex } from "./share";
 
 const MAX_UINT = BigNumber.from(2).pow(256).sub(1);
 const erc20 = new utils.Interface(ERC20_ABI);
@@ -160,7 +161,10 @@ export async function keeperStep(deps: KeeperDeps, state: KeeperState, report: C
     out.skipped.push({ account: "*", reason: `the log scan is behind by ${report.indexBehindBlocks} blocks${report.indexError ? ` (${report.indexError.slice(0, 80)})` : ""}: no payment while the borrower index is incomplete` });
     return out;
   }
-  const defaults = report.accounts.filter((a) => a.verdictCode === Verdict.DEFAULT_EXHAUSTED).sort((x, y) => (BigInt(y.debtUnits) > BigInt(x.debtUnits) ? 1 : -1));
+  // ALERT-ONLY for vault-share collateral: the keeper cannot price shares independently, so an account holding that collateral is NEVER repaid automatically (the monitor's
+  // finding `acct:<a>:share-collateral` carries the alert; here it is excluded from the payable set and named in the skip list)
+  for (const a of report.accounts) if (a.shareCollateral && BigInt(a.debtUnits) > 0n) out.skipped.push({ account: a.account, reason: `ALERT-ONLY (vault-share collateral): ${shareAlertOnlyText(a.account, BigInt(a.debtUnits), !!a.shareShortfall)}` });
+  const defaults = report.accounts.filter((a) => a.verdictCode === Verdict.DEFAULT_EXHAUSTED && !a.shareCollateral).sort((x, y) => (BigInt(y.debtUnits) > BigInt(x.debtUnits) ? 1 : -1));
   let st: KeeperState = { ...state, seen: updateConfirmations(state.seen, defaults.map((d) => d.account), report.blockNumber, report.blockTimestamp) };
   deps.persist(st);
   for (const d of defaults) {
@@ -225,6 +229,8 @@ async function payOne(deps: KeeperDeps, st: KeeperState, account: string): Promi
   const snap = await readBlockSnapshot(ctx, blk.number);
   if (snap.reference.status !== "ok") return { kind: "skip", reason: `no healthy reference price at execution (${snap.reference.reason})` };
   const inputs = await readAccountInputs(ctx, snap, [account.toLowerCase()]);
+  // re-check at execution, independent of the report's flag: an account holding the vault-share collateral is never paid by the keeper (alert-only)
+  if (holdsShareCollateral(inputs.get(account.toLowerCase()), shareMarketIndex(snap, cfg))) return { kind: "skip", reason: `ALERT-ONLY (vault-share collateral): ${shareAlertOnlyText(account, inputs.get(account.toLowerCase())!.debtUnits, true)}` };
   const fresh = evaluateRule(inputs.get(account.toLowerCase())!, { liquidationIncentive: snap.liquidationIncentive, dustUsd: BigInt(cfg.monitor.dustUsd1e18), toleranceBp: BigInt(cfg.reference.toleranceBp) });
   if (fresh.verdict !== Verdict.DEFAULT_EXHAUSTED) return { kind: "skip", reason: `re-verification at block ${blk.number} reads verdict ${fresh.verdict} instead of DEFAULT_EXHAUSTED (rule unchanged: no payment)` };
   const debt = fresh.debtUnits;

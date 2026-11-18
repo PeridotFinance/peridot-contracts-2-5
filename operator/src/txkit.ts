@@ -29,13 +29,16 @@ export function makeSender(signer: ExternalSigner, fees: Fees): (to: string, dat
     const tx: TxRequest = { to, data, gasLimit, ...fees };
     const sent = await signer.sendTransaction(tx);
     let mined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       // a stalled wait must not hang the process between transactions: the caller treats the timeout as unexpected, keeps the pending marker and halts
-      mined = await Promise.race([sent.wait(), new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`transaction ${sent.hash} was not mined within ${TX_WAIT_TIMEOUT_MS / 1000} s`)), TX_WAIT_TIMEOUT_MS))]);
+      mined = await Promise.race([sent.wait(), new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error(`transaction ${sent.hash} was not mined within ${TX_WAIT_TIMEOUT_MS / 1000} s`)), TX_WAIT_TIMEOUT_MS)))]);
     } catch (e) {
       // ethers v5 rejects wait() with CALL_EXCEPTION when the transaction was mined with status 0
       if ((e as { code?: string }).code === "CALL_EXCEPTION") throw new TxReverted(sent.hash);
       throw e;
+    } finally {
+      if (timer) clearTimeout(timer); // the wait settled: the stall timer must not keep the process (or a test run) alive
     }
     if (mined.status !== 1) throw new TxReverted(sent.hash);
     return { hash: sent.hash, blockNumber: mined.blockNumber, gasUsed: mined.gasUsed };

@@ -59,7 +59,7 @@ export function oracleFindings(snap: BlockSnapshot, cfg: MonitorConfig): Finding
   one("avax", m.avaxFeedWarnRatio, m.avaxFeedCritRatio);
   one("usdc", m.usdcFeedWarnRatio, m.usdcFeedCritRatio);
   snap.markets.forEach((mk, i) => {
-    if (snap.oraclePrices[i] === 0n) f.push({ key: `oracle-zero:${mk.pToken.toLowerCase()}`, severity: "crit", message: `guarded oracle returns 0 for ${mk.pToken} (stale, non-positive or unreadable): liquidations and borrows are blocked, the default rule is silent`, audience: "monitor-operator" });
+    if (snap.oraclePrices[i] === 0n) f.push({ key: `oracle-zero:${mk.pToken.toLowerCase()}`, severity: "crit", message: `the oracle (guarded oracle or wrapper) returns 0 for ${mk.pToken} (stale, non-positive or unreadable price; for the vault-share market, an unreadable vault valuation): liquidations and borrows are blocked, the default rule is silent`, audience: "monitor-operator" });
   });
   if (snap.reference.status === "none") f.push({ key: "reference:none", severity: "warn", message: `no reference price (fail closed): ${snap.reference.reason}`, audience: "monitor-operator" });
   return f;
