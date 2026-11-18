@@ -7,12 +7,7 @@ import {IMarginPriceOracle} from "./margin/interfaces/IMarginPriceOracle.sol";
 
 interface IShareMarket {
     function underlying() external view returns (address);
-    function peridottroller() external view returns (address);
     function isPToken() external view returns (bool);
-}
-
-interface IControllerOracle {
-    function oracle() external view returns (address);
 }
 
 /**
@@ -75,10 +70,9 @@ contract PharaohDlmmShareOracle is PriceOracle, IMarginPriceOracle {
 
         address vault_ = pToken.underlying();
         if (vault_.code.length == 0) revert PharaohDlmmOracle__InvalidConfiguration();
-        // the base oracle must be the one the market's controller uses right now (deploy-time pin against a wrong address)
-        if (IControllerOracle(pToken.peridottroller()).oracle() != address(baseOracle_)) {
-            revert PharaohDlmmOracle__InvalidConfiguration();
-        }
+        // NO check against the controller's current oracle: after the swap the controller points at THIS wrapper, and a fixed or rate-limited
+        // replacement must be deployable without first rolling back (the deploy script's check() pins controller.oracle() == the base oracle
+        // before the first wrapper is created)
 
         address asset_ = _readAddress(vault_, abi.encodeWithSignature("asset()"));
         uint8 shareDecimals_ = _readDecimals(vault_);

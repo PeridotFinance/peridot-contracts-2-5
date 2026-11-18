@@ -21,7 +21,7 @@
 #                      to print only that stage; no argument prints all, plus the rollback.
 #   members            read-only, best effort: accounts that entered the new market (MarketEntered logs from <from-block>); needed before a rollback
 #
-#   ENDPOINT. ONLY through the ETH_RPC_URL environment variable (cast and forge read it natively). It is never an argument, is never printed, and
+#   ENDPOINT. ONLY through the ETH_RPC_URL environment variable (cast reads it natively; forge gets it through a generated config alias, see need_rpc). It is never an argument, is never printed, and
 #   every line this wrapper prints from a network command passes through tools/avalanche-redact-rpc.py. rehearsal: point ETH_RPC_URL at the LOCAL
 #   anvil fork; the accounts are impersonated (--unlocked). live: the real endpoint; the Ledger device signs (--ledger).
 set -uo pipefail
@@ -51,8 +51,20 @@ SKIP=(--skip P_OFTAdapter.sol --skip P_OFTAdapterUpgradeable.sol --skip P_OFTAda
 export FOUNDRY_PROFILE=debt_accounting FOUNDRY_OUT=out_bpdlmm FOUNDRY_CACHE_PATH=cache_bpdlmm
 
 REDACT() { python3 -I tools/avalanche-redact-rpc.py ETH_RPC_URL; }
-need_rpc() { [ -n "${ETH_RPC_URL:-}" ] || { echo "ETH_RPC_URL must be set in the ENVIRONMENT (never as an argument; rehearsal: the local anvil fork)" >&2; exit 1; }; }
-FS() { forge script "$SCRIPT:$CONTRACT" --skip test "${SKIP[@]}" "$@" 2>&1 | REDACT; }
+# `forge script` does NOT read ETH_RPC_URL (without --rpc-url it runs on the empty local chain), `cast` does. So forge gets the endpoint through a generated
+# config ALIAS that expands the environment variable: the URL is never an argument and never a file. The committed foundry.toml is the base (the pin refuses
+# a dirty one), the alias is appended in a temp dir that is removed on exit.
+need_rpc() {
+  [ -n "${ETH_RPC_URL:-}" ] || { echo "ETH_RPC_URL must be set in the ENVIRONMENT (never as an argument; rehearsal: the local anvil fork)" >&2; exit 1; }
+  if [ -z "${BP_CFGDIR:-}" ]; then
+    BP_CFGDIR="$(mktemp -d /tmp/bp-dlmm-ceremony.XXXXXX)"; trap 'rm -rf "$BP_CFGDIR"' EXIT
+    git show HEAD:./foundry.toml > "$BP_CFGDIR/foundry-ceremony.toml" || { echo "cannot read the committed foundry.toml" >&2; exit 1; }
+    if grep -q "^\[rpc_endpoints\]" "$BP_CFGDIR/foundry-ceremony.toml"; then echo "committed foundry.toml already has [rpc_endpoints]; alias injection not supported" >&2; exit 2; fi
+    printf '\n[rpc_endpoints]\nbp_ceremony = "${ETH_RPC_URL}"\n' >> "$BP_CFGDIR/foundry-ceremony.toml"
+    export FOUNDRY_CONFIG="$BP_CFGDIR/foundry-ceremony.toml"
+  fi
+}
+FS() { forge script "$SCRIPT:$CONTRACT" --rpc-url bp_ceremony --skip test "${SKIP[@]}" "$@" 2>&1 | REDACT; }
 
 need_deployer() {
   [ -n "${BP_DEPLOYER:-}" ] || { echo "UNSET: BP_DEPLOYER (the public address of the throwaway deployer)" >&2; exit 1; }
@@ -132,7 +144,9 @@ print("git commit:", pin["commit"]); print("sources sha256:", pin["sourcesSha256
       done; } > "$ADDR_FILE"
     echo "addresses written to $ADDR_FILE: $(grep -c '=0x' "$ADDR_FILE") of 3 found"
     [ "$RC" = 0 ] && [ "$(grep -c '=0x' "$ADDR_FILE")" = 3 ] || exit 1
-    exec "$0" verify-deployed "$MODE" ;;
+    # forge may write the endpoint into its broadcast / cache files: scan them (prints only file NAMES, never content)
+    for d in broadcast cache_bpdlmm; do [ -d "$d" ] && { python3 -I tools/avalanche-redact-rpc.py --scan "$d" ETH_RPC_URL || echo "WARNING: the endpoint appears in $d (do not share that folder)" >&2; }; done
+    "$0" verify-deployed "$MODE"; exit $? ;;
 
   verify-deployed)
     need_rpc; load_new
@@ -224,13 +238,14 @@ sys.exit(0 if ok else 1)
       echo "# then: tools/bp-dlmm-ceremony.sh verify-listing $MODE 1     (wrapper == guarded oracle for every market, share price sane)"
     fi
     if show 2; then
-      stage_hdr "STAGE 2  list, lock borrowing (flash loans are already paused by the delegate at construction)"
-      emit "T2 controller._supportMarket(market)" "0" "$CONTROLLER" "_supportMarket(address)(uint256)" "$MARKET"
-      read_back "markets(market) -> true, 0 (listed, CF 0)" "$CONTROLLER" 'markets(address)(bool,uint256,bool)' "$MARKET"
-      emit "T3 controller._setBorrowPaused(market, true)" "true" "$CONTROLLER" "_setBorrowPaused(address,bool)(bool)" "$MARKET" true
-      read_back "borrowGuardianPaused(market) == true" "$CONTROLLER" 'borrowGuardianPaused(address)(bool)' "$MARKET"
-      emit "T4 controller._setMarketBorrowCaps([market],[1])  (0 would mean UNLIMITED; 1 blocks every borrow)" "(no return value; must not revert)" "$CONTROLLER" "_setMarketBorrowCaps(address[],uint256[])" "[$MARKET]" "[1]"
+      stage_hdr "STAGE 2  borrow cap FIRST (the cap setter has no isListed check; the market is then never listed, priced and borrowable at once), list, borrow pause (flash loans are already paused by the delegate)"
+      emit "T2 controller._setMarketBorrowCaps([market],[1])  (BEFORE listing; 0 would mean UNLIMITED, 1 fails every borrow)" "(no return value; must not revert)" "$CONTROLLER" "_setMarketBorrowCaps(address[],uint256[])" "[$MARKET]" "[1]"
       read_back "borrowCaps(market) == 1" "$CONTROLLER" 'borrowCaps(address)(uint256)' "$MARKET"
+      emit "T3 controller._supportMarket(market)" "0" "$CONTROLLER" "_supportMarket(address)(uint256)" "$MARKET"
+      read_back "markets(market) -> true, 0 (listed, CF 0)" "$CONTROLLER" 'markets(address)(bool,uint256,bool)' "$MARKET"
+      emit "T4 controller._setBorrowPaused(market, true)" "true" "$CONTROLLER" "_setBorrowPaused(address,bool)(bool)" "$MARKET" true
+      read_back "borrowGuardianPaused(market) == true" "$CONTROLLER" 'borrowGuardianPaused(address)(bool)' "$MARKET"
+      read_back "market.flashLoansPaused() == true (set by the delegate at construction)" "$MARKET" 'flashLoansPaused()(bool)'
       echo "# then: tools/bp-dlmm-ceremony.sh verify-listing $MODE 2"
     fi
     if show 3; then
@@ -242,12 +257,12 @@ sys.exit(0 if ok else 1)
       read_back "market.totalSupply() == $SEED_PTOKENS" "$MARKET" 'totalSupply()(uint256)'
       read_back "market.getCash() == $SEED_SHARES" "$MARKET" 'getCash()(uint256)'
       read_back "market.exchangeRateStored() == 200000000000000 (2e14: no donation moved it)" "$MARKET" 'exchangeRateStored()(uint256)'
-      emit "T7 market.transfer(DEAD, $SEED_PTOKENS)  (the WHOLE seed; the Ledger keeps no pToken)" "true" "$MARKET" "transfer(address,uint256)(bool)" "$DEAD" "$SEED_PTOKENS"
+      emit "T7 controller._setMintPaused(market, true)  (right after the seed mint: nobody else supplies; the seed pTokens sit with the Ledger one more transaction)" "true" "$CONTROLLER" "_setMintPaused(address,bool)(bool)" "$MARKET" true
+      read_back "mintGuardianPaused(market) == true" "$CONTROLLER" 'mintGuardianPaused(address)(bool)' "$MARKET"
+      emit "T8 market.transfer(DEAD, $SEED_PTOKENS)  (the WHOLE seed; the Ledger keeps no pToken)" "true" "$MARKET" "transfer(address,uint256)(bool)" "$DEAD" "$SEED_PTOKENS"
       read_back "market.balanceOf(DEAD) == $SEED_PTOKENS" "$MARKET" 'balanceOf(address)(uint256)' "$DEAD"
       read_back "market.balanceOf(Ledger) == 0" "$MARKET" 'balanceOf(address)(uint256)' "$LEDGER"
-      emit "T8 controller._setMintPaused(market, true)  (nobody else supplies until activation)" "true" "$CONTROLLER" "_setMintPaused(address,bool)(bool)" "$MARKET" true
-      read_back "mintGuardianPaused(market) == true" "$CONTROLLER" 'mintGuardianPaused(address)(bool)' "$MARKET"
-      echo "# then: tools/bp-dlmm-ceremony.sh verify-listing $MODE 3"
+      echo "# then: tools/bp-dlmm-ceremony.sh verify-listing $MODE 3     (lower bounds: a donation or a mint between T6 and T7 is logged, not fatal)"
     fi
     if show 4; then
       stage_hdr "STAGE 4  ACTIVATION: ONLY after the fork liquidation test passed and verify-listing 3 is OK. CF stays 0 until here"

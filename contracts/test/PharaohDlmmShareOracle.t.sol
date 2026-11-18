@@ -234,11 +234,12 @@ contract PharaohDlmmShareOracleTest is Test {
 
     // ---------------------------------------------------------------------------------- wrapper: construction pins
 
-    function testConstructorRejectsWrongBaseOrMarket() external {
-        DlmmTestGuardedBase other = new DlmmTestGuardedBase();
-        other.setAssetPrice(address(usdc), 1e18);
-        vm.expectRevert(PharaohDlmmShareOracle.PharaohDlmmOracle__InvalidConfiguration.selector);
-        new PharaohDlmmShareOracle(other, address(market)); // the controller's oracle is `base`, not `other`
+    function testConstructorRejectsBadMarketOrBaseAndAllowsReplacement() external {
+        // a replacement wrapper must stay deployable while the controller already points at the first wrapper
+        controller.setOracle(address(oracle));
+        PharaohDlmmShareOracle replacement = new PharaohDlmmShareOracle(base, address(market));
+        assertEq(replacement.getUnderlyingPrice(PToken(address(market))), oracle.getUnderlyingPrice(PToken(address(market))));
+        controller.setOracle(address(base));
 
         vm.expectRevert(); // not a pToken: the isPToken() probe has no answer
         new PharaohDlmmShareOracle(base, address(vault));

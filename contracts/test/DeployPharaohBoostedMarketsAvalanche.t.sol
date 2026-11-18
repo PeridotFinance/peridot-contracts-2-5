@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {PharaohDlmmShareOracle} from "../contracts/PharaohDlmmShareOracle.sol";
 import {PToken} from "../contracts/PToken.sol";
+import {PriceOracle} from "../contracts/PriceOracle.sol";
 import {PErc20} from "../contracts/PErc20.sol";
 import {DeployPharaohBoostedMarketsAvalanche} from "../script/DeployPharaohBoostedMarketsAvalanche.s.sol";
 import {DlmmTestGuardedBase} from "./PharaohDlmmShareOracle.t.sol";
@@ -26,6 +27,7 @@ contract ScriptTestController {
     mapping(address => bool) public borrowGuardianPaused;
     mapping(address => uint256) public borrowCaps;
     mapping(address => uint256) public borrowCashFloor;
+    address public pauseGuardian = address(0x9A);
 
     constructor(address admin_, address oracle_) {
         admin = admin_;
@@ -193,15 +195,15 @@ contract DeployPharaohBoostedMarketsAvalancheTest is Test {
         vm.stopPrank();
         _stage(1);
 
-        // T2-T4: list, borrow pause, borrow cap 1
+        // T2-T4: borrow cap 1 BEFORE listing (no isListed check on caps), then list, then borrow pause
         vm.startPrank(LEDGER);
-        assertEq(ctl._supportMarket(market), 0);
-        ctl._setBorrowPaused(market, true);
         address[] memory ps = new address[](1);
         ps[0] = market;
         uint256[] memory caps = new uint256[](1);
         caps[0] = 1;
         ctl._setMarketBorrowCaps(ps, caps);
+        assertEq(ctl._supportMarket(market), 0);
+        ctl._setBorrowPaused(market, true);
         vm.stopPrank();
         _stage(2);
 
@@ -214,15 +216,15 @@ contract DeployPharaohBoostedMarketsAvalancheTest is Test {
         assertFalse(outsiderOk, "an outsider minted before the seed");
         vm.stopPrank();
 
-        // T5-T7: seed, T8: dead, T9: mint pause
+        // T5-T6: seed mint, T7: mint pause, T8: the whole seed to the dead address
         vm.startPrank(LEDGER);
         vault.approve(market, 1_000_000);
         assertEq(PToken(market).balanceOf(LEDGER), 0);
         (bool ok,) = market.call(abi.encodeWithSignature("mint(uint256)", uint256(1_000_000)));
         assertTrue(ok);
         assertEq(PToken(market).balanceOf(LEDGER), 5_000_000_000);
-        PToken(market).transfer(DEAD, PToken(market).balanceOf(LEDGER));
         ctl._setMintPaused(market, true);
+        PToken(market).transfer(DEAD, PToken(market).balanceOf(LEDGER));
         vm.stopPrank();
         _stage(3);
 
@@ -233,10 +235,60 @@ contract DeployPharaohBoostedMarketsAvalancheTest is Test {
         vm.stopPrank();
         _stage(4);
 
+        // after activation anybody supplies and the exchange rate / supply / cash move: verify-listing must keep passing at stages 3 and 4
+        vm.prank(LEDGER);
+        vault.transfer(address(0xBAD), 3e6);
+        vm.startPrank(address(0xBAD));
+        vault.approve(market, type(uint256).max);
+        (bool supplied,) = market.call(abi.encodeWithSignature("mint(uint256)", uint256(2e6)));
+        assertTrue(supplied);
+        vault.transfer(market, 1); // a 1-wei donation
+        vm.stopPrank();
+        _stage(4);
+
         // rollback: one transaction, the guarded oracle again; the identity holds either way
         vm.prank(LEDGER);
         ctl._setPriceOracle(GUARDED);
         assertEq(ctl.oracle(), GUARDED);
+    }
+
+    function testStage3SurvivesADonationAndAMintBeforeThePause() external {
+        (, address market, address oracle) = _deploy();
+        vm.startPrank(LEDGER);
+        ctl._setPriceOracle(oracle);
+        address[] memory ps = new address[](1);
+        ps[0] = market;
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = 1;
+        ctl._setMarketBorrowCaps(ps, caps);
+        ctl._supportMarket(market);
+        ctl._setBorrowPaused(market, true);
+        vault.approve(market, 1_000_000);
+        (bool ok,) = market.call(abi.encodeWithSignature("mint(uint256)", uint256(1_000_000)));
+        assertTrue(ok);
+        vault.transfer(address(0xBAD), 3e6);
+        vm.stopPrank();
+        // between the seed mint and the pause an outsider mints and donates
+        vm.startPrank(address(0xBAD));
+        vault.approve(market, type(uint256).max);
+        (bool supplied,) = market.call(abi.encodeWithSignature("mint(uint256)", uint256(1e6)));
+        assertTrue(supplied);
+        vault.transfer(market, 1);
+        vm.stopPrank();
+        vm.startPrank(LEDGER);
+        ctl._setMintPaused(market, true);
+        PToken(market).transfer(DEAD, PToken(market).balanceOf(LEDGER));
+        vm.stopPrank();
+        _stage(3);
+    }
+
+    function testReplacementWrapperIsDeployableAfterTheSwap() external {
+        (, address market, address oracle) = _deploy();
+        vm.prank(LEDGER);
+        ctl._setPriceOracle(oracle);
+        // the controller now points at the wrapper; a fixed wrapper over the same base must still deploy
+        PharaohDlmmShareOracle fixedWrapper = new PharaohDlmmShareOracle(PriceOracle(GUARDED), market);
+        assertEq(fixedWrapper.getUnderlyingPrice(PToken(market)), PharaohDlmmShareOracle(oracle).getUnderlyingPrice(PToken(market)));
     }
 
     function testVerifyListingRejectsAnUnlockedShareMarket() external {

@@ -24,6 +24,7 @@ interface IBpController {
     function borrowCashFloor(address pToken) external view returns (uint256);
     function closeFactorMantissa() external view returns (uint256);
     function liquidationIncentiveMantissa() external view returns (uint256);
+    function pauseGuardian() external view returns (address);
 }
 
 interface IBpVault {
@@ -96,7 +97,7 @@ interface IBpBaseOracle {
  *   verifyDeployed  read-only (env BP_DELEGATE, BP_MARKET, BP_ORACLE): code hashes against a fresh build in this very run, every pin,
  *                   identity of the wrapper with the guarded oracle for every listed market, the share price
  *   verifyListing   read-only (env as above + BP_STAGE 1..4): the cumulative controller state after each Ledger stage
- *                     1 oracle swapped   2 listed + CF 0 + borrow paused + cap 1   3 seeded + mint paused   4 activated (CF 50%, mint open)
+ *                     1 oracle swapped   2 cap 1, listed, CF 0, borrow paused   3 seeded + mint paused   4 activated (CF 50%, mint open)
  */
 contract DeployPharaohBoostedMarketsAvalanche is Script {
     uint256 internal constant AVALANCHE_CHAIN_ID = 43_114;
@@ -180,6 +181,7 @@ contract DeployPharaohBoostedMarketsAvalanche is Script {
         console2.log("vault totalSupply:", v.totalSupply());
         console2.log("vault depositCap:", v.depositCap());
         console2.log("vault Ledger shares:", v.balanceOf(LEDGER));
+        console2.log("pauseGuardian:", c.pauseGuardian());
         console2.log("check: OK");
     }
 
@@ -267,11 +269,15 @@ contract DeployPharaohBoostedMarketsAvalanche is Script {
             _req(m.totalSupply() == 0, "stage 2: the market must be unseeded");
         }
         if (stage >= 3) {
-            _req(m.totalSupply() == SEED_PTOKENS, "pToken supply != the seed (5,000,000,000)");
-            _req(m.balanceOf(DEAD) == SEED_PTOKENS, "the dead address does not hold the whole seed");
+            // LOWER BOUNDS, never equalities: after activation anybody can supply, and a 1-wei share donation or a mint between the seed and the
+            // mint pause must not make a later verify fail. The permanent part is the dead balance; excess is logged.
+            _req(m.balanceOf(DEAD) >= SEED_PTOKENS, "the dead address holds less than the seed");
+            _req(m.totalSupply() >= SEED_PTOKENS, "pToken supply below the seed");
             _req(m.balanceOf(LEDGER) == 0, "the Ledger still holds pTokens");
-            _req(IBpVault(VAULT).balanceOf(n.market) == SEED_SHARES && m.getCash() == SEED_SHARES, "market cash != the seed shares");
-            _req(m.exchangeRateStored() == INITIAL_EXCHANGE_RATE, "exchange rate moved (a donation?)");
+            _req(IBpVault(VAULT).balanceOf(n.market) >= SEED_SHARES && m.getCash() >= SEED_SHARES, "market cash below the seed shares");
+            _req(m.exchangeRateStored() >= INITIAL_EXCHANGE_RATE, "exchange rate below the initial rate");
+            console2.log("dead pToken balance / seed:", m.balanceOf(DEAD), SEED_PTOKENS);
+            console2.log("pToken supply / market cash / exchange rate:", m.totalSupply(), m.getCash(), m.exchangeRateStored());
         }
         if (stage == 3) {
             _req(cf == 0, "stage 3: CF must be 0");
@@ -281,6 +287,7 @@ contract DeployPharaohBoostedMarketsAvalanche is Script {
             _req(cf == CF_ACTIVE, "stage 4: CF must be 0.5");
             _req(!c.mintGuardianPaused(n.market), "stage 4: mint must be open");
         }
+        console2.log("pauseGuardian (may pause mint/borrow, and set flash loans either way):", c.pauseGuardian());
         _logExisting();
         console2.log("verifyListing stage OK:", stage);
     }
