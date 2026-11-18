@@ -1,0 +1,78 @@
+{
+ "note": "test-only Chainlink aggregator stand-in (source: contracts/range-tp/test/MockFeed.sol, solc 0.8.35): answer slot 0, updatedAt slot 1, decimals 8, roundId=answeredInRound=1000",
+ "abi": [
+  {
+   "type": "function",
+   "name": "answer",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "",
+     "type": "int256",
+     "internalType": "int256"
+    }
+   ],
+   "stateMutability": "view"
+  },
+  {
+   "type": "function",
+   "name": "decimals",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "",
+     "type": "uint8",
+     "internalType": "uint8"
+    }
+   ],
+   "stateMutability": "pure"
+  },
+  {
+   "type": "function",
+   "name": "latestRoundData",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "",
+     "type": "uint80",
+     "internalType": "uint80"
+    },
+    {
+     "name": "",
+     "type": "int256",
+     "internalType": "int256"
+    },
+    {
+     "name": "",
+     "type": "uint256",
+     "internalType": "uint256"
+    },
+    {
+     "name": "",
+     "type": "uint256",
+     "internalType": "uint256"
+    },
+    {
+     "name": "",
+     "type": "uint80",
+     "internalType": "uint80"
+    }
+   ],
+   "stateMutability": "view"
+  },
+  {
+   "type": "function",
+   "name": "updatedAt",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "",
+     "type": "uint256",
+     "internalType": "uint256"
+    }
+   ],
+   "stateMutability": "view"
+  }
+ ],
+ "deployedBytecode": "0x60808060405260043610156011575f80fd5b5f3560e01c908163313ce5671460b4575080637519ab5014609957806385bb7d6914607f5763feaf968c146043575f80fd5b34607b575f366003190112607b5760a05f54600154604051916103e88352602083015280604083015260608201526103e86080820152f35b5f80fd5b34607b575f366003190112607b5760205f54604051908152f35b34607b575f366003190112607b576020600154604051908152f35b34607b575f366003190112607b5780600860209252f3fea164736f6c6343000823000a"
+}
