@@ -9,7 +9,7 @@ import { configureLogPace, pacedGetLogs } from "./logpace";
 import { providers } from "ethers";
 import { AlertManager, MemorySink, createSink } from "./alerts";
 import { checkPoolIdentity } from "./reference";
-import { ConfigError, findSecretsInConfigText, requireRpcUrlFromEnv, requireValidConfig } from "./config";
+import { ConfigError, findSecretsInConfigText, oracleAllowList, requireRpcUrlFromEnv, requireValidConfig } from "./config";
 import type { MonitorConfig } from "./config";
 import { crossCheckIndex, loadState, saveState } from "./borrowers";
 import { emptyMonitorState, reportBlind, runCycle } from "./monitor";
@@ -84,6 +84,8 @@ async function main(): Promise<number> {
     console.error("the process did not start");
     return EX_CONFIG;
   }
+  // one start-up line with the oracle allow-list and the share block this process runs with (a host on the new build but without the wrapper in its config is visible here, BEFORE the swap)
+  console.log(JSON.stringify({ startup: { oracleAllowList: oracleAllowList(cfg.deployment), shareCollateral: cfg.shareCollateral ? { pToken: cfg.shareCollateral.pToken, underlying: cfg.shareCollateral.underlying, liquidationEnabled: cfg.shareCollateral.liquidation.enabled } : null } }));
   if (cmd === "validate-config") {
     console.log("configuration valid");
     return 0;

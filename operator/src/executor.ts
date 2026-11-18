@@ -280,6 +280,10 @@ export async function executorStep(deps: ExecutorDeps, state: ExecutorState): Pr
         }
         if (route === "none") {
           out.skipped.push(`${c.a}: share collateral: ${sp.reason ?? "nothing to do"}`);
+          if (sp.repay === 0n && sp.bound === "inventory") {
+            out.unfunded = true;
+            await alerts.raise({ key: `executor:unfunded:${opName}`, severity: "warn", message: `operator ${opName}: USDC inventory ${inventory} is below the minimum repayment for ${c.a} (share collateral); this account stays in shortfall. Top the inventory up`, audience: "liquidators" }, nowS());
+          }
           if (sp.repay === 0n && (sp.bound === "daily-cap" || sp.bound === "held-value" || sp.bound === "per-call-cap")) {
             await alerts.raise({ key: `executor:share-bounded:${opName}`, severity: sp.bound === "daily-cap" || sp.bound === "held-value" ? "crit" : "warn", message: `operator ${opName} cannot liquidate ${c.a} through the vault-share collateral: ${sp.reason}. ${sp.bound === "daily-cap" ? "The daily share-repayment cap is used up; the other operator may act or raise it deliberately (config)" : sp.bound === "held-value" ? "The operator already holds shares up to its ceiling and never sells them; a human decides (raise the ceiling, or move the shares)" : ""}`, audience: "liquidators" }, nowS());
           }

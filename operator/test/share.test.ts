@@ -50,14 +50,14 @@ test("oracle allow-list in the read layer: the same build reads before AND after
 });
 
 // ------------------------------------------------------------------ configuration
-function withWrapper(wrapper = true, liquidation = true): any {
+function withWrapper(wrapper = true, liquidation = true, convert = false): any {
   const c = decidedConfig();
   c.deployment = { controller: ADDR.controller, pWavax: ADDR.pWavax, pUsdc: ADDR.pUsdc, oracle: ADDR.guarded, deploymentBlock: 99_000_000 };
   if (wrapper) c.deployment.oracleWrapper = ADDR.wrapper;
   c.operators = [{ name: "op-a", address: ADDR.operator }, { name: "op-b", address: A(0x102) }];
   c.executor.enabled = true;
   c.keeper.enabled = false;
-  c.executor.convertToUsdc = false;
+  c.executor.convertToUsdc = convert;
   c.shareCollateral = { pToken: ADDR.pShare, underlying: ADDR.vault, liquidation: { enabled: liquidation, maxRepayPerCallUsdc: 60, dailyRepayCapUsdc: 100, minRepayUsdc: 1, retryCooldownSeconds: 30, maxHeldValueUsdc: 200 } };
   return c;
 }
@@ -375,4 +375,30 @@ test("treasury keeper: the execution-time re-check refuses a share-collateral ac
   assert.equal(chain.sent.length, 0, "no approval, no repayment");
   assert.ok(raised.some((m) => /ALERT-ONLY \(vault-share collateral\)/.test(m) && /did NOT pay/.test(m)), raised.join(" | "));
   assert.equal(o.halted, false);
+});
+
+test("executor with convertToUsdc TRUE (as op1/op2 run): the share round still sends only approve + liquidateBorrow, and the kept pTokens are never redeemed on the next cycle", async () => {
+  const chain = new MockChain();
+  shareBorrower(chain, 100, 110);
+  const r1 = await runExecutor(chain, withWrapper(true, true, true));
+  assert.equal(r1.out.halted, false, JSON.stringify(r1.out.skipped));
+  assert.ok(r1.out.round);
+  assert.deepEqual(chain.sent.map((s) => s.name), ["approve", "liquidateBorrow"], "no redeem, no swap approval, no swap");
+  assert.ok(chain.poolBal(ADDR.pShare, ADDR.operator) > 0n);
+  // next cycle: the account recovered; the leading finishConversion only knows pWAVAX/WAVAX, so the held share pTokens are left alone
+  chain.accounts[lc(ADDR.borrower)]!.shortfall = false;
+  const n = chain.sent.length;
+  const r2 = await runExecutor(chain, withWrapper(true, true, true), r1.persisted);
+  assert.equal(r2.out.halted, false);
+  assert.equal(chain.sent.length, n, "nothing sent on the following cycle");
+});
+
+test("executor: a share-only account with inventory below the minimum raises the unfunded alert and sends nothing", async () => {
+  const chain = new MockChain();
+  shareBorrower(chain, 100, 110);
+  chain.usdc[lc(ADDR.operator)] = 500_000n; // 0.5 USDC, below the 1 USDC minimum
+  const r = await runExecutor(chain);
+  assert.equal(r.out.unfunded, true);
+  assert.equal(chain.sent.length, 0);
+  assert.ok(r.sink.messages.some((m) => /below the minimum repayment.*share collateral.*Top the inventory up/.test(m.text)));
 });

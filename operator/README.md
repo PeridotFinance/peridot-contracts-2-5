@@ -7,7 +7,7 @@ Status: DRAFT, not audited, not deployed, no launch approval implied. Spec: `doc
 ## Use
 ```
 npm ci --ignore-scripts          # own lockfile; one runtime dependency (ethers 5.8.0)
-npm test                         # unit tests (122 at the bpPHAR-USDC step), no network
+npm test                         # unit tests (124 at the bpPHAR-USDC step), no network
 npm run build:contracts          # forge build (debt_accounting profile) into .forge-out, needed by the fork tests only
 AVALANCHE_MAINNET_RPC_URL=... npm run test:fork   # fork tests (monitor, keeper, executor cycle suite) on a local anvil fork (needs anvil and an archive RPC)
 OPERATOR_CONFIG=<file> AVALANCHE_MAINNET_RPC_URL=... node dist/src/main.js check    # one cycle, JSON report, alerts NOT delivered

@@ -125,6 +125,12 @@ export class MockChain {
       const p = lc(orc.decodeFunctionData(fn, data)[0]);
       return enc(orc, fn, [this.prices[p] ?? 0n]);
     }
+    if (T === lc(WAVAX)) {
+      const fn = fnOf(erc);
+      if (fn === "balanceOf") return enc(erc, fn, [0n]);
+      if (fn === "allowance") return enc(erc, fn, [0n]);
+      return fail;
+    }
     if (T === lc(USDC)) {
       const fn = fnOf(erc);
       if (!fn) return fail;
