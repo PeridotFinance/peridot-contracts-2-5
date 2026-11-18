@@ -151,9 +151,15 @@ export async function headTs() { return (await provider.getBlock("latest")).time
 export async function mine(n = 1) { for (let i = 0; i < n; i++) await rpc("evm_mine", []); }
 
 // ---- time. Instant mining: a block per transaction, timestamps from the wall clock unless pinned. `warp` moves time and re-pins every mock feed so the feeds that must stay fresh are fresh.
-export async function warp(seconds) {
-  await rpc("evm_increaseTime", [Number(seconds)]);
+/** move time forward WITHOUT re-pinning (feeds age). evm_increaseTime is ignored while a block-timestamp interval is set, so the next block's timestamp is set explicitly. */
+export async function warpRaw(seconds) {
+  const t = (await headTs()) + Number(seconds);
+  await rpc("evm_setNextBlockTimestamp", [t]);
   await mine(1);
+  if ((await headTs()) < t) throw new Error(`warp did not reach ${t}`);
+}
+export async function warp(seconds) {
+  await warpRaw(seconds);
   await repin();
 }
 export async function setNextTimestamp(ts) { await rpc("evm_setNextBlockTimestamp", [Number(ts)]); }

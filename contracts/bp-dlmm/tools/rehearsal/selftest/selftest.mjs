@@ -52,6 +52,10 @@ await group("P1 feeds, time, snapshots", async () => {
   await warp(100_000);
   const f2 = await readFeed(feed);
   check("P1.3", f2.age <= 2 && f2.answer.eq(99_000_000), `warp(100000 s) then repin: the mock is fresh again (age ${f2.age} s) with the same answer`);
+  // warp while a 1 s block-timestamp interval is set (the real harness sets it in B0 and B4 warps afterwards)
+  await rpc("anvil_setBlockTimestampInterval", [1]); await mine(1); const tA = await headTs(); await mine(1); const tB = await headTs();
+  await warp(100_000); const tC = await headTs();
+  check("P1.3b", tB - tA === 1 && tC - tB >= 100_000, `with anvil_setBlockTimestampInterval(1): blocks are 1 s apart (${tB - tA}) and warp(100000) still jumps the head by ${tC - tB} s`);
   await setFeed(feed, 99_000_000, (await headTs()) - 4000);
   await warp(10);
   check("P1.4", (await readFeed(feed)).age >= 4000, "a deliberately stale mock (explicit updatedAt) is NOT re-pinned by a warp");
@@ -75,7 +79,7 @@ await group("P1 feeds, time, snapshots", async () => {
 });
 
 await group("P2 results writer", async () => {
-  check("P2.1", results.checks.length >= 14 && results.notes === 1 && results.fail === 0, `results object: ${results.pass} pass, ${results.fail} fail, ${results.notes} note`);
+  check("P2.1", results.checks.length >= 15 && results.notes === 1 && results.fail === 0, `results object: ${results.pass} pass, ${results.fail} fail, ${results.notes} note`);
   // a deliberate failure must be counted, written and make the process exit 1 -- the shell wrapper checks that by running with REH_SELFTEST_FAIL=1
   if (process.env.REH_SELFTEST_FAIL === "1") check("P2.2", false, "deliberate failure (REH_SELFTEST_FAIL=1)", "expected by the self-test");
 });

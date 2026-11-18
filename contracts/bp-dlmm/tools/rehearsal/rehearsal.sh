@@ -29,7 +29,7 @@ export BP_OUT
 if [ -z "${BP_TOOL:-}" ]; then
   for c in /Users/joshua/Peridot/.wt-bp-core/contracts/tools/bp-dlmm-ceremony.sh "$REPO/contracts/tools/bp-dlmm-ceremony.sh"; do [ -f "$c" ] && { BP_TOOL="$c"; break; }; done
 fi
-BP_TOOL="${BP_TOOL:-}"; BP_USE_TOOL="${BP_USE_TOOL:-auto}"
+BP_TOOL="${BP_TOOL:-}"; BP_USE_TOOL="${BP_USE_TOOL:-auto}"; export BP_TOOL BP_USE_TOOL
 WRAPPER="${BP_WRAPPER_NAME:-PharaohDlmmShareOracle}"; DELEGATE="${BP_DELEGATE_NAME:-PharaohBoostedDelegate}"
 if [ "${BP_BUILD:-0}" = 1 ]; then ( cd "$(dirname "$BP_OUT")" && forge build --skip test 2>&1 | REDACT | tail -3 ); fi
 if [ "$SELFTEST" != 1 ]; then
@@ -50,7 +50,7 @@ for f in lib.mjs rehearsal.mjs readback.mjs rpc-proxy.mjs selftest/selftest.mjs;
 if [ "$DRY" = 1 ]; then
   echo "DRY: out dir $OUT, artifacts $BP_OUT, ethers $ETHERS (version $(grep -m1 '"version"' "$ETHERS/node_modules/ethers/package.json" | tr -d ' ,"' ))"
   for t in anvil cast forge node; do command -v "$t" >/dev/null && echo "DRY ok   $t: $($t --version 2>&1 | head -1)" || echo "DRY FAIL $t not found"; done
-  REH_RPC="http://127.0.0.1:1" node "$HERE/rehearsal.mjs" --dry 2>&1 | REDACT; RC=${PIPESTATUS[0]}
+  REH_RPC="http://127.0.0.1:1" REH_RESULTS="$OUT/dry-results.json" node "$HERE/rehearsal.mjs" --dry 2>&1 | REDACT; RC=${PIPESTATUS[0]}
   [ "$RC" = 0 ] && echo "DRY PASSED (nothing was forked, no lock taken, no endpoint used)" || echo "DRY FAILED"
   exit "$RC"
 fi
