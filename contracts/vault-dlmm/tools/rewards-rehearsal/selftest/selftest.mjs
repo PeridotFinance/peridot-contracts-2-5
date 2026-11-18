@@ -103,12 +103,13 @@ async function main() {
     if (fs.existsSync("/tmp/pilot-fork.lock")) { console.log("SELFTEST SKIP wrapper mode: /tmp/pilot-fork.lock is held by another job"); return 0; }
     const evidence = path.join(scratch, "rel-evidence"); // a RELATIVE out-dir, run from another directory: the wrapper must make it absolute
     const r = spawnSync("bash", [path.join(REH, "rehearsal.sh"), "rel-evidence"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: scratch,
-      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: scratch, AVALANCHE_RPC: RPC, REH_SCAN_FROM: String(N0), ETHERS_DIR, REH_INT_TOOLS: INT_TOOLS, REH_PORT: String(await free()), REH_PROXY_PORT: String(await free()) } });
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: scratch, AVALANCHE_RPC: RPC, REH_SCAN_FROM: String(N0), ETHERS_DIR, REH_INT_TOOLS: INT_TOOLS, REH_PORT: String(await free()), REH_PROXY_PORT: String(await free()), ...(process.env.SELFTEST_REH_WRAPPER === "1" ? { REH_WRAPPER: "1" } : {}) } });
+    const NW = process.env.SELFTEST_REH_WRAPPER === "1" ? 39 : 33;
     const outTxt = r.stdout + r.stderr;
     const argv = (outTxt.match(/argv check: (\d+) of (\d+) processes carry the upstream endpoint/) || [])[1];
     const checks = [
       ["rehearsal.sh exits 0 on the mock world", r.status === 0],
-      ["the verdict line is REHEARSAL PASSED: 33 checks, 0 failures", /^REHEARSAL PASSED: 33 checks, 0 failures$/m.test(outTxt)],
+      [`the verdict line is REHEARSAL PASSED: ${NW} checks, 0 failures`, new RegExp(`^REHEARSAL PASSED: ${NW} checks, 0 failures$`, "m").test(outTxt)],
       ["the argv check ran and found 0 processes carrying the upstream", argv === "0"],
       ["the proxy wrote its upstream status counts and saw no 429", /upstream HTTP status counts seen by the proxy: \{"requests":\d+,"errors":0,"upstreamStatus":\{"200":\d+\}\}/.test(outTxt)],
       ["the fork pin is head - 4", /fork pin block: \d+/.test(outTxt)],
@@ -127,7 +128,9 @@ async function main() {
   const resultsFile = path.join(scratch, "results.json");
   const keep = path.join(scratch, "evidence"); fs.mkdirSync(keep);
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, ETHERS_DIR, REH_PROJ: PROJ, REH_SCRATCH: path.join(scratch, "reh"), REH_RPC: RPC, REH_RESULTS: resultsFile, REH_INT_TOOLS: INT_TOOLS,
-    REH_SCAN_FROM: String(N0), REH_WARP_SECONDS: "86400", REH_CHUNK: "100", REH_SLEEP_MS: "0", REH_EPOCH_OUT: keep };
+    REH_SCAN_FROM: String(N0), REH_WARP_SECONDS: "86400", REH_CHUNK: "100", REH_SLEEP_MS: "0", REH_EPOCH_OUT: keep, ...(process.env.SELFTEST_REH_WRAPPER === "1" ? { REH_WRAPPER: "1" } : {}) };
+  const WRAP = process.env.SELFTEST_REH_WRAPPER === "1"; // the OPTIONAL wrapper step of the rehearsal (REH_WRAPPER=1): 33 + 6 checks (P00..P32, W01..W06)
+  const NCHECKS = WRAP ? 39 : 33;
   fs.mkdirSync(env.REH_SCRATCH);
   const lines = [];
   const code = await new Promise((resolve) => {
@@ -138,12 +141,12 @@ async function main() {
   });
   const txt = lines.join("\n");
   const verdict = lines.filter((l) => /^REHEARSAL (PASSED|FAILED)|^FATAL|^NO PHAR/.test(l)).pop();
-  const passLines = lines.filter((l) => /^PASS P\d\d /.test(l)).length;
+  const passLines = lines.filter((l) => /^PASS [PW]\d\d /.test(l)).length;
   const failLines = lines.filter((l) => /^FAIL /.test(l));
   const wholeChecks = [
     ["rehearsal.mjs exits 0", code === 0],
-    ["verdict line is 'REHEARSAL PASSED: 33 checks, 0 failures'", verdict === "REHEARSAL PASSED: 33 checks, 0 failures"],
-    ["33 PASS lines P00..P32 and no FAIL line", passLines === 33 && failLines.length === 0],
+    [`verdict line is 'REHEARSAL PASSED: ${NCHECKS} checks, 0 failures'`, verdict === `REHEARSAL PASSED: ${NCHECKS} checks, 0 failures`],
+    [`${NCHECKS} PASS lines (P00..P32${WRAP ? ", W01..W06" : ""}) and no FAIL line`, passLines === NCHECKS && failLines.length === 0],
     ["a RESULTS json line is printed", /^RESULTS \{/m.test(txt)],
     ["results.json was written", fs.existsSync(resultsFile)],
     ["the rehearsal epoch files were copied for inspection, marked NOT-PUBLISHABLE", fs.existsSync(path.join(keep, "epoch-rehearsal-NOT-PUBLISHABLE", "epoch.json"))],

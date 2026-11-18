@@ -15,6 +15,7 @@ The operator commits all of these in the epoch's commit (W5) **before** the suba
 | 3 | the **input block range** | `manifest.startBlock` / `endBlock` (+ timestamps), `epoch.json inputs.scanFromBlock` | the epoch is the block range `(startBlock, endBlock]`; both are harvest blocks (the first epoch starts at 100488395); the scan starts at `scanFromBlock` (the vault's deployment block) |
 | 4 | the **parameters** | `epoch.json inputs`: `userBps`, `extraPhar`, `minAmount`, `epochId`, `firstEpoch`, `previousEpochId` | what the generator was told |
 | 5 | the **allowlist and the exclusions** | `epoch.json inputs.allowContracts`, `inputs.explicitExcludes`, `exclusions.list` (address, reason, weight, `returnedToSafe`) | the contracts allowed to claim (default none) and everyone excluded, with the reason |
+| 5b | the **wrapper holders** (only when the market exists) | `epoch.json inputs.wrappers` (pToken, underlying, fromBlock, label) and `manifest.wrappersHash` / `wrapperCount`; the original `epochs/<id>/wrappers.json` | the lending-market pTokens whose vault shares are split among their suppliers (rewards document section 15). The recompute rebuilds the config from `inputs.wrappers` and scans each pToken's Transfer logs itself |
 | 6 | the **generator source at the recorded commit** | the repository at `manifest.gitCommit`: `tools/dlmm-rewards-root.mjs` | the code that produced the file. `gitDirty` must be `false` |
 | 7 | the previous epoch's manifest | `epochs/<prev>/manifest.json` (every epoch after the first) | the start block and the continuity of epochs |
 | 8 | the harvest transactions of the range | `manifest.harvestTxHashes` | each is a `PharHarvested` event of the vault; their `amount`s add up to `harvestSum` |
@@ -35,6 +36,8 @@ node tools/dlmm-rewards-root.mjs \
   --to-harvest <the transaction hash in inputs.harvest.transactions whose block == inputs.endBlock> \
   --user-bps <inputs.userBps> --extra-phar <inputs.extraPhar> --min-amount <inputs.minAmount> \
   [ --allow-contract <A> for every A in inputs.allowContracts ] [ --exclude <E> for every E in inputs.explicitExcludes ] \
+  [ if inputs.wrappers exists:  --wrappers <a file you write in your fresh directory:
+        {"schema":"peridot-dlmm-rewards-wrappers/1","wrappers": <inputs.wrappers copied verbatim>}  (it must equal epochs/<id>/wrappers.json in content) > ] \
   --out-dir <a NEW empty directory> --cache-dir <a NEW empty directory>
 ```
 

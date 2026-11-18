@@ -20,6 +20,10 @@ const WARP = Number(process.env.REH_WARP_SECONDS || 86400);
 const CHUNK = process.env.REH_CHUNK || "100";
 const SLEEP_MS = process.env.REH_SLEEP_MS || "0";
 const EPOCH_OUT = process.env.REH_EPOCH_OUT;
+// OPTIONAL WRAPPER STEP (REH_WRAPPER=1, off by default: with it off the 33 checks P00..P32 run exactly as before): a stand-in pToken (script/rehearsal/StandInWrapper.sol) holds vault shares of
+// several suppliers, one of them redeems half in the middle of the epoch, the permanent seed goes to the dead address, shares are donated to it, and the generator runs with --wrappers.
+// Adds the checks W01..W06 (39 in all). The steps are marked "S2w / S3w / W0x" below.
+const WRAPPER = process.env.REH_WRAPPER === "1";
 if (!PROJ || !SCRATCH || !RPC || !INT_TOOLS || !SCAN_FROM) { console.log("FATAL: rehearsal.mjs is started by rehearsal.sh (missing environment)"); process.exit(2); }
 const req = createRequire(path.join(PROJ, "package.json"));
 const { ethers } = req(process.env.ETHERS_DIR || "ethers");
@@ -64,6 +68,29 @@ const DIST_ABI = [
   "error RenounceDisabled()", "error OwnableUnauthorizedAccount(address account)", "error OwnableInvalidOwner(address owner)", "error ReentrancyGuardReentrantCall()",
 ];
 const dIface = new utils.Interface(DIST_ABI);
+const STANDIN_ABI = ["function underlying() view returns (address)", "function balanceOf(address) view returns (uint256)", "function totalSupply() view returns (uint256)", "function mint(uint256 shares)", "function redeem(uint256 pTokens)", "function transfer(address,uint256) returns (bool)"];
+const SHARE_ABI = ["function approve(address,uint256) returns (bool)", "function transfer(address,uint256) returns (bool)", "function balanceOf(address) view returns (uint256)"];
+const PTOKENS_PER_SHARE = 50n;
+/** The expected split of a wrapper's vault-share-seconds, computed here from the harness's OWN transactions (their block timestamps), not from logs: same rule as the generator (segments of constant
+ *  state, floor(V * dt * p / P) per segment, the rest and the no-supplier time are residual). events: [{ t, dV: bigint, dP: [[address, bigint]] }] in chain order; t1 = the epoch end timestamp. */
+function expectedWrapperSplit(events, t1) {
+  let V = 0n; const bal = new Map(); const w = new Map(); let rounding = 0n, noSupplier = 0n, vSeconds = 0n; let cur = null;
+  const integrate = (to) => {
+    if (cur === null || to <= cur) return;
+    const u = V * BigInt(to - cur); vSeconds += u; if (u === 0n) return;
+    let P = 0n; for (const b of bal.values()) P += b;
+    if (P === 0n) { noSupplier += u; return; }
+    let acc = 0n; for (const [a, b] of bal) { const x = (u * b) / P; if (x > 0n) w.set(a, (w.get(a) ?? 0n) + x); acc += x; }
+    rounding += u - acc;
+  };
+  for (const e of events) {
+    integrate(e.t); cur = cur === null ? e.t : Math.max(cur, e.t);
+    V += e.dV; for (const [a, d] of e.dP) { const k = a.toLowerCase(); const nb = (bal.get(k) ?? 0n) + d; if (nb < 0n) throw new Error("expected-split model: negative balance"); if (nb === 0n) bal.delete(k); else bal.set(k, nb); }
+  }
+  integrate(t1);
+  const weights = new Map(); for (const [a, x] of w) weights.set(a, x);
+  return { weights, rounding, noSupplier, vSeconds, V, bal };
+}
 const STATUS = { None: 0, Open: 1, Cancelled: 2, Swept: 3 };
 
 // ---------------------------------------------------------------------------------------------------------------- reporting
@@ -167,9 +194,54 @@ async function main() {
   check("P03", holder.code && !holder.bobCode && (await vault.balanceOf(bobAddr)).toString() === holder.toBob && (await vault.balanceOf(holder.contract)).toString() === holder.toContract,
     `Bob (EOA ${bobAddr}) holds ${holder.toBob} shares and the contract ${holder.contract} holds ${holder.toContract} shares (both moved by the impersonated Ledger)`);
 
+  // ------------------------------------------------------------------ S2w (OPTIONAL, REH_WRAPPER=1) a stand-in pToken that holds the shares of its suppliers
+  const wr = { events: [], file: null };
+  if (WRAPPER) {
+    const L = ledgerShares;
+    if (L.lt(1000000)) throw new Abort(2, "REH_WRAPPER=1 needs the Ledger to hold at least 1,000,000 shares");
+    const carolAddr = Wallet.createRandom().address;
+    const carol = await impersonate(carolAddr);
+    await step("S2w deploy the stand-in pToken; the Ledger supplies, the permanent seed goes to 0x...dEaD, Bob and Carol supply, 1 donation", async () => {
+      const art = JSON.parse(fs.readFileSync(path.join(PROJ, "out/StandInWrapper.sol/StandInWrapper.json"), "utf8"));
+      const dep = await new ethers.ContractFactory(art.abi, art.bytecode.object, stranger).deploy(A.VAULT, { gasLimit: 2000000 });
+      const rcD = await dep.deployTransaction.wait();
+      const W0 = new ethers.Contract(dep.address, STANDIN_ABI, provider); const share = new ethers.Contract(A.VAULT, SHARE_ABI, provider);
+      const tsOf = async (rc) => (await provider.getBlock(rc.blockNumber)).timestamp;
+      const send = async (signer, c, fn, args) => { const rc = await (await c.connect(signer)[fn](...args, { gasLimit: 800000 })).wait(); return tsOf(rc); }; // explicit, generous gas: no estimate
+      const mintFor = async (signer, who, shares) => { await send(signer, share, "approve", [W0.address, shares.toString()]); const t = await send(signer, W0, "mint", [shares.toString()]); wr.events.push({ t, dV: BigInt(shares), dP: [[who, BigInt(shares) * PTOKENS_PER_SHARE]] }); return t; };
+      const mL = BigInt(L.div(20).toString()), seed = 1000n, dn = BigInt(L.div(200).toString()), cShares = BigInt(L.div(50).toString());
+      const bobSupply = BigInt(BN(holder.toBob).div(4).mul(2).toString()); // about half of Bob's shares, an even number (he redeems half of it later)
+      await mintFor(ledger, LEDGER, mL);
+      await mintFor(ledger, LEDGER, seed);
+      { const t = await send(ledger, W0, "transfer", [A.DEAD, (seed * PTOKENS_PER_SHARE).toString()]); wr.events.push({ t, dV: 0n, dP: [[LEDGER, -seed * PTOKENS_PER_SHARE], [A.DEAD, seed * PTOKENS_PER_SHARE]] }); } // the permanent seed
+      const tCarolRecv = await send(ledger, share, "transfer", [carolAddr, cShares.toString()]);                                         // Carol gets shares and supplies ALL of them: a pure supplier
+      const tCarolMint = await mintFor(carol, carolAddr, cShares);   // (between the two blocks she holds them directly: that is her only direct weight)
+      await mintFor(bob, bobAddr, bobSupply);
+      { const t = await send(ledger, share, "transfer", [W0.address, dn.toString()]); wr.events.push({ t, dV: dn, dP: [] }); }  // a donation: shares to the pToken, no pToken event
+      Object.assign(wr, { addr: dep.address, W0, share, deployBlock: rcD.blockNumber, carolAddr, bobSupply, sizes: { mL, seed, dn, cShares }, carolDirect: cShares * BigInt(tCarolMint - tCarolRecv) });
+      wr.file = path.join(SCRATCH, "wrappers.json");
+      fs.writeFileSync(wr.file, JSON.stringify({ schema: "peridot-dlmm-rewards-wrappers/1", wrappers: [{ pToken: dep.address, underlying: A.VAULT, fromBlock: rcD.blockNumber, label: "rehearsal stand-in" }] }));
+    });
+    const vShares = await wr.share.balanceOf(wr.addr), pSupply = await wr.W0.totalSupply();
+    const exp = expectedWrapperSplit(wr.events, 2 ** 40);
+    check("W01", (await wr.W0.underlying()).toLowerCase() === A.VAULT.toLowerCase() && vShares.toString() === exp.V.toString() && pSupply.toString() === [...exp.bal.values()].reduce((a, b) => a + b, 0n).toString()
+      && (await wr.W0.balanceOf(A.DEAD)).toString() === (wr.sizes.seed * PTOKENS_PER_SHARE).toString() && (await wr.W0.balanceOf(wr.carolAddr)).toString() === (wr.sizes.cShares * PTOKENS_PER_SHARE).toString(),
+      `the stand-in pToken ${wr.addr} (underlying = the vault) holds ${vShares} vault shares for ${pSupply} pTokens: Ledger supplied ${wr.sizes.mL} shares, the seed ${wr.sizes.seed} shares' pTokens sit at 0x...dEaD, Carol (no direct shares) supplied ${wr.sizes.cShares}, Bob ${wr.bobSupply}, ${wr.sizes.dn} shares were donated directly`);
+  }
+
   // ------------------------------------------------------------------ S3 warp, S4 harvest through the Safe
   const t0 = (await provider.getBlock("latest")).timestamp;
-  const t1 = await step(`S3 evm time warp ${WARP} s`, () => warp(WARP));
+  let t1;
+  if (WRAPPER) {
+    // S3w: half the warp, Bob redeems HALF of his pTokens inside the epoch (a mid-epoch change of both the pToken balances and the shares the pToken holds), the other half of the warp
+    await step(`S3w evm time warp ${Math.floor(WARP / 2)} s (first half)`, () => warp(Math.floor(WARP / 2)));
+    await step("S3w Bob redeems half of his pTokens", async () => {
+      const half = (wr.bobSupply / 2n) * PTOKENS_PER_SHARE;
+      const rc = await (await wr.W0.connect(bob).redeem(half.toString(), { gasLimit: 800000 })).wait();
+      wr.events.push({ t: (await provider.getBlock(rc.blockNumber)).timestamp, dV: -(wr.bobSupply / 2n), dP: [[bobAddr, -half]] });
+    });
+    t1 = await step(`S3w evm time warp ${WARP - Math.floor(WARP / 2)} s (second half)`, () => warp(WARP - Math.floor(WARP / 2)));
+  } else t1 = await step(`S3 evm time warp ${WARP} s`, () => warp(WARP));
   check("P04", t1 - t0 >= WARP, `chain time advanced by ${t1 - t0} s (>= ${WARP}); the Chainlink feeds are now stale on this fork: harvestRewards does not read them (the event's totalAssets may be 0), no later step needs the oracle`);
   const ids = []; { const [lo, up] = await vault.bandState(); for (let i = Number(lo); i <= Number(up); i++) ids.push(i); }
   const pending = await rewarder.getPendingRewards(A.VAULT, ids);
@@ -194,7 +266,7 @@ async function main() {
 
   // ------------------------------------------------------------------ S5 the generator against the LOCAL anvil, twice
   const gen = (cacheDir, outDir) => run("node", [path.join(PROJ, "tools/dlmm-rewards-root.mjs"), "--local-rpc", RPC, "--cache-dir", cacheDir, "--out-dir", outDir, "--epoch-id", "0", "--scan-from", SCAN_FROM,
-    "--first-epoch", "--to-harvest", harvest.tx, "--chunk", CHUNK, "--sleep-ms", SLEEP_MS]);
+    "--first-epoch", "--to-harvest", harvest.tx, "--chunk", CHUNK, "--sleep-ms", SLEEP_MS, ...(WRAPPER ? ["--wrappers", wr.file] : [])]);
   const dir0 = path.join(SCRATCH, "epoch0"), dir0b = path.join(SCRATCH, "epoch0-recompute");
   const g1 = await step("S5 generator run 1 (live RpcSource path against the local anvil: getLogs chunks, block timestamps, eth_getCode)", async () => {
     const tt = Date.now(); const r = gen(path.join(SCRATCH, "cache1"), dir0);
@@ -231,6 +303,30 @@ async function main() {
   const m2 = same ? JSON.parse(fs.readFileSync(path.join(dir0b, "manifest.json"), "utf8")) : null;
   check("P14", same && m2.dataHash === manifest.dataHash && m2.root === manifest.root, same ? `second run: byte-identical epoch.json (sha256 ${sha256File(epochPath).slice(0, 16)}...), dataHash ${manifest.dataHash}, root ${manifest.root}` : `the second run DIFFERS or failed (exit ${g2.code}): ${tail(g2.out)}`);
   const pa = manifest.publishEpochArguments;
+  let carolLeaf = null;
+  if (WRAPPER) {
+    // ---- W02..W05: the wrapper split in epoch.json against what this harness did (its own transactions' block timestamps, not the logs the generator read)
+    const endTs = (await provider.getBlock(harvest.block)).timestamp;
+    const exp = expectedWrapperSplit(wr.events, endTs);
+    const rep0 = (epoch.wrappers ?? []).find((x) => x.pToken.toLowerCase() === wr.addr.toLowerCase());
+    check("W02", !!rep0 && epoch.generator.version === "2.1.0" && inp.wrappers?.length === 1 && inp.wrappers[0].pToken.toLowerCase() === wr.addr.toLowerCase() && manifest.wrapperCount === 1
+      && epoch.checks.wrapperSplitSumsToPTokenHolding === true && epoch.checks.seedExcluded === true && epoch.checks.wrapperHoldersHaveNoLeaf === true,
+      `epoch.json carries the wrapper config and report (generator ${epoch.generator.version}, ${inp.wrappers?.length} wrapper(s)) and the checks wrapperSplitSumsToPTokenHolding, seedExcluded, wrapperHoldersHaveNoLeaf are true`);
+    const sup = new Map((rep0?.suppliers ?? []).map((x) => [x.address.toLowerCase(), x]));
+    const same = (a) => (sup.get(a.toLowerCase())?.weight ?? "0") === (exp.weights.get(a.toLowerCase()) ?? 0n).toString();
+    check("W03", !!rep0 && [LEDGER, bobAddr, wr.carolAddr, A.DEAD].every(same) && rep0.vaultShareSeconds === exp.vSeconds.toString() && rep0.roundingWeight === exp.rounding.toString() && rep0.noSupplierWeight === exp.noSupplier.toString()
+      && BN(rep0.suppliersWeight).add(rep0.returnedToSafeWeight).eq(rep0.vaultShareSeconds),
+      `supplier weights equal the harness's own expectation: Ledger ${sup.get(LEDGER.toLowerCase())?.weight}, Bob ${sup.get(bobAddr.toLowerCase())?.weight}, Carol ${sup.get(wr.carolAddr.toLowerCase())?.weight}, dead seed ${sup.get(A.DEAD.toLowerCase())?.weight}; integral of the shares in the pToken ${rep0?.vaultShareSeconds}, rounding ${rep0?.roundingWeight}, no-supplier ${rep0?.noSupplierWeight}`);
+    const wRow = epoch.holders.find((h) => h.address.toLowerCase() === wr.addr.toLowerCase());
+    check("W04", (BN(rep0?.returnedToSafeWeight ?? 0).isZero() ? !wRow : wRow?.excludedReason === "wrapper-residual" && wRow.weight === rep0.returnedToSafeWeight) && !leafByAddr.has(wr.addr.toLowerCase()) && dead?.reason === "dead-seed"
+      && BN(rep0?.deadSeed.weight ?? 0).gt(0) && epoch.holders.find((h) => h.address.toLowerCase() === A.DEAD.toLowerCase())?.wrapperWeight === rep0?.deadSeed.weight && !leafByAddr.has(A.DEAD.toLowerCase()),
+      `the pToken itself has no leaf and only its residual (${rep0?.returnedToSafeWeight}) as an excluded row; the seed's pTokens at the dead address earned ${rep0?.deadSeed.weight} share-seconds that stay with the Safe (dead-seed, no leaf)`);
+    carolLeaf = leafByAddr.get(wr.carolAddr.toLowerCase());
+    const hr = (a) => epoch.holders.find((h) => h.address.toLowerCase() === a.toLowerCase());
+    const sumsOk = [LEDGER, bobAddr, wr.carolAddr].every((a) => hr(a) && BN(hr(a).weight).eq(BN(hr(a).directWeight).add(hr(a).wrapperWeight)) && hr(a).wrapperWeight === (exp.weights.get(a.toLowerCase()) ?? 0n).toString());
+    check("W05", sumsOk && !!carolLeaf && hr(wr.carolAddr).directWeight === wr.carolDirect.toString() && carolLeaf.amount === pool.mul(hr(wr.carolAddr).weight).div(totalWeight).toString() && BN(carolLeaf.amount).gt(0),
+      `Ledger and Bob (direct holders AND suppliers) have weight = direct + wrapper; Carol (a pure supplier: her only direct weight is the ${wr.carolDirect} share-seconds between receiving the shares and supplying them) has a leaf of ${carolLeaf?.amount} wei = floor(pool * weight / totalWeight), almost all of it from her pToken balance`);
+  }
 
   // ------------------------------------------------------------------ S6 deploy the distributor (throwaway deployer, tools/dlmm-rewards-ceremony.sh)
   const addrFile = path.join(SCRATCH, "dlmm-rewards-addresses.rehearsal.env");
@@ -327,12 +423,21 @@ async function main() {
   const borrowed = await revertsWith(() => D.connect(stranger).callStatic.claim(0, holder.contract, cx.returnedToSafe, bobLeaf.proof, GL));
   check("P27", deadClaim === "InvalidProof()" && contractClaim === "InvalidProof()" && borrowed === "InvalidProof()",
     `the dead seed (${deadClaim}) and the contract holder (${contractClaim}; with a borrowed proof ${borrowed}) cannot claim their slices even with the amount from epoch.json: those slices were never published`);
-  const claimedSoFar = BN(ledgerLeaf.amount).add(bobLeaf.amount);
+  let claimedSoFar = BN(ledgerLeaf.amount).add(bobLeaf.amount);
   const ei0c = await D.epochInfo(0);
   const safeNow = await phar.balanceOf(SAFE);
   const excludedTotal = BN(t.stayWithSafe.excludedHoldersSlice);
   check("P28", ei0c.claimed.eq(claimedSoFar) && (await phar.balanceOf(dist)).eq(BN(pa.total).sub(claimedSoFar)) && safeBeforeApprove.sub(safeNow).eq(pa.total) && excludedTotal.gt(0),
     `accounting: claimed ${ei0c.claimed} of ${pa.total}; the distributor holds ${await phar.balanceOf(dist)}; the Safe paid only the publish total ${pa.total} (Safe PHAR ${safeBeforeApprove} -> ${safeNow}): the excluded slices (${excludedTotal} wei), the 10 % part and the rounding never left it`);
+
+  // ------------------------------------------------------------------ W06 (OPTIONAL, REH_WRAPPER=1): a supplier of the pToken claims from the SAME distributor
+  if (WRAPPER) {
+    const before = await bal(wr.carolAddr);
+    const rcC = await (await D.connect(stranger).claim(0, wr.carolAddr, carolLeaf.amount, carolLeaf.proof, GL)).wait();
+    claimedSoFar = claimedSoFar.add(carolLeaf.amount);
+    check("W06", (await bal(wr.carolAddr)).sub(before).toString() === carolLeaf.amount && (await D.isClaimed(0, wr.carolAddr)) && (await D.epochInfo(0)).claimed.eq(claimedSoFar),
+      `Carol, who holds only pTokens of the stand-in market, claimed ${carolLeaf.amount} wei of PHAR to HER address (the one she supplied from) with a proof from epoch.json, submitted by a stranger (claim gas ${rcC.gasUsed})`);
+  }
 
   // ------------------------------------------------------------------ S12 sweep refused before the deadline
   const sweepTool = sc(["simulate", "sweep", "0"]);
@@ -341,7 +446,8 @@ async function main() {
 
   // ------------------------------------------------------------------ S13 warp past 180 days, sweep
   await step("S13 evm time warp past the 180 day deadline", () => warp(CLAIM_DEADLINE));
-  const leftover = [...leafByAddr.values()].find((l) => ![LEDGER, bobAddr].some((a) => a.toLowerCase() === l.account.toLowerCase()));
+  const claimedAddrs = [LEDGER, bobAddr, ...(WRAPPER ? [wr.carolAddr] : [])];
+  const leftover = [...leafByAddr.values()].find((l) => !claimedAddrs.some((a) => a.toLowerCase() === l.account.toLowerCase()));
   const lateClaim = await revertsWith(() => D.connect(stranger).callStatic.claim(0, leftover ? leftover.account : LEDGER, leftover ? leftover.amount : ledgerLeaf.amount, leftover ? leftover.proof : ledgerLeaf.proof, { gasLimit: 500000 }));
   check("P30", /^ClaimsClosed\(/.test(lateClaim ?? "") || (!leftover && lateClaim === "AlreadyClaimed()"), `after the deadline a claim is refused: ${lateClaim} (${leftover ? "an unclaimed leaf of " + leftover.account : "every leaf was claimed: the already-claimed check comes first"}); isClaimWindowOpen ${await D.isClaimWindowOpen(0)}`);
   const safeBeforeSweep = await phar.balanceOf(SAFE);

@@ -56,6 +56,13 @@ contract MockVault {
     function pending() public view returns (uint256) { return (block.timestamp - lastClaim) * rate; }
     function mintTo(address to, uint256 a) external { balanceOf[to] += a; totalSupply += a; emit Transfer(address(0), to, a); }
     function transfer(address to, uint256 a) external returns (bool) { require(balanceOf[msg.sender] >= a, "balance"); balanceOf[msg.sender] -= a; balanceOf[to] += a; emit Transfer(msg.sender, to, a); return true; }
+    // standard ERC-20 allowance (the real vault is an OpenZeppelin ERC-20): used by the OPTIONAL wrapper step of the rehearsal (REH_WRAPPER=1), where a stand-in pToken pulls shares
+    mapping(address => mapping(address => uint256)) public allowance;
+    function approve(address s, uint256 a) external returns (bool) { allowance[msg.sender][s] = a; return true; }
+    function transferFrom(address f, address to, uint256 a) external returns (bool) {
+        uint256 al = allowance[f][msg.sender]; require(al >= a, "allowance"); if (al != type(uint256).max) allowance[f][msg.sender] = al - a;
+        require(balanceOf[f] >= a, "balance"); balanceOf[f] -= a; balanceOf[to] += a; emit Transfer(f, to, a); return true;
+    }
     function harvestRewards() external {
         if (msg.sender != rebalancer && msg.sender != SAFE_ADDR) revert NotRebalancer();
         uint256 amount = pending(); lastClaim = block.timestamp;

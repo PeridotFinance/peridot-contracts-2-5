@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generator version: 2 (epochs are harvest-to-harvest, contracts/EIP-7702 handled, manifest + data hash). Off-chain root generator of the PHAR distribution (design A) for the Peridot Pharaoh DLMM USDC/USDt vault.
+// Generator version: 2 (epochs are harvest-to-harvest, contracts/EIP-7702 handled, manifest + data hash; 2.1.0 = wrapper holders: --wrappers, a lending-market pToken's vault shares are split among its suppliers). Off-chain root generator of the PHAR distribution (design A) for the Peridot Pharaoh DLMM USDC/USDt vault.
 // Reads ONLY public data: the vault's ERC-20 Transfer events (the shares) and PharHarvested events, from the public Avalanche C-chain endpoint
 // (no RPC url or key is ever taken from, or printed to, the environment). Computes every holder's TIME-WEIGHTED share balance over the epoch,
 // splits the epoch's PHAR pro rata, and writes a deterministic JSON report plus the Merkle proofs file for contracts/vault-dlmm/src/rewards/PharRewardsDistributor.sol.
@@ -39,6 +39,10 @@ export const HARVEST_TOPIC = utils.id('PharHarvested(address,uint256,uint256,uin
 export const SCHEMA = 'peridot-dlmm-rewards-epoch/2';
 export const MANIFEST_SCHEMA = 'peridot-dlmm-rewards-manifest/2';
 export const GENERATOR = { name: 'dlmm-rewards-root', version: '2.0.0' };
+// An epoch generated WITH --wrappers says 2.1.0 (its epoch.json has the extra wrapper sections); one without is byte-identical to a 2.0.0 file.
+export const GENERATOR_WRAPPERS = { name: 'dlmm-rewards-root', version: '2.1.0' };
+export const WRAPPERS_SCHEMA = 'peridot-dlmm-rewards-wrappers/1';
+export const UNDERLYING_SELECTOR = '0x6f307dc3'; // underlying()
 // The vault's first harvest-eligible block (openBand tx 0x58e31159ad11de27e80ed6871f00e53923077c1c18a5e31b07722ae25e8634ab): the default start of the FIRST epoch.
 export const FIRST_EPOCH_START_BLOCK = 100488395;
 export const DEFAULT_CHUNK = 100; // blocks per eth_getLogs call
@@ -100,6 +104,22 @@ export class RpcSource {
     if (!b) throw new Error(`block ${n} not found`);
     return b.timestamp;
   }
+  /** The ERC-20 Transfer logs of ANOTHER contract (a wrapper holder's pToken). One address per call (no address arrays). */
+  async getAddressLogs({ address, fromBlock, toBlock }) {
+    const logs = await this.provider.getLogs({ address, fromBlock, toBlock, topics: [TRANSFER_TOPIC] });
+    return logs.map((l) => ({ blockNumber: l.blockNumber, logIndex: l.logIndex, transactionHash: l.transactionHash, topics: l.topics, data: l.data }));
+  }
+  /** pToken.underlying() at `block` (latest when the node has no old state): { value, at }. */
+  async getUnderlying(address, block) {
+    const call = async (tag) => { // null when the call returns no data (no contract at that block)
+      const ret = await this.provider.call({ to: address, data: UNDERLYING_SELECTOR }, tag);
+      return utils.hexDataLength(ret) < 32 ? null : utils.getAddress(utils.hexDataSlice(ret, 12, 32));
+    };
+    try { return { value: await call(block), at: block }; } catch (e) {
+      if (!/missing trie node|historical state|state .*(not available|pruned)|header not found|unknown block|not found/i.test(String(e?.message ?? e))) throw e;
+      return { value: await call('latest'), at: 'latest' };
+    }
+  }
 }
 
 /** Wraps a source so that every call is retried with exponential back-off (the public endpoint rate-limits and drops calls). */
@@ -110,6 +130,8 @@ export function withBackoff(source, { sleep = sleepReal, log = () => {}, retries
     getLogs: (r) => wrap(`logs ${r.fromBlock}-${r.toBlock}`, () => source.getLogs(r)),
     getTimestamp: (n) => wrap(`block ${n}`, () => source.getTimestamp(n)),
     getCode: (a, b) => wrap(`code ${a}`, () => source.getCode(a, b)),
+    getAddressLogs: (r) => wrap(`logs of ${r.address} ${r.fromBlock}-${r.toBlock}`, () => source.getAddressLogs(r)),
+    getUnderlying: source.getUnderlying ? (a, b) => wrap(`underlying ${a}`, () => source.getUnderlying(a, b)) : async () => null,
   };
 }
 
@@ -122,7 +144,17 @@ export class FixtureSource {
     const n = this._fails.get(key) ?? 0;
     if (n < this.failFirst) { this._fails.set(key, n + 1); throw new Error('transient failure (fixture)'); }
     this.calls.push([fromBlock, toBlock]);
-    return this.fx.logs.filter((l) => l.blockNumber >= fromBlock && l.blockNumber <= toBlock).map((l) => ({ ...l }));
+    // a fixture log without `address` is a vault log; a log with another address belongs to a wrapper holder's pToken (getAddressLogs)
+    return this.fx.logs.filter((l) => l.blockNumber >= fromBlock && l.blockNumber <= toBlock && (!l.address || lc(l.address) === lc(this.fx.vault ?? VAULT))).map((l) => ({ ...l }));
+  }
+  async getAddressLogs({ address, fromBlock, toBlock }) {
+    this.addressCalls = this.addressCalls ?? [];
+    this.addressCalls.push([lc(address), fromBlock, toBlock]);
+    return this.fx.logs.filter((l) => l.address && lc(l.address) === lc(address) && l.topics[0] === TRANSFER_TOPIC && l.blockNumber >= fromBlock && l.blockNumber <= toBlock).map((l) => ({ ...l }));
+  }
+  async getUnderlying(address, block) {
+    const u = this.fx.underlying?.[address] ?? this.fx.underlying?.[lc(address)] ?? Object.entries(this.fx.underlying ?? {}).find(([k]) => lc(k) === lc(address))?.[1];
+    return u === undefined ? null : { value: u, at: block };
   }
   async getCode(address, block) { return { code: this.fx.code?.[address] ?? this.fx.code?.[address.toLowerCase()] ?? '0x', at: block }; }
   async getTimestamp(n) {
@@ -312,6 +344,124 @@ export function split({ weights, totalWeight, pharTotal, userBps, excluded, minA
   return { pool, rows, sumLeaves, excludedSlice, dust };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------------- wrapper holders (a lending market's pToken holds the vault shares of its suppliers)
+/**
+ * Config of the wrapper holders: { "schema": WRAPPERS_SCHEMA, "wrappers": [ { "pToken": "0x..", "underlying": "<the vault>", "fromBlock": N (optional: the pToken's deployment block), "label": "free text" } ] }.
+ * A wrapper holder is a contract (a Peridot pToken) whose underlying is the vault share: the vault shares it holds belong to its SUPPLIERS, split by their pToken balances.
+ * Returns the normalised list sorted by pToken address. Refuses: another underlying, zero/dead/vault as pToken, duplicates, a pToken that is also on --allow-contract or --exclude.
+ */
+export function normalizeWrappers(list, { vault = VAULT, allowContract = [], exclude = [] } = {}) {
+  if (!Array.isArray(list)) throw new Error('wrappers must be an array');
+  const out = []; const seen = new Set();
+  for (const w of list) {
+    if (!w || typeof w !== 'object') throw new Error('a wrapper entry must be an object { pToken, underlying, fromBlock?, label? }');
+    for (const k of Object.keys(w)) if (!['pToken', 'underlying', 'fromBlock', 'label'].includes(k)) throw new Error(`wrapper entry: unknown field ${k}`);
+    const pToken = addr(w.pToken); const underlying = addr(w.underlying);
+    if (lc(underlying) !== lc(vault)) throw new Error(`wrapper ${pToken}: underlying ${underlying} is not the vault ${addr(vault)} (only pTokens whose underlying is the vault share can be wrappers)`);
+    if (lc(pToken) === lc(ZERO) || lc(pToken) === lc(DEAD) || lc(pToken) === lc(vault)) throw new Error(`wrapper ${pToken}: the zero address, the dead address and the vault cannot be wrapper holders`);
+    if (seen.has(lc(pToken))) throw new Error(`wrapper ${pToken} is listed twice`);
+    seen.add(lc(pToken));
+    if (allowContract.some((x) => lc(x) === lc(pToken))) throw new Error(`wrapper ${pToken} is also on --allow-contract: a wrapper's shares belong to its suppliers, never to the pToken`);
+    if (exclude.some((x) => lc(x) === lc(pToken))) throw new Error(`wrapper ${pToken} is also on --exclude: to exclude a whole market remove it from the wrappers (it is then an ordinary contract holder, excluded)`);
+    let fromBlock = null;
+    if (w.fromBlock !== undefined && w.fromBlock !== null) {
+      if (!Number.isInteger(w.fromBlock) || w.fromBlock < 0) throw new Error(`wrapper ${pToken}: fromBlock must be a non-negative integer`);
+      fromBlock = w.fromBlock;
+    }
+    const label = w.label === undefined ? '' : String(w.label);
+    if (label.length > 64) throw new Error(`wrapper ${pToken}: label longer than 64 characters`);
+    out.push({ pToken, underlying, fromBlock, label });
+  }
+  out.sort((a, b) => (lc(a.pToken) < lc(b.pToken) ? -1 : 1));
+  return out;
+}
+export function parseWrappersFile(obj, opts) {
+  if (!obj || obj.schema !== WRAPPERS_SCHEMA || !Array.isArray(obj.wrappers)) throw new Error(`the wrappers file must be { "schema": "${WRAPPERS_SCHEMA}", "wrappers": [ ... ] }`);
+  return normalizeWrappers(obj.wrappers, opts);
+}
+
+/**
+ * The split of ONE wrapper holder's vault-share-seconds among its suppliers, by pToken balance.
+ *   V(t) = the vault shares the pToken holds (from the VAULT's Transfer logs: not totalSupply x exchange rate, a donation to the pToken counts),
+ *   p_i(t) = supplier i's pToken balance (from the pToken's Transfer logs; the pToken itself and 0x0 are the mint/burn sides and hold nothing: mint = Transfer(pToken -> minter),
+ *            redeem and the protocol part of a seize = Transfer(x -> pToken), a liquidation seize = Transfer(borrower -> liquidator)),  P(t) = sum of the p_i (the dead seed included).
+ * The window is (startBlock, endBlock] exactly as in timeWeights: events at blocks <= startBlock only build the opening state. The time axis is cut into SEGMENTS in which (V, every p_i)
+ * is constant; a segment starts at the timestamp of a block whose END state differs from the state before it (events of one block are applied in log order, only the end state counts,
+ * so a block that changes nothing, e.g. a zero-value transfer or a mint and redeem inside one block, is no boundary). In a segment of dt seconds:
+ *      w_i += floor(V * dt * p_i / P)          (P > 0)          the rest of V*dt - sum of the w_i goes to `rounding`
+ *      noSupplier += V * dt                      (P == 0: shares in the pToken but nobody holds pTokens: a donation before the first supply, dust after a full exit)
+ * so   sum(w_i) + rounding + noSupplier == integral of V   EXACTLY. `rounding` and `noSupplier` stay on the pToken's own row, which is excluded: they return to the Safe.
+ */
+export function wrapperSplit({ pToken, vaultTransfers, pTokenTransfers, startBlock, endBlock, t0, t1, ts }) {
+  if (!(t1 > t0)) throw new Error(`the epoch has no duration (t0=${t0}, t1=${t1})`);
+  const P = pToken;
+  const evs = [];
+  for (const e of vaultTransfers) if (e.blockNumber <= endBlock && (e.from === P || e.to === P)) evs.push({ ...e, kind: 'v' });
+  for (const e of pTokenTransfers) if (e.blockNumber <= endBlock) evs.push({ ...e, kind: 'p' });
+  evs.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+  for (let i = 1; i < evs.length; i++) if (evs[i - 1].blockNumber === evs[i].blockNumber && evs[i - 1].logIndex === evs[i].logIndex) throw new Error(`wrapper ${P}: two logs at position ${evs[i].blockNumber}/${evs[i].logIndex} (corrupt cache, or the pToken equals the vault?)`);
+  let V = 0n; let bal = new Map();
+  const weights = new Map(); let rounding = 0n; let noSupplier = 0n; let segments = 0; let segStart = t0;
+  const sumBal = (m) => { let x = 0n; for (const b of m.values()) x += b; return x; };
+  const integrate = (v, m, T) => {
+    const dt = T - segStart;
+    if (dt <= 0 || v === 0n) return;
+    const u = v * BigInt(dt); const tot = sumBal(m);
+    segments++;
+    if (tot === 0n) { noSupplier += u; return; }
+    let acc = 0n;
+    for (const [a, b] of m) { const w = (u * b) / tot; if (w > 0n) weights.set(a, (weights.get(a) ?? 0n) + w); acc += w; }
+    rounding += u - acc;
+  };
+  const apply = (e) => {
+    if (e.kind === 'v') {
+      if (e.from === e.to) return;
+      if (e.from === P) { V -= e.value; if (V < 0n) throw new Error(`wrapper ${P}: negative vault-share balance at block ${e.blockNumber}: the vault scan misses earlier history`); }
+      if (e.to === P) V += e.value;
+      return;
+    }
+    if (e.from === e.to) return;
+    if (e.from !== P && e.from !== ZERO) {
+      const b = (bal.get(e.from) ?? 0n) - e.value;
+      if (b < 0n) throw new Error(`wrapper ${P}: negative pToken balance for ${e.from} at block ${e.blockNumber}: the pToken scan misses earlier history (use an earlier fromBlock for this wrapper)`);
+      if (b === 0n) bal.delete(e.from); else bal.set(e.from, b);
+    }
+    if (e.to !== P && e.to !== ZERO && e.value > 0n) bal.set(e.to, (bal.get(e.to) ?? 0n) + e.value);
+  };
+  const same = (m1, m2) => { if (m1.size !== m2.size) return false; for (const [a, b] of m1) if (m2.get(a) !== b) return false; return true; };
+  let opening = null; // the state after block startBlock (pTokens and vault shares)
+  for (let i = 0; i < evs.length;) {
+    const blk = evs[i].blockNumber; let j = i; while (j < evs.length && evs[j].blockNumber === blk) j++;
+    if (blk <= startBlock) { for (let k = i; k < j; k++) apply(evs[k]); i = j; continue; }
+    if (opening === null) opening = { V, bal: new Map(bal) };
+    const T = ts(blk);
+    if (T < t0 || T > t1) throw new Error(`block ${blk} has timestamp ${T} outside [${t0}, ${t1}]`);
+    const beforeV = V; const beforeBal = new Map(bal);
+    for (let k = i; k < j; k++) apply(evs[k]);
+    if (V !== beforeV || !same(bal, beforeBal)) { integrate(beforeV, beforeBal, T); segStart = T; }
+    i = j;
+  }
+  if (opening === null) opening = { V, bal: new Map(bal) };
+  integrate(V, bal, t1);
+  let sumW = 0n; for (const w of weights.values()) sumW += w;
+  return { weights, supplierWeight: sumW, rounding, noSupplier, residual: rounding + noSupplier, vaultShareSeconds: sumW + rounding + noSupplier, segments,
+    openingVaultShares: opening.V, closingVaultShares: V, openingBalances: opening.bal, closingBalances: bal, openingPTokenSupply: sumBal(opening.bal), closingPTokenSupply: sumBal(bal) };
+}
+
+/** Replaces every wrapper holder's own weight by its residual and adds the suppliers' slices. The total weight is unchanged (checked). `splits` = [{ pToken, split }]. */
+export function applyWrapperSplits(weights, splits, totalWeight) {
+  const out = new Map(weights);
+  for (const { pToken } of splits) out.delete(pToken);
+  const add = (a, w) => { if (w > 0n) out.set(a, (out.get(a) ?? 0n) + w); };
+  for (const { pToken, split: sp } of splits) {
+    add(pToken, sp.residual);
+    for (const [a, w] of sp.weights) add(a, w);
+  }
+  let sum = 0n; for (const w of out.values()) sum += w;
+  if (sum !== totalWeight) throw new Error(`the wrapper split changed the total weight (${sum} != ${totalWeight})`);
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------- merkle (same rules as OpenZeppelin MerkleProof + the contract's leaf)
 export const leafHash = (epochId, account, amount) => utils.keccak256(utils.keccak256(utils.defaultAbiCoder.encode(['uint256', 'address', 'uint256'], [epochId, account, amount])));
 export const hashPair = (a, b) => (lc(a) < lc(b) ? utils.keccak256(utils.concat([a, b])) : utils.keccak256(utils.concat([b, a])));
@@ -362,7 +512,7 @@ const S = (x) => x.toString();
 const sha = (text) => utils.keccak256(utils.toUtf8Bytes(text));
 export const toJson = (o) => `${JSON.stringify(o, null, 2)}\n`;
 
-export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, opening, exclusions, codeChecks }) {
+export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, opening, exclusions, codeChecks, wrappers = null }) {
   const { epochId, userBps, pharTotal, extraPhar, minAmount, vault, scanFrom, startBlock, endBlock, firstEpoch, previousEpochId, allowContract, explicitExclude } = params;
   const leavesSorted = splitRes.rows.filter((r) => r.status === 'paid').map((r) => ({ account: r.address, amount: r.amount, leaf: leafHash(epochId, r.address, r.amount) }));
   leavesSorted.sort((a, b) => (lc(a.leaf) < lc(b.leaf) ? -1 : 1));
@@ -388,6 +538,42 @@ export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, o
     exclusionSliceMatches: exTotal === splitRes.excludedSlice,
     balancesPartitionPharTotal: publishTotal + splitRes.excludedSlice + roundingAndDust + safeShare === pharTotal,
   };
+  // ---- wrapper holders: extra checks and report sections, present ONLY when wrappers are configured (an epoch without them is byte-identical to a generator-2.0.0 file)
+  let wrapperReport = null; let wrapperHolderFields = () => ({});
+  if (wrappers) {
+    const wset = new Set(wrappers.list.map((x) => lc(x.pToken)));
+    const exByAddr = new Map(exclusions.map((e) => [lc(e.address), e]));
+    const slices = new Map(); // address -> weight received from wrapper suppliers
+    for (const x of wrappers.list) for (const [a, wt] of x.split.weights) slices.set(a, (slices.get(a) ?? 0n) + wt);
+    const deadRow = exByAddr.get(lc(DEAD));
+    const deadWeightFromWrappers = wrappers.list.map((x) => x.split.weights.get(DEAD) ?? 0n);
+    checks.wrapperSplitSumsToPTokenHolding = wrappers.list.every((x) => x.split.supplierWeight + x.split.rounding + x.split.noSupplier === (wrappers.vaultWeights.get(x.pToken) ?? 0n));
+    checks.wrapperTotalWeightUnchanged = [...weightsRes.weights.values()].reduce((a, b) => a + b, 0n) === weightsRes.totalWeight;
+    checks.seedExcluded = leavesSorted.every((l) => lc(l.account) !== lc(DEAD) && lc(l.account) !== lc(ZERO))
+      && deadWeightFromWrappers.every((dw) => dw === 0n || (!!deadRow && deadRow.reason === 'dead-seed' && BigInt(deadRow.weight) >= dw));
+    checks.wrapperHoldersHaveNoLeaf = leavesSorted.every((l) => !wset.has(lc(l.account)));
+    checks.wrapperHoldersAreExcluded = wrappers.list.every((x) => { const r = exByAddr.get(lc(x.pToken)); return x.split.residual === 0n || (!!r && r.reason === 'wrapper-residual'); });
+    wrapperHolderFields = (r) => {
+      const isW = wset.has(lc(r.address));
+      const wrapperWeight = slices.get(r.address) ?? 0n;
+      return { directWeight: S(isW ? 0n : r.weight - wrapperWeight), wrapperWeight: S(wrapperWeight) };
+    };
+    wrapperReport = wrappers.list.map((x) => {
+      const sp = x.split;
+      const sup = [...sp.weights.keys(), ...sp.openingBalances.keys(), ...sp.closingBalances.keys()];
+      const rows = [...new Set(sup)].sort((a, b) => (lc(a) < lc(b) ? -1 : 1)).map((a) => ({
+        address: a, weight: S(sp.weights.get(a) ?? 0n), openingPTokens: S(sp.openingBalances.get(a) ?? 0n), closingPTokens: S(sp.closingBalances.get(a) ?? 0n),
+      }));
+      return {
+        pToken: x.pToken, label: x.label, underlying: x.underlying, fromBlock: x.fromBlock ?? scanFrom,
+        vaultShareSeconds: S(sp.vaultShareSeconds), suppliersWeight: S(sp.supplierWeight), returnedToSafeWeight: S(sp.residual),
+        roundingWeight: S(sp.rounding), noSupplierWeight: S(sp.noSupplier), segments: sp.segments,
+        openingVaultShares: S(sp.openingVaultShares), closingVaultShares: S(sp.closingVaultShares), openingPTokenSupply: S(sp.openingPTokenSupply), closingPTokenSupply: S(sp.closingPTokenSupply),
+        deadSeed: { address: DEAD, weight: S(sp.weights.get(DEAD) ?? 0n), openingPTokens: S(sp.openingBalances.get(DEAD) ?? 0n), closingPTokens: S(sp.closingBalances.get(DEAD) ?? 0n) },
+        suppliers: rows,
+      };
+    });
+  }
   for (const [k, v] of Object.entries(checks)) if (!v) throw new Error(`check failed: ${k}`);
   const dur = BigInt(w.t1 - w.t0);
   const holders = splitRes.rows.map((r) => ({
@@ -400,16 +586,18 @@ export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, o
     status: r.status,
     excludedReason: r.reason,
     unpaidSlice: r.status === 'excluded' || r.status === 'dust' ? S(r.would) : '0',
+    ...wrapperHolderFields(r),
   }));
   return {
     schema: SCHEMA,
-    generator: GENERATOR,
+    generator: wrappers ? GENERATOR_WRAPPERS : GENERATOR,
     inputs: {
       chainId: CHAIN_ID, vault: addr(vault), epochId, firstEpoch, previousEpochId: previousEpochId ?? null, scanFromBlock: scanFrom, startBlock, endBlock,
       startTimestamp: w.t0, endTimestamp: w.t1, durationSeconds: w.t1 - w.t0, userBps,
       harvest: { sum: S(harvest.sum), count: harvest.count, transactions: harvest.txs.map((h) => ({ txHash: h.txHash, block: h.blockNumber, logIndex: h.logIndex, amount: S(h.amount) })) },
       extraPhar: S(extraPhar), pharTotal: S(pharTotal), minAmount: S(minAmount),
       allowContracts: allowContract.map(addr).sort(), explicitExcludes: explicitExclude.map(addr).sort(),
+      ...(wrappers ? { wrappers: wrappers.list.map((x) => ({ pToken: x.pToken, underlying: x.underlying, fromBlock: x.fromBlock, label: x.label })) } : {}),
     },
     totals: {
       pool: S(splitRes.pool), publishTotal: S(publishTotal), leafCount: leaves.length,
@@ -418,6 +606,7 @@ export function buildEpoch({ params, window: w, harvest, weightsRes, splitRes, o
       droppedDust: S(splitRes.dust),
     },
     exclusions: { list: exList, listHash: sha(JSON.stringify(exList)), totalReturnedToSafe: S(exTotal) },
+    ...(wrapperReport ? { wrappers: wrapperReport } : {}),
     codeChecks,
     checks,
     root: tree.root,
@@ -438,6 +627,7 @@ export function buildManifest({ epoch, text, uri = '', git = null, extra = null 
     publishTotal: t.publishTotal, leafCount: t.leafCount,
     generator: epoch.generator, gitCommit: git?.commit ?? null, gitDirty: git?.dirty ?? null,
     exclusionListHash: epoch.exclusions.listHash,
+    ...(i.wrappers ? { wrappersHash: sha(JSON.stringify(i.wrappers)), wrapperCount: i.wrappers.length } : {}),
     dataFile: 'epoch.json', leavesFile: 'epoch.json', dataHash: sha(text), root: epoch.root,
     uri,
     publishEpochArguments: { root: epoch.root, total: t.publishTotal, fromBlock: i.startBlock, toBlock: i.endBlock, dataHash: sha(text) },
@@ -451,6 +641,7 @@ export async function generate({ source: rawSource, cacheFile = null, args, prev
   const { epochId, userBps, vault, scanFrom, minAmount, chunk, sleepMs } = args;
   const allow = (args.allowContract ?? []).map(addr); const explicit = (args.exclude ?? []).map(addr);
   const extraPhar = args.extraPhar ?? 0n;
+  const wrappers = normalizeWrappers(args.wrappers ?? [], { vault, allowContract: allow, exclude: explicit });
   const head = await source.getHead();
   const cache = new Cache(cacheFile).load(vault);
   const ts = new Timestamps(source, cache);
@@ -475,10 +666,38 @@ export async function generate({ source: rawSource, cacheFile = null, args, prev
 
   const { transfers, harvests } = decodeLogs(cache.data.logs.filter((l) => l.blockNumber >= scanFrom && l.blockNumber <= endBlock));
   if (previous && !harvests.some((h) => h.blockNumber === startBlock)) throw new Error(`the start block ${startBlock} (end of the previous epoch) has no PharHarvested event: boundaries must be harvest blocks`);
+  // ---- wrapper holders: the pToken's own Transfer logs (separate resumable cache per pToken), and a check of pToken.underlying()
+  const wrapperData = [];
+  for (const w of wrappers) {
+    const u = await source.getUnderlying(w.pToken, endBlock);
+    if (u !== null && u.value === null) { // underlying() returned no data: fine only if nothing is deployed there yet at the end block (the pToken then has no history in this epoch)
+      const { code, at } = await source.getCode(w.pToken, endBlock);
+      if (classifyCode(code) !== 'eoa') throw new Error(`wrapper ${w.pToken}: underlying() returned nothing although the address has code (checked at ${at}): it is not a pToken`);
+      log(`  [wrapper ${w.pToken}] no contract at block ${endBlock}: it contributes nothing to this epoch`);
+    } else if (u !== null && lc(u.value) !== lc(vault)) throw new Error(`wrapper ${w.pToken}: underlying() is ${u.value} (checked at ${u.at}), not the vault ${addr(vault)}`);
+    const wFrom = w.fromBlock ?? scanFrom;
+    const wCache = new Cache(cacheFile ? join(dirname(cacheFile), `scan-${CHAIN_ID}-${lc(w.pToken)}.json`) : null).load(w.pToken);
+    const wSource = { getLogs: (r) => source.getAddressLogs({ address: w.pToken, ...r }) };
+    await scanLogs({ source: wSource, cache: wCache, scanFrom: wFrom, endBlock, head: null, resolve: null, chunk, sleepMs, sleep, log: (m) => log(`  [wrapper ${w.pToken}] ${m}`) });
+    const pTokenTransfers = decodeLogs(wCache.data.logs.filter((l) => l.blockNumber >= wFrom && l.blockNumber <= endBlock)).transfers;
+    wrapperData.push({ ...w, pTokenTransfers, underlyingChecked: u !== null });
+  }
   const t0 = await ts.get(startBlock); const t1 = await ts.get(endBlock);
-  for (const b of new Set(transfers.filter((e) => e.blockNumber > startBlock).map((e) => e.blockNumber))) await ts.get(b);
+  const tsBlocks = new Set(transfers.filter((e) => e.blockNumber > startBlock).map((e) => e.blockNumber));
+  for (const w of wrapperData) for (const e of w.pTokenTransfers) if (e.blockNumber > startBlock) tsBlocks.add(e.blockNumber);
+  for (const b of [...tsBlocks].sort((x, y) => x - y)) await ts.get(b);
   cache.save();
-  const weightsRes = timeWeights({ transfers, startBlock, endBlock, t0, t1, ts: (b) => ts.map[String(b)] });
+  const tsOf = (b) => ts.map[String(b)];
+  const vaultWeightsRes = timeWeights({ transfers, startBlock, endBlock, t0, t1, ts: tsOf });
+  let weightsRes = vaultWeightsRes; let wrapperResults = null;
+  if (wrapperData.length > 0) {
+    wrapperResults = wrapperData.map((w) => ({ ...w, split: wrapperSplit({ pToken: w.pToken, vaultTransfers: transfers, pTokenTransfers: w.pTokenTransfers, startBlock, endBlock, t0, t1, ts: tsOf }) }));
+    for (const w of wrapperResults) {
+      const own = vaultWeightsRes.weights.get(w.pToken) ?? 0n;
+      if (w.split.vaultShareSeconds !== own) throw new Error(`wrapper ${w.pToken}: the split (${w.split.vaultShareSeconds}) does not add up to the pToken's own vault-share-seconds (${own})`);
+    }
+    weightsRes = { ...vaultWeightsRes, weights: applyWrapperSplits(vaultWeightsRes.weights, wrapperResults.map((w) => ({ pToken: w.pToken, split: w.split })), vaultWeightsRes.totalWeight) };
+  }
   const hv = harvests.filter((h) => h.blockNumber > startBlock && h.blockNumber <= endBlock);
   const harvest = { sum: hv.reduce((a, h) => a + h.amount, 0n), count: hv.length, txs: hv };
   if (hv.length === 0) throw new Error('no harvest inside the epoch');
@@ -490,6 +709,7 @@ export async function generate({ source: rawSource, cacheFile = null, args, prev
   for (const a of [...weightsRes.weights.keys()].sort((x, y) => (lc(x) < lc(y) ? -1 : 1))) {
     if (lc(a) === lc(DEAD)) { excluded.set(a, 'dead-seed'); continue; }
     if (lc(a) === lc(vault)) { excluded.set(a, 'vault'); continue; }
+    if (wrappers.some((w) => lc(w.pToken) === lc(a))) { excluded.set(a, 'wrapper-residual'); continue; }
     if (explicit.some((x) => lc(x) === lc(a))) { excluded.set(a, 'explicit'); continue; }
     const { code, at } = await source.getCode(a, endBlock);
     const cls = classifyCode(code);
@@ -503,6 +723,7 @@ export async function generate({ source: rawSource, cacheFile = null, args, prev
   const epoch = buildEpoch({
     params: { epochId, userBps, pharTotal, extraPhar, minAmount, vault, scanFrom, startBlock, endBlock, firstEpoch: !previous, previousEpochId, allowContract: allow, explicitExclude: explicit },
     window: { t0, t1 }, harvest, weightsRes, splitRes, opening, exclusions, codeChecks,
+    wrappers: wrapperResults ? { list: wrapperResults, vaultWeights: vaultWeightsRes.weights } : null,
   });
   const text = toJson(epoch);
   return { epoch, text, manifest: buildManifest({ epoch, text, uri: args.uri ?? '', git, extra: manifestExtra }) };
@@ -530,6 +751,9 @@ const HELP = `dlmm-rewards-root.mjs: time-weighted PHAR split of the Pharaoh DLM
     --exclude ADDR          more holders with no entitlement (repeatable). ALWAYS excluded: 0x0, 0x...dEaD, the vault itself. Their slice returns to the Safe.
     --min-amount WEI        drop leaves below this (default 1)           --vault ADDR      default ${VAULT}
     --start-block N         with --first-epoch only: another first start block   --cache-dir DIR   resumable cache (default ./rewards-cache)
+    --wrappers FILE         wrapper holders: a JSON file { "schema": "${WRAPPERS_SCHEMA}", "wrappers": [ { "pToken": "0x..", "underlying": "<the vault>", "fromBlock": N, "label": "..." } ] }.
+                            The vault shares such a pToken holds are split among ITS SUPPLIERS by pToken balance (time-weighted; the pToken's Transfer logs are scanned too), not
+                            excluded as a contract. The permanent seed (pTokens at 0x...dEaD) is excluded like the vault's dead seed. Written into epoch.json inputs.
     --chunk N               blocks per getLogs call (default ${DEFAULT_CHUNK})   --sleep-ms N      pause between chunks   --fixture FILE   offline: events from a fixture
     --local-rpc URL         REHEARSAL ONLY: read from a LOCAL anvil fork instead (http://127.0.0.1:PORT or http://localhost:PORT, nothing else; refused unless the node answers
                             anvil_nodeInfo and has chain id 43114). Needs an explicit --cache-dir and --out-dir (a fork's data never lands in the real cache or epochs/), and
@@ -566,6 +790,7 @@ export function parseArgs(argv) {
       case '--uri': a.uri = need(i++, k); break;
       case '--force': a.force = true; break;
       case '--fixture': a.fixture = need(i++, k); break;
+      case '--wrappers': a.wrappersFile = need(i++, k); break;
       default: throw new Error(`unknown argument ${redact(k)} (an RPC url, an end block and a PHAR amount are deliberately not options)`);
     }
   }
@@ -598,6 +823,7 @@ export async function main(argv, { git = undefined } = {}) {
   }
   else { source = new RpcSource({ vault: args.vault }); cacheFile = resolve(args.cacheDir, `scan-${CHAIN_ID}-${lc(args.vault)}.json`); }
   const previous = args.previousManifest ? JSON.parse(readFileSync(args.previousManifest, 'utf8')) : null;
+  if (args.wrappersFile) args.wrappers = parseWrappersFile(JSON.parse(readFileSync(args.wrappersFile, 'utf8')), { vault: args.vault, allowContract: args.allowContract, exclude: args.exclude });
   const gitInfo = git !== undefined ? git : gitState();
   const { epoch, text, manifest } = await generate({ source, cacheFile, args, previous, log, git: gitInfo, manifestExtra });
   const dir = resolve(args.outDir ?? join('epochs', String(args.epochId)));

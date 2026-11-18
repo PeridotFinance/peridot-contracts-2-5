@@ -5,6 +5,9 @@
 #   usage:  AVALANCHE_RPC=<in your shell, never in a file>  REH_SCAN_FROM=<vault deployment block>  [DLMM_FORK_BLOCK=<block>]  tools/rewards-rehearsal/rehearsal.sh <out-dir>
 #           REH_SCAN_FROM=<block>  tools/rewards-rehearsal/rehearsal.sh --dry [<out-dir>]          (checks the INPUTS only: no endpoint, no chain, no lock, no anvil)
 #   run from contracts/vault-dlmm (or anywhere: the script finds its own project).
+#   OPTIONAL WRAPPER STEP:  add  REH_WRAPPER=1  to either command line (default OFF: the 33 checks P00..P32 are then exactly the ones of before). It adds the stand-in pToken
+#   (script/rehearsal/StandInWrapper.sol: it holds vault shares for its suppliers, emits the pToken Transfer logs), the generator option --wrappers, and the checks W01..W06 (39 in all):
+#   see section 15 of docs/deployment-handoffs/avalanche-dlmm-vault-rewards-distribution.md. Needs one more artifact (out/StandInWrapper.sol, built by the same forge build; --dry checks it).
 #
 # Scenario (rehearsal.mjs): a local anvil fork of the LIVE chain at head-4 with the REAL vault and the REAL Safe (the Ledger impersonated, SEND_MODE=unlocked of the integration tools);
 # shares moved to an EOA and to a contract; 1 day of chain time; harvestRewards through the Safe; the generator (tools/dlmm-rewards-root.mjs, --local-rpc = the live RpcSource path)
@@ -62,6 +65,7 @@ if [ "$DRY" = 1 ]; then
     if ! ( cd "$PROJ" && forge build --skip test 2>&1 | REDACT | tail -3 ); then bad "forge build failed"; fi
     [ -f "$PROJ/out/FixedFeed.sol/FixedFeed.json" ] || bad "out/FixedFeed.sol/FixedFeed.json missing after forge build (the contract-holder stand-in)"
     [ -f "$PROJ/out/PharRewardsDistributor.sol/PharRewardsDistributor.json" ] || bad "out/PharRewardsDistributor.sol/PharRewardsDistributor.json missing after forge build"
+    if [ "${REH_WRAPPER:-}" = 1 ]; then [ -f "$PROJ/out/StandInWrapper.sol/StandInWrapper.json" ] || bad "out/StandInWrapper.sol/StandInWrapper.json missing after forge build (REH_WRAPPER=1: the stand-in pToken)"; fi
     node --check "$HERE/rehearsal.mjs" 2>/dev/null || bad "node --check rehearsal.mjs fails"
     node --check "$HERE/rpc-proxy.mjs" 2>/dev/null || bad "node --check rpc-proxy.mjs fails"
     ETHERS_DIR="$ETHERS" node "$PROJ/tools/dlmm-rewards-root.mjs" --help >/dev/null 2>&1 || bad "the generator does not start (node tools/dlmm-rewards-root.mjs --help)"
@@ -81,6 +85,7 @@ cd "$PROJ" || exit 2
 forge build --skip test 2>&1 | REDACT | tail -3
 [ -f out/FixedFeed.sol/FixedFeed.json ] || { echo "FixedFeed artifact missing (forge build)"; rm -rf "$SCRATCH"; exit 2; }
 [ -f out/PharRewardsDistributor.sol/PharRewardsDistributor.json ] || { echo "PharRewardsDistributor artifact missing (forge build)"; rm -rf "$SCRATCH"; exit 2; }
+if [ "${REH_WRAPPER:-}" = 1 ]; then [ -f out/StandInWrapper.sol/StandInWrapper.json ] || { echo "StandInWrapper artifact missing (forge build; REH_WRAPPER=1)"; rm -rf "$SCRATCH"; exit 2; }; fi
 
 HELD=0; APID=""; PPID_X=""; T0=0
 cleanup() {
@@ -121,7 +126,7 @@ echo "argv check: $NURL of $NPROC processes carry the upstream endpoint in their
 [ "$NURL" = 0 ] || { echo "ARGV CHECK FAILED: stopping"; exit 3; }
 
 env -i PATH="$PATH" HOME="$HOME" ETHERS_DIR="$ETHERS" REH_PROJ="$PROJ" REH_SCRATCH="$SCRATCH" REH_RPC="$LOCAL_URL" REH_RESULTS="$OUT/results.json" REH_INT_TOOLS="$INT_TOOLS" \
-  REH_SCAN_FROM="$REH_SCAN_FROM" REH_WARP_SECONDS="${REH_WARP_SECONDS:-86400}" REH_CHUNK="${REH_CHUNK:-100}" REH_SLEEP_MS="${REH_SLEEP_MS:-0}" REH_KEEP_EPOCH_DIR="${REH_KEEP_EPOCH_DIR:-}" REH_EPOCH_OUT="$OUT" \
+  REH_SCAN_FROM="$REH_SCAN_FROM" REH_WARP_SECONDS="${REH_WARP_SECONDS:-86400}" REH_CHUNK="${REH_CHUNK:-100}" REH_SLEEP_MS="${REH_SLEEP_MS:-0}" REH_KEEP_EPOCH_DIR="${REH_KEEP_EPOCH_DIR:-}" REH_EPOCH_OUT="$OUT" REH_WRAPPER="${REH_WRAPPER:-}" \
   node "$HERE/rehearsal.mjs" 2>&1 | REDACT | tee "$LOG"
 RC=${PIPESTATUS[0]}
 kill "$PPID_X" 2>/dev/null; sleep 1; PPID_X=""   # SIGTERM makes the proxy write its status counts

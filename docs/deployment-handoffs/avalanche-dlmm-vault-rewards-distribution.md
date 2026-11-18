@@ -2,7 +2,7 @@
 
 Status: **BUILT AND TESTED OFFLINE, REHEARSAL SCRIPT WRITTEN (self-tested on a mock world, NOT YET RUN ON A FORK OF THE LIVE CHAIN), NOT DEPLOYED.** Nothing here was signed, sent or broadcast and no RPC endpoint was used by the agents that built it. The deploy script (`contracts/vault-dlmm/script/DeployPharRewardsDistributor.s.sol`) ran only in the local mock-world self-test; the shell tools have stub-cast tests and a self-test. All paths are relative to `contracts/vault-dlmm/` unless they start with `docs/`.
 
-**Operator decisions (final, 16 Nov 2026):** (1) the dead seed's share **returns to the Safe** (the seed's weight stays in the denominator, the default of the generator); (2) **each epoch folder is committed to the repo** (`contracts/vault-dlmm/epochs/<id>/`) and **kept at least 180 days** (never rewritten or deleted); (3) the **second recompute is done by a FRESH subagent from the published inputs only** (`avalanche-dlmm-rewards-second-recompute.md`); (4) **harvest daily, publish weekly** (the keeper's optional harvest, `dlmm-keeper/README.md`, or `tools/dlmm-harvest.sh` by hand); (5) the **first epoch starts at block 100488395** (the `openBand` block). Design B (in-vault accumulator) is not part of this work. The step-by-step live procedure is `avalanche-dlmm-vault-rewards-ceremony.md`; the fork rehearsal is `tools/rewards-rehearsal/` (section 12).
+**Operator decisions (final, 16 Nov 2026):** (1) the dead seed's share **returns to the Safe** (the seed's weight stays in the denominator, the default of the generator); (2) **each epoch folder is committed to the repo** (`contracts/vault-dlmm/epochs/<id>/`) and **kept at least 180 days** (never rewritten or deleted); (3) the **second recompute is done by a FRESH subagent from the published inputs only** (`avalanche-dlmm-rewards-second-recompute.md`); (4) **harvest daily, publish weekly** (the keeper's optional harvest, `dlmm-keeper/README.md`, or `tools/dlmm-harvest.sh` by hand); (5) the **first epoch starts at block 100488395** (the `openBand` block). Design B (in-vault accumulator) is not part of this work. **(6) Added 18 Nov 2026, wrapper holders:** the vault shares held by the pToken of the lending market `bpPHAR-USDC` are **split among that market's suppliers by pToken balance** (time-weighted), not excluded as "a contract"; the permanent seed's slice returns to the Safe; the suppliers claim from the same distributor. Section 15 (rule, reasoning, edge cases, config format, rehearsal); no contract change. The step-by-step live procedure is `avalanche-dlmm-vault-rewards-ceremony.md`; the fork rehearsal is `tools/rewards-rehearsal/` (section 12).
 
 The live vault (proxy `0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D`, source `src/PharaohDlmmVault.sol`, **frozen**, together with `PharaohDlmmPairValidator.sol` and `IPharaohDlmmVault.sol`) claims PHAR with `harvestRewards()` and forwards the **whole** PHAR balance to its owner, the Peridot Safe `0x80f4207e0810EA2C39B6C8387E5ffC6FF34dfB12` (1-of-1, owner the Ledger `0x064eFE76812F5f18Bd1aA9708739Fb33C810B2dD`). `harvestRewards()` may be called by the rebalancer (keeper) or the owner, so PHAR reaches the Safe whenever either calls it. The operator decided that depositors receive most of that PHAR. This document is design A: **a separate distributor contract plus an off-chain root generator; the vault is not touched.**
 
@@ -26,7 +26,7 @@ sweepUnclaimed(epochId)  ->  what nobody claimed returns to the Safe
 
 * **One epoch = a block range `(start, end]` whose two boundaries are harvest blocks.** `end` is the block of a chosen `PharHarvested` event; `start` is the previous published epoch's `end` (the first epoch starts at the vault's first harvest-eligible block, the `openBand` block **100488395**, tx `0x58e31159ad11de27e80ed6871f00e53923077c1c18a5e31b07722ae25e8634ab`, unless the operator says otherwise). An epoch may span several consecutive harvests (`--to-harvest`). **The PHAR of an epoch is the sum of `PharHarvested.amount` inside the range**, not the Safe's balance: PHAR the Safe received from the Pharaoh CL vaults, or that someone donated to the DLMM vault, is not distributed unless the operator adds it explicitly (`--extra-phar`), and then it is shown separately.
 * **Entitlement is time-weighted.** For every share holder the generator integrates the share balance over the block timestamps of the range (a share held for the whole epoch counts fully, one bought half-way counts half, one sold half-way the other half). The epoch's PHAR times `USER_BPS` (default **9000 = 90 %**, a per-epoch generator argument, **not an on-chain constant**) is split pro rata over the **total** time-weighted supply, with floor rounding.
-* **Holders that cannot claim are excluded and their share goes back to the Safe**: the zero address, the dead seed `0x...dEaD` (1,000,000 seed shares), the vault itself, every address with contract code at the epoch's end block **except** addresses on the operator's `--allow-contract` list (an EIP-7702 delegation designator, code `0xef0100` + 20 bytes = 23 bytes, counts as an EOA), and any `--exclude` address. Their weight **stays in the denominator**, so excluding a holder never raises anybody else's amount; their slice is simply never published and stays with the Safe (it is listed per address as `returnedToSafe`).
+* **Holders that cannot claim are excluded and their share goes back to the Safe**: the zero address, the dead seed `0x...dEaD` (1,000,000 seed shares), the vault itself, every address with contract code at the epoch's end block **except** addresses on the operator's `--allow-contract` list and **except the configured wrapper holders** (a lending market's pToken, section 15: its shares are split among its suppliers instead) (an EIP-7702 delegation designator, code `0xef0100` + 20 bytes = 23 bytes, counts as an EOA), and any `--exclude` address. Their weight **stays in the denominator**, so excluding a holder never raises anybody else's amount; their slice is simply never published and stays with the Safe (it is listed per address as `returnedToSafe`).
 * **The Safe publishes the exact sum of the leaves** as `total` (not `pharTotal * USER_BPS / 10000`): rounding dust and the excluded slices never leave the Safe, so nothing is locked in the distributor for 180 days.
 * **On chain only the root, the total, the block range and a hash of the data file are recorded** (`EpochPublished(epochId, root, total, fromBlock, toBlock, dataHash, publishedAt, claimOpensAt, claimDeadline)`). `dataHash = keccak256(epoch.json bytes)`. `USER_BPS` appears on chain **only inside** that file (so only as part of `dataHash`), as do the exclusion list, the harvest transaction list and every holder's weight.
 
@@ -41,6 +41,8 @@ sweepUnclaimed(epochId)  ->  what nobody claimed returns to the Safe
 | `script/DeployPharRewardsDistributor.s.sol` | deploy script (pre-flight, one transaction, post-checks) and `ReadBackPharRewardsDistributor` |
 | `tools/dlmm-rewards-ceremony.sh` | `list` / `check-env` / `deploy` / `verify`, in the style of `dlmm-vault-ceremony.sh` |
 | `tools/dlmm-rewards-safe-call.sh` | the Safe calls of the procedure (approve exact total, publish, cancel, sweep), in the style of `dlmm-safe-call.sh` |
+| `tools/rewards-test/dlmm-rewards-wrapper.test.mjs` | 19 offline tests of the wrapper-holder split (section 15): synthetic vault and pToken Transfer histories, an exact second-by-second oracle, determinism, the fake-node network path |
+| `script/rehearsal/StandInWrapper.sol` | a stand-in pToken for the OPTIONAL wrapper step of the fork rehearsal (`REH_WRAPPER=1`, section 15.7) |
 | `tools/rewards-test/dlmm-rewards-root.rpc.test.mjs` | the generator's LIVE network path (`RpcSource`) against a fake JSON-RPC node, and the `--local-rpc` refusals |
 | `tools/rewards-test/dlmm-rewards-tools.test.mjs` | 13 tests of the two shell tools with a stub `cast` / `forge`, under `/bin/bash` 3.2 |
 | `tools/rewards-rehearsal/` | `rehearsal.sh`, `rehearsal.mjs`, `rpc-proxy.mjs` (the fork rehearsal of one full epoch), `selftest/` (mock world, no endpoint) |
@@ -70,6 +72,8 @@ pool   = floor(PHAR_harvested_in_range * USER_BPS / 10000)           (+ --extra-
 amount = floor(pool * W_me / W)
 ```
 
+For a supplier of a wrapper holder (section 15) `W_me` is the sum of the direct share-seconds and the wrapper slices (`directWeight` + `wrapperWeight` in the holder row; the per-segment arithmetic is in section 15.2 and the `wrappers` section of `epoch.json`).
+
 `epoch.json` lists `weight` (= `W_me`) for every holder and `totals.totalWeight` (= `W`), so the arithmetic can be checked per line. The window is `(startBlock, endBlock]`: events in blocks `<= startBlock` only build the opening balances; an event in a block `> startBlock` takes effect at that block's timestamp; weights are integrated over `[ts(startBlock), ts(endBlock)]`; events in the same block are applied in log order.
 
 ## 4. Parameters
@@ -94,7 +98,7 @@ Contract conventions worth knowing: the "bitmap" of the brief is a per-`(epoch, 
 cd contracts/vault-dlmm
 node tools/dlmm-rewards-root.mjs --epoch-id <ID> --scan-from <vault deployment block> \
      (--first-epoch | --previous-manifest epochs/<prev>/manifest.json) --to-harvest <txhash|N> \
-     [--user-bps 9000] [--extra-phar WEI] [--allow-contract ADDR]... [--exclude ADDR]... [--min-amount WEI] \
+     [--user-bps 9000] [--extra-phar WEI] [--allow-contract ADDR]... [--exclude ADDR]... [--min-amount WEI] [--wrappers FILE] \
      [--out-dir epochs/<ID>] [--uri 'https://...'] [--cache-dir ./rewards-cache]
 ```
 
@@ -102,6 +106,7 @@ node tools/dlmm-rewards-root.mjs --epoch-id <ID> --scan-from <vault deployment b
 * **Scan time:** the scan must start at the vault's deployment block (`--scan-from`) so that every opening balance is known; the tool aborts with "negative balance" if the history is incomplete. At 100 blocks per call a month of Avalanche blocks is on the order of 10^4 calls; the first run is slow, later runs resume. **Not measured against the live endpoint** (see open questions).
 * **Contract detection:** `eth_getCode` at the epoch's end block for every holder that is not already excluded. If the public endpoint does not serve historical state, the tool falls back to the **latest** code and records `checkedAt: "latest"` per address in `epoch.json` (`codeChecks`). A contract does not disappear, but a contract deployed after the end block at an address that was an EOA then would not be seen: low risk, stated here.
 * **Outputs** (`--out-dir`, default `epochs/<ID>/`): `epoch.json` (the hashed data file: `inputs`, `totals`, `exclusions` with the reason and the PHAR returned per address and `listHash`, `codeChecks`, `checks`, `root`, the per-holder table, and `leaves` sorted by leaf hash **with their proofs**) and `manifest.json` (epoch id, vault, start/end block and timestamps, harvest tx hashes, `harvestSum`, `extraPhar`, `pharTotal`, `userBps`, `publishTotal`, generator version, **git commit and dirty flag of the generator**, `exclusionListHash`, `dataFile`, `leavesFile`, `dataHash`, `root`, a free-string `uri`, and the exact `publishEpochArguments`). The manifest is not part of `dataHash` (it carries the git commit and the `uri`, which are set after the fact); everything that matters for recomputation is in `epoch.json`. The tool refuses to overwrite an existing, different `epoch.json` (`--force` to override).
+* **`--wrappers FILE`** (generator 2.1.0; section 15): the lending-market pTokens whose vault shares are split among their suppliers. Without it the output is byte-identical to a 2.0.0 file (the committed golden files).
 * **Checks the tool enforces before it writes** (it throws otherwise): sum of leaves <= `floor(pharTotal * bps / 10000)` and <= `pharTotal * bps / 10000`; the sum of the per-holder weights equals the integral of the total supply; leaves unique, none zero, none for an excluded holder; the excluded slices add up; `leaves + excluded + rounding/dust + (100 % - bps)` partition `pharTotal` exactly; every proof verifies against the root.
 * Rounding: `amount = floor(pool * weight / totalWeight)`; the remainder stays with the Safe and is reported as `roundingAndDust`. `--min-amount` (default 1 wei) drops tiny leaves (a claim costs about 90,000 gas).
 
@@ -169,7 +174,7 @@ Before deposits open, the deposit screen must show the following, in plain words
 
 1. **Share passed to depositors.** "Of the PHAR this vault harvests, **90 %** is passed to depositors in proportion to how many vault shares they held and for how long. The remaining **10 %** stays with the protocol Safe." (The number is the `userBps` of the latest published epoch, default 90 %; it is set per distribution and shown with each distribution; it can differ between distributions.)
 2. **How it is paid.** "PHAR is distributed in rounds. Each round is published, then waits **24 hours** before anyone can claim; **you claim it yourself** (it is not sent automatically). Unclaimed PHAR returns to the Safe 180 days after publication."
-3. **Who is not paid.** "Shares held by smart contracts (for example lending pools or routers) and the 1 USDC launch seed are excluded; their part stays with the protocol Safe. If you hold your shares in a contract, you may not receive PHAR for them."
+3. **Who is not paid.** "Shares held by smart contracts (for example routers) and the 1 USDC launch seed are excluded; their part stays with the protocol Safe. If you hold your shares in a contract, you may not receive PHAR for them. **Exception: shares you supply to the Peridot bpPHAR-USDC market are paid to you** in proportion to your supply (your pToken balance) and the time it was supplied, and you claim from the same address you supplied from (section 15). The market's own 1 USDC permanent seed is excluded."
 4. **No promise.** "PHAR comes from a weekly vote and can be zero in any week. There is no APY and no promised amount. PHAR is paid in PHAR; its price is not guaranteed."
 
 ## 9. Known limits
@@ -177,7 +182,7 @@ Before deposits open, the deposit screen must show the following, in plain words
 * **Shares transferred during an epoch.** Handled by time-weighting, per second of block timestamps: seller and buyer each get PHAR for the time they held. It does not track *who deposited the USDC*: a transfer moves the entitlement from that moment. Shares sent to the dead address stop earning for the sender.
 * **PHAR is attributed by holding time, not by accrual time.** The vault's bins earn PHAR continuously but it is only harvested when someone calls `harvestRewards()`; an epoch's PHAR is split by who held shares during the range that ends at a harvest, not by when the PHAR was earned. A holder who is there for the whole range gets the most; a deposit just before a harvest gets little (the weight is time-weighted) but is not zero.
 * **The dead seed.** 1,000,000 shares (1 USDC) sit at `0x...dEaD` and earn nothing: their weight stays in the denominator and their slice (visible in `exclusions.list` of `epoch.json` as the entry with reason `dead-seed`, with its `weight` and `returnedToSafe`) stays with the Safe. The operator decided (final) that this slice returns to the Safe; the alternative reading (seed removed from the denominator) is not used.
-* **Shares held by contracts** (a lending pool, a router, a Safe) are excluded by default and their PHAR returns to the Safe; the operator can allow a contract that can claim (`--allow-contract`). A holder behind a contract loses the distribution unless the operator allows that contract or the holder moves the shares to an EOA.
+* **Shares held by contracts** (a router, a Safe, another protocol's pool) are excluded by default and their PHAR returns to the Safe; **the one configured exception is the bpPHAR-USDC pToken, whose suppliers are paid (section 15)**; the operator can allow a contract that can claim (`--allow-contract`). A holder behind a contract loses the distribution unless the operator allows that contract or the holder moves the shares to an EOA.
 * **The operator's own holding** (the 199 USDC "rest" is minted to the Ledger by default) is an ordinary holder: 90 % of its slice returns to the Safe by claiming. The operator may exclude it (`--exclude`).
 * **Dust and rounding** stay with the Safe (reported). **Donated PHAR** is not distributed (unless `--extra-phar`), and PHAR sent straight to the distributor is lost.
 * **Harvests by the keeper.** With the keeper's optional periodic harvest enabled (daily, `dlmm-keeper/README.md`; OFF in the deployed host config until the operator turns it on) every harvest in the range counts (the manifest lists them). The keeper never harvests ahead of or during a rebalance, so PHAR accrued on a band that is replaced between two harvests can be forfeited (W6 finding): harvest by hand before an expected exit if that matters. The harvest event's `amount` is what the rewarder paid in that call; the whole PHAR balance is forwarded, so a donation to the vault never inflates the event.
@@ -202,7 +207,7 @@ Built here: contract + 69 tests + generator + 22 offline tests + deploy script +
 
 ## 12. Evidence
 
-Run from `contracts/vault-dlmm` (no fork, no RPC): `forge test --match-path 'test/rewards/*'` and `ETHERS_DIR=<...>/dlmm-keeper/node_modules/ethers node --test tools/rewards-test/dlmm-rewards-root.test.mjs tools/rewards-test/dlmm-rewards-root.rpc.test.mjs tools/rewards-test/dlmm-rewards-tools.test.mjs` (22 + 5 + 13 = 40 JavaScript tests, MEASURED 16 Nov 2026) and the self-test `node tools/rewards-rehearsal/selftest/selftest.mjs`.
+Run from `contracts/vault-dlmm` (no fork, no RPC): `forge test --match-path 'test/rewards/*'` and `ETHERS_DIR=<...>/dlmm-keeper/node_modules/ethers node --test tools/rewards-test/dlmm-rewards-root.test.mjs tools/rewards-test/dlmm-rewards-root.rpc.test.mjs tools/rewards-test/dlmm-rewards-tools.test.mjs` (22 + 5 + 13 = 40 JavaScript tests, MEASURED 16 Nov 2026; the wrapper tests `tools/rewards-test/dlmm-rewards-wrapper.test.mjs` add 19, MEASURED 18 Nov 2026: 59 in all) and the self-test `node tools/rewards-rehearsal/selftest/selftest.mjs`.
 
 * Foundry: 69 tests in 5 suites (45 contract tests incl. every window boundary at `t-1/t/t+1`, cancel/sweep/over-commit/ownership/unprivileged/renounce, 9 odd-token tests: fee-on-transfer, over-delivering, false-returning, no-return-value, blacklisting, ERC-777-style recipient hooks re-entering `claim`, `claimMany`, `cancelEpoch`, `sweepUnclaimed`; 7 fuzz tests on claim amounts, proofs, tampering, epoch ids, time windows, over-commit, constructor windows; 3 invariants: balance equals open obligations, `claimed <= total` and matches the ghost accounting, no over-pay; 5 JS-vs-Solidity cross-check tests).
 * Gas (`forge test --isolate --match-test test_gasNumbers -vv`, so that every call is its own transaction with cold slots and the 21,000 base cost included; optimizer 200, via-IR): `publishEpoch` 145,000 to 180,000 (the first epoch of a fresh contract is the highest), `claim` 87,000 (empty proof) to 99,000 (10 proof nodes) to a fresh account, `cancelEpoch` 51,000, `sweepUnclaimed` 51,000, `claimMany` of 5 (5-leaf tree) 313,000. Without `--isolate` forge reports warm-slot numbers that are about 30 to 40 % lower and must not be quoted.
@@ -232,7 +237,7 @@ Design B puts the split in the vault: `harvestRewards()` would not forward PHAR 
 
 Still open:
 
-1. **Contract-held shares.** Default: every holder with code at the end block is excluded and its slice returns to the Safe. Which contracts go on `--allow-contract` (the Ledger's Safe if it ever holds shares; a lending market that you want to pay and that can pass PHAR on)? The allow-list is part of `epoch.json` (and of the second recompute's inputs).
+1. **Contract-held shares.** Default: every holder with code at the end block is excluded and its slice returns to the Safe (except the configured wrapper holders, section 15; contract SUPPLIERS of a wrapper are excluded the same way). Which contracts go on `--allow-contract` (the Ledger's Safe if it ever holds shares; a lending market that you want to pay and that can pass PHAR on)? The allow-list is part of `epoch.json` (and of the second recompute's inputs).
 2. **The Ledger's 199 USDC holding** (the "rest" receiver): paid like any holder (default), or `--exclude`d?
 3. **Hosting URI.** The committed copy is `contracts/vault-dlmm/epochs/<id>/epoch.json`. Where does the app serve it (`manifest.uri`, e.g. a static path on the app host), and is the repo public? The frontend must check `keccak256(file) == dataHash`.
 4. **Minimum amount.** `--min-amount` (claim gas is about 90,000): default 1 wei drops nothing. A floor would leave small holders' slices with the Safe.
@@ -245,3 +250,80 @@ Still open:
 11. **Pre-rebalance harvest.** The keeper never harvests before a re-centre (it would delay the rebalance); PHAR accrued on a replaced band since the last claim can be forfeited. Accept, or harvest by hand before an expected exit?
 12. **Publishing the raw logs.** The second recompute reads the public endpoint itself (an independent scan). Do you also want the scan cache (the vault's logs and block timestamps of the range) published with each epoch as evidence? It would let a recompute run offline but it is not an independent input.
 13. **Harvest and the rebalance nonce.** The keeper's harvest waits up to 20 s for its receipt inside the polling loop (an exit starting in that window is detected that much late), and an unmined harvest sits at a lower nonce than a later rebalance. A strict version (send now, check the receipt in a later cycle) is not built. Accept the bound, or ask for it?
+
+## 15. Wrapper holders: the bpPHAR-USDC market (rule of 18 Nov 2026, no contract change)
+
+### 15.1 The problem and the rule
+
+Once the vault's shares are supplied into the Peridot market `bpPHAR-USDC` (a `PharaohBoostedDelegate` pToken whose underlying is the share), the HOLDER of those shares is the pToken contract. Section 1 excludes contracts "unable to claim", so every supplier of the market would get nothing and all of the market's PHAR would return to the Safe. **Rule (operator decision, 18 Nov 2026):** the vault shares a configured *wrapper holder* (a pToken) holds are split **among its suppliers by pToken balance, time-weighted over the epoch like every other holder**; the suppliers claim from the existing distributor; the permanent seed (pTokens sent to `0x...dEaD`) is excluded and its slice returns to the Safe like the vault's own dead seed. Implemented in the generator only (`--wrappers FILE`, generator 2.1.0); the distributor, its Merkle format and the vault are untouched.
+
+Reasoning: it is the only rule that pays the people whose capital earns the PHAR without a contract change; "by pToken balance" is the supplier's share of the market, and the pToken's actual vault-share balance (not `totalSupply x exchange rate`) is what the rewarder pays on, so a donation of shares to the pToken accrues to the current suppliers pro rata and nothing is lost to a rate calculation.
+
+### 15.2 The arithmetic (exact, reproducible)
+
+Per wrapper, over the epoch window `(startBlock, endBlock]` (same window rules as section 3):
+
+* `V(t)` = the vault shares the pToken holds (from the VAULT's own Transfer logs: supply, redeem, a direct donation, a reserve withdrawal).
+* `p_i(t)` = supplier `i`'s pToken balance, replayed from the pToken's ERC-20 Transfer logs. In `PToken.sol` a mint is `Transfer(pToken -> minter)`, a redeem is `Transfer(redeemer -> pToken)`, a liquidation seize is `Transfer(borrower -> liquidator)` plus `Transfer(borrower -> pToken)` for the protocol's part (burnt into reserves); a transfer between suppliers is `Transfer(a -> b)`. The pToken itself and `0x0` are the mint/burn sides and hold nothing. `P(t)` = the sum of the `p_i`, the dead seed's pTokens included.
+* The time axis is cut into **segments** in which `V` and every `p_i` are constant. A segment starts at the timestamp of a block whose END state (V and balances; events of one block are applied in log order) differs from the state before it; a block that changes nothing (a zero-value transfer, a mint and a redeem inside one block) is no boundary. In a segment of `dt` seconds `w_i += floor(V * dt * p_i / P)`.
+* What the floors leave, and all of `V * dt` while `P = 0` (shares in the pToken but nobody holds pTokens: a donation before the first supply, dust after a full exit), stays on **the pToken's own row**, which is excluded with the reason `wrapper-residual`: it returns to the Safe.
+* So `sum(w_i) + residual = integral of V` **exactly**, and the pToken row's old weight is replaced by its residual: **the total weight (the denominator) does not change, nobody else's amount moves**, and the pool is split as before: `amount = floor(pool * weight / totalWeight)`. A supplier's `weight` is the sum of his direct share-seconds and all of his wrapper slices; he has one row and one leaf.
+
+### 15.3 Edge cases (each has a test in `dlmm-rewards-wrapper.test.mjs`)
+
+| Case | What happens |
+| --- | --- |
+| permanent seed (pTokens minted, then sent to `0x...dEaD`) | the dead address is an ordinary supplier of pTokens; its slice is merged into the one `dead-seed` row (with the vault's own dead seed), excluded, never a leaf, returned to the Safe. Check `seedExcluded` |
+| partial redeem inside the epoch | the redeemer's balance falls at that block and the shares leave the pToken at the same block: his weight is his time-weighted balance |
+| transfer between suppliers | `p_i` changes at that block; no vault share moves |
+| liquidation seize | follows the balances: the liquidator's slice starts at the seize block; the protocol's part (burnt to the pToken) is a reduction of `P` and of the borrower's balance. The vault shares behind it stay in the pToken (reserves) and so are split pro rata like a donation (known limit, 15.6) |
+| a plain `transfer(pToken, n)` of pTokens by a supplier | the log is identical to a redeem (`Transfer(x -> pToken)`): it is replayed as a burn of that supplier's pTokens, the vault shares stay in the pToken and are re-split among the remaining suppliers (the supplier loses the entitlement, nobody else is harmed) |
+| donation to the pToken | `V` rises with no pToken event: split pro rata among the current suppliers; with no supplier (`P = 0`) it returns to the Safe |
+| supplier that is also a direct share holder | both are summed (`directWeight` + `wrapperWeight` in the holder row) |
+| contract supplier (a margin account, a vault) | excluded like any contract holder (reason `contract`) unless on `--allow-contract`; its slice stays in the denominator and returns to the Safe |
+| two wrapper holders | each is split on its own `V` and `p`; a supplier of both is summed. A wrapper's pTokens sitting at another wrapper's address end in that address's row, excluded as `wrapper-residual` |
+| wrapper on `--allow-contract` or `--exclude` | refused (a wrapper's shares belong to its suppliers; to exclude a whole market, remove it from the config: it is then an ordinary contract holder) |
+| supplier on `--exclude` | excluded; the slice stays in the denominator |
+| rounding | floor per segment; the rest is returned to the Safe and reported (`roundingWeight`) |
+| incomplete pToken history | the replay aborts with `negative pToken balance` (use an earlier `fromBlock` for that wrapper) |
+
+### 15.4 Config format and outputs
+
+The config is a JSON file given with `--wrappers FILE` (it is an input of the epoch: commit it as `epochs/<id>/wrappers.json`; its content is also written into `epoch.json` `inputs.wrappers`, so it is covered by `dataHash`):
+
+```
+{ "schema": "peridot-dlmm-rewards-wrappers/1",
+  "wrappers": [ { "pToken": "0x<bpPHAR-USDC pToken>", "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+                  "fromBlock": <the pToken's deployment block, optional, default --scan-from>, "label": "bpPHAR-USDC" } ] }
+```
+
+`underlying` must equal the vault (and, when the source can answer, `pToken.underlying()` is read at the end block and must match). The tool refuses zero/dead/vault as a pToken, duplicates, unknown fields, and a pToken that is also on `--allow-contract` or `--exclude`. The pToken's Transfer logs are scanned from its `fromBlock` in the same 100-block chunks into its own resumable cache (`scan-43114-<pToken>.json` next to the vault's).
+
+With a wrapper configured, `epoch.json` additionally has: `inputs.wrappers`, a top-level `wrappers` section per pToken (`vaultShareSeconds`, `suppliersWeight`, `returnedToSafeWeight` = `roundingWeight` + `noSupplierWeight`, opening/closing vault shares and pToken supply, the `deadSeed` slice, `segments`, and every supplier's weight with opening and closing pTokens), `directWeight` / `wrapperWeight` in every holder row, `generator.version` `2.1.0`, `manifest.wrappersHash` / `wrapperCount`, and the checks **`wrapperSplitSumsToPTokenHolding`** (suppliers + residual equal the pToken's own vault-share-seconds, exactly), **`wrapperTotalWeightUnchanged`**, **`seedExcluded`** (the dead seed has no leaf and every wrapper's dead slice is inside the `dead-seed` exclusion), `wrapperHoldersHaveNoLeaf`, `wrapperHoldersAreExcluded`. All the earlier checks stay (`sumLeavesLePool`, the partition, `allProofsVerify`, ...). Without `--wrappers` none of this appears.
+
+The recompute (`avalanche-dlmm-rewards-second-recompute.md`) takes the wrapper list from `inputs.wrappers` and scans the pToken's logs itself.
+
+### 15.5 Determinism
+
+`epoch.json` is byte-identical for any `--chunk` size, from a fresh or a resumed cache, and for any order of the config (the list is sorted by pToken address). The segments depend only on the end-of-block states of the pToken's own balances and its vault-share balance, so a second implementation can reproduce the floors.
+
+### 15.6 Known limits and OPEN questions (read before launch)
+
+* **OPEN: suppliers claim as the pToken-balance holder.** The leaf is for the address that holds the pTokens, i.e. the address the supplier supplied from (or received the pTokens at). A contract that supplied (a margin account, a vault) is excluded unless the operator allows it. A user who sends pTokens to a different address moves the entitlement with them from that block. The claim screen must say that PHAR is claimed with the wallet that supplied.
+* **Risk: omitting `--wrappers` is silent.** Without the config the pToken is just a contract holder and its whole slice returns to the Safe; the second recompute derives the flag from `inputs.wrappers`, so it would reproduce the omission. The weekly procedure (ceremony 0g / W3) therefore checks that `inputs.wrappers` lists the market.
+* **OPEN: hosting of the epoch file stays undecided** (section 14 item 3), unchanged by this rule; the wrapper config is committed with the epoch.
+* Reserves: the vault shares behind pTokens burnt by a liquidation seize (the protocol's part) stay in the pToken and are split among the suppliers like a donation; the PHAR on them is paid to suppliers, not kept by the protocol. Immaterial while the seized part is small; if the operator wants it kept, the generator needs the `ReservesAdded`/`Redeem` log to tell a protocol seize from a redeem (not built).
+* The pToken must emit the standard `Transfer` logs of `PToken.sol` (the Pharaoh delegate does not override them); a delegate that does would need its own handling.
+* The split uses the pToken's real vault-share balance, not its exchange rate: shares that leave the pToken without a pToken event (an admin reserve withdrawal) simply reduce `V` at that block.
+* Not audited; verified offline by the 19 tests, the golden files (unchanged) and the mock-world self-test; never run against the live chain or a fork of it.
+
+### 15.7 Rehearsal on the fork (optional step, written, NOT RUN against a fork)
+
+`REH_WRAPPER=1 REH_SCAN_FROM=<block> AVALANCHE_RPC=... tools/rewards-rehearsal/rehearsal.sh <out-dir>` (or `--dry` with the same variable to check the inputs and the stand-in artifact). With the variable unset the 33 checks `P00..P32` are exactly as before. With it set the run adds:
+
+* **S2w** a stand-in pToken (`script/rehearsal/StandInWrapper.sol`, `underlying() = the vault`, emits the PToken Transfer logs, 50 pTokens per share) is deployed on the fork; the impersonated Ledger supplies, the seed's pTokens go to `0x...dEaD`, a fresh wallet (Carol, no direct shares) and Bob supply, shares are donated directly to the stand-in;
+* **S3w** the time warp is split in two halves and Bob redeems half of his pTokens in between (a mid-epoch change);
+* the generator runs with `--wrappers` (twice: the byte-identity check P14 covers the wrapper path);
+* **W01** the stand-in holds the shares and pTokens the harness put in; **W02** `epoch.json` carries the wrapper config and the checks `wrapperSplitSumsToPTokenHolding`, `seedExcluded`, `wrapperHoldersHaveNoLeaf` are true; **W03** the supplier weights equal what the harness computes from its OWN transactions' block timestamps (not from logs); **W04** the pToken has no leaf, its residual is an excluded `wrapper-residual` row, the dead seed's slice is excluded; **W05** Ledger and Bob have `weight = direct + wrapper`, Carol has a leaf from her pToken balance alone; **W06** Carol claims from the same distributor, her PHAR arrives at her address. 39 checks in all.
+
+Offline evidence: the self-test (`SELFTEST_REH_WRAPPER=1 node tools/rewards-rehearsal/selftest/selftest.mjs`, mock chain, no endpoint) passes with `REHEARSAL PASSED: 39 checks, 0 failures`; the default self-test still passes with 33. The fork run, with the REAL vault and a stand-in (not the real pToken), is the user's.
