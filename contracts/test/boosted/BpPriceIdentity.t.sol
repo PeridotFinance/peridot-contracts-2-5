@@ -10,9 +10,9 @@ import {BpBase, BpNotAMarket} from "./BpBase.sol";
 ///         every feed state, including reverts. Compared byte-for-byte via staticcall (success flag + returndata), so a
 ///         revert in one and a zero in the other is a failure.
 ///
-///         `getUnderlyingPrice` tests must be green against the current wrapper. The `test_marginSurface_*` tests cover the
-///         other functions of `IMarginPriceOracle` that a consumer reaching the oracle through `controller.oracle()`
-///         could call (`marketAsset`, `getPrice`); they are RED until the wrapper forwards them (subagent A's list).
+///         Wrapper under test: `PharaohDlmmShareOracle(baseOracle = the guarded oracle, market = bpPHAR)`. The `test_marginSurface_*`
+///         tests cover the other functions of `IMarginPriceOracle` that a consumer reaching the oracle through
+///         `controller.oracle()` could call (`marketAsset`, `getPrice`), plus arbitrary / non-contract pToken arguments.
 ///
 ///         Which functions are actually consumed through `controller.oracle()` (on-chain): Peridottroller
 ///         (`getUnderlyingPrice` only: borrowAllowed, getHypotheticalAccountLiquidity, liquidateCalculateSeizeTokens,
@@ -28,7 +28,6 @@ abstract contract BpIdentityBase is BpBase {
 
     function setUp() public override {
         super.setUp();
-        _registerVaultInWrapper(); // wrapper active for the share vault, as after the ceremony
         unknownWavaxMarket = new PharaohTestMarket(address(wavax));
         unknownUsdcMarket = new PharaohTestMarket(address(usdc));
         notAMarket = new BpNotAMarket();
@@ -236,10 +235,9 @@ contract BpPriceIdentityTest is BpIdentityBase {
     }
 }
 
-/// @notice RED against the CURRENT wrapper by design (identity gaps found by these tests; they go green when the wrapper
-///         (a) returns 0 / does not revert for a non-contract pToken, like the old oracle, and (b) forwards
-///         `marketAsset` and `getPrice` of the old oracle). Kept separate so the green suite is unambiguous.
-contract BpPriceIdentityPendingTest is BpIdentityBase {
+/// @notice Margin surface and arbitrary-argument identity. These were RED against the first wrapper (PharaohVaultShareOracle:
+///         reverted for non-contract pTokens, no marketAsset/getPrice); GREEN against PharaohDlmmShareOracle.
+contract BpPriceIdentityMarginSurfaceTest is BpIdentityBase {
     /// @dev Arbitrary target address (EOA, zero, precompile-like, random): old returns 0 for an unknown market.
     ///      If the wrapper reverts here while the old oracle returns 0 it is a REAL identity gap for any consumer that
     ///      passes a non-contract pToken (Peridottroller never does: it only calls with listed pTokens).

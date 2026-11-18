@@ -268,3 +268,48 @@ contract BpRollbackTest is BpBase {
         assertFalse(ok);
     }
 }
+
+/// @notice Rollback timing against the ceremony steps: clean before T3 (nothing listed) and after T3 while nobody has entered;
+///         after anyone entered it freezes them (see BpRollbackTest).
+contract BpRollbackEarlyTest is BpBase {
+    address internal constant DAVE = address(0xDA7E);
+    address internal constant FRANK = address(0xF7A);
+
+    function _prices() internal view returns (uint256, uint256) {
+        return (_price(PToken(address(pWavax))), _price(PToken(address(pUsdc))));
+    }
+
+    function test_rollbackAfterT1BeforeSupport_isClean_andTheCeremonyCanBeRepeated() external {
+        (uint256 w0, uint256 u0) = _prices();
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0); // T1
+        (uint256 w1, uint256 u1) = _prices();
+        assertEq(w1, w0);
+        assertEq(u1, u0);
+        require(controller._setPriceOracle(PriceOracle(address(old))) == 0); // rollback
+        (w1, u1) = _prices();
+        assertEq(w1, w0);
+        assertEq(u1, u0);
+        // nothing was listed: bp cannot be entered, so nobody can be frozen
+        address[] memory ms = new address[](1);
+        ms[0] = address(bp);
+        vm.prank(DAVE);
+        uint256[] memory res = controller.enterMarkets(ms);
+        assertEq(res[0], 9, "MARKET_NOT_LISTED: nothing to enter before T3");
+        _listShareMarket(); // repeat the ceremony
+        assertGt(_price(PToken(address(bp))), 0);
+    }
+
+    function test_rollbackAfterListingWithNoEntrants_isClean() external {
+        _listShareMarket();
+        require(controller._setPriceOracle(PriceOracle(address(old))) == 0);
+        assertEq(_price(PToken(address(bp))), 0);
+        // a pilot debtor that never entered bp is untouched: borrow, repay and liquidation all work
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _borrowUsdc(DAVE, 10e6);
+        assertTrue(ok);
+        avaxFeed.setRound(1e8, block.timestamp, 9, 9);
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertTrue(ok);
+    }
+}

@@ -22,7 +22,7 @@ import {
     GuardedAvalanchePriceOracle,
     IAvalanchePriceOracleSource
 } from "../../contracts/margin/GuardedAvalanchePriceOracle.sol";
-import {PharaohVaultShareOracle} from "../../contracts/PharaohVaultShareOracle.sol";
+import {PharaohDlmmShareOracle} from "../../contracts/PharaohDlmmShareOracle.sol";
 import {PharaohBoostedDelegate} from "../../contracts/boosted/PharaohBoostedDelegate.sol";
 import {PharaohTestAsset, PharaohTestFeed} from "../mocks/PharaohBoostedMocks.sol";
 
@@ -189,7 +189,7 @@ abstract contract BpBase is Test {
     Peridot internal peridot;
     AvalanchePriceOracle internal inner; // source oracle 0x74eB...
     GuardedAvalanchePriceOracle internal old; // the live controller oracle 0x7BAB...
-    PharaohVaultShareOracle internal wrapper;
+    PharaohDlmmShareOracle internal wrapper;
     Unitroller internal unitroller;
     Peridottroller internal controller;
     ConfigurableJumpRateModelV2 internal irm;
@@ -203,8 +203,9 @@ abstract contract BpBase is Test {
 
     function setUp() public virtual {
         _deployPilot();
-        _deployWrapper();
+        _deployVault();
         _deployShareMarket();
+        _deployWrapper();
     }
 
     // ================================================================ pilot (no share market yet)
@@ -279,11 +280,15 @@ abstract contract BpBase is Test {
     }
 
     // ================================================================ wrapper + share market (edit here when A changes them)
-    function _deployWrapper() internal {
+    function _deployVault() internal {
         vault = new BpDlmmVaultMock(address(usdc));
         vault.mintShares(address(0x1ED6E2), VAULT_SUPPLY_AT_LISTING - 1_000_000); // "Ledger" 16,000,000
         vault.mintShares(DEAD, 1_000_000); // vault dead seed
-        wrapper = new PharaohVaultShareOracle(address(this), PriceOracle(address(old)));
+    }
+
+    /// @dev PharaohDlmmShareOracle: stateless, ownerless; constructor(baseOracle, market). It needs the market pToken to exist.
+    function _deployWrapper() internal {
+        wrapper = new PharaohDlmmShareOracle(PriceOracle(address(old)), address(bp));
     }
 
     /// @dev Deploys the share market (delegator + PharaohBoostedDelegate pinned to the mock vault). NOT listed.
@@ -303,41 +308,36 @@ abstract contract BpBase is Test {
         );
     }
 
-    /// @dev Registers the vault in the wrapper (feed = USDC/USD, staleness = the guarded oracle's USDC maxAge).
-    function _registerVaultInWrapper() internal {
-        wrapper.registerVault(IERC4626(address(vault)), AggregatorV3Interface(address(usdcFeed)), USDC_MAX_AGE);
-    }
-
-    /// @dev The ceremony order that survived BpListingOrderTest (see test_closedOrder_...). The key facts:
-    ///      * `_setMarketBorrowCaps` and `PToken._setFlashLoansPaused` work on an UNLISTED pToken, `_setBorrowPaused` does not;
-    ///      * any account may `enterMarkets([bp])` with a zero balance the moment bp is listed, and a listed market priced 0
-    ///        makes the controller return PRICE_ERROR for that account in EVERY market (no zero-balance skip), i.e. the
-    ///        account becomes unliquidatable. So bp must never be listed while the controller oracle prices it 0.
-    ///      Order: 1 flash loans paused  2 borrow cap = 1  3 register vault in wrapper  4 swap controller oracle to wrapper
-    ///      5 support market (CF 0)  6 pause borrow  7 seed mint + burn to dead. CF stays 0 until the fork gate passes.
-    ///      While bp is listed-but-unseeded (between 5 and 7) the cap of 1 already blocks share borrowing.
+    /// @dev The ceremony order of tools/bp-dlmm-ceremony.sh (T1..T9), verified by BpListingOrderTest:
+    ///      T1 swap controller oracle to the wrapper (bp still unlisted)  T2 borrow cap = 1 (works on an unlisted pToken)
+    ///      T3 _supportMarket (CF 0, born priced)  T4 borrow pause  [flash loans are paused from birth by the delegate]
+    ///      T5/T6 seed mint BY THE ADMIN (seed-first guard: outsiders cannot mint while supply is 0)
+    ///      T7 mint pause  T8 transfer the whole seed to 0x...dEaD  T9 mint unpause (activation). CF stays 0.
     function _listShareMarket() internal {
         _listShareMarketNoSeed();
         _seedPermanent(SEED);
     }
 
     function _listShareMarketNoSeed() internal {
-        PErc20(address(bp))._setFlashLoansPaused(true);
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0, "wrapper"); // T1
         PToken[] memory ps = new PToken[](1);
         ps[0] = PToken(address(bp));
         uint256[] memory caps = new uint256[](1);
         caps[0] = 1;
-        controller._setMarketBorrowCaps(ps, caps);
-        _registerVaultInWrapper();
-        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0, "wrapper");
-        require(controller._supportMarket(PErc20(address(bp))) == 0, "list bp");
-        controller._setBorrowPaused(PToken(address(bp)), true);
+        controller._setMarketBorrowCaps(ps, caps); // T2
+        require(controller._supportMarket(PErc20(address(bp))) == 0, "list bp"); // T3
+        controller._setBorrowPaused(PToken(address(bp)), true); // T4
     }
 
+    /// @dev Seed: the ADMIN mints `shares` (seed-first guard), mint pause, everything to the dead address, mint unpause.
     function _seedPermanent(uint256 shares) internal {
-        uint256 pTokens = _supplyShares(SEEDER, shares);
-        vm.prank(SEEDER);
-        require(bp.transfer(DEAD, pTokens), "burn seed");
+        vault.mintShares(address(this), shares);
+        vault.approve(address(bp), shares);
+        require(bp.mint(shares) == 0, "seed mint");
+        uint256 pTokens = bp.balanceOf(address(this));
+        controller._setMintPaused(PToken(address(bp)), true); // T7
+        require(bp.transfer(DEAD, pTokens), "burn seed"); // T8
+        controller._setMintPaused(PToken(address(bp)), false); // T9
     }
 
     // ================================================================ helpers

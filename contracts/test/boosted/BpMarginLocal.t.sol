@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {PToken} from "../../contracts/PToken.sol";
 import {PriceOracle} from "../../contracts/PriceOracle.sol";
 import {PErc20Delegator} from "../../contracts/PErc20Delegator.sol";
 import {PeridottrollerInterface} from "../../contracts/PeridottrollerInterface.sol";
 import {InterestRateModel} from "../../contracts/InterestRateModel.sol";
-import {PharaohVaultShareOracle} from "../../contracts/PharaohVaultShareOracle.sol";
+import {PharaohDlmmShareOracle} from "../../contracts/PharaohDlmmShareOracle.sol";
 import {PharaohBoostedDelegate} from "../../contracts/boosted/PharaohBoostedDelegate.sol";
 import {IsolatedMarginTypes} from "../../contracts/margin/IsolatedMarginTypes.sol";
 import {IsolatedMarginExecutorUpgradeable} from "../../contracts/margin/IsolatedMarginExecutorUpgradeable.sol";
@@ -36,12 +34,11 @@ import {BpDlmmVaultMock} from "./BpBase.sol";
 ///           - the live pToken delegates (0xAB5a..) and rate model (0xe5a8..) with real interest accrual;
 ///           - end-to-end margin open that BORROWS through the live pUSDC (cap 200 USDC, floor 50 USDC) with the wrapper installed.
 contract BpMarginLocalTest is IsolatedMarginV2IntegrationTest {
-    PharaohVaultShareOracle internal bpWrapper;
+    PharaohDlmmShareOracle internal bpWrapper;
     BpDlmmVaultMock internal bpVault;
     PErc20Delegator internal bpMarket;
 
     function _bpInstallWrapper() internal {
-        bpWrapper = new PharaohVaultShareOracle(address(this), PriceOracle(address(oracle)));
         bpVault = new BpDlmmVaultMock(address(usd));
         bpVault.mintShares(address(0xB0B0), 17_000_000);
         PharaohBoostedDelegate delegate = new PharaohBoostedDelegate();
@@ -57,16 +54,15 @@ contract BpMarginLocalTest is IsolatedMarginV2IntegrationTest {
             address(delegate),
             abi.encode(address(bpVault), uint256(1_000_000))
         );
-        require(controller._supportMarket(PToken(address(bpMarket))) == 0, "support");
-        controller._setBorrowPaused(PToken(address(bpMarket)), true);
+        bpWrapper = new PharaohDlmmShareOracle(PriceOracle(address(oracle)), address(bpMarket));
+        require(controller._setPriceOracle(PriceOracle(address(bpWrapper))) == 0, "swap"); // T1
         PToken[] memory ps = new PToken[](1);
         ps[0] = PToken(address(bpMarket));
         uint256[] memory caps = new uint256[](1);
         caps[0] = 1;
-        controller._setMarketBorrowCaps(ps, caps);
-        PErc20(address(bpMarket))._setFlashLoansPaused(true);
-        bpWrapper.registerVault(IERC4626(address(bpVault)), AggregatorV3Interface(address(usdFeed)), 7 days);
-        require(controller._setPriceOracle(PriceOracle(address(bpWrapper))) == 0, "swap");
+        controller._setMarketBorrowCaps(ps, caps); // T2
+        require(controller._supportMarket(PToken(address(bpMarket))) == 0, "support"); // T3
+        controller._setBorrowPaused(PToken(address(bpMarket)), true); // T4
     }
 
     function _bpScenarioLongOpenAndPartialLiquidation(bool swap) internal returns (bytes32) {

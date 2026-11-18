@@ -5,7 +5,7 @@ import {PToken} from "../../contracts/PToken.sol";
 import {PErc20} from "../../contracts/PErc20.sol";
 import {PeridottrollerAvalanche} from "../../contracts/PeridottrollerAvalanche.sol";
 import {PriceOracle} from "../../contracts/PriceOracle.sol";
-import {PharaohVaultShareOracle} from "../../contracts/PharaohVaultShareOracle.sol";
+import {PharaohBoostedDelegate} from "../../contracts/boosted/PharaohBoostedDelegate.sol";
 import {PErc20Delegator} from "../../contracts/PErc20Delegator.sol";
 import {PeridottrollerInterface} from "../../contracts/PeridottrollerInterface.sol";
 import {InterestRateModel} from "../../contracts/InterestRateModel.sol";
@@ -201,7 +201,7 @@ contract BpMarketTest is BpBase {
         _enter(BOB, address(bp));
         vault.setConvertReverts(true); // models the DLMM vault's totalAssets() guard revert / pause
         assertEq(_price(PToken(address(bp))), 0, "reverting convertToAssets -> 0");
-        assertEq(wrapper.getShareUsdPrice(address(vault)), 0);
+        assertEq(wrapper.getShareUsdPrice(), 0);
         assertGt(_price(PToken(address(pUsdc))), 0, "USDC itself is still priced");
 
         (bool ok, bytes memory ret) = _borrowUsdc(BOB, 1e6);
@@ -378,40 +378,25 @@ contract BpMarketTest is BpBase {
 
 }
 
-/// @notice Listing order: every ceremony step is its own EOA transaction, so each prefix of the sequence is tested.
+/// @notice Listing order (tools/bp-dlmm-ceremony.sh T1..T9): every ceremony step is its own EOA transaction, so each prefix of
+///         the sequence is tested.
 contract BpListingOrderTest is BpBase {
-    function _fresh() internal returns (PErc20Delegator) {
-        return new PErc20Delegator(
-            address(vault),
-            PeridottrollerInterface(address(controller)),
-            InterestRateModel(address(irm)),
-            SHARE_INITIAL_EXCHANGE_RATE,
-            "x",
-            "x",
-            8,
-            payable(address(this)),
-            address(bpDelegate),
-            abi.encode(address(vault), MIN_VAULT_SUPPLY)
-        );
-    }
+    address internal constant DAVE = address(0xDA7E);
+    address internal constant FRANK = address(0xF7A);
 
-    function test_flashLoansOfTheShareMarket_defaultOpenUntilPaused() external {
-        assertFalse(bp.flashLoansPaused(), "default: flash loans NOT paused (must be paused in the ceremony)");
-        assertTrue(PErc20(address(bp))._setFlashLoansPaused(true));
-        assertTrue(bp.flashLoansPaused());
+    function test_flashLoansOfTheShareMarket_pausedFromBirth() external view {
+        assertTrue(bp.flashLoansPaused(), "the delegate pauses flash loans in _becomeImplementation");
+        assertEq(bp.maxFlashLoan(address(vault)), 0);
     }
 
     function test_deployedButUnlisted_cannotBeSupplied() external {
         vault.mintShares(BOB, 1e6);
         vm.startPrank(BOB);
         vault.approve(address(bp), 1e6);
-        vm.expectRevert(); // MintPeridottrollerRejection(MARKET_NOT_LISTED): the seed cannot be minted before listing
+        vm.expectRevert(); // SeedPending (outsider, supply 0)
         bp.mint(1e6);
         vm.stopPrank();
     }
-
-    address internal constant DAVE = address(0xDA7E);
-    address internal constant FRANK = address(0xF7A);
 
     /// @dev DAVE borrows USDC against pWAVAX, enters bp with a ZERO balance (allowed for anyone once bp is listed), the AVAX
     ///      price collapses, FRANK tries to liquidate DAVE (seizing pWAVAX). Returns whether the liquidation went through.
@@ -424,7 +409,7 @@ contract BpListingOrderTest is BpBase {
         address[] memory ms = new address[](1);
         ms[0] = address(bp);
         vm.prank(DAVE);
-        controller.enterMarkets(ms); // may return MARKET_NOT_LISTED (9) when bp is not listed: then nothing is entered
+        controller.enterMarkets(ms); // returns MARKET_NOT_LISTED (9) when bp is not listed: then nothing is entered
         avaxFeed.setRound(1e8, block.timestamp, 9, 9); // AVAX $1: DAVE is deeply underwater
         (liquidated,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
         code = _errCode(lastRevert);
@@ -439,70 +424,6 @@ contract BpListingOrderTest is BpBase {
         vm.revertToState(snap);
     }
 
-    /// @dev ORDER A (the order the boosted-markets doc and the first draft of the ceremony use): support first, wrapper last.
-    ///      Between `_supportMarket` and the oracle swap bp is LISTED but priced 0 by the old oracle. Any account can enter
-    ///      it for free; the controller then returns PRICE_ERROR for that account in every market, so a debtor who enters
-    ///      bp cannot be liquidated until the wrapper is installed. The window is only as long as the ceremony, but it is real.
-    function test_orderA_supportBeforeWrapper_hasAnUnpricedWindow_zeroBalanceEntryBlocksLiquidation() external {
-        require(controller._supportMarket(PErc20(address(bp))) == 0);
-        controller._setBorrowPaused(PToken(address(bp)), true);
-        PErc20(address(bp))._setFlashLoansPaused(true);
-        (bool liquidated, uint256 code) = _zeroBalanceEntryLiquidation();
-        assertFalse(liquidated, "WINDOW: a zero-balance entrant of the unpriced listed market is unliquidatable");
-        assertEq(code, ERR_PRICE);
-        // wrapper installed: the window closes
-        _registerVaultInWrapper();
-        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0);
-        (liquidated,) = _zeroBalanceEntryLiquidation();
-        assertTrue(liquidated, "window closed after the swap");
-    }
-
-    function test_listedButUnpriced_shareBorrowFailsClosed() external {
-        require(controller._supportMarket(PErc20(address(bp))) == 0);
-        vault.mintShares(BOB, 100e6);
-        vm.startPrank(BOB);
-        vault.approve(address(bp), 100e6);
-        bp.mint(100e6); // supply is open the moment the market is listed
-        vm.stopPrank();
-        (bool ok, bytes memory ret) = _bpBorrowAttempt();
-        assertFalse(ok);
-        assertEq(_errCode(ret), ERR_PRICE, "old oracle: unknown pToken -> price 0 -> share borrow fails closed");
-    }
-
-    /// @dev ORDER B (closed): cap and flash pause work on an unlisted pToken, so set them first; install the wrapper while
-    ///      bp is still unlisted; only then support the market (it is born priced), then pause borrow and seed. After EVERY
-    ///      step: (a) a pWAVAX holder cannot borrow shares, (b) a zero-balance bp entrant is still liquidatable.
-    function test_closedOrder_capFlashWrapperFirst_thenSupportPauseSeed_everyPrefixIsClosed() external {
-        PToken[] memory ps = new PToken[](1);
-        ps[0] = PToken(address(bp));
-        uint256[] memory caps = new uint256[](1);
-        caps[0] = 1;
-
-        _assertClosed("0 start (unlisted)");
-        assertTrue(PErc20(address(bp))._setFlashLoansPaused(true)); // 1
-        _assertClosed("1 flash paused");
-        controller._setMarketBorrowCaps(ps, caps); // 2 (accepted for an unlisted pToken)
-        assertEq(controller.borrowCaps(address(bp)), 1);
-        _assertClosed("2 cap 1");
-        _registerVaultInWrapper(); // 3
-        _assertClosed("3 vault registered");
-        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0); // 4 (bp still unlisted)
-        _assertClosed("4 wrapper installed");
-        require(controller._supportMarket(PErc20(address(bp))) == 0); // 5 now listed AND priced
-        assertGt(_price(PToken(address(bp))), 0, "born priced");
-        (bool ok, bytes memory ret) = _bpBorrowAttempt();
-        assertFalse(ok);
-        assertEq(_reason(ret), "market borrow cap reached", "listed, not yet paused: the cap of 1 alone stops share borrowing");
-        _assertClosed("5 supported (cap 1 only)");
-        controller._setBorrowPaused(PToken(address(bp)), true); // 6
-        (ok, ret) = _bpBorrowAttempt();
-        assertEq(_reason(ret), "borrow is paused");
-        _assertClosed("6 paused");
-        _seedPermanent(SEED); // 7
-        _assertClosed("7 seeded");
-        assertEq(bp.balanceOf(DEAD), SEED * 5000);
-    }
-
     function _assertClosed(string memory step) internal {
         (bool ok,) = _bpBorrowAttempt();
         assertFalse(ok, string.concat("share borrow must fail at step ", step));
@@ -510,25 +431,126 @@ contract BpListingOrderTest is BpBase {
         assertTrue(liquidated, string.concat("zero-balance entrant must stay liquidatable at step ", step, " code ", vm.toString(code)));
     }
 
-    /// @dev Anyone can mint into the market between support and the seed. A front-runner who poisons the empty market
-    ///      (mint dust, redeem all but one pToken base unit, donate) leaves totalSupply != 0 BEFORE the seed.
-    ///      The ceremony must check `totalSupply == 0 && cash == 0` immediately before the seed mint; if it fails,
-    ///      abandon this pToken (it stays listed but paused, nothing of anyone's is in it).
-    function test_preSeedFrontRun_isDetectableByTotalSupplyAndCash() external {
+    /// @dev ORDER A (rejected): support first, swap last. Between `_supportMarket` and the oracle swap bp is LISTED but priced 0
+    ///      by the old oracle. Any account can enter it for free; the controller then returns PRICE_ERROR for that account in
+    ///      every market, so a debtor who enters bp cannot be liquidated until the wrapper is installed.
+    function test_orderA_supportBeforeSwap_hasAnUnpricedWindow_zeroBalanceEntryBlocksLiquidation() external {
         require(controller._supportMarket(PErc20(address(bp))) == 0);
-        assertEq(bp.totalSupply(), 0);
-        assertEq(vault.balanceOf(address(bp)), 0);
+        controller._setBorrowPaused(PToken(address(bp)), true);
+        (bool liquidated, uint256 code) = _zeroBalanceEntryLiquidation();
+        assertFalse(liquidated, "WINDOW: a zero-balance entrant of the unpriced listed market is unliquidatable");
+        assertEq(code, ERR_PRICE);
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0);
+        (liquidated,) = _zeroBalanceEntryLiquidation();
+        assertTrue(liquidated, "window closed after the swap");
+    }
+
+    function test_orderA_listedButUnpriced_shareBorrowFailsClosed() external {
+        require(controller._supportMarket(PErc20(address(bp))) == 0);
+        (bool ok, bytes memory ret) = _bpBorrowAttempt();
+        assertFalse(ok);
+        assertEq(_errCode(ret), ERR_PRICE, "old oracle: unknown pToken -> price 0 -> share borrow fails closed");
+    }
+
+    /// @dev ORDER B (the ceremony): T1 swap, T2 cap 1 (accepted for an unlisted pToken), T3 support, T4 pause, T5/6 seed mint by
+    ///      the admin, T7 mint pause, T8 dead transfer, T9 mint unpause. After EVERY step: (a) a pWAVAX holder cannot borrow shares,
+    ///      (b) a zero-balance bp entrant is still liquidatable, and while the supply is 0 (c) an outsider cannot mint.
+    function test_closedOrder_swapFirst_capThenSupportPauseSeed_everyPrefixIsClosed() external {
+        PToken[] memory ps = new PToken[](1);
+        ps[0] = PToken(address(bp));
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = 1;
+
+        _assertClosed("0 start (unlisted)");
+        require(controller._setPriceOracle(PriceOracle(address(wrapper))) == 0); // T1
+        assertGt(_price(PToken(address(bp))), 0, "priced while still unlisted");
+        _assertClosed("T1 swapped");
+        controller._setMarketBorrowCaps(ps, caps); // T2
+        assertEq(controller.borrowCaps(address(bp)), 1);
+        _assertClosed("T2 cap 1");
+        require(controller._supportMarket(PErc20(address(bp))) == 0); // T3
+        (bool ok, bytes memory ret) = _bpBorrowAttempt();
+        assertFalse(ok);
+        assertEq(_reason(ret), "market borrow cap reached", "listed, not yet paused: cap 1 alone stops share borrowing");
+        _assertOutsiderCannotMint("T3 listed");
+        _assertClosed("T3 supported");
+        controller._setBorrowPaused(PToken(address(bp)), true); // T4
+        (ok, ret) = _bpBorrowAttempt();
+        assertEq(_reason(ret), "borrow is paused");
+        _assertOutsiderCannotMint("T4 paused");
+        _assertClosed("T4 paused");
+        vault.mintShares(address(this), SEED); // T5 approve, T6 seed mint (admin)
+        vault.approve(address(bp), SEED);
+        assertEq(bp.mint(SEED), 0);
+        assertEq(bp.balanceOf(address(this)), SEED * 5000);
+        _assertClosed("T6 seeded");
+        controller._setMintPaused(PToken(address(bp)), true); // T7
+        vault.mintShares(BOB, 1e6);
+        vm.startPrank(BOB);
+        vault.approve(address(bp), 1e6);
+        (ok, ret) = address(bp).call(abi.encodeWithSelector(PErc20.mint.selector, 1e6));
+        vm.stopPrank();
+        assertFalse(ok);
+        assertEq(_reason(ret), "mint is paused", "T7: supply closed right after the seed");
+        assertTrue(bp.transfer(DEAD, SEED * 5000)); // T8
+        assertEq(bp.balanceOf(address(this)), 0, "admin keeps 0 pTokens");
+        assertEq(bp.balanceOf(DEAD), SEED * 5000);
+        _assertClosed("T8 dead");
+        controller._setMintPaused(PToken(address(bp)), false); // T9
+        _assertClosed("T9 activation");
+    }
+
+    function _assertOutsiderCannotMint(string memory step) internal {
+        uint256 snap = vm.snapshotState();
         vault.mintShares(ATTACKER, 1_000e6);
         vm.startPrank(ATTACKER);
         vault.approve(address(bp), type(uint256).max);
-        bp.mint(1);
-        bp.redeem(bp.balanceOf(ATTACKER) - 1); // burns 4999 pTokens for 0 shares (rounds to zero), leaves 1 base unit
-        vault.transfer(address(bp), 100e6); // donate
+        (bool ok, bytes memory ret) = address(bp).call(abi.encodeWithSelector(PErc20.mint.selector, 1));
         vm.stopPrank();
-        assertEq(bp.totalSupply(), 1, "attacker left totalSupply = 1 base unit");
-        assertGt(bp.exchangeRateStored(), 1e6 * 1e18, "rate is inflated");
-        // the seeder's mint is now captured: 1_000_000 shares at that rate mints ~0 pTokens
-        uint256 seeded = _supplyShares(SEEDER, SEED);
-        assertEq(seeded, 0, "the seed is lost to the attacker -> the ceremony must check totalSupply==0 first");
+        assertFalse(ok, string.concat("outsider mint must revert at ", step));
+        assertEq(_selector(ret), PharaohBoostedDelegate.PharaohBoosted__SeedPending.selector);
+        vm.revertToState(snap);
+    }
+
+    /// @dev The classic pre-seed poisoning (mint 1 wei, redeem all but one pToken wei, donate) is impossible for an outsider:
+    ///      `mint` reverts with SeedPending while the pToken supply is 0.
+    function test_preSeedFrontRun_outsiderCannotMint() external {
+        require(controller._supportMarket(PErc20(address(bp))) == 0);
+        _assertOutsiderCannotMint("listed, unseeded");
+        assertEq(bp.totalSupply(), 0);
+    }
+
+    /// @dev A direct share donation before the seed does not change what the seed mints (supply 0 => initial rate) but inflates
+    ///      the post-seed rate, which the ceremony's read-back (exchangeRateStored == 2e14) detects; the dead seed owns the donation.
+    function test_preSeedDonation_seedStillMintsAtInitialRate_andIsDetectableAfterwards() external {
+        require(controller._supportMarket(PErc20(address(bp))) == 0);
+        vault.mintShares(ATTACKER, 100e6);
+        vm.prank(ATTACKER);
+        vault.transfer(address(bp), 100e6);
+        vault.mintShares(address(this), SEED);
+        vault.approve(address(bp), SEED);
+        assertEq(bp.mint(SEED), 0);
+        assertEq(bp.balanceOf(address(this)), SEED * 5000, "seed minted at the INITIAL rate");
+        assertGt(bp.exchangeRateStored(), SHARE_INITIAL_EXCHANGE_RATE, "post-seed rate inflated: detectable by the read-back");
+        assertTrue(bp.transfer(DEAD, SEED * 5000));
+        // the dead address owns the donation: it is worth ~ (100 + 1) shares
+        assertEq((bp.balanceOf(DEAD) * bp.exchangeRateStored()) / 1e18, 101e6);
+    }
+
+    /// @dev Between T6 and T7 the seed guard is inert (supply > 0): an outsider mint is ordinary supply, harmless.
+    function test_betweenSeedMintAndMintPause_outsiderMintIsOrdinarySupply() external {
+        _listShareMarketNoSeed();
+        vault.mintShares(address(this), SEED);
+        vault.approve(address(bp), SEED);
+        bp.mint(SEED);
+        uint256 minted = _supplyShares(BOB, 5e6);
+        assertEq(minted, 5e6 * 5000, "mints at the initial rate; no inflation possible");
+    }
+
+    function test_adminIsTheOnlyMinterWhileSupplyIsZero() external {
+        _listShareMarketNoSeed();
+        vault.mintShares(address(this), 10);
+        vault.approve(address(bp), 10);
+        assertEq(bp.mint(10), 0, "admin can mint first");
     }
 }

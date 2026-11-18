@@ -21,10 +21,34 @@ import {BpBase} from "./BpBase.sol";
 ///         profit = shares redeemed - (1 + D) shares spent is <= 0. Attacker budget in the realistic case is bounded by the
 ///         vault deposit cap of 200 USDC (= 200e6 share base units at NAV 1.0); the grid also goes far beyond it.
 contract BpInflationTest is BpBase {
+    /// @dev A market over the same vault share with the PLAIN delegate (no seed-first guard): isolates the effect of the permanent
+    ///      SEED from the effect of the seed-first guard that `PharaohBoostedDelegate` adds (the guard stops outsiders from being the
+    ///      first minter; the seed numbers below hold even for a first minter who is the attacker).
+    PErc20Delegator internal m;
+
     function setUp() public override {
         super.setUp();
-        // support only: borrow stays irrelevant here (nobody borrows); the seed is applied per scenario
-        require(controller._supportMarket(PErc20(address(bp))) == 0, "list bp");
+        m = _plainMarket(address(vault), SHARE_INITIAL_EXCHANGE_RATE, "plain share market", "pSHARE");
+        require(controller._supportMarket(PErc20(address(m))) == 0, "list m");
+    }
+
+    function _seedM(uint256 shares) internal {
+        vault.mintShares(SEEDER, shares);
+        vm.startPrank(SEEDER);
+        vault.approve(address(m), shares);
+        require(m.mint(shares) == 0);
+        require(m.transfer(DEAD, m.balanceOf(SEEDER)));
+        vm.stopPrank();
+    }
+
+    function _supplyM(address who, uint256 shares) internal returns (uint256 minted) {
+        vault.mintShares(who, shares);
+        uint256 before = m.balanceOf(who);
+        vm.startPrank(who);
+        vault.approve(address(m), shares);
+        require(m.mint(shares) == 0);
+        vm.stopPrank();
+        minted = m.balanceOf(who) - before;
     }
 
     struct Outcome {
@@ -37,34 +61,34 @@ contract BpInflationTest is BpBase {
 
     function _attack(uint256 seed, uint256 victimShares, uint256 donation) internal returns (Outcome memory o) {
         uint256 snap = vm.snapshotState();
-        if (seed > 0) _seedPermanent(seed);
+        if (seed > 0) _seedM(seed);
         // 1. attacker: mint 1 base unit, redeem all but one pToken base unit
         vault.mintShares(ATTACKER, 1 + donation);
         vm.startPrank(ATTACKER);
-        vault.approve(address(bp), type(uint256).max);
-        require(bp.mint(1) == 0);
-        uint256 minted = bp.balanceOf(ATTACKER);
-        require(bp.redeem(minted - 1) == 0);
+        vault.approve(address(m), type(uint256).max);
+        require(m.mint(1) == 0);
+        uint256 minted = m.balanceOf(ATTACKER);
+        require(m.redeem(minted - 1) == 0);
         // 2. donate
-        if (donation > 0) vault.transfer(address(bp), donation);
+        if (donation > 0) vault.transfer(address(m), donation);
         vm.stopPrank();
-        o.supplyAfterTrick = bp.totalSupply();
-        o.rateAfterDonation = bp.exchangeRateStored();
+        o.supplyAfterTrick = m.totalSupply();
+        o.rateAfterDonation = m.exchangeRateStored();
         // 3. victim mints
-        o.victimTokens = _supplyShares(VICTIM, victimShares);
+        o.victimTokens = _supplyM(VICTIM, victimShares);
         // 4. attacker redeems everything he holds (1 pToken base unit)
         uint256 attackerBefore = vault.balanceOf(ATTACKER);
-        uint256 attackerTokens = bp.balanceOf(ATTACKER);
+        uint256 attackerTokens = m.balanceOf(ATTACKER);
         vm.prank(ATTACKER);
-        require(bp.redeem(attackerTokens) == 0);
+        require(m.redeem(attackerTokens) == 0);
         uint256 attackerGot = vault.balanceOf(ATTACKER) - attackerBefore;
         o.attackerProfit = int256(attackerGot) - int256(1 + donation);
         // victim redeems what he can
         uint256 victimBefore = vault.balanceOf(VICTIM);
-        uint256 vt = bp.balanceOf(VICTIM);
+        uint256 vt = m.balanceOf(VICTIM);
         if (vt > 0) {
             vm.prank(VICTIM);
-            require(bp.redeem(vt) == 0);
+            require(m.redeem(vt) == 0);
         }
         o.victimLoss = int256(victimShares) - int256(vault.balanceOf(VICTIM) - victimBefore);
         vm.revertToState(snap);
@@ -199,58 +223,58 @@ contract BpInflationTest is BpBase {
 
     // =================================================================== 3. donation, rounding, minimum behaviour
     function test_donationDirectlyToThePToken_doesNotMintPTokens_andRaisesTheRateForHolders() external {
-        _seedPermanent(SEED);
-        uint256 aliceTokens = _supplyShares(ALICE, 100e6);
-        uint256 rateBefore = bp.exchangeRateStored();
+        _seedM(SEED);
+        uint256 aliceTokens = _supplyM(ALICE, 100e6);
+        uint256 rateBefore = m.exchangeRateStored();
         assertEq(rateBefore, 2e14);
         vault.mintShares(ATTACKER, 100e6);
         vm.prank(ATTACKER);
-        vault.transfer(address(bp), 100e6); // donate 100 shares
-        uint256 rateAfter = bp.exchangeRateStored();
+        vault.transfer(address(m), 100e6); // donate 100 shares
+        uint256 rateAfter = m.exchangeRateStored();
         // cash 101 + 100 = 201 shares over (1 + 100) shares of pTokens
         assertEq(rateAfter, (uint256(201e6) * 1e18) / (uint256(101e6) * 5000));
         assertGt(rateAfter, rateBefore);
-        assertEq(bp.balanceOf(ATTACKER), 0, "donor receives nothing");
+        assertEq(m.balanceOf(ATTACKER), 0, "donor receives nothing");
         // holders (and the dead seed) benefit pro rata: ALICE redeems ~ 100 + 100 * 100/101
-        (bool ok,) = _redeemShares(ALICE, aliceTokens);
+        (bool ok,) = _try(ALICE, address(m), abi.encodeWithSelector(PErc20.redeem.selector, aliceTokens));
         assertTrue(ok);
         assertEq(vault.balanceOf(ALICE), (aliceTokens * rateAfter) / 1e18);
         assertGt(vault.balanceOf(ALICE), 100e6);
     }
 
     function test_redeemRounding_tinyPTokenAmountsRedeemZeroShares_burnsTokensForNothing() external {
-        _seedPermanent(SEED);
-        uint256 pTokens = _supplyShares(ALICE, 10e6);
+        _seedM(SEED);
+        uint256 pTokens = _supplyM(ALICE, 10e6);
         vm.prank(ALICE);
-        require(bp.redeem(4999) == 0); // 4999 * 2e14 / 1e18 = 0.9998 -> 0 shares
+        require(m.redeem(4999) == 0); // 4999 * 2e14 / 1e18 = 0.9998 -> 0 shares
         assertEq(vault.balanceOf(ALICE), 0, "redeemed 4999 pTokens for 0 shares: rounding is in the market's favour");
-        assertEq(bp.balanceOf(ALICE), pTokens - 4999);
+        assertEq(m.balanceOf(ALICE), pTokens - 4999);
     }
 
     function test_redeemUnderlying_zeroTokenRoundingIsBlockedByRedeemVerify() external {
-        _seedPermanent(SEED);
-        _supplyShares(ALICE, 10e6);
+        _seedM(SEED);
+        _supplyM(ALICE, 10e6);
         // inflate the rate above 1 share base unit per pToken base unit: donate 10_000 shares over (1+10) shares of supply
         vault.mintShares(ATTACKER, 100_000e6);
         vm.prank(ATTACKER);
-        vault.transfer(address(bp), 100_000e6);
-        assertGt(bp.exchangeRateStored(), 1e18, "rate > 1: one pToken base unit is worth more than one share base unit");
+        vault.transfer(address(m), 100_000e6);
+        assertGt(m.exchangeRateStored(), 1e18, "rate > 1: one pToken base unit is worth more than one share base unit");
         // redeemUnderlying(1): tokens = floor(1 / rate) = 0 while amount > 0 -> redeemVerify reverts
         (bool ok, bytes memory ret) =
-            _try(ALICE, address(bp), abi.encodeWithSelector(PErc20.redeemUnderlying.selector, 1));
+            _try(ALICE, address(m), abi.encodeWithSelector(PErc20.redeemUnderlying.selector, 1));
         assertFalse(ok);
         assertEq(_reason(ret), "redeemTokens zero");
     }
 
     function test_firstMintAfterSeed_getsTheInitialRate_andTotalSupplyIsSeedPlusMinted() external {
-        _seedPermanent(SEED);
-        assertEq(bp.totalSupply(), SEED * 5000);
-        assertEq(bp.balanceOf(DEAD), SEED * 5000);
-        assertEq(bp.exchangeRateStored(), 2e14);
-        uint256 minted = _supplyShares(ALICE, 1);
+        _seedM(SEED);
+        assertEq(m.totalSupply(), SEED * 5000);
+        assertEq(m.balanceOf(DEAD), SEED * 5000);
+        assertEq(m.exchangeRateStored(), 2e14);
+        uint256 minted = _supplyM(ALICE, 1);
         assertEq(minted, 5000, "1 share base unit mints 5000 pToken base units");
         // minimum supplyable amount: 0 pTokens would be minted by... no amount > 0 mints 0 at rate 2e14
-        assertEq(bp.exchangeRateStored(), 2e14);
+        assertEq(m.exchangeRateStored(), 2e14);
     }
 
     // =================================================================== minimum-seed behaviour of the delegate
@@ -291,7 +315,7 @@ contract BpInflationTest is BpBase {
 contract BpInflationBorrowTest is BpBase {
     function setUp() public override {
         super.setUp();
-        _listShareMarketNoSeed(); // priced, listed, borrow paused, cap 1; the seed is applied per scenario
+        _listShareMarketNoSeed(); // swapped, cap 1, listed, borrow paused; the seed is applied per scenario
         require(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE) == 0);
     }
 
@@ -304,6 +328,7 @@ contract BpInflationBorrowTest is BpBase {
         assertEq(vault.totalSupply(), 1, "vault supply far below the listing minimum");
         assertEq(PharaohBoostedDelegate(address(bp)).vaultTotalSupply(), 1);
         assertGt(_price(PToken(address(bp))), 0, "oracle still prices the share (no on-chain re-check of the minimum supply)");
+        _seedPermanent(SEED); // seed-first: the admin mints first
         uint256 minted = _supplyShares(ALICE, 1e6);
         assertGt(minted, 0, "market still accepts supply");
     }
@@ -318,40 +343,44 @@ contract BpInflationBorrowTest is BpBase {
         bool redeemOk;
     }
 
+    /// @dev seed 0: `PharaohBoostedDelegate` forbids an outsider from minting first, so the attacker here is the ADMIN (the only
+    ///      account that can be the first minter): this measures what an UNSEEDED market would suffer. With seed > 0 the admin
+    ///      seeds first and the attacker is an outsider.
     function _sonne(uint256 seed, uint256 donation) internal returns (Result memory r) {
         uint256 snap = vm.snapshotState();
         if (seed > 0) _seedPermanent(seed);
-        vault.mintShares(ATTACKER, 1 + donation);
-        vm.startPrank(ATTACKER);
+        address att = seed == 0 ? address(this) : ATTACKER;
+        vault.mintShares(att, 1 + donation);
+        vm.startPrank(att);
         vault.approve(address(bp), type(uint256).max);
         require(bp.mint(1) == 0);
-        require(bp.redeem(bp.balanceOf(ATTACKER) - 2) == 0); // keep exactly 2 pToken base units
+        require(bp.redeem(bp.balanceOf(att) - 2) == 0); // keep exactly 2 pToken base units
         vault.transfer(address(bp), donation);
         vm.stopPrank();
-        assertEq(bp.balanceOf(ATTACKER), 2);
+        assertEq(bp.balanceOf(att), 2);
         r.rate = bp.exchangeRateStored();
-        _enter(ATTACKER, address(bp));
+        _enter(att, address(bp));
         uint256 tokenValue = r.rate / 1e18; // share (== USDC) base units per pToken base unit, pre-redeem
         uint256 borrow = (tokenValue * 50) / 100;
         if (borrow > 1) {
             borrow -= 1; // the single remaining pToken must (at the PRE-redeem rate) still cover the debt
-            (bool ok, bytes memory ret) = _borrowUsdc(ATTACKER, borrow);
+            (bool ok, bytes memory ret) = _borrowUsdc(att, borrow);
             require(ok, string(abi.encodePacked("attacker borrow: ", _reason(ret))));
             r.borrowed = borrow;
         }
         // largest amount that burns only ONE pToken base unit: x * 1e18 / rate < 2
         uint256 x = (2 * r.rate + 1e18 - 1) / 1e18 - 1;
-        uint256 tokensBefore = bp.balanceOf(ATTACKER);
-        uint256 sharesBefore = vault.balanceOf(ATTACKER);
+        uint256 tokensBefore = bp.balanceOf(att);
+        uint256 sharesBefore = vault.balanceOf(att);
         bytes memory rr;
-        (r.redeemOk, rr) = _try(ATTACKER, address(bp), abi.encodeWithSelector(PErc20.redeemUnderlying.selector, x));
+        (r.redeemOk, rr) = _try(att, address(bp), abi.encodeWithSelector(PErc20.redeemUnderlying.selector, x));
         if (r.redeemOk) {
-            r.burned = tokensBefore - bp.balanceOf(ATTACKER);
-            r.shares = vault.balanceOf(ATTACKER) - sharesBefore;
+            r.burned = tokensBefore - bp.balanceOf(att);
+            r.shares = vault.balanceOf(att) - sharesBefore;
         }
-        (, , r.shortfall) = controller.getAccountLiquidity(ATTACKER);
-        uint256 left = (bp.balanceOf(ATTACKER) * bp.exchangeRateStored()) / 1e18;
-        r.attackerNet = int256(r.borrowed) + int256(vault.balanceOf(ATTACKER)) + int256(left) - int256(1 + donation);
+        (, , r.shortfall) = controller.getAccountLiquidity(att);
+        uint256 left = (bp.balanceOf(att) * bp.exchangeRateStored()) / 1e18;
+        r.attackerNet = int256(r.borrowed) + int256(vault.balanceOf(att)) + int256(left) - int256(1 + donation);
         rr; // silence
         vm.revertToState(snap);
     }
