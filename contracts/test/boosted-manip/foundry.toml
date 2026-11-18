@@ -1,0 +1,27 @@
+# Offline, self-contained project for the bpPHAR-USDC share-price manipulation PoCs. Same compiler settings as the DLMM vault project
+# (solc 0.8.35, optimizer 200 runs, EVM osaka, via-IR). `lib` and `node_modules` are local symlinks (git-ignored) to the main repo's.
+# Imports of the repo contracts are RELATIVE (../../../contracts/...), so the same files also compile under the main contracts/foundry.toml.
+# No RPC endpoint is configured or used: nothing here forks.
+[profile.default]
+src = "vault-src"
+test = "tests"
+out = "out"
+cache_path = "cache"
+libs = ["lib"]
+include_paths = ["../.."]
+allow_paths = ["../.."]
+solc_version = "0.8.35"
+evm_version = "osaka"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+cbor_metadata = true
+use_literal_content = true
+ignored_error_codes = [3628, 2072, 5667, 2018]
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "@chainlink/contracts/=node_modules/@chainlink/contracts/",
+]
