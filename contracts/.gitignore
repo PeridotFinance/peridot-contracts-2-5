@@ -54,3 +54,5 @@ out-spy/
 .scratch/
 deployments/spy-margin/*rehearsal*
 deployments/spy-margin/*.nvda-before.txt
+deployments/spy-collateral/*rehearsal*
+deployments/spy-collateral/*.untouched-before.txt

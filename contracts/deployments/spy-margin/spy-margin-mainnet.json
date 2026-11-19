@@ -1,0 +1,12 @@
+{
+  "chainId": 4663,
+  "closedFrom": 432000,
+  "closedUntil": 3600,
+  "delegate": "0x0a23c74A2aEc26429ad937B4dDa2ae636479d408",
+  "deployer": "0x19fb83bC4aA08234a5171901a4e7AF15E1bdB6E7",
+  "lendingAdapter": "0x74f1ea31ED6615833F096D1Ac695036538969A59",
+  "maxStaleness": 90000,
+  "pSpy": "0xa6660499a9cB9B6691247fE1FAbc248f502E5fB3",
+  "router": "0x5a17f1bfd30a514903F5bC2ce5df86497E11a7BC",
+  "spySource": "0x19328c075bD9c1b0D33c5559d491EA39725C45F8"
+}

@@ -207,7 +207,7 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
      * @param account Address of the account to snapshot
      * @return (possible error, token balance, borrow balance, exchange rate mantissa)
      */
-    function getAccountSnapshot(address account) external view override returns (uint256, uint256, uint256, uint256) {
+    function getAccountSnapshot(address account) external view virtual override returns (uint256, uint256, uint256, uint256) {
         return (NO_ERROR, accountTokens[account], borrowBalanceStoredInternal(account), exchangeRateStoredInternal());
     }
 

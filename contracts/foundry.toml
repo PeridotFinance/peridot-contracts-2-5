@@ -80,4 +80,4 @@ evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 1
-fs_permissions = [{ access = "read-write", path = "./deployments/spy-margin" }, { access = "read", path = "./out-spy" }]
+fs_permissions = [{ access = "read-write", path = "./deployments/spy-margin" }, { access = "read-write", path = "./deployments/spy-collateral" }, { access = "read", path = "./out-spy" }]
