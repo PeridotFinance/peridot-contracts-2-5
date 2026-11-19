@@ -255,6 +255,45 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
         assertEq(IMarket(d.pSpy).balanceOf(c.liquidator), 0);
     }
 
+    function testUnenteredPSpyNotSeizableAtWeekend() public {
+        _collateralCeremony();
+        // bob: pNVDA collateral entered, USDG debt, plus pSPY that he never entered.
+        vm.prank(WHALE);
+        IERC20(P.NVDA).transfer(bob, 0.2e18);
+        vm.startPrank(bob);
+        IERC20(P.NVDA).approve(P.PNVDA, 0.2e18);
+        IMarket(P.PNVDA).mint(0.2e18);
+        address[] memory a = new address[](1);
+        a[0] = P.PNVDA;
+        IController(P.CONTROLLER).enterMarkets(a);
+        vm.stopPrank();
+        vm.prank(WHALE);
+        IERC20(P.SPY).transfer(bob, 0.01e18);
+        vm.startPrank(bob);
+        IERC20(P.SPY).approve(d.pSpy, 0.01e18);
+        IMarket(d.pSpy).mint(0.01e18);
+        (, uint256 liq,) = _liquidity(bob);
+        IMarket(P.PUSDG).borrow(liq / 1e12 * 99 / 100);
+        vm.stopPrank();
+        vm.warp(_nextSaturdayNoon());
+        _freshSpyFeed();
+        // NVDA falls 30 % on its (24/7) price: shortfall on the NVDA side, read through the live controller oracle.
+        address o = IController(P.CONTROLLER).oracle();
+        uint256 pn = IPriceOracleLike(o).getUnderlyingPrice(P.PNVDA);
+        vm.mockCall(o, abi.encodeWithSignature("getUnderlyingPrice(address)", P.PNVDA), abi.encode(pn * 70 / 100));
+        (uint256 err,, uint256 shortfall) = _liquidity(bob);
+        assertEq(err, 0, "bob never entered pSPY: his liquidity reads no SPY price");
+        assertGt(shortfall, 0);
+        _fund(keeperEoa, 10e6);
+        vm.startPrank(keeperEoa);
+        IERC20(P.USDG).approve(P.PUSDG, 10e6);
+        vm.expectRevert(abi.encodeWithSelector(RobinhoodSpyCollateralDelegate.SpySessionClosed.selector, uint256(7)));
+        IDebtMarket(P.PUSDG).liquidateBorrow(bob, 1e6, d.pSpy);
+        // the NVDA collateral is still liquidatable at the weekend, as before
+        assertEq(IDebtMarket(P.PUSDG).liquidateBorrow(bob, 1e6, P.PNVDA), 0);
+        vm.stopPrank();
+    }
+
     function testNvdaOnlyAccountsUnchangedValueForValue() public {
         // a fresh NVDA-only borrower, plus the live lending account, read in session and at the weekend
         vm.prank(WHALE);

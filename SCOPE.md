@@ -61,9 +61,9 @@ not auto-enter pSPY on supply, and must show "SPY market closed: repay only".
 ## 2. What changes
 
 **Contracts (`contracts/margin/spy/`, profile `robinhood_spy`)**
-1. `RobinhoodSpyCollateralDelegate is PErc20Delegate`: the two October corrections (ZeroSharesMinted, round-up redeemUnderlying) + snapshot gate + lending supply cap. Appended storage: one `uint256 lendingSupplyCap` after `implementation` (layout check in tests). Immutable `spySource`.
+1. `RobinhoodSpyCollateralDelegate is PErc20Delegate`: the two October corrections (ZeroSharesMinted, round-up redeemUnderlying) + snapshot gate + `seize` gate + lending supply cap. Appended storage: one `uint256 lendingSupplyCap` after `implementation` (layout check in tests). Immutable `spySource`.
 2. `SpyCollateralLiquidator`: immutable flash-liquidation helper (above).
-3. `PToken.getAccountSnapshot`: `virtual`.
+3. `PToken.getAccountSnapshot` and `PToken.seize`: `virtual`.
 
 **Keeper (new branch `margin-keeper-spy-collateral` off cefe964, worktree `RobinhoodVaults/.wt-margin-keeper-collateral`)**: lending discovery + plan + execution policy (`to == SPY_COLLATERAL_LIQUIDATOR`, fixed calldata shape), journal ids ≥ 1e12 in the existing table, margin `unresolved()` ignores them, gas cap unchanged 12M, runtime pins for the two new contracts added after deployment (pin file ships empty ⇒ module off).
 
@@ -79,6 +79,8 @@ not auto-enter pSPY on supply, and must show "SPY market closed: repay only".
 - **R4 Live adapter trust set.** `setOperator(liquidator)` on 0xa32C: an operator can pull tokens from any `fromAccount` that approved the adapter. The liquidator only ever passes `address(this)`, is immutable, and has no admin.
 - **R5 Thin market inflation.** Dead seed 0.0001 SPY (5e5 shares). Donation to pSPY raises the exchange rate for everyone; covered by a fork test at CF 30 %.
 - **R6 Keeper wallet = margin keeper wallet**; a lending tx shares its nonce. Ambiguous lending submission ⇒ operator_attention for both (correct: nonce uncertainty). Read/stale failures are isolated.
+- **R8 Non-USDG debt against pSPY.** pNVDA borrowing is open, so an account can borrow NVDA against pSPY. The liquidator repays pUSDG only, so that debt has no automated liquidation path. The keeper reports it as `lending_unsupported_shortfall`. Options: accept it under the cap, or extend the liquidator later. pNVDA borrowing cannot be paused for pSPY accounts alone.
+- **R9 Un-entered holders.** `seizeAllowed` has no membership check, so another market's shortfall could seize un-entered pSPY at the cached lending price at weekends. Closed by gating `pSPY.seize` itself while SPY is withheld (unit and fork tested).
 - **R7 Rollback**: setting CF back to 0 makes SPY-backed borrowers instantly liquidatable (when fresh). Rollback order: cap 0 first, then CF 0 once SPY-backed debt is repaid.
 
 ---

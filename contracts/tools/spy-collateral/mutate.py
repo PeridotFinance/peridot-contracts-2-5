@@ -20,6 +20,7 @@ MUTANTS = [
     (D, '    function _setLendingSupplyCap(uint256 newCap) external {\n        if (msg.sender != admin) revert OnlyAdmin();', '    function _setLendingSupplyCap(uint256 newCap) external {'),
     (D, 'lendingSupplyCap = newCap;', ''),
     (D, 'return totalSupply * exchangeRateStoredInternal() / expScale;', 'return totalSupply;'),
+    (D, 'if (reason != 0) revert SpySessionClosed(reason);', ''),
     (L, 'if (reason != 0) revert SpyPriceUnavailable(reason);\n        _borrower', '_borrower'),
     (L, 'msg.sender != address(flashLender) || initiator != address(this)', 'initiator != address(this)'),
     (L, '|| borrower == address(0)', ''),

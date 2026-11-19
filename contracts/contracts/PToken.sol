@@ -902,6 +902,7 @@ abstract contract PToken is PTokenInterface, ExponentialNoError, TokenErrorRepor
      */
     function seize(address liquidator, address borrower, uint256 seizeTokens)
         external
+        virtual
         override
         nonReentrant
         returns (uint256)

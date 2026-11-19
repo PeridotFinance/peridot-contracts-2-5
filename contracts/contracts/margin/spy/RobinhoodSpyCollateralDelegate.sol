@@ -22,7 +22,10 @@ interface IIsolatedAccountRegistry {
  *         isolated-margin account. The controller's liquidity loop turns a nonzero snapshot error into SNAPSHOT_ERROR,
  *         so for such accounts every liquidity-checked action fails closed: borrow (any market), redeem and transfer
  *         (any market the account is in), exitMarket and liquidateBorrow. Repay and mint read no snapshot and keep
- *         working. Accounts without pSPY are untouched (a zero balance contributes nothing, whatever the price), and
+ *         working. `seize` itself also reverts while SPY is withheld, which covers a holder who never entered
+ *         pSPY: the controller's liquidity check then never reads pSPY, but `seizeAllowed` has no membership
+ *         check, so another market's shortfall could otherwise seize pSPY at the cached lending price.
+ *         Accounts without pSPY are untouched (a zero balance contributes nothing, whatever the price), and
  *         isolated-margin accounts never reach the controller's liquidity path (they are routed to the margin risk
  *         hook) and are exempted here so that external readers see them unchanged.
  *
@@ -48,6 +51,7 @@ contract RobinhoodSpyCollateralDelegate is PErc20Delegate {
     error LendingSupplyCapExceeded(uint256 totalUnderlying, uint256 cap);
     error InvalidConfiguration();
     error OnlyAdmin();
+    error SpySessionClosed(uint256 reason);
 
     event LendingSupplyCapSet(uint256 oldCap, uint256 newCap);
 
@@ -95,6 +99,19 @@ contract RobinhoodSpyCollateralDelegate is PErc20Delegate {
             if (reason != 0) return (reason, 0, 0, 0);
         }
         return (NO_ERROR, tokens, borrowBalanceStoredInternal(account), exchangeRateStoredInternal());
+    }
+
+    /// @notice No pSPY changes hands in a liquidation while SPY is closed or stale, whoever the borrower is.
+    function seize(address liquidator, address borrower, uint256 seizeTokens)
+        external
+        override
+        nonReentrant
+        returns (uint256)
+    {
+        uint256 reason = sessionReason();
+        if (reason != 0) revert SpySessionClosed(reason);
+        seizeInternal(msg.sender, liquidator, borrower, seizeTokens);
+        return NO_ERROR;
     }
 
     function mint(uint256 mintAmount) external override returns (uint256) {

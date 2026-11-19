@@ -484,6 +484,34 @@ contract SpyCollateralDelegateTest is Test {
         assertEq(err, 15, "SNAPSHOT_ERROR");
     }
 
+    function testUnenteredPSpyCannotBeSeizedWhileClosed() public {
+        // bob borrows against NVDA only and also holds pSPY he never entered.
+        _mint(pNvda, nvda, bob, 1e18);
+        _enter(bob, address(pNvda));
+        _mint(pSpy, spy, bob, 0.1e18);
+        vm.prank(bob);
+        pUsdg.borrow(100e6);
+        oracle.set(address(pNvda), 100e18); // NVDA falls (24/7 feed): shortfall on the NVDA side
+        (uint256 err,, uint256 shortfall) = controller.getAccountLiquidity(bob);
+        assertEq(err, 0);
+        assertGt(shortfall, 0);
+        usdg.mint(liq, 40e6);
+        vm.prank(liq);
+        usdg.approve(address(pUsdg), 40e6);
+        source.set(0, 7);
+        vm.prank(liq);
+        vm.expectRevert(abi.encodeWithSelector(RobinhoodSpyCollateralDelegate.SpySessionClosed.selector, uint256(7)));
+        pUsdg.liquidateBorrow(bob, 10e6, address(pSpy));
+        // the NVDA collateral itself stays liquidatable
+        vm.prank(liq);
+        assertEq(pUsdg.liquidateBorrow(bob, 10e6, address(pNvda)), 0);
+        // and once SPY is open again, Compound semantics: an un-entered balance is seizable
+        source.set(716e18, 0);
+        vm.prank(liq);
+        assertEq(pUsdg.liquidateBorrow(bob, 5e6, address(pSpy)), 0);
+        assertGt(pSpy.balanceOf(liq), 0);
+    }
+
     function testNvdaOnlyAccountUnchangedByGate() public {
         _mint(pNvda, nvda, bob, 1e18);
         _enter(bob, address(pNvda));
