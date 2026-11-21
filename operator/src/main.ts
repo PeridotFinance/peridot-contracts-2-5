@@ -155,7 +155,7 @@ async function main(): Promise<number> {
   const alerts = new AlertManager(sink, cfg.monitor.escalationSeconds, state0.alerts);
   let state = state0;
   if (ctx.logProbeProblem) await alerts.raise({ key: "logs:probe", severity: "warn", message: `the log endpoint did not serve eth_getLogs at start (${ctx.logProbeProblem}): the process runs, the borrower index catches up when it answers (finding index:behind). Set AVALANCHE_LOGS_RPC_URL to another endpoint if it persists`, audience: "monitor-operator" }, Math.floor(Date.now() / 1000));
-  const once = async (): Promise<number> => {
+  const cycleOnce = async (): Promise<number> => {
     try {
       const out = await runCycle(ctx, state, alerts);
       state = out.state;
@@ -178,16 +178,6 @@ async function main(): Promise<number> {
         state = { ...state, executor: x.state, alerts: alerts.toJson() };
         saveState(cfg.monitor.statePath, state);
         if (x.round || x.skipped.length || x.halted) console.log(mask(JSON.stringify({ executor: { round: x.round, skipped: x.skipped, unfunded: x.unfunded, swapBlocked: x.swapBlocked, halted: x.halted } })));
-      }
-      // the wrapper-fallback poke: only on the host with shareCollateral.poke.enabled; after the executor (a liquidation is more urgent than an hourly poke); never throws
-      if (execSigner && pokeSettings(cfg)) {
-        const px = await pokeStep(
-          { ctx, signer: execSigner, alerts, persist: (ps) => { state = { ...state, poke: ps }; saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() }); } },
-          state.poke ?? emptyPokeState(),
-        );
-        state = { ...state, poke: px.state, alerts: alerts.toJson() };
-        saveState(cfg.monitor.statePath, state);
-        if (px.result !== "not-due" && px.result !== "disabled") console.log(mask(JSON.stringify({ poke: { result: px.result, note: px.note, hash: px.hash } })));
       }
       // daily full re-scan of the events from the deployment block against the incremental index. It runs AFTER the keeper and the executor (it can be
       // long on a public log endpoint and must never starve them), never throws, and always advances its clock so that a failing endpoint is retried
@@ -213,6 +203,28 @@ async function main(): Promise<number> {
       console.error(`cycle failed: ${safeError(e)}`);
       return 1;
     }
+  };
+  // The wrapper-fallback poke (only on the host with shareCollateral.poke.enabled) is its OWN step, run after every cycle whatever the cycle's outcome: a failing
+  // monitor cycle or executor step (RPC trouble on a read, a halted executor) must not stop the fallback from being refreshed. It never throws. It runs after the
+  // executor (a liquidation is more urgent than an hourly poke). Only `run` has a signer; `check` never pokes.
+  const pokeRound = async (): Promise<void> => {
+    if (!execSigner || !pokeSettings(cfg)) return;
+    try {
+      const px = await pokeStep(
+        { ctx, signer: execSigner, alerts, persist: (ps) => { state = { ...state, poke: ps }; saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() }); } },
+        state.poke ?? emptyPokeState(),
+      );
+      state = { ...state, poke: px.state, alerts: alerts.toJson() };
+      saveState(cfg.monitor.statePath, state);
+      if (px.result !== "not-due" && px.result !== "disabled") console.log(mask(JSON.stringify({ poke: { result: px.result, note: px.note, hash: px.hash } })));
+    } catch (e) {
+      console.error(`poke step failed: ${safeError(e)}`); // pokeStep itself never throws; this guards the persistence around it
+    }
+  };
+  const once = async (): Promise<number> => {
+    const code = await cycleOnce();
+    await pokeRound();
+    return code;
   };
   if (cmd === "check") return once();
   for (;;) {
