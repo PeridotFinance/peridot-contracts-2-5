@@ -206,6 +206,9 @@ sys.exit(0 if ok else 1)
     ORACLE="$BP_ORACLE"; MARKET="$BP_MARKET"
     if [ "$MODE" = live ]; then SEND="--ledger --from $LEDGER"; else SEND="--unlocked --from $LEDGER"; fi
     WANT="${ARG3:-all}"
+    # EXPLICIT GAS on every Ledger send. eth_estimateGas returns the LOWEST gas at which a tx does not revert; the wrapper swallows a failed vault read (price 0) and
+    # _setCollateralFactor RETURNS an error code instead of reverting, so an estimated T10 can mine with status 1 and change nothing (measured on the fork). The unused gas is not charged.
+    GASLIMIT="${BP_LEDGER_GAS:-1500000}"
     n=0
     # emit <label> <expect> <target> <signature-with-returns> <args...>: the simulation (eth_call from the Ledger) FIRST, then the calldata, then the send
     emit() {
@@ -219,7 +222,7 @@ sys.exit(0 if ok else 1)
       printf '# calldata (compare with the device): '
       cast calldata "$argsig" "$@" 2>/dev/null || echo "(cast calldata unavailable)"
       printf 'cast call --from %s %s' "$LEDGER" "$target"; printf " '%s'" "$sig"; for a in "$@"; do printf " '%s'" "$a"; done; echo ' 2>&1 | python3 -I tools/avalanche-redact-rpc.py ETH_RPC_URL   # SIMULATE FIRST'
-      printf 'cast send %s %s' "$SEND" "$target"; printf " '%s'" "$argsig"; for a in "$@"; do printf " '%s'" "$a"; done; echo ' 2>&1 | python3 -I tools/avalanche-redact-rpc.py ETH_RPC_URL   # then SIGN'
+      printf 'cast send %s %s --gas-limit %s' "$SEND" "$target" "$GASLIMIT"; printf " '%s'" "$argsig"; for a in "$@"; do printf " '%s'" "$a"; done; echo ' 2>&1 | python3 -I tools/avalanche-redact-rpc.py ETH_RPC_URL   # then SIGN'
     }
     read_back() { echo "# read-back: $1"; shift; printf 'cast call %s' "$1"; shift; for a in "$@"; do printf " '%s'" "$a"; done; echo ' 2>&1 | python3 -I tools/avalanche-redact-rpc.py ETH_RPC_URL'; }
     stage_hdr() { echo; echo "################################################################################ $1"; }
