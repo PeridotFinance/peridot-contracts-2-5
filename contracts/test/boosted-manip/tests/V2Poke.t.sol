@@ -77,6 +77,40 @@ contract V2PokeTest is V2Base {
         // one poke while the vault still answered would have bought up to 24 h - (outage start - poke)
     }
 
+
+    /// how long the fallback is valid after the vault's FIRST FeedInvalid (93,601 s after the USDT feed's last update u), by keeper cadence c: last accepted poke <= u + 93,600, so
+    /// the fallback is valid for 86,400 - (93,601 - lastPoke) seconds from the first revert and price 0 from lastPoke + 86,401 (absolute: u + 176,401 .. u + 180,001)
+    function test_A4_fallback_validity_after_the_first_feedinvalid_by_keeper_cadence() public {
+        uint256[4] memory cad = [uint256(900), 3_600, 21_600, 40_000];
+        console2.log("cadence s / last poke after u / fallback seconds valid from the first revert / price 0 from (s after u)");
+        for (uint256 i; i < cad.length; ++i) {
+            uint256 snap = vm.snapshotState();
+            uint256 lastPoke = t0;
+            uint256 t = t0;
+            while (t + cad[i] <= t0 + VAULT_MAX_AGE) {
+                _to(t + cad[i]);
+                t = clock;
+                _freshUsdc();
+                assertTrue(_poke());
+                lastPoke = clock;
+            }
+            _to(t0 + VAULT_MAX_AGE + 1);
+            _freshUsdc();
+            assertTrue(_usingFallback());
+            (,,,, uint256 left) = w2.shareState();
+            assertEq(left, WINDOW - (clock - lastPoke));
+            console2.log(cad[i], lastPoke - t0, left);
+            console2.log(lastPoke + WINDOW + 1 - t0);
+            _to(lastPoke + WINDOW);
+            _freshUsdc();
+            assertGt(_p(), 0);
+            _to(lastPoke + WINDOW + 1);
+            _freshUsdc();
+            assertEq(_p(), 0);
+            vm.revertToState(snap);
+        }
+    }
+
     function test_A3_poke_gate_boundaries_3599_3600() public {
         usdc.mint(address(this), 20e6);
         usdc.transfer(proxyAddr, 2e6); // live +11.7 %

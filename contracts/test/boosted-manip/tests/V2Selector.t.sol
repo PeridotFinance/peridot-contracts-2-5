@@ -4,19 +4,18 @@ pragma solidity ^0.8.20;
 import {console2} from "forge-std/Test.sol";
 
 import {V2Base} from "./V2Base.sol";
-import {PharaohDlmmShareOracle as SelOracle} from "./v2sel/PharaohDlmmShareOracle.sol";
+import {PharaohDlmmShareOracle as SelOracle} from "../../../contracts/PharaohDlmmShareOracle.sol";
 import {PriceOracle} from "../../../contracts/PriceOracle.sol";
 import {PToken} from "../../../contracts/PToken.sol";
 
-/// @notice OPTIONAL variant (patch `patches/dlmm-oracle-fallback-feedinvalid-only.patch`, NOT applied to the frozen wrapper): fall back ONLY when the vault reverts with its own
-///         `FeedInvalid(uint8)`; every other revert (failed pair read `ExitFailed`, out of gas = empty data) and a zero answer is a BROKEN vault: price 0. Shows the variant keeps the feed
-///         outage behaviour and removes the non-feed fallback of V2Fallback D5/D6.
+/// @notice REGRESSION tests of the production wrapper v3 (`cac947c9`): the fallback covers ONLY the vault's own `FeedInvalid(uint8)`; every other vault failure (a failed pair read =
+///         `ExitFailed`, an empty revert = out of gas, a panic, a zero answer) prices 0 at once. (The 21 Nov `FeedInvalid`-only patch proposed by this analysis was adopted as v3.)
 contract V2SelectorTest is V2Base {
     SelOracle internal s2;
 
     function setUp() public {
         _setUpV2();
-        s2 = new SelOracle(PriceOracle(address(guarded)), address(pS2));
+        s2 = w2; // production v3 (same constructor arguments as every other V2 test)
     }
 
     function _sp() internal view returns (uint256) {
@@ -66,8 +65,6 @@ contract V2SelectorTest is V2Base {
         assertEq(_sp(), 0, "ExitFailed is not FeedInvalid: BROKEN");
         assertFalse(_sUsing());
         assertFalse(s2.poke());
-        // the frozen wrapper serves 97 % in the same state
-        assertGt(_p(), 0);
     }
 
     function test_S4_a_vault_whose_nav_rounds_to_zero_is_price_0() public {
@@ -78,7 +75,27 @@ contract V2SelectorTest is V2Base {
         assertEq(v.convertToAssets(1e6), 0);
         assertEq(_sp(), 0);
         assertFalse(_sUsing());
-        assertGt(_p(), 0, "frozen wrapper: 97 %");
+    }
+
+    function test_S4b_other_non_feed_failures_price_0_and_the_vaults_own_feed_error_falls_back() public {
+        _tick(3_600);
+        _freshBoth();
+        assertTrue(s2.poke());
+        uint256 fb = (uint256(s2.lastGoodAssetsPerShare()) * 9_700 / 10_000) * 1e24;
+        bytes4 sel = v.convertToAssets.selector;
+        // empty revert (what an out-of-gas inside the vault looks like), a Panic, a custom error that is not FeedInvalid, a one-word return
+        vm.mockCallRevert(proxyAddr, abi.encodeWithSelector(sel), "");
+        assertEq(_sp(), 0, "empty revert");
+        vm.mockCallRevert(proxyAddr, abi.encodeWithSelector(sel), abi.encodeWithSignature("Panic(uint256)", 0x11));
+        assertEq(_sp(), 0, "panic");
+        vm.mockCallRevert(proxyAddr, abi.encodeWithSelector(sel), abi.encodeWithSignature("ExitFailed()"));
+        assertEq(_sp(), 0, "ExitFailed");
+        vm.mockCallRevert(proxyAddr, abi.encodeWithSelector(sel), abi.encodeWithSignature("FeedInvalid(uint8)", uint8(2)));
+        assertEq(_sp(), fb, "FeedInvalid(2) (the USDT feed): fallback");
+        vm.mockCallRevert(proxyAddr, abi.encodeWithSelector(sel), abi.encodeWithSignature("FeedInvalid(uint8)", uint8(1)));
+        assertEq(_sp(), fb, "FeedInvalid(1) (the USDC feed, if the base oracle still prices it): fallback");
+        vm.clearMockedCalls();
+        assertGt(_sp(), fb);
     }
 
     function test_S5_gas_sweep_still_never_a_fallback_or_zero_for_a_healthy_vault() public {

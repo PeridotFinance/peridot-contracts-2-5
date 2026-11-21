@@ -92,26 +92,22 @@ contract V2FallbackTest is V2Base {
     // D5-D6. the vault can revert for reasons other than a stale feed: the "depeg x w" bound does not apply
     // =====================================================================================================================================================
 
-    function test_D5_a_failing_pair_read_makes_the_vault_revert_with_fresh_feeds_and_the_wrapper_cannot_tell() public {
+    function test_D5_v3_a_failing_pair_read_prices_0_at_once_with_fresh_feeds() public {
         _tick(3_600);
         _freshBoth();
         _poke();
         uint256 liveP = _p();
+        assertGt(liveP, 0);
         vm.mockCallRevert(address(pair), abi.encodeWithSelector(pair.getBin.selector), "pair down");
         vm.expectRevert(); // ExitFailed from _pv
         v.totalAssets();
         assertEq(_live(), 0);
-        assertTrue(_usingFallback(), "fresh feeds, healthy USDC, broken pair: the fallback serves 97 % of the last good leg");
-        assertEq(_p(), (_stored() * 9_700 / 10_000) * 1e24);
-        assertLt(_p(), liveP);
-        assertFalse(_poke(), "the poke cannot refresh while the vault cannot answer");
-        // the true NAV in this case is unrelated to w x depeg: the bound is the whole debt (see D2: 0.485 x posted), for up to 24 h after the last poke
-        (,,,, uint256 left) = w2.shareState();
-        console2.log("pair failure: fallback seconds left right after an hourly poke:", left);
-        assertGe(left, WINDOW - 1);
+        assertFalse(_usingFallback(), "v3: ExitFailed is not FeedInvalid, no fallback");
+        assertEq(_p(), 0, "price 0 at once (v2 served 97 % of the last good leg here)");
+        assertFalse(_poke());
     }
 
-    function test_D6_a_vault_whose_nav_rounds_to_zero_is_priced_at_97_percent_of_the_last_good_leg() public {
+    function test_D6_v3_a_vault_whose_nav_rounds_to_zero_prices_0_a_tiny_nonzero_answer_is_live() public {
         _tick(3_600);
         _freshBoth();
         _poke();
@@ -119,15 +115,14 @@ contract V2FallbackTest is V2Base {
         vm.mockCall(address(pair), abi.encodeWithSelector(pair.getBin.selector), abi.encode(uint128(0), uint128(0)));
         uint256 conv = v.convertToAssets(1e6);
         console2.log("convertToAssets(1 share) with the bins reported empty:", conv);
-        uint256 ta = v.totalAssets();
-        console2.log("totalAssets (idle dust):", ta);
         assertEq(conv, 0, "TA 2 wei over 17 shares: convertToAssets(1 share) floors to 0");
-        assertTrue(_usingFallback(), "answer 0 = 'cannot answer': fallback at 97 % of the last good leg although the vault is worth ~0");
-        assertEq(_p(), (_stored() * 9_700 / 10_000) * 1e24);
-        // a non-zero (tiny) answer is the LIVE price: the wrapper follows the collapse, no fallback
+        assertFalse(_usingFallback());
+        assertEq(_p(), 0, "v3: answer 0 = broken vault, price 0 (v2 served 97 %)");
+        // a non-zero (tiny) answer is the LIVE price: the wrapper follows the collapse
         vm.mockCall(address(pair), abi.encodeWithSelector(pair.getBin.selector), abi.encode(uint128(1e6), uint128(1e6)));
         assertGt(v.convertToAssets(1e6), 0);
         assertFalse(_usingFallback());
+        assertEq(_p(), v.convertToAssets(1e6) * 1e24);
     }
 
     function test_D7_usdt_feed_conditions_that_start_the_fallback_at_once() public {
@@ -355,6 +350,7 @@ contract V2FallbackTest is V2Base {
     // =====================================================================================================================================================
 
     function _sweepPrice(uint256 live, uint256 from, uint256 to, uint256 step) internal returns (uint256 reverts, uint256 equalLive, uint256 other, uint256 firstOther) {
+        uint256 zeros_;
         for (uint256 g = from; g <= to; g += step) {
             vm.cool(address(w2));
             vm.cool(proxyAddr);
@@ -368,12 +364,17 @@ contract V2FallbackTest is V2Base {
                 ++reverts;
             } else if (abi.decode(ret, (uint256)) == live) {
                 ++equalLive;
+            } else if (abi.decode(ret, (uint256)) == 0) {
+                ++zeros_; // v3: the vault call ran out of gas -> empty revert -> BROKEN -> price 0 (fail closed; blinds only the caller's own transaction)
             } else {
                 ++other;
                 if (firstOther == 0) firstOther = g;
             }
         }
+        lastSweepZeros = zeros_;
     }
+
+    uint256 internal lastSweepZeros;
 
     /// stored ABOVE live: a 3.00 glitch pokes the stored leg up two steps, then the feed recovers: the fallback price (1.009) would be ABOVE the live price (1.0): the discriminating case
     function _storedAboveLive() internal {
@@ -398,6 +399,7 @@ contract V2FallbackTest is V2Base {
         (uint256 rv, uint256 eq_, uint256 ot, uint256 first) = _sweepPrice(live, 4_000, 400_000, 250);
         console2.log("sweep stored>live (4k..400k step 250): reverts / equals live / OTHER / first other gas:", rv);
         console2.log(eq_, ot, first);
+        console2.log("  of which price 0 (call survived with an out-of-gas vault read):", lastSweepZeros);
         assertEq(ot, 0, "no gas value makes a healthy vault price at the fallback");
         assertGt(eq_, 0);
     }
