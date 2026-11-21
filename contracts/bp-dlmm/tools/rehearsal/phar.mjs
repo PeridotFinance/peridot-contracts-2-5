@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { ethers, utils, BN, Wallet, A, C, LIVE, HERE, OUTDIR, check, note, group, runProc, provider, rpc, log, impersonate, tx, expectRevert, addErrorAbi, headTs, warp } from "./lib.mjs";
+import { ethers, utils, BN, Wallet, A, C, LIVE, HERE, OUTDIR, check, note, group, runProc, blockNumber, provider, rpc, log, impersonate, tx, expectRevert, addErrorAbi, headTs, warp } from "./lib.mjs";
 
 const FIRST_START_BLOCK = 100488395;
 const CLAIM_DELAY = 86400, CLAIM_DEADLINE = 15552000;
@@ -118,7 +118,7 @@ export async function runPhar(c) {
 
   await group("B11 PHAR distribution: the deployed bpPHAR-USDC market as the wrapper holder (LAST group)", async () => {
     if (!SCAN_FROM || !/^\d+$/.test(SCAN_FROM)) throw new Error("REH_SCAN_FROM (the vault's deployment block) is required for the PHAR step; REH_WRAPPER=0 skips it");
-    const startBlock = await provider.getBlockNumber();
+    const startBlock = await blockNumber();
     const t00 = Date.now();
 
     // ------------------------------------------------------------------ p00-p02 facts of the fork

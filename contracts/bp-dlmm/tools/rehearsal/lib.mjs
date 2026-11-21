@@ -26,7 +26,9 @@ for (const k of ["log", "error"]) {
   console[k] = (...a) => { if (LOGFILE) { try { fs.appendFileSync(LOGFILE, redactUrl(util.format(...a)) + "\n"); } catch { /* the log file is a convenience: never end the run for it */ } } orig(...a); };
 }
 export const flight = new Map(); let flightId = 0;
-export const where = { group: "", id: "", idAt: Date.now() };
+export const where = { group: "", id: "", idAt: Date.now(), step: "", stepAt: Date.now() };
+/** a progress line AND the "current step" the heartbeat reports: every transaction and every ceremony step announces itself, so a stall is never anonymous */
+export function progress(msg) { where.step = msg; where.stepAt = Date.now(); console.log(`STEP ${new Date().toISOString().slice(11, 19)} ${msg}`); }
 /** race a promise against a timeout; the label (what is being waited for) is printed when the timeout fires and kept in the in-flight table meanwhile */
 export function track(label, promise, ms) {
   const id = ++flightId; flight.set(id, { label, t: Date.now() }); let timer;
@@ -51,7 +53,7 @@ export function runProc(cmd, args, { env = {}, cwd, timeoutMs = 25 * 60 * 1000, 
 }
 const heartbeat = setInterval(() => {
   const now_ = Date.now(), fl = [...flight.values()].map((f) => `${f.label} (${Math.round((now_ - f.t) / 1000)} s)`).join(" | ") || "none";
-  console.log(`HEARTBEAT ${new Date().toISOString().slice(11, 19)} group="${where.group}" last check ${where.id || "-"} (${Math.round((now_ - where.idAt) / 1000)} s ago) in flight: ${fl}`);
+  console.log(`HEARTBEAT ${new Date().toISOString().slice(11, 19)} group="${where.group}" last check ${where.id || "-"} (${Math.round((now_ - where.idAt) / 1000)} s ago) current step: "${where.step || "-"}" (${Math.round((now_ - where.stepAt) / 1000)} s ago) in flight: ${fl}`);
 }, Number(process.env.REH_HEARTBEAT_MS) || 60_000); heartbeat.unref();
 export const BN = (x) => BigNumber.from(x);
 export const RPC = process.env.REH_RPC;
@@ -71,7 +73,13 @@ const estimateGas0 = provider.estimateGas.bind(provider);
 provider.estimateGas = async (txr) => { const g = await estimateGas0(txr); const m = g.mul(150).div(100); return m.gt(14_000_000) ? BN(14_000_000) : m; };
 const send0 = provider.send.bind(provider);   // every JSON-RPC call (ours and ethers' own) goes through here: tracked, with a timeout (tracers get longer)
 const RPC_TIMEOUT = Number(process.env.REH_RPC_TIMEOUT_MS) || 180_000;
-provider.send = (method, params) => track(`rpc ${method} ${JSON.stringify(params ?? []).slice(0, 90)}`, send0(method, params), /^debug_/.test(method) ? Math.max(RPC_TIMEOUT, 600_000) : RPC_TIMEOUT);
+provider.send = (method, params) => track(`rpc ${method} ${JSON.stringify(params ?? []).slice(0, 90)}`, send0(method, params), /^debug_/.test(method) ? Math.max(RPC_TIMEOUT, 600_000) : RPC_TIMEOUT)
+  .then((r) => { if (method === "evm_revert") resetEthersCaches(); return r; });
+/** ethers v5 never lets its block number go DOWN (_maxInternalBlockNumber clamps it) and its poll loop skips pending-transaction checks while the (clamped) number equals the last one: after an evm_revert it keeps the pre-revert value for good.
+ *  Reproduced offline (selftest P5): provider.getBlockNumber() stayed 58 on a chain at block 6. So after EVERY evm_revert the caches are reset, and nothing in the harness depends on provider.getBlockNumber() or on ethers' wait()/polling. */
+export function resetEthersCaches() { provider._maxInternalBlockNumber = -1024; provider._internalBlockNumber = null; provider._lastBlockNumber = -2; provider._fastBlockNumber = null; provider._fastBlockNumberPromise = null; provider._fastQueryDate = 0; if (provider._emitted) provider._emitted.block = -2; }
+/** the chain's REAL head block number (one tracked eth_blockNumber, no ethers cache) */
+export const blockNumber = async () => parseInt(await provider.send("eth_blockNumber", []), 16);
 export const rpc = (m, p = []) => provider.send(m, p);
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const now = () => new Date().toISOString().slice(11, 19);
@@ -97,7 +105,7 @@ export async function group(name, fn, opts = {}) {
   finally { clearTimeout(timer); }
   if (expired) {   // the group is still running somewhere: the chain state is unknown, so the run ENDS here (results so far are saved), it does not carry on into the next group
     const fl = [...flight.values()].map((f) => `${f.label} (${Math.round((Date.now() - f.t) / 1000)} s)`).join(" | ") || "none";
-    check(`${name.split(" ")[0]}.watchdog`, false, `group ${name} exceeded ${Math.round(ms / 1000)} s and was stopped by the watchdog; last check ${where.id}; calls in flight: ${fl}`, fl);
+    check(`${name.split(" ")[0]}.watchdog`, false, `group ${name} exceeded ${Math.round(ms / 1000)} s and was stopped by the watchdog; last check ${where.id}; current step "${where.step}" (${Math.round((Date.now() - where.stepAt) / 1000)} s ago); calls in flight: ${fl}`, fl);
     finish({ aborted: `watchdog in ${name}` });
   }
   checkpoint(name);
@@ -169,6 +177,7 @@ export async function codeOrRevert(fn) {
  * (no transaction exists to trace) the call is replayed once with a fixed gas limit so that a mined, failed transaction can be traced. Throws on failure.
  */
 export async function tx(label, fn) {
+  progress(`tx ${label}: sending`);
   let resp;
   try { resp = await fn({}); }
   catch (e) {
@@ -189,6 +198,31 @@ export async function tx(label, fn) {
 
 // ---------------------------------------------------------------------------------------------------------------- chain helpers
 export const A = (tag) => utils.getAddress(utils.hexZeroPad("0x" + tag, 20)); // a valid checksummed address from a short hex tag
+// ---- transactions WITHOUT ethers' poll machinery: send with eth_sendTransaction (tracked), then poll eth_getTransactionReceipt ourselves (tracked, bounded). A stall here is an RPC with a name, never a silent wait on ethers' internal "poll" events.
+async function waitReceipt(hash) {
+  const deadline = Date.now() + (Number(process.env.REH_RECEIPT_TIMEOUT_MS) || 180_000);
+  for (let n = 0; ; n++) {
+    const raw = await provider.send("eth_getTransactionReceipt", [hash]);
+    if (raw && raw.blockHash) {
+      const receipt = provider.formatter.receipt(raw); receipt.confirmations = 1;
+      progress(`mined ${hash.slice(0, 12)} in block ${receipt.blockNumber} status ${receipt.status} gas ${receipt.gasUsed}`);
+      if (receipt.status === 0) throw Object.assign(new Error("transaction failed"), { code: "CALL_EXCEPTION", transactionHash: hash, receipt });
+      return receipt;
+    }
+    if (Date.now() > deadline) throw Object.assign(new Error(`no receipt for ${hash} after ${Math.round((Number(process.env.REH_RECEIPT_TIMEOUT_MS) || 180_000) / 1000)} s`), { code: "REH_TIMEOUT", transactionHash: hash });
+    await sleep(n < 20 ? 25 : 100);
+  }
+}
+async function harnessSendTransaction(txr) {
+  const hash = await this.sendUncheckedTransaction(txr);            // eth_estimateGas (50 % headroom wrapper) + eth_sendTransaction, both tracked
+  progress(`sent ${hash.slice(0, 12)} to ${txr?.to ?? "(create)"}`);
+  let raw = null; for (let i = 0; i < 40 && !raw; i++) { raw = await provider.send("eth_getTransactionByHash", [hash]); if (!raw) await sleep(25); }
+  const resp = raw ? provider.formatter.transactionResponse(raw) : { hash, from: await this.getAddress(), nonce: 0, confirmations: 0 };
+  resp.wait = () => waitReceipt(hash);
+  return resp;
+}
+const getSigner0 = provider.getSigner.bind(provider);
+provider.getSigner = (a) => { const s = getSigner0(a); s.sendTransaction = harnessSendTransaction.bind(s); return s; };
 export const signer = (addr) => provider.getSigner(addr);
 export const C = (addr, abi, who) => new ethers.Contract(addr, abi, who ? signer(who) : provider);
 export async function impersonate(addr, eth = "0x56BC75E2D63100000") { await rpc("anvil_impersonateAccount", [addr]); await rpc("anvil_setBalance", [addr, eth]); return signer(addr); }

@@ -10,7 +10,7 @@
 //     90,000 s, AVAX 1,200 s). The vault's USDC feed and the base oracle's USDC feed are the SAME address (B0.f2), so one re-pinned mock serves both.
 //   * eth_call / callStatic see block.timestamp == the head block's timestamp (probed on anvil 1.7.1), so the 24 h boundary is tested with static calls only (a mined transaction moves the head by 1 s).
 import {
-  ethers, BN, A, C, LIVE, check, note, group, provider, rpc, tx, expectRevert, codeOrRevert, impersonate, setErc20Balance, setFeed, readFeed, warp, warpTo, headTs, scenario, mocks,
+  ethers, BN, A, C, LIVE, signer, check, note, group, provider, rpc, tx, expectRevert, codeOrRevert, impersonate, setErc20Balance, setFeed, readFeed, warp, warpTo, headTs, scenario, mocks,
 } from "./lib.mjs";
 
 const E18 = BN(10).pow(18);
@@ -47,7 +47,7 @@ export async function runOutage(c) {
   const usdcUsd = () => guarded.getPrice(LIVE.USDC);                 // the BASE oracle's live USDC price (1e18): the same read the wrapper makes
   const priceBP = () => wrapper.getUnderlyingPrice(D.PBP);
   const st = async () => { const s = await wrapper.shareState(); return { live: s[0], stored: s[1], at: s[2].toNumber(), usingFallback: s[3], left: s[4] }; }; // by index (struct names collide with Array methods in ethers v5)
-  const poked = async (label) => { const r = await tx(label, (o) => wrapper.connect(provider.getSigner(A("90CE1"))).poke(o)); return r; };
+  const poked = async (label) => { const r = await tx(label, (o) => wrapper.connect(signer(A("90CE1"))).poke(o)); return r; };
   const pokeEvents = (r) => r.logs.filter((l) => l.address.toLowerCase() === D.WRAPPER.toLowerCase()).map((l) => { try { return wrapper.interface.parseLog(l); } catch { return null; } }).filter((e) => e && e.name === "FallbackPriceStored");
 
   await group("B10 stale-feed outage on the real vault (v2 fallback)", async () => {

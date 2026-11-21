@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ethers, utils, BN, BigNumber, A, C, LIVE, HERE, OUTDIR, check, note, group, finish, results, provider, rpc, log, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  decodeData, runProc, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
+  decodeData, runProc, progress, blockNumber, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
 } from "./lib.mjs";
 import { snapshot, diff, PATH_CONTRACTS } from "./readback.mjs";
 import { runOutage, shareExpect, fallbackLeg } from "./outage.mjs";
@@ -176,11 +176,15 @@ const touchedByStep = {};
 async function runStep(s) {
   const data = s.data;
   let ret;
+  progress(`ceremony step ${s.id} ${s.label}: static call from the Ledger`);
   try { ret = await provider.call({ from: LIVE.LEDGER, to: s.to, data }); }
   catch (e) { throw new Error(`${s.id} ${s.label}: static call reverted: ${decodeErr(e)}`); }
   if (s.code0 && ret && ret.length === 66 && !BN(ret).eq(0)) throw new Error(`${s.id} ${s.label}: returned error code ${BN(ret)} (see ErrorReporter.sol)`);
+  progress(`ceremony step ${s.id} ${s.label}: static call ok (${ret && ret.length === 66 ? "code " + BN(ret) : "no code"}), sending`);
   const r = await tx(`${s.id} ${s.label}`, (o) => ledgerSigner().sendTransaction({ to: s.to, data, ...o }));
+  progress(`ceremony step ${s.id} ${s.label}: mined in block ${r.blockNumber}, tracing the contracts it wrote`);
   touchedByStep[s.id] = await touched(r.transactionHash);
+  progress(`ceremony step ${s.id} ${s.label}: done (trace ${touchedByStep[s.id].mode}, ${touchedByStep[s.id].addresses.length} addresses)`);
   return r;
 }
 const step = (key) => ({ ...CER[key], id: CER[key].id || key });
@@ -270,7 +274,7 @@ async function main() {
 
   // ============================================================================================================ B0 pre-flight and deployment
   await group("B0 pre-flight and deployment", async () => {
-    check("B0.1", (await provider.getNetwork()).chainId === 43114 && !!(await rpc("anvil_nodeInfo")), `local anvil fork, chain id 43114, pinned block ${process.env.REH_PIN} (head ${await provider.getBlockNumber()})`);
+    check("B0.1", (await provider.getNetwork()).chainId === 43114 && !!(await rpc("anvil_nodeInfo")), `local anvil fork, chain id 43114, pinned block ${process.env.REH_PIN} (head ${await blockNumber()})`);
     // deterministic time: every block is exactly 1 s after the previous one, so the REAL feeds (AVAX maxAge 1200 s) cannot go stale during B1 however long the run takes
     try { await rpc("anvil_setBlockTimestampInterval", [1]); note("B0.n1", "block timestamp interval set to 1 s (deterministic time for the real-feed comparison in B1)"); } catch (e) { note("B0.n1", `anvil_setBlockTimestampInterval unavailable (${String(e.message).slice(0, 60)}): B1 relies on wall-clock time`); }
     await impersonate(LIVE.LEDGER); await impersonate(LIVE.SAFE); await impersonate(deployerAddr);
@@ -320,7 +324,7 @@ async function main() {
 
     // deploy the NEW contracts (the starting state of the ceremony: deployed, NOT seeded, NOT listed)
     await impersonate(deployerAddr);
-    const hBefore = await provider.getBlockNumber();
+    const hBefore = await blockNumber();
     const pinFile = KNOB.tool ? path.join(path.dirname(KNOB.tool), "..", "ceremony", "bp-dlmm-pin.json") : "";
     TOOL_ON = KNOB.useTool !== "0" && !!KNOB.tool && fs.existsSync(KNOB.tool) && fs.existsSync(pinFile);
     results.data.mode = TOOL_ON ? "TOOL (A's ceremony tool: real deploy script, verify-*, printed calldata)" : "BUILT-IN (harness deployment and encodings, NOT A's deploy script)";
@@ -352,7 +356,7 @@ async function main() {
       D.WRAPPER = await deployFromArtifact(KNOB.wrapperName, { baseOracle: LIVE.GUARDED_ORACLE, base: LIVE.GUARDED_ORACLE, market: D.PBP, pToken: D.PBP, owner: LIVE.LEDGER, vault: LIVE.VAULT, source: LIVE.SOURCE_ORACLE }, deployerAddr);
       check("B0.12b", true, `built-in deployment by the throwaway deployer from the forge artifacts of ${BP_OUT} (NOT the real deploy script - use the ceremony tool for the real rehearsal): delegate ${D.DELEGATE}, market ${D.PBP}, wrapper ${D.WRAPPER}`);
     }
-    const hAfter = await provider.getBlockNumber();
+    const hAfter = await blockNumber();
     D.blocks = { market: await firstBlockWithCode(D.PBP, hBefore + 1, hAfter), wrapper: await firstBlockWithCode(D.WRAPPER, hBefore + 1, hAfter), head: hAfter };   // where the contracts were created, found by bisection on eth_getCode of the local chain
     CER = ownCalls();
     if (TOOL_ON) {

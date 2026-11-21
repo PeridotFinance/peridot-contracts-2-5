@@ -1,7 +1,7 @@
 // READ-BACK of the live pilot: a JSON snapshot (margin positions and orders, margin proxies' raw storage + implementation slots, the lending state of every EXISTING market, the oracle pointers
 // of controller / risk engine / quoter, code hashes of the contracts in the account's path, the DLMM vault totals) and a field-by-field diff. READ ONLY: nothing is sent.
 // Used by the fork rehearsal (B1 before/after the oracle swap, B9 end) and by the operator before / after the live ceremony.
-import { ethers, utils, BN, C, LIVE, provider } from "./lib.mjs";
+import { ethers, utils, BN, C, LIVE, provider, blockNumber } from "./lib.mjs";
 
 const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103";
@@ -29,7 +29,7 @@ export const PATH_CONTRACTS = () => ({
 export async function snapshot(opts = {}) {
   const exec = C(LIVE.M_EXECUTOR, EXEC_ABI), reg = C(LIVE.M_REGISTRY, REG_ABI), risk = C(LIVE.M_RISK_ENGINE, RISK_ABI), ctl = C(LIVE.CONTROLLER, CTL_ABI);
   const pu = C(LIVE.PUSDC, PT_ABI), pw = C(LIVE.PWAVAX, PT_ABI), usdc = C(LIVE.USDC, ERC20_ABI), wavax = C(LIVE.WAVAX, ERC20_ABI), mvault = C(LIVE.M_VAULT, VAULT_ABI), vault = C(LIVE.VAULT, VAULT_ABI);
-  const S = { block: await provider.getBlockNumber(), positions: {}, orders: {}, proxies: {}, misc: {}, lending: {}, pointers: {}, codehash: {}, metrics: {}, dlmm: {} };
+  const S = { block: await blockNumber(), positions: {}, orders: {}, proxies: {}, misc: {}, lending: {}, pointers: {}, codehash: {}, metrics: {}, dlmm: {} };
   const next = (await exec.nextPositionId()).toNumber();
   for (let id = 1; id < next; id++) {
     const p = await exec.positions(id), acct = p.account;

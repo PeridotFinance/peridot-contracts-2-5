@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ethers, utils, BN, A, C, check, note, group, finish, results, provider, rpc, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  etchFeed, setFeed, repin, warp, warpTo, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR, checkpoint } from "../lib.mjs";
+  etchFeed, setFeed, repin, warp, warpTo, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR, checkpoint, blockNumber, progress, where } from "../lib.mjs";
 import { shareExpect, fallbackLeg, expectPoke } from "../outage.mjs";
 import { crossCheckModel } from "../phar.mjs";
 
@@ -154,6 +154,32 @@ await group("P4 PHAR expected-split model vs the generator", async () => {
   const R = await import(gfile);
   const cc = crossCheckModel(R, 11), cc2 = crossCheckModel(R, 4242);
   check("P4.1", cc.ok && cc2.ok, `the harness's expected-split model equals the generator's exported wrapperSplit on ${cc.cases + cc2.cases} random histories (two seeds; one event in four shares its block with the previous one)`, cc.detail || cc2.detail);
+});
+
+// ---- P5: the run-2 hang. After B1m's ~60 transactions inside one evm snapshot and the evm_revert, group B2 stalled FOR 20 MINUTES inside the wait of its first transactions with no RPC in flight. ethers v5 never lets its block
+//      number go down after a revert (provider.getBlockNumber() stayed above the chain's real head) and its poll loop skips pending-transaction checks while that clamped number does not change. The harness now (a) resets
+//      ethers' caches after every evm_revert, (b) never uses provider.getBlockNumber() / ethers' wait(): it sends with eth_sendTransaction and polls eth_getTransactionReceipt itself, tracked and bounded.
+//      The offline run did NOT hang with the old code either (the stall needs a particular poll timing the fork run produced); what P5 pins down is the part that IS reproducible: the stale block number, and that
+//      the new send/wait path works across reverts, with the 1 s timestamp interval, nested snapshots and the tracer, and that every step announces itself.
+await group("P5 transactions across evm_revert", async () => {
+  const a = A("A11CE5"), b = A("B0B015"); await impersonate(a); await impersonate(b);
+  await rpc("anvil_setBlockTimestampInterval", [1]);
+  const send = async (n) => { const r = await tx(`p5 send ${n}`, (o) => signer(a).sendTransaction({ to: b, value: 1, ...o })); await touched(r.transactionHash); return r; };
+  const within = async (label, p, ms = 15000) => { let t; const to = new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`HANG: ${label} did not finish in ${ms / 1000} s`)), ms); }); try { return await Promise.race([p, to]); } finally { clearTimeout(t); } };
+  for (let i = 0; i < 3; i++) await send("pre" + i);
+  let staleSeen = 0;
+  await scenario("p5 outer", async () => {
+    for (let i = 0; i < 60; i++) { await send(i); if (i === 30) await scenario("p5 inner", async () => { for (let k = 0; k < 10; k++) await send("in" + k); }); }
+    staleSeen = await provider.getBlockNumber();   // ethers' own view while the chain is at its highest
+  });
+  const real = await blockNumber(), ethersView = await provider.getBlockNumber();
+  check("P5.1", staleSeen > real && ethersView === real && real === parseInt(await rpc("eth_blockNumber"), 16), `after the revert the chain is at block ${real} (it was ${staleSeen} inside the snapshot); blockNumber() = the real head, and ethers' own getBlockNumber() (${ethersView}) is back in line because the caches are reset after every evm_revert`);
+  let okAll = true; const seen = [];
+  for (let i = 0; i < 4; i++) { try { const r = await within(`post-revert tx ${i}`, send("post" + i)); seen.push(r.blockNumber); } catch (e) { okAll = false; seen.push(e.message); } }
+  check("P5.2", okAll && seen.every((x, i) => i === 0 || x === seen[i - 1] + 1) && seen[0] === real + 1, `the first four transactions after the revert are mined and returned within seconds (blocks ${seen.join(", ")}; the chain was at ${real})`, seen.join(" | "));
+  const r2 = await within("a transaction with logs and a receipt", send("logs")); 
+  check("P5.3", r2.status === 1 && r2.confirmations === 1 && Array.isArray(r2.logs) && r2.gasUsed.gt(0) && r2.transactionHash.length === 66 && /mined 0x/.test(where.step), `the receipt the harness builds itself has status, confirmations, logs, gasUsed, transactionHash; the current step reads "${where.step}"`);
+  progress("P5 a progress line"); check("P5.4", where.step === "P5 a progress line", "progress() sets the step the heartbeat reports");
 });
 
 await group("P2 results writer", async () => {
