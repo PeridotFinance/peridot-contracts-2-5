@@ -131,24 +131,167 @@ contract PharaohDlmmShareOracleTest is Test {
         assertEq(oracle.getUnderlyingPrice(PToken(address(market))), perShare * 0.998e18 * 1e12 / 1e6);
     }
 
-    function testShareFailsClosedWithoutRevertingWhenVaultPricingFails() external {
+    function testVaultReadFailureServesTheHaircutLastGoodLegNeverReverts() external {
         PToken m = PToken(address(market));
         vault.setConversionReverts(true); // the real vault's totalAssets reverts on a stale feed
-        assertEq(oracle.getUnderlyingPrice(m), 0);
-        assertEq(oracle.getShareUsdPrice(), 0);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30, "last good 1.000000 minus 3%");
+        assertEq(oracle.getShareUsdPrice(), 0.97e18);
         vault.setConversionReverts(false);
         assertEq(oracle.getUnderlyingPrice(m), 1e30);
 
+        // short return data, a zero answer: the vault cannot answer, same fallback
         vm.mockCall(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encode(uint256(0)));
-        assertEq(oracle.getUnderlyingPrice(m), 0);
-        vm.mockCall(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), hex""); // short return data
-        assertEq(oracle.getUnderlyingPrice(m), 0);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        vm.mockCall(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), hex"");
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        // an oversized answer is a broken vault, not an outage: no fallback
         vm.mockCall(
             address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encode(uint256(type(uint128).max) + 1)
         );
         assertEq(oracle.getUnderlyingPrice(m), 0);
         vm.clearMockedCalls();
         assertEq(oracle.getUnderlyingPrice(m), 1e30);
+    }
+
+    function testFallbackUsesTheLiveUsdcPriceAndTheStoredLegOnly() external {
+        PToken m = PToken(address(market));
+        usdc.mint(address(vault), 100e6); // NAV +10%, then poked: stored = the live leg (within the +2% cap it is 1.02)
+        vm.warp(oracle.lastGoodTime() + 1 hours);
+        assertTrue(oracle.poke());
+        assertEq(oracle.lastGoodAssetsPerShare(), 1_020_000, "upward step capped at 2%");
+        vault.setConversionReverts(true);
+        base.setAssetPrice(address(usdc), 0.998e18); // the live USDC price moved after the poke: the fallback follows it
+        assertEq(oracle.getUnderlyingPrice(m), uint256(1_020_000) * 9700 / 10_000 * 0.998e18 * 1e12 / 1e6);
+    }
+
+    function testFallbackExpires24HoursAfterTheLastPokeAndPokeRenewsIt() external {
+        PToken m = PToken(address(market));
+        uint256 t0 = oracle.lastGoodTime(); // the constructor stored the leg at t0
+        vault.setConversionReverts(true);
+        vm.warp(t0 + 24 hours);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30, "still valid at exactly 24 h");
+        vm.warp(t0 + 24 hours + 1);
+        assertEq(oracle.getUnderlyingPrice(m), 0, "expired one second later");
+        assertEq(oracle.getShareUsdPrice(), 0);
+
+        vault.setConversionReverts(false);
+        assertTrue(oracle.poke()); // stored value older than the window: replaced by the live value
+        uint256 t1 = t0 + 24 hours + 1;
+        assertEq(oracle.lastGoodTime(), t1);
+        vault.setConversionReverts(true);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        vm.warp(t1 + 24 hours);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        vm.warp(t1 + 24 hours + 1);
+        assertEq(oracle.getUnderlyingPrice(m), 0);
+    }
+
+    function testPokeWhileTheVaultCannotAnswerStoresNothing() external {
+        vault.setConversionReverts(true);
+        uint256 before_ = oracle.lastGoodTime();
+        vm.warp(before_ + 5 hours);
+        assertFalse(oracle.poke());
+        assertEq(oracle.lastGoodTime(), before_);
+        assertEq(oracle.lastGoodAssetsPerShare(), 1e6);
+    }
+
+    function testPokeBounds_downAtOnce_upOncePerHourAndCappedAt2Percent() external {
+        // the vault leg falls 5%: stored at once (conservative), no waiting
+        vm.prank(address(vault));
+        usdc.transfer(address(0xD00D), 50e6);
+        assertTrue(oracle.poke());
+        uint256 down = oracle.lastGoodAssetsPerShare();
+        assertLt(down, 0.96e6 + 100_000);
+        assertLt(down, 1e6);
+
+        // the leg recovers +30% (a glitch or a donation): an upward poke inside the hour is refused ...
+        usdc.mint(address(vault), 300e6);
+        assertFalse(oracle.poke(), "upward move inside POKE_UP_INTERVAL");
+        assertEq(oracle.lastGoodAssetsPerShare(), down);
+        // ... and later it is stored at most +2% per accepted poke
+        vm.warp(oracle.lastGoodTime() + 1 hours);
+        assertTrue(oracle.poke());
+        assertEq(oracle.lastGoodAssetsPerShare(), down * 10_200 / 10_000);
+        assertFalse(oracle.poke(), "a second poke in the same transaction/time cannot compound");
+        assertEq(oracle.lastGoodAssetsPerShare(), down * 10_200 / 10_000);
+    }
+
+    function testPokeAfterTheWindowAcceptsTheLiveValueWhateverItIs() external {
+        usdc.mint(address(vault), 1_000e6); // x2
+        vm.warp(oracle.lastGoodTime() + 24 hours + 1);
+        assertTrue(oracle.poke());
+        assertApproxEqAbs(oracle.lastGoodAssetsPerShare(), 2e6, 1);
+    }
+
+    function testPokeIsPermissionlessAndOnlyEverStoresTheVaultsOwnAnswer() external {
+        vm.prank(OUTSIDER);
+        assertTrue(oracle.poke());
+        // the stored leg can never exceed the live leg (the cap only lowers a live value)
+        usdc.mint(address(vault), 500e6);
+        vm.warp(oracle.lastGoodTime() + 2 hours);
+        vm.prank(OUTSIDER);
+        oracle.poke();
+        assertLe(oracle.lastGoodAssetsPerShare(), vault.convertToAssets(1e6));
+    }
+
+    function testFallbackNeverCoversAnUnpricedUsdcOrABrokenVault() external {
+        PToken m = PToken(address(market));
+        vault.setConversionReverts(true);
+        base.setAssetPrice(address(usdc), 0); // the USDC feed is stale too: pUSDC is unpriced by the base oracle as well
+        assertEq(oracle.getUnderlyingPrice(m), 0);
+        base.setAssetPrice(address(usdc), 1e18);
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        vm.mockCall(address(vault), abi.encodeWithSignature("asset()"), abi.encode(address(0x1234))); // another asset
+        assertEq(oracle.getUnderlyingPrice(m), 0);
+        vm.mockCallRevert(address(vault), abi.encodeWithSignature("asset()"), "x"); // unreadable asset
+        assertEq(oracle.getUnderlyingPrice(m), 0);
+        vm.clearMockedCalls();
+        base.setRevertAll(true);
+        assertEq(oracle.getUnderlyingPrice(m), 0, "the share path never reverts");
+    }
+
+    function testIdentityForOtherMarketsIsUnchangedDuringTheFallback() external {
+        address other = address(0x7777);
+        base.setUnderlyingPrice(other, 123e18);
+        vault.setConversionReverts(true);
+        assertEq(oracle.getUnderlyingPrice(PToken(other)), 123e18);
+    }
+
+    function testShareStateReportsTheFallback() external {
+        uint256 t0 = oracle.lastGoodTime();
+        (uint256 live, uint256 stored, uint64 at, bool fb, uint256 left) = oracle.shareState();
+        assertEq(live, 1e6);
+        assertEq(stored, 1e6);
+        assertEq(at, t0);
+        assertFalse(fb);
+        assertEq(left, 24 hours);
+
+        vault.setConversionReverts(true);
+        vm.warp(t0 + 10 hours);
+        (live, stored, at, fb, left) = oracle.shareState();
+        assertEq(live, 0);
+        assertTrue(fb);
+        assertEq(left, 14 hours);
+        vm.warp(t0 + 24 hours);
+        (,,, fb, left) = oracle.shareState();
+        assertTrue(fb, "valid at exactly 24 h, like the price");
+        assertEq(left, 0);
+        vm.warp(t0 + 24 hours + 1);
+        (,,, fb, left) = oracle.shareState();
+        assertFalse(fb);
+        assertEq(left, 0);
+    }
+
+    function testConstructorSeedsTheStoredLegAndEmits() external {
+        vm.recordLogs();
+        PharaohDlmmShareOracle fresh = new PharaohDlmmShareOracle(base, address(market));
+        assertEq(fresh.lastGoodAssetsPerShare(), 1e6);
+        assertEq(fresh.lastGoodTime(), block.timestamp);
+        assertEq(vm.getRecordedLogs().length, 1);
+        assertEq(fresh.FALLBACK_HAIRCUT_BPS(), 300);
+        assertEq(fresh.FALLBACK_WINDOW(), 24 hours);
+        assertEq(fresh.POKE_MAX_UP_BPS(), 200);
+        assertEq(fresh.POKE_UP_INTERVAL(), 1 hours);
     }
 
     function testShareFailsClosedWhenAssetPriceOrVaultAssetChanges() external {
@@ -226,7 +369,7 @@ contract PharaohDlmmShareOracleTest is Test {
     }
 
     function testWrapperHasNoOwnerOrRegistry() external view {
-        // the only state-changing surface is none: every public symbol is a view / immutable
+        // no owner, no setter: the only state-changing function is the permissionless, bounded poke() (see the poke tests)
         assertEq(address(oracle.baseOracle()), address(base));
         assertEq(oracle.market(), address(market));
         assertTrue(oracle.isPriceOracle());
