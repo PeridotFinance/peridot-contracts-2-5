@@ -9,6 +9,11 @@ interface ISpySessionSource {
 
 interface IIsolatedAccountRegistry {
     function isolatedMarginAccounts(address account) external view returns (bool);
+    function getAssetsIn(address account) external view returns (address[] memory);
+}
+
+interface IBorrowBalanceView {
+    function borrowBalanceStored(address account) external view returns (uint256);
 }
 
 /**
@@ -17,12 +22,19 @@ interface IIsolatedAccountRegistry {
  * @dev `RobinhoodPlainDelegate` (the October ZeroSharesMinted and round-up redeemUnderlying corrections) plus:
  *
  *      1. Session gate. While `spySource.stockPrice()` withholds the SPY price (reason != 0: weekend window, age above
- *         maxStaleness, SPY paused / oraclePaused, bad or incomplete round, lending-oracle mismatch),
- *         `getAccountSnapshot` returns that reason as its error code for every account that holds pSPY and is not an
- *         isolated-margin account. The controller's liquidity loop turns a nonzero snapshot error into SNAPSHOT_ERROR,
- *         so for such accounts every liquidity-checked action fails closed: borrow (any market), redeem and transfer
- *         (any market the account is in), exitMarket and liquidateBorrow. Repay and mint read no snapshot and keep
- *         working. `seize` itself also reverts while SPY is withheld, which covers a holder who never entered
+ *         maxStaleness, SPY paused / oraclePaused, bad or incomplete round, lending-oracle mismatch), for every account
+ *         that holds pSPY and is not an isolated-margin account:
+ *           - with a borrow balance in ANY market of the controller (read as `getAssetsIn` + `borrowBalanceStored`;
+ *             a borrow always enters its market, and a market with debt cannot be exited), `getAccountSnapshot`
+ *             returns the reason as its error code. The controller's liquidity loop turns it into SNAPSHOT_ERROR, so
+ *             borrow (any market), redeem and transfer (any entered market), exitMarket and liquidateBorrow all fail
+ *             closed. Repay and mint read no snapshot and keep working.
+ *           - debt-free, the snapshot is served with a zero exchange rate: pSPY counts as zero collateral and its
+ *             redemption as zero effect. Redeem, transfer and exitMarket work (nothing is owed), while a new borrow can
+ *             only be backed by the account's other collateral, never by SPY at a withheld price. A borrow taken that
+ *             way makes the account indebted, and the first branch applies from then on.
+ *         All reads are views (`borrowBalanceStored` has no lock), so the gate is safe inside another market's
+ *         nonReentrant borrow or redeem. `seize` itself also reverts while SPY is withheld, which covers a holder who never entered
  *         pSPY: the controller's liquidity check then never reads pSPY, but `seizeAllowed` has no membership
  *         check, so another market's shortfall could otherwise seize pSPY at the cached lending price.
  *         Accounts without pSPY are untouched (a zero balance contributes nothing, whatever the price), and
@@ -96,7 +108,11 @@ contract RobinhoodSpyCollateralDelegate is PErc20Delegate {
         uint256 tokens = accountTokens[account];
         if (tokens != 0 && !_isMarginAccount(account)) {
             uint256 reason = sessionReason();
-            if (reason != 0) return (reason, 0, 0, 0);
+            if (reason != 0) {
+                if (_hasDebt(account)) return (reason, 0, 0, 0);
+                // Debt-free: SPY is worth nothing as collateral while withheld, so withdrawing it costs no liquidity.
+                return (NO_ERROR, tokens, 0, 0);
+            }
         }
         return (NO_ERROR, tokens, borrowBalanceStoredInternal(account), exchangeRateStoredInternal());
     }
@@ -144,6 +160,22 @@ contract RobinhoodSpyCollateralDelegate is PErc20Delegate {
         emit Redeem(msg.sender, redeemAmount, redeemTokens);
         peridottroller.redeemVerify(address(this), msg.sender, redeemAmount, redeemTokens);
         return NO_ERROR;
+    }
+
+    /// @notice Whether `account` owes anything in any market it is in (the controller's view). Monitoring / frontend.
+    function hasDebt(address account) external view returns (bool) {
+        return _hasDebt(account);
+    }
+
+    function _hasDebt(address account) internal view returns (bool) {
+        address[] memory assets = IIsolatedAccountRegistry(address(peridottroller)).getAssetsIn(account);
+        for (uint256 i = 0; i < assets.length; i++) {
+            uint256 owed = assets[i] == address(this)
+                ? borrowBalanceStoredInternal(account)
+                : IBorrowBalanceView(assets[i]).borrowBalanceStored(account);
+            if (owed != 0) return true;
+        }
+        return false;
     }
 
     function _isMarginAccount(address account) internal view returns (bool) {

@@ -10,6 +10,10 @@ interface ISpyPriceSession {
     function stockPrice() external view returns (uint256 priceE18, uint8 reason, uint256 updatedAt);
 }
 
+interface IUsdPriceSource {
+    function assetPrices(address asset) external view returns (uint256);
+}
+
 interface ILiquidatablePToken {
     function liquidateBorrow(address borrower, uint256 repayAmount, address pTokenCollateral) external returns (uint256);
     function redeem(uint256 redeemTokens) external returns (uint256);
@@ -19,10 +23,13 @@ interface ILiquidatablePToken {
 
 /**
  * @title SpyCollateralLiquidator
- * @notice Inventory-free liquidation of ordinary lending accounts with pUSDG debt and pSPY collateral.
- * @dev One call: flash-borrow USDG from the margin flash vault, `pUSDG.liquidateBorrow(borrower, repay, pSPY)`, redeem
- *      the seized pSPY, swap the SPY to USDG through the Robinhood v4 router adapter (this contract must be one of its
- *      operators), repay the flash loan, and send every remaining USDG to the immutable `beneficiary`.
+ * @notice Inventory-free liquidation of ordinary lending accounts with pSPY collateral and pUSDG or pNVDA debt.
+ * @dev Both paths flash-borrow USDG from the margin flash vault (its NVDA balance is too small to matter) and repay it
+ *      from the seized SPY, swapped to USDG through the Robinhood v4 router adapter (this contract must be one of its
+ *      operators). Every remaining USDG (and any NVDA left over) goes to the immutable `beneficiary`.
+ *        - `liquidate(borrower, repay)`: `pUSDG.liquidateBorrow(borrower, repay, pSPY)`.
+ *        - `liquidateNvdaDebt(borrower, usdgIn, maxRepay)`: swap `usdgIn` USDG to NVDA (floor: the guarded NVDA margin
+ *          price less `maxSlippageBps`), `pNVDA.liquidateBorrow(borrower, min(nvdaOut, maxRepay), pSPY)`.
  *
  *      - Permissionless: the caller pays gas and gains nothing; all proceeds go to `beneficiary`.
  *      - Fails closed unless the SPY session source serves a price (reason 0). The controller enforces the same rule
@@ -40,6 +47,9 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
 
     ILiquidatablePToken public immutable debtMarket; // pUSDG
     ILiquidatablePToken public immutable collateralMarket; // pSPY
+    ILiquidatablePToken public immutable nvdaDebtMarket; // pNVDA
+    IERC20 public immutable nvda;
+    IUsdPriceSource public immutable nvdaPriceSource; // guarded NVDA margin source: 0 when stale or paused
     IERC20 public immutable usdg;
     IERC20 public immutable spy;
     IERC3156FlashLender public immutable flashLender;
@@ -49,7 +59,8 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
     uint256 public immutable maxSlippageBps;
     uint256 internal immutable usdgScale; // 10 ** (18 - USDG decimals)
 
-    address private _borrower; // nonzero only inside liquidate()
+    address private _borrower; // nonzero only inside liquidate() / liquidateNvdaDebt()
+    uint256 private _maxRepayNvda; // nonzero only inside liquidateNvdaDebt()
 
     error InvalidConfiguration();
     error SpyPriceUnavailable(uint8 reason);
@@ -59,14 +70,20 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
     error NothingSeized();
     error InsufficientProceeds(uint256 have, uint256 owed);
     error ZeroRepay();
+    error NvdaPriceUnavailable();
 
     event Liquidated(
         address indexed borrower, uint256 repaid, uint256 seizedPTokens, uint256 spySold, uint256 usdgOut, uint256 profit
+    );
+    event LiquidatedNvdaDebt(
+        address indexed borrower, uint256 usdgIn, uint256 nvdaRepaid, uint256 seizedPTokens, uint256 usdgOut, uint256 profit
     );
 
     constructor(
         address debtMarket_,
         address collateralMarket_,
+        address nvdaDebtMarket_,
+        address nvdaPriceSource_,
         address flashLender_,
         address router_,
         address spySource_,
@@ -77,13 +94,18 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
         if (
             debtMarket_.code.length == 0 || collateralMarket_.code.length == 0 || flashLender_.code.length == 0
                 || router_.code.length == 0 || spySource_.code.length == 0 || beneficiary_ == address(0)
-                || debtMarket_ == collateralMarket_ || maxSlippageBps_ == 0 || maxSlippageBps_ > 500
+                || debtMarket_ == collateralMarket_ || nvdaDebtMarket_.code.length == 0
+                || nvdaPriceSource_.code.length == 0 || nvdaDebtMarket_ == debtMarket_
+                || nvdaDebtMarket_ == collateralMarket_ || maxSlippageBps_ == 0 || maxSlippageBps_ > 500
                 || usdgDecimals_ > 18
         ) revert InvalidConfiguration();
         debtMarket = ILiquidatablePToken(debtMarket_);
         collateralMarket = ILiquidatablePToken(collateralMarket_);
         usdg = IERC20(ILiquidatablePToken(debtMarket_).underlying());
         spy = IERC20(ILiquidatablePToken(collateralMarket_).underlying());
+        nvdaDebtMarket = ILiquidatablePToken(nvdaDebtMarket_);
+        nvda = IERC20(ILiquidatablePToken(nvdaDebtMarket_).underlying());
+        nvdaPriceSource = IUsdPriceSource(nvdaPriceSource_);
         flashLender = IERC3156FlashLender(flashLender_);
         router = IMarginRouterAdapter(router_);
         spySource = ISpyPriceSession(spySource_);
@@ -106,6 +128,26 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
         if (profit != 0) usdg.safeTransfer(beneficiary, profit);
     }
 
+    /// @notice Liquidates `borrower`'s pNVDA debt against their pSPY: `usdgIn` USDG is flash-borrowed and swapped to
+    ///         NVDA, and at most `maxRepay` NVDA is repaid (the keeper sizes `usdgIn` to land just under `maxRepay`).
+    ///         Returns USDG sent to `beneficiary`; NVDA left over, if any, also goes to `beneficiary`.
+    function liquidateNvdaDebt(address borrower, uint256 usdgIn, uint256 maxRepay) external returns (uint256 profit) {
+        if (usdgIn == 0 || maxRepay == 0) revert ZeroRepay();
+        if (_borrower != address(0)) revert UnexpectedCallback();
+        (, uint8 reason,) = spySource.stockPrice();
+        if (reason != 0) revert SpyPriceUnavailable(reason);
+        if (nvdaPriceSource.assetPrices(address(nvda)) == 0) revert NvdaPriceUnavailable();
+        _borrower = borrower;
+        _maxRepayNvda = maxRepay;
+        flashLender.flashLoan(this, address(usdg), usdgIn, "");
+        _borrower = address(0);
+        _maxRepayNvda = 0;
+        uint256 leftover = nvda.balanceOf(address(this));
+        if (leftover != 0) nvda.safeTransfer(beneficiary, leftover);
+        profit = usdg.balanceOf(address(this));
+        if (profit != 0) usdg.safeTransfer(beneficiary, profit);
+    }
+
     function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata)
         external
         override
@@ -117,15 +159,32 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
                 || borrower == address(0)
         ) revert UnexpectedCallback();
 
-        usdg.forceApprove(address(debtMarket), amount);
-        uint256 code = debtMarket.liquidateBorrow(borrower, amount, address(collateralMarket));
-        if (code != 0) revert LiquidationRejected(code);
-        usdg.forceApprove(address(debtMarket), 0);
+        uint256 maxRepayNvda = _maxRepayNvda;
+        uint256 repaid;
+        if (maxRepayNvda == 0) {
+            repaid = amount;
+            usdg.forceApprove(address(debtMarket), amount);
+            uint256 code = debtMarket.liquidateBorrow(borrower, amount, address(collateralMarket));
+            if (code != 0) revert LiquidationRejected(code);
+            usdg.forceApprove(address(debtMarket), 0);
+        } else {
+            uint256 nvdaPrice = nvdaPriceSource.assetPrices(address(nvda));
+            if (nvdaPrice == 0) revert NvdaPriceUnavailable();
+            uint256 minNvda = amount * usdgScale * 1e18 / nvdaPrice * (BPS - maxSlippageBps) / BPS;
+            usdg.forceApprove(address(router), amount);
+            uint256 nvdaOut = router.swap(address(this), address(usdg), address(nvda), amount, minNvda, "");
+            usdg.forceApprove(address(router), 0);
+            repaid = nvdaOut < maxRepayNvda ? nvdaOut : maxRepayNvda;
+            nvda.forceApprove(address(nvdaDebtMarket), repaid);
+            uint256 code = nvdaDebtMarket.liquidateBorrow(borrower, repaid, address(collateralMarket));
+            if (code != 0) revert LiquidationRejected(code);
+            nvda.forceApprove(address(nvdaDebtMarket), 0);
+        }
 
         uint256 seized = collateralMarket.balanceOf(address(this));
         if (seized == 0) revert NothingSeized();
-        code = collateralMarket.redeem(seized);
-        if (code != 0) revert RedeemRejected(code);
+        uint256 code2 = collateralMarket.redeem(seized);
+        if (code2 != 0) revert RedeemRejected(code2);
 
         uint256 spyAmount = spy.balanceOf(address(this));
         (uint256 priceE18, uint8 reason,) = spySource.stockPrice();
@@ -139,7 +198,8 @@ contract SpyCollateralLiquidator is IERC3156FlashBorrower {
         uint256 have = usdg.balanceOf(address(this));
         if (have < owed) revert InsufficientProceeds(have, owed);
         usdg.forceApprove(address(flashLender), owed);
-        emit Liquidated(borrower, amount, seized, spyAmount, out, have - owed);
+        if (maxRepayNvda == 0) emit Liquidated(borrower, repaid, seized, spyAmount, out, have - owed);
+        else emit LiquidatedNvdaDebt(borrower, amount, repaid, seized, out, have - owed);
         return CALLBACK_SUCCESS;
     }
 }

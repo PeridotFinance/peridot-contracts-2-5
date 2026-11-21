@@ -25,6 +25,8 @@ contract DeploySpyCollateral is Script {
             new SpyCollateralLiquidator(
                 P.PUSDG,
                 pSpy,
+                P.PNVDA,
+                P.NVDA_GUARDED_SOURCE,
                 P.FLASH_VAULT,
                 P.ROUTER_ADAPTER,
                 spySource,
@@ -44,6 +46,8 @@ contract DeploySpyCollateral is Script {
         require(
             address(l.debtMarket()) == P.PUSDG && address(l.collateralMarket()) == pSpy && address(l.usdg()) == P.USDG
                 && address(l.spy()) == P.SPY && address(l.flashLender()) == P.FLASH_VAULT
+                && address(l.nvdaDebtMarket()) == P.PNVDA && address(l.nvda()) == P.NVDA
+                && address(l.nvdaPriceSource()) == P.NVDA_GUARDED_SOURCE
                 && address(l.router()) == P.ROUTER_ADAPTER && address(l.spySource()) == spySource
                 && l.beneficiary() == P.LEDGER && l.maxSlippageBps() == C.LIQUIDATOR_MAX_SLIPPAGE_BPS,
             "LIQUIDATOR"

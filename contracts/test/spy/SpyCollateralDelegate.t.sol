@@ -66,6 +66,19 @@ contract MockSessionSource {
     }
 }
 
+/// @dev Stands in for the guarded NVDA margin source (USD 1e18 per NVDA, 0 = unavailable).
+contract NvdaPriceMock {
+    uint256 public price = 180e18;
+
+    function set(uint256 p) external {
+        price = p;
+    }
+
+    function assetPrices(address) external view returns (uint256) {
+        return price;
+    }
+}
+
 /// @dev Fixed-rate router adapter: pulls `amountIn` from `fromAccount`, pays `amountIn * rate / 1e18` of tokenOut.
 contract RateRouter is IMarginRouterAdapter {
     mapping(address => mapping(address => uint256)) public rate;
@@ -124,6 +137,10 @@ contract FakeMarginAccount {
     }
 }
 
+interface IDebtView {
+    function hasDebt(address) external view returns (bool);
+}
+
 interface IMarketFull {
     function mint(uint256) external returns (uint256);
     function redeem(uint256) external returns (uint256);
@@ -157,6 +174,8 @@ contract SpyCollateralDelegateTest is Test {
     IMarketFull pSpy;
     IMarketFull pNvda;
     MockSessionSource source;
+    NvdaPriceMock nvdaSource;
+    RateRouter lastRouter;
     RobinhoodSpyCollateralDelegate impl;
 
     address alice = makeAddr("alice"); // SPY collateral borrower
@@ -180,6 +199,7 @@ contract SpyCollateralDelegateTest is Test {
         controller = Peridottroller(address(u));
         oracle = new MarketPriceOracle();
         source = new MockSessionSource();
+        nvdaSource = new NvdaPriceMock();
 
         pUsdg = _market(address(usdg), 2e14, address(new PErc20Delegate()));
         pNvda = _market(address(nvda), 2e26, address(new PErc20Delegate()));
@@ -424,16 +444,78 @@ contract SpyCollateralDelegateTest is Test {
         pUsdg.redeem(shares / 100);
     }
 
-    function testDebtFreeEnteredHolderCannotRedeemWhileClosed() public {
+    function testDebtFreeHolderWithdrawsWhileClosed() public {
         _aliceBorrows(0);
+        source.set(0, 7);
+        (uint256 err, uint256 tokens, uint256 borrows, uint256 rate) = pSpy.getAccountSnapshot(alice);
+        assertEq(err, 0, "debt-free: no snapshot error");
+        assertEq(tokens, pSpy.balanceOf(alice));
+        assertEq(borrows, 0);
+        assertEq(rate, 0, "SPY counts as zero collateral while withheld");
+        assertFalse(IDebtView(address(pSpy)).hasDebt(alice));
+        uint256 bal = pSpy.balanceOf(alice);
+        vm.startPrank(alice);
+        assertTrue(pSpy.transfer(bob, bal / 4));
+        assertEq(pSpy.redeem(bal / 4), 0);
+        assertEq(pSpy.redeemUnderlying(0.01e18), 0);
+        assertEq(controller.exitMarket(address(pSpy)), 0);
+        assertEq(pSpy.redeem(pSpy.balanceOf(alice)), 0);
+        vm.stopPrank();
+        assertEq(pSpy.balanceOf(alice), 0);
+        assertFalse(controller.checkMembership(alice, PToken(address(pSpy))));
+    }
+
+    function testDebtFreeWeekendBorrowOnlyAgainstOtherCollateral() public {
+        _mint(pUsdg, usdg, alice, 10e6); // $10 of pUSDG at CF 80 %
+        _enter(alice, address(pUsdg));
+        _aliceBorrows(0); // + 0.2 SPY entered
+        (, uint256 openLiq,) = controller.getAccountLiquidity(alice);
+        source.set(0, 7);
+        (uint256 err, uint256 liq,) = controller.getAccountLiquidity(alice);
+        assertEq(err, 0);
+        assertApproxEqAbs(liq, 8e18, 1e10, "only the pUSDG collateral counts while SPY is withheld");
+        assertLt(liq, openLiq);
+        vm.prank(alice);
+        vm.expectRevert();
+        pUsdg.borrow(9e6); // would need the SPY
+        vm.prank(alice);
+        assertEq(pUsdg.borrow(7e6), 0); // backed by pUSDG alone
+        // now indebted: frozen until SPY reopens or the debt is repaid
+        (err,,) = controller.getAccountLiquidity(alice);
+        assertEq(err, 15);
+        vm.prank(alice);
+        vm.expectRevert();
+        pSpy.redeem(1e6);
+    }
+
+    function testRepayToZeroWhileClosedThenWithdraw() public {
+        _aliceBorrows(20e6);
         source.set(0, 7);
         uint256 bal = pSpy.balanceOf(alice);
         vm.prank(alice);
         vm.expectRevert();
         pSpy.redeem(bal);
-        source.set(716e18, 0);
+        vm.startPrank(alice);
+        usdg.approve(address(pUsdg), type(uint256).max);
+        assertEq(pUsdg.repayBorrow(type(uint256).max), 0);
+        assertEq(pUsdg.borrowBalanceStored(alice), 0);
+        assertEq(pSpy.redeem(bal), 0, "withdraws once debt-free, still inside the window");
+        vm.stopPrank();
+    }
+
+    function testIndebtedInOtherMarketIsFrozen() public {
+        // debt only in pNVDA still freezes the pSPY holder
+        _mint(pNvda, nvda, lender, 10e18);
+        _aliceBorrows(0);
         vm.prank(alice);
-        assertEq(pSpy.redeem(bal), 0);
+        assertEq(pNvda.borrow(0.05e18), 0);
+        source.set(0, 6);
+        assertTrue(IDebtView(address(pSpy)).hasDebt(alice));
+        (uint256 err,,) = controller.getAccountLiquidity(alice);
+        assertEq(err, 15);
+        vm.prank(alice);
+        vm.expectRevert();
+        pSpy.redeem(1e6);
     }
 
     function testNotEnteredHolderRedeemsWhileClosed() public {
@@ -534,9 +616,10 @@ contract SpyCollateralDelegateTest is Test {
         acct.call(address(spy), abi.encodeWithSignature("approve(address,uint256)", address(pSpy), 0.01e18));
         acct.call(address(pSpy), abi.encodeWithSignature("mint(uint256)", 0.01e18));
         source.set(0, 7);
-        (uint256 err, uint256 tokens,,) = pSpy.getAccountSnapshot(address(acct));
+        (uint256 err, uint256 tokens,, uint256 rate) = pSpy.getAccountSnapshot(address(acct));
         assertEq(err, 0);
         assertEq(tokens, pSpy.balanceOf(address(acct)));
+        assertEq(rate, pSpy.exchangeRateStored(), "margin accounts see the real rate, not the debt-free zero");
     }
 
     function testUnreadableSourceFailsClosed() public {
@@ -594,9 +677,10 @@ contract SpyCollateralDelegateTest is Test {
         RateRouter r = new RateRouter();
         r.setRate(address(spy), address(usdg), spyToUsdgRate);
         l = new SpyCollateralLiquidator(
-            address(pUsdg), address(pSpy), address(v), address(r), address(source), address(0xBEEF), 100, 6
+            address(pUsdg), address(pSpy), address(pNvda), address(nvdaSource), address(v), address(r), address(source), address(0xBEEF), 100, 6
         );
         r.setOperator(address(l), true);
+        lastRouter = r;
     }
 
     function testFlashLiquidatorProfitGoesToBeneficiary() public {
@@ -661,20 +745,101 @@ contract SpyCollateralDelegateTest is Test {
         v.depositLiquidity(address(usdg), 100e6);
         ReenteringRouter r = new ReenteringRouter();
         SpyCollateralLiquidator l = new SpyCollateralLiquidator(
-            address(pUsdg), address(pSpy), address(v), address(r), address(source), address(0xBEEF), 100, 6
+            address(pUsdg), address(pSpy), address(pNvda), address(nvdaSource), address(v), address(r), address(source), address(0xBEEF), 100, 6
         );
         vm.expectRevert(SpyCollateralLiquidator.UnexpectedCallback.selector);
         l.liquidate(alice, 20e6);
     }
 
+    /// alice: 0.2 SPY ($143.2) entered, borrows NVDA at $180; lender supplies NVDA.
+    function _aliceBorrowsNvda(uint256 nvdaWei) internal {
+        _mint(pNvda, nvda, lender, 10e18);
+        _aliceBorrows(0);
+        vm.prank(alice);
+        assertEq(pNvda.borrow(nvdaWei), 0);
+    }
+
+    function _nvdaRouterRate(uint256 nvdaUsd) internal pure returns (uint256) {
+        // 1 raw USDG -> NVDA wei at `nvdaUsd` (1e18), 10 bp worse than the oracle
+        return uint256(1e18) * 1e18 / nvdaUsd * 1e12 * 9990 / 10_000;
+    }
+
+    function _nvdaLiquidation(uint256 spyUsd, uint256 nvdaUsd) internal returns (uint256 profit) {
+        _aliceBorrowsNvda(0.23e18); // $41.4 of $42.96 capacity
+        oracle.set(address(pSpy), spyUsd);
+        source.set(spyUsd, 0);
+        oracle.set(address(pNvda), nvdaUsd);
+        nvdaSource.set(nvdaUsd);
+        (,, uint256 shortfall) = controller.getAccountLiquidity(alice);
+        assertGt(shortfall, 0);
+        (SpyCollateralLiquidator l,) = _liquidatorStack(spyUsd / 1e12 * 9990 / 10_000);
+        lastRouter.setRate(address(usdg), address(nvda), _nvdaRouterRate(nvdaUsd));
+        uint256 maxRepay = pNvda.borrowBalanceStored(alice) / 2;
+        uint256 usdgIn = maxRepay * nvdaUsd / 1e18 / 1e12 * 98 / 100;
+        uint256 debtBefore = pNvda.borrowBalanceStored(alice);
+        vm.prank(liq);
+        profit = l.liquidateNvdaDebt(alice, usdgIn, maxRepay);
+        assertGt(profit, 0);
+        assertEq(usdg.balanceOf(address(0xBEEF)), profit);
+        assertLt(pNvda.borrowBalanceStored(alice), debtBefore);
+        assertGe(pNvda.borrowBalanceStored(alice), debtBefore - maxRepay);
+        assertEq(usdg.balanceOf(address(l)) + nvda.balanceOf(address(l)) + spy.balanceOf(address(l)), 0);
+        assertEq(pSpy.balanceOf(address(l)), 0);
+    }
+
+    function testNvdaDebtLiquidationAfterSpyFall() public {
+        _nvdaLiquidation(573e18, 180e18); // SPY -20 %
+    }
+
+    function testNvdaDebtLiquidationAfterNvdaRise() public {
+        _nvdaLiquidation(716e18, 216e18); // NVDA +20 %
+    }
+
+    function testNvdaDebtLiquidationCapsRepayAndReturnsLeftover() public {
+        _aliceBorrowsNvda(0.23e18);
+        oracle.set(address(pSpy), 573e18);
+        source.set(573e18, 0);
+        (SpyCollateralLiquidator l,) = _liquidatorStack(573e6 * 9990 / 10_000);
+        lastRouter.setRate(address(usdg), address(nvda), _nvdaRouterRate(180e18));
+        uint256 debtBefore = pNvda.borrowBalanceStored(alice);
+        l.liquidateNvdaDebt(alice, 9.2e6, 0.05e18); // ~0.0510 NVDA out, only 0.05 repaid
+        assertEq(debtBefore - pNvda.borrowBalanceStored(alice), 0.05e18);
+        assertGt(nvda.balanceOf(address(0xBEEF)), 0, "leftover NVDA to the beneficiary");
+        // overshooting further cannot be paid back from the seized SPY: the whole call reverts
+        vm.expectRevert();
+        l.liquidateNvdaDebt(alice, 18e6, 0.05e18);
+    }
+
+    function testNvdaDebtLiquidationRefusals() public {
+        _aliceBorrowsNvda(0.23e18);
+        oracle.set(address(pSpy), 573e18);
+        source.set(573e18, 0);
+        (SpyCollateralLiquidator l,) = _liquidatorStack(573e6);
+        lastRouter.setRate(address(usdg), address(nvda), _nvdaRouterRate(180e18));
+        nvdaSource.set(0);
+        vm.expectRevert(SpyCollateralLiquidator.NvdaPriceUnavailable.selector);
+        l.liquidateNvdaDebt(alice, 10e6, 0.05e18);
+        nvdaSource.set(180e18);
+        source.set(0, 7);
+        vm.expectRevert(abi.encodeWithSelector(SpyCollateralLiquidator.SpyPriceUnavailable.selector, uint8(7)));
+        l.liquidateNvdaDebt(alice, 10e6, 0.05e18);
+        source.set(573e18, 0);
+        vm.expectRevert(SpyCollateralLiquidator.ZeroRepay.selector);
+        l.liquidateNvdaDebt(alice, 0, 1);
+        // pool far below the NVDA floor
+        lastRouter.setRate(address(usdg), address(nvda), _nvdaRouterRate(180e18) * 90 / 100);
+        vm.expectRevert(bytes("MIN_OUT"));
+        l.liquidateNvdaDebt(alice, 10e6, 0.05e18);
+    }
+
     function testLiquidatorConstructorChecks() public {
         vm.expectRevert(SpyCollateralLiquidator.InvalidConfiguration.selector);
-        new SpyCollateralLiquidator(address(pUsdg), address(pUsdg), address(pUsdg), address(pUsdg), address(source), address(1), 100, 6);
+        new SpyCollateralLiquidator(address(pUsdg), address(pUsdg), address(pNvda), address(nvdaSource), address(pUsdg), address(pUsdg), address(source), address(1), 100, 6);
         vm.expectRevert(SpyCollateralLiquidator.InvalidConfiguration.selector);
-        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pUsdg), address(pUsdg), address(source), address(0), 100, 6);
+        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pNvda), address(nvdaSource), address(pUsdg), address(pUsdg), address(source), address(0), 100, 6);
         vm.expectRevert(SpyCollateralLiquidator.InvalidConfiguration.selector);
-        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pUsdg), address(pUsdg), address(source), address(1), 0, 6);
+        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pNvda), address(nvdaSource), address(pUsdg), address(pUsdg), address(source), address(1), 0, 6);
         vm.expectRevert(SpyCollateralLiquidator.InvalidConfiguration.selector);
-        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pUsdg), address(pUsdg), address(source), address(1), 501, 6);
+        new SpyCollateralLiquidator(address(pUsdg), address(pSpy), address(pNvda), address(nvdaSource), address(pUsdg), address(pUsdg), address(source), address(1), 501, 6);
     }
 }

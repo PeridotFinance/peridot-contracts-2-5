@@ -52,17 +52,43 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
     address keeperEoa = makeAddr("keeper");
     DeploySpyCollateral.Deployed c;
 
+    address constant NVDA_FEED_247 = 0x321A36e441DfBadA01Aa6f9884F14a344E133D1F; // guard + lending NVDA feed
+    int256 nvdaAnswer;
+
+    /// @dev Re-stamps the real NVDA (24/7) answer at the current time, optionally scaled (10_000 = unchanged).
+    function _setNvda(uint256 bps) internal {
+        if (nvdaAnswer == 0) (, nvdaAnswer,,,) = IFeedRead(NVDA_FEED_247).latestRoundData();
+        uint256 t = block.timestamp;
+        vm.mockCall(
+            NVDA_FEED_247,
+            abi.encodeWithSignature("latestRoundData()"),
+            abi.encode(uint80(1000), int256(uint256(nvdaAnswer) * bps / 10_000), t, t, uint80(1000))
+        );
+    }
+
+    function _fresh() internal {
+        _freshSpyFeed();
+        _setNvda(10_000);
+    }
+
     function setUp() public {
         _fork();
+        // A pin inside the SPY closed window (weekend) is moved to the next Monday 02:00 UTC, with both feeds re-stamped
+        // at their real last answers. Interest accrues on the native block number, which a warp does not change.
+        uint256 ws = (block.timestamp + 3 days) % 7 days;
+        if (ws >= 5 days || ws < 1 hours) {
+            vm.warp(block.timestamp + (7 days - ws) % 7 days + 2 hours);
+        }
+        _setNvda(10_000);
         string memory j = vm.readFile("deployments/spy-margin/spy-margin-mainnet.json");
         d.delegate = j.readAddress(".delegate");
         d.pSpy = j.readAddress(".pSpy");
         d.lendingAdapter = j.readAddress(".lendingAdapter");
         d.spySource = j.readAddress(".spySource");
         d.router = j.readAddress(".router");
-        _freshSpyFeed();
+        _fresh();
         _fullCeremony(); // SPY margin enable, exactly as tools/spy/ceremony.sh t0 + t1
-        _freshSpyFeed();
+        _fresh();
     }
 
     function _collateralCeremony() internal {
@@ -205,7 +231,7 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
     function testWeekendWindowRepayOnly() public {
         _aliceBorrowing();
         vm.warp(_nextSaturdayNoon());
-        _freshSpyFeed(); // even a "fresh" print is withheld inside the window
+        _fresh(); // even a "fresh" print is withheld inside the window
         _assertRepayOnly(7);
     }
 
@@ -276,7 +302,7 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
         IMarket(P.PUSDG).borrow(liq / 1e12 * 99 / 100);
         vm.stopPrank();
         vm.warp(_nextSaturdayNoon());
-        _freshSpyFeed();
+        _fresh();
         // NVDA falls 30 % on its (24/7) price: shortfall on the NVDA side, read through the live controller oracle.
         address o = IController(P.CONTROLLER).oracle();
         uint256 pn = IPriceOracleLike(o).getUnderlyingPrice(P.PNVDA);
@@ -292,6 +318,112 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
         // the NVDA collateral is still liquidatable at the weekend, as before
         assertEq(IDebtMarket(P.PUSDG).liquidateBorrow(bob, 1e6, P.PNVDA), 0);
         vm.stopPrank();
+    }
+
+    // ------------------------------------------------------------------ debt-free withdrawals while closed
+
+    function testDebtFreeWithdrawsAtWeekend() public {
+        _collateralCeremony();
+        _supplySpy(alice, 0.05e18);
+        vm.warp(_nextSaturdayNoon());
+        _fresh();
+        assertEq(IPSpyCollateral(d.pSpy).sessionReason(), 7);
+        (uint256 err,,) = _liquidity(alice);
+        assertEq(err, 0, "debt-free: no snapshot error");
+        uint256 bal = IMarket(d.pSpy).balanceOf(alice);
+        vm.startPrank(alice);
+        assertTrue(IMarket(d.pSpy).transfer(bob, bal / 5));
+        assertEq(IMarket(d.pSpy).redeem(bal / 5), 0);
+        assertEq(ICollateralController(P.CONTROLLER).exitMarket(d.pSpy), 0);
+        assertEq(IMarket(d.pSpy).redeem(IMarket(d.pSpy).balanceOf(alice)), 0);
+        vm.stopPrank();
+        // and a weekend borrow cannot lean on SPY
+        _supplySpy(bob, 0.05e18);
+        vm.prank(bob);
+        vm.expectRevert();
+        IMarket(P.PUSDG).borrow(1e6);
+    }
+
+    function testRepayToZeroAtWeekendThenWithdraw() public {
+        _aliceBorrowing();
+        vm.warp(_nextSaturdayNoon());
+        _fresh();
+        uint256 bal = IMarket(d.pSpy).balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert();
+        IMarket(d.pSpy).redeem(bal);
+        _fund(alice, 20e6);
+        vm.startPrank(alice);
+        IERC20(P.USDG).approve(P.PUSDG, type(uint256).max);
+        assertEq(IDebtMarket(P.PUSDG).repayBorrow(type(uint256).max), 0);
+        assertEq(IMarket(d.pSpy).redeem(bal), 0, "debt-free inside the window: withdraws");
+        vm.stopPrank();
+    }
+
+    // ------------------------------------------------------------------ NVDA debt against pSPY
+
+    function _nvdaDebtLiquidation(uint256 spyBps, uint256 nvdaBps) internal {
+        _collateralCeremony();
+        _supplySpy(alice, 0.1e18);
+        (, uint256 liq,) = _liquidity(alice);
+        address o = IController(P.CONTROLLER).oracle();
+        uint256 pn = IPriceOracleLike(o).getUnderlyingPrice(P.PNVDA);
+        uint256 nvdaBorrow = liq * 95 / 100 * 1e18 / pn;
+        vm.prank(alice);
+        assertEq(IMarket(P.PNVDA).borrow(nvdaBorrow), 0);
+        _moveSpy(spyBps);
+        _setNvda(nvdaBps);
+        if (nvdaBps != 10_000) {
+            // The guarded margin source also checks the NVDA pool against the feed; the shock moves only the feed here,
+            // so stand in the shocked price for it (the pool is left where it is).
+            uint256 shocked = uint256(nvdaAnswer) * 1e10 * nvdaBps / 10_000;
+            vm.mockCall(P.NVDA_GUARDED_SOURCE, abi.encodeWithSignature("assetPrices(address)", P.NVDA), abi.encode(shocked));
+        }
+        (uint256 err,, uint256 shortfall) = _liquidity(alice);
+        assertEq(err, 0);
+        assertGt(shortfall, 0);
+        uint256 debt = IMarket(P.PNVDA).borrowBalanceCurrent(alice);
+        uint256 maxRepay = debt / 2;
+        uint256 pNow = IPriceOracleLike(o).getUnderlyingPrice(P.PNVDA);
+        uint256 usdgIn = maxRepay * pNow / 1e18 / 1e12 * 97 / 100;
+        uint256 usdgBefore = IERC20(P.USDG).balanceOf(P.LEDGER);
+        uint256 nvdaBefore = IERC20(P.NVDA).balanceOf(P.LEDGER);
+        vm.prank(keeperEoa);
+        uint256 g0 = gasleft();
+        uint256 profit = SpyCollateralLiquidator(c.liquidator).liquidateNvdaDebt(alice, usdgIn, maxRepay);
+        emit log_named_uint("NVDA-debt flash liquidation gas", g0 - gasleft());
+        assertGt(profit, 0);
+        assertEq(IERC20(P.USDG).balanceOf(P.LEDGER) - usdgBefore, profit);
+        assertGe(IERC20(P.NVDA).balanceOf(P.LEDGER), nvdaBefore);
+        uint256 after_ = IMarket(P.PNVDA).borrowBalanceCurrent(alice);
+        assertLt(after_, debt);
+        assertGe(after_ + maxRepay + 2, debt);
+        assertEq(IERC20(P.SPY).balanceOf(c.liquidator) + IERC20(P.NVDA).balanceOf(c.liquidator), 0);
+        assertEq(IERC20(P.USDG).balanceOf(c.liquidator) + IMarket(d.pSpy).balanceOf(c.liquidator), 0);
+    }
+
+    function testNvdaDebtLiquidationAfterSpyFall() public {
+        _nvdaDebtLiquidation(8_000, 10_000);
+    }
+
+    function testNvdaDebtLiquidationAfterNvdaRise() public {
+        _nvdaDebtLiquidation(10_000, 12_000);
+    }
+
+    function testNvdaDebtNotLiquidatableAtWeekend() public {
+        _collateralCeremony();
+        _supplySpy(alice, 0.1e18);
+        (, uint256 liq,) = _liquidity(alice);
+        uint256 pn = IPriceOracleLike(IController(P.CONTROLLER).oracle()).getUnderlyingPrice(P.PNVDA);
+        vm.prank(alice);
+        IMarket(P.PNVDA).borrow(liq * 95 / 100 * 1e18 / pn);
+        vm.warp(_nextSaturdayNoon());
+        _fresh();
+        _setNvda(12_000);
+        (uint256 err,,) = _liquidity(alice);
+        assertEq(err, 15, "indebted pSPY holder frozen at the weekend");
+        vm.expectRevert();
+        SpyCollateralLiquidator(c.liquidator).liquidateNvdaDebt(alice, 5e6, 1e15);
     }
 
     function testNvdaOnlyAccountsUnchangedValueForValue() public {
@@ -325,7 +457,7 @@ contract SpyCollateralForkTest is SpyMarginForkBase {
         uint256 id = _openLong(50e6, 200);
         _collateralCeremony();
         vm.warp(_nextSaturdayNoon());
-        _freshSpyFeed();
+        _fresh();
         IsolatedMarginTypes.Position memory p = _pos(id);
         (uint256 err, uint256 tokens,,) = IPSpyCollateral(d.pSpy).getAccountSnapshot(p.account);
         assertEq(err, 0, "margin accounts exempt from the gate");

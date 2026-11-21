@@ -7,8 +7,8 @@ Nothing here is live. Scope and design: `../../../SCOPE.md`. To go live, the ope
 
 | Contract | Role | Runtime B (EIP-170 headroom) |
 | --- | --- | --- |
-| `RobinhoodSpyCollateralDelegate` | New pSPY implementation. It is the plain delegate's two October corrections plus: (1) a session gate, where `getAccountSnapshot` returns the SPY source reason as its error for non-margin pSPY holders while SPY is closed or stale; (2) `seize` reverts while SPY is withheld (covers un-entered holders, whom the snapshot gate never reads); (3) a lending supply cap on non-margin mints, measured in SPY against total pSPY. One appended storage slot (21, `lendingSupplyCap`). Immutable `spySource`. | 18,999 (5,577) |
-| `SpyCollateralLiquidator` | Immutable, no admin. Flash USDG, `liquidateBorrow`, redeem pSPY, swap via router adapter 0xa32C, repay; proceeds to the Ledger. | 3,812 (20,764) |
+| `RobinhoodSpyCollateralDelegate` | New pSPY implementation. It is the plain delegate's two October corrections plus: (1) a session gate for non-margin pSPY holders while SPY is closed or stale. If the holder has a borrow balance in any controller market (`getAssetsIn` + `borrowBalanceStored`, views only), `getAccountSnapshot` returns the SPY source reason as its error and the account is frozen except for repay. If the holder is debt-free, the snapshot is served with a zero exchange rate: SPY counts as zero collateral, so redeem, transfer and exitMarket work, and a new borrow can only lean on other collateral; (2) `seize` reverts while SPY is withheld (covers un-entered holders, whom the snapshot gate never reads); (3) a lending supply cap on non-margin mints, measured in SPY against total pSPY. One appended storage slot (21, `lendingSupplyCap`). Immutable `spySource`. | 18,999 (5,577) |
+| `SpyCollateralLiquidator` | Immutable, no admin. For pUSDG debt (`liquidate`): flash USDG, `liquidateBorrow`, redeem pSPY, swap SPY to USDG via router adapter 0xa32C, repay. For pNVDA debt (`liquidateNvdaDebt`): flash USDG, swap it to NVDA (floor: guarded NVDA margin price 0x25E0 − 1 %), liquidate, then the same SPY to USDG repayment. Proceeds, including any leftover NVDA, go to the Ledger. It flashes USDG because the vault's NVDA balance is only 0.025 NVDA; its USDG capacity is 105.27 USDG at 5 bp. | 3,812 (20,764) |
 | `PToken.getAccountSnapshot`, `PToken.seize` | Now `virtual`. `RobinhoodPlainDelegate` executable bytecode is unchanged by both (only the CBOR metadata hash differs). | n/a |
 
 Storage layout: `RobinhoodPlainDelegate` slots 0-20 (`implementation` = 20) and `RobinhoodSpyCollateralDelegate` slots 0-20 are
@@ -110,3 +110,38 @@ Rehearsal-only deviations, the same as the SPY margin rehearsal:
 | 03a83599b87533e10a0f07473db23e9abe7ac47fc4fd0088d7271ebe97716e3f | rehearsal-run1.log (superseded: before the seize gate) |
 | d6cfbd1c878bc47c00a200d14892a4482b006600fe1459e43f24459f4dd08eac | fork-all-run2.log (superseded: before the seize gate) |
 | 2113b3ec36100ea670b785f3d4db3bd1e09a040fd6264e578a253be2f32faf29 | mutate-run2.log (superseded: before the seize gate) |
+
+## Demo sizing (operator decision 5)
+
+Inputs: RHSPY $699.40 (Fri 11-20 close) and the 30 % collateral factor. The Ledger holds 0.0001477 SPY now, and 0.0000477 after the margin seed.
+
+| | Value |
+| --- | --- |
+| Demo borrow | **5 USDG** |
+| Collateral at exactly 5 USDG of power | 0.02383 SPY ($16.67) |
+| Recommended collateral | **0.045 SPY** ($31.47). Borrowing power is $9.44, so 5 USDG is 53 % of it, and SPY can fall about 47 % before shortfall. `ceremony.sh demo-open` refuses above 60 %. |
+| SPY to buy | 0.045 − 0.0000477 = **0.04495 SPY**, about 31.5 USDG at the pool: $31.44 plus the 0.30 % fee, with a 0.5 % slippage bound giving a budget of **≤ 31.8 USDG** |
+| Ledger USDG | 106.22 in the wallet today. The margin ceremony t1 supplies 80, leaving about **26.2**, so the buy is **~5.6 USDG short**. Either redeem ~6 USDG of the Ledger's pUSDG first (one extra Ledger tx; pUSDG cash is ~108 after the margin supply), or borrow 4 USDG against 0.036 SPY (≤ 25.4 USDG). |
+| Repay | The 5 USDG borrowed is held and repaid (`repayBorrow(max)`), so only interest dust is extra. |
+| ETH | Demo ~1.9M gas plus the SPY buy ~0.3M gas: about 0.00005 ETH at 0.02 gwei. The Ledger holds 0.00251 ETH and the margin ceremony uses ~0.0005. |
+| Lending cap | 0.045 SPY plus the margin demo position (~0.143 SPY if still open) plus the 0.0001 seed = 0.188 SPY, which is ≤ 0.23 |
+
+## Rehearsal (run by the parent; not run by this build)
+
+```
+cd /Users/joshua/Peridot/.wt-spy-collateral/contracts && tools/spy-collateral/rehearse_ceremony.sh 2>&1 | tee ../.scratch/rehearsal-gate.log
+```
+
+It needs the keeper worktree at `KEEPER_REPO` (default `/Users/joshua/Peridot/RobinhoodVaults/.wt-margin-keeper-collateral`, branch margin-keeper-spy-collateral) and anvil port 8681 free. A fork started at a weekend is warped to Monday 02:00 UTC. Expected:
+- SPY margin t0: 13 Ledger txs; t1: 3; deploy: 2 txs.
+- Collateral t0: steps 1-3, each `status 0x1`, all `ok:` lines; demo-open borrows 5000000.
+- Keeper:
+  - healthy run: both borrowers `healthy`;
+  - −20 % run: B (USDG debt) and C (NVDA debt) `executable_plan`;
+  - execute run: two `confirmed` journals, about 1.0M and 1.25M gas, and a positive Ledger USDG profit.
+- Weekend:
+  - `closed-check` all `ok:`, including the debt-free account's redeem allowed and borrow refused;
+  - the debt-free account's redeem and exitMarket `status 0x1`, and the repay `status 0x1`;
+  - keeper `spy_closed`.
+- Rollback: R1-R3 `status 0x1`.
+- The last lines are `Ledger transactions sent ...: 15` and `REHEARSAL COMPLETE`.

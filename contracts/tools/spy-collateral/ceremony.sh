@@ -11,8 +11,8 @@
 # Nothing here reads a key. Re-run `verify` at any time.
 #
 # Operator parameters (env, defaults = proposal): SPY_LENDING_CAP_WEI=230000000000000000 (0.23 SPY)
-# SPY_CF_MANTISSA=300000000000000000 (30 %) DEMO_SPY_WEI (default: the Ledger's whole SPY balance)
-# DEMO_BORROW_RAW (default: 80 % of the demo's borrowing power, in raw USDG)
+# SPY_CF_MANTISSA=300000000000000000 (30 %) DEMO_SPY_WEI (default: the Ledger's whole SPY balance; buy ~0.045 SPY first)
+# DEMO_BORROW_RAW=5000000 (5 USDG; refused above 60 % of the demo's borrowing power)
 set -euo pipefail
 MJ=${1:?spy-margin journal}; CJ=${2:?spy-collateral journal}; PHASE=${3:?phase}
 RPC=${RPC:-https://rpc.mainnet.chain.robinhood.com}; SIGN=${SIGN:---ledger}
@@ -79,6 +79,9 @@ preflight)
     forge script script/spy/DeploySpyCollateral.s.sol:DeploySpyCollateral --rpc-url "$RPC" >/dev/null && echo "   ok: deployment verify (delegate source, liquidator wiring, beneficiary = Ledger)"
   need "$(c $DELEGATE 'spySource()(address)')" $SPYSRC "delegate gates on the SPY margin session source"
   need "$(ge $CAP $(c $PSPY 'totalSupply()(uint256)' | first) && echo ok)" ok "cap parameter is a sane SPY amount"
+  need "$(c $RADAPTER 'poolFor(address,address)((address,address,uint24,int24,address))' $USDG 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC | tr -d '()' | cut -d, -f3 | tr -d ' ')" 3000 "router adapter has the NVDA/USDG pool (NVDA-debt liquidations)"
+  need "$(c $RADAPTER 'poolFor(address,address)((address,address,uint24,int24,address))' $SPY $USDG | tr -d '()' | cut -d, -f3 | tr -d ' ')" 3000 "router adapter has the SPY/USDG pool (SPY margin t0 step 13 done)"
+  echo "   flash vault USDG capacity $(c $FLASH 'maxFlashLoan(address)(uint256)' $USDG | first) raw (the liquidator flashes USDG for both debt kinds)"
   untouched > "${CJ%.json}.untouched-before.txt"; echo "   untouched-state snapshot saved ($(wc -l < "${CJ%.json}.untouched-before.txt") lines)"
   ;;
 t0)
@@ -101,9 +104,9 @@ demo-open)
   s "D2 supply SPY to pSPY" $PSPY 'mint(uint256)' $AMT
   s "D3 use pSPY as collateral" $CONTROLLER 'enterMarkets(address[])' "[$PSPY]"
   LQ=$(c $CONTROLLER 'getAccountLiquidity(address)(uint256,uint256,uint256)' $L | sed -n 2p | first)
-  B=${DEMO_BORROW_RAW:-$(python3 -c "print($LQ*8//10//10**12)")}
+  B=${DEMO_BORROW_RAW:-5000000}
   echo "   borrowing power $LQ (1e18 USD), borrow $B raw USDG"
-  need "$(ge $B 1 && echo yes)" yes "demo borrow is at least 1 raw USDG"
+  need "$(python3 -c "print('yes' if 0 < $B*10**12 <= $LQ*6//10 else 'no')")" yes "demo borrow is at most 60 % of the borrowing power (SPY may fall ~40 % before shortfall)"
   s "D4 borrow USDG against pSPY" $PUSDG 'borrow(uint256)' $B
   echo "   Ledger pUSDG debt $(cast call $PUSDG 'borrowBalanceCurrent(address)(uint256)' $L --rpc-url "$RPC" | first)"
   ;;
@@ -127,6 +130,14 @@ closed-check)
     echo "   ok: $name refused"
   done
   need "$(cast call $LIQ 'liquidate(address,uint256)(uint256)' $A 1000 --from $L --rpc-url "$RPC" >/dev/null 2>&1 && echo allowed || echo refused)" refused "liquidation refused"
+  if [ -n "${DEBTFREE_ACCOUNT:-}" ]; then
+    need "$(c $PSPY 'hasDebt(address)(bool)' $DEBTFREE_ACCOUNT)" false "debt-free account has no debt"
+    need "$(c $CONTROLLER 'getAccountLiquidity(address)(uint256,uint256,uint256)' $DEBTFREE_ACCOUNT | head -1 | first)" 0 "debt-free account: no snapshot error"
+    B2=$(c $PSPY 'balanceOf(address)(uint256)' $DEBTFREE_ACCOUNT | first)
+    need "$(cast call $PSPY 'redeem(uint256)(uint256)' $B2 --from $DEBTFREE_ACCOUNT --rpc-url "$RPC" 2>/dev/null | first)" 0 "debt-free account may redeem all its pSPY while closed"
+    if cast call $PUSDG 'borrow(uint256)' 1000 --from $DEBTFREE_ACCOUNT --rpc-url "$RPC" >/dev/null 2>&1; then echo "CHECK FAILED: debt-free account borrowed against SPY while closed"; exit 1; fi
+    echo "   ok: debt-free account cannot borrow against SPY while closed"
+  fi
   ;;
 verify)
   need "$(c $PSPY 'implementation()(address)')" $DELEGATE "pSPY implementation = collateral delegate"

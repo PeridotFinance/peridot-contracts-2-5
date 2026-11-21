@@ -146,3 +146,21 @@ After the ceremony (keeper, `.wt-margin-keeper-collateral` branch `margin-keeper
 None of the existing margin pins change: the keeper pins no pSPY state, and steps 1-3 change only storage on the pSPY delegator, the controller and the adapter.
 
 Unverified / open: the operator's sign-off on R2 (the dust freeze) and R3 (the cap is a bound, not exact); live pool depth for a SPY→USDG liquidation swap at a weekend reopen (the fork pool was unmoved); and the DigitalOcean deploy of the keeper change (not done, by instruction).
+
+
+## 10. Operator decisions 2026-11-21 (implemented)
+
+1. The weekend freeze is accepted at these caps.
+2. **Debt-free holders withdraw while SPY is closed or stale.**
+   - Only pSPY holders with a borrow balance in any controller market are frozen.
+   - Debt-free holders see SPY valued at zero, so they can redeem, transfer and exitMarket, but cannot borrow against SPY.
+   - Seize stays gated.
+   - This replaces the "debt-free entered holders cannot redeem" deviation in §1.1, and the frontend no longer has to avoid auto-entering pSPY.
+3. **NVDA debt against pSPY is liquidated** by `SpyCollateralLiquidator.liquidateNvdaDebt` (USDG flash, USDG to NVDA, liquidate, SPY to USDG). The keeper plans and executes it. R8 is closed.
+4. Cap 0.23 SPY and CF 30 % are confirmed.
+5. Demo sizing: see `contracts/deployments/spy-collateral/README.md`.
+   - The Ledger needs 0.045 SPY, so it buys 0.04495 SPY for ≤ 31.8 USDG.
+   - That needs ~5.6 USDG more than the wallet holds after the margin t1, for example by redeeming ~6 USDG of pUSDG first.
+   - ETH needed is ~0.00005.
+
+Ceremony list unchanged: 3 direct Ledger calls (plus the optional SPY buy and demo). Remaining estimate: ~0.5 day after the parent's gate rehearsal (evidence README, frontend note refresh).

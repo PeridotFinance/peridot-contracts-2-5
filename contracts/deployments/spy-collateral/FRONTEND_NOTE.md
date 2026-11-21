@@ -16,13 +16,14 @@ It becomes ordinary lending collateral at a **30 % collateral factor**. Borrowin
 - `getAccountSnapshot(account)` now returns a **nonzero error code** (the reason above) while SPY is closed, for accounts
   that hold pSPY. Lens code must not assume error = 0.
 
-**UI states while `sessionReason() != 0`**, for an account that holds pSPY and has entered the pSPY market:
-- Only **repay** works.
-- Borrow, withdraw (any market), transfer of pTokens and "disable as collateral" (`exitMarket`) all fail.
-  `getAccountLiquidity` returns error 15 (SNAPSHOT_ERROR); show it as "SPY market closed: repay only".
-- Liquidations are also off.
-- This applies even when the account has no debt. **Do not auto-enter pSPY on supply.** Ask "use as collateral" as a
-  separate step, and offer "disable as collateral" only while SPY is open.
+**UI states while `sessionReason() != 0`**, for an account that holds pSPY (`pSPY.hasDebt(account)` tells you which case applies):
+- **With any borrow balance** (any market): only **repay** works.
+  - Borrow, withdraw (any market), transferring pTokens, disabling collateral (`exitMarket`) and liquidation are all refused.
+  - `getAccountLiquidity` returns error 15 (SNAPSHOT_ERROR). Show "SPY market closed: repay only".
+  - After a full repay, the account is debt-free and may withdraw at once.
+- **Debt-free:** withdraw, transfer and disable-collateral all work.
+  - SPY counts as **zero** collateral while closed. `getAccountSnapshot` returns rate 0 and `getAccountLiquidity` shows only the other collateral.
+  - A new borrow is limited to the other collateral. Show "SPY collateral counts as 0 until the market reopens".
 - Accounts that hold no pSPY, and all margin positions, are unaffected.
 
 **Unchanged:** NVDA and USDG lending and every margin flow. The SPY margin weekend rules are in `../spy-margin/FRONTEND_NOTE.md`.
