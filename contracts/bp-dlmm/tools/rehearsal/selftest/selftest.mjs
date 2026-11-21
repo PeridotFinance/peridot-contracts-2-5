@@ -94,7 +94,7 @@ await group("P3 v2 wrapper vs the outage helpers", async () => {
   const price = () => w.getUnderlyingPrice(market.address);
   const usd = () => base.usd();
   check("P3.1", (await price()).eq(shareExpect(1_050_000, await usd())) && (await w.getShareUsdPrice()).eq((await price()).div(BN(10).pow(12))) && (await w.lastGoodAssetsPerShare()).eq(1_050_000) && (await state()).live.eq(1_050_000),
-    `live path: price = shareExpect(1,050,000, 1e18) = ${await price()}, getShareUsdPrice = price / 1e12, constructor stored 1,050,000 (the fixture wrapper's runtime is ${runtime} bytes; the product build is 3,472)`);
+    `live path: price = shareExpect(1,050,000, 1e18) = ${await price()}, getShareUsdPrice = price / 1e12, constructor stored 1,050,000 (the fixture wrapper's runtime is ${runtime} bytes; the product build is 3,628)`);
 
   // poke(): the harness's expectPoke (written from the specification) against the contract over a scripted sequence
   const steps = [["10 s later, live +4.8 % (inside the 1 h gate)", 10, 1_100_000, false], ["3,601 s later, live still +4.8 %", 3601, 1_100_000, false], ["3,601 s later again", 3601, 1_100_000, false],
@@ -128,6 +128,21 @@ await group("P3 v2 wrapper vs the outage helpers", async () => {
   await tx("fixture dead", (o) => vault.connect(sig).set(1_000_000, true, o)); await tx("USD price 0", (o) => base.connect(sig).setUsd(0, o));
   const nz = await state();
   check("P3.5", nz.fb === false && (await price()).eq(0), "never a fallback when the base oracle has no USDC price (usingFallback false, price 0), even inside the window");
+  // v3: ONLY the vault's own FeedInvalid(uint8) is an outage. Every other failure is a BROKEN vault: price 0 at once, usingFallback false, even with a fresh stored value and a live USDC price
+  await tx("fixture alive", (o) => vault.connect(sig).set(1_000_000, false, o)); await tx("USD price back", (o) => base.connect(sig).setUsd(ethers.constants.WeiPerEther, o));
+  await tx("poke", (o) => w.connect(sig).poke(o));
+  const kinds = [[2, "ExitFailed() (a failed pair read)"], [3, "an answer of 0 (NAV rounds to nothing)"], [4, "an EMPTY revert (out of gas)"], [5, 'Error("boom")'], [6, "a short return (16 bytes)"]];
+  let allBroken = true; const klines = [];
+  for (const [m, label] of kinds) {
+    await tx("fixture broken", (o) => vault.connect(sig).setMode(1_000_000, m, o));
+    const sb = await state(), pb = await price(), pk = await w.callStatic.poke();
+    const ok = pb.eq(0) && sb.fb === false && sb.live.eq(0) && pk === false && sb.left.gt(0); allBroken = allBroken && ok; klines.push(`${label}: ${ok ? "price 0, no fallback" : "WRONG price " + pb + " fb " + sb.fb}`);
+  }
+  await tx("fixture FeedInvalid", (o) => vault.connect(sig).setMode(1_000_000, 1, o));
+  const sf = await state();
+  check("P3.7", allBroken && sf.fb === true && (await price()).gt(0), `v3: ${klines.join(" | ")}; the SAME stored value and window serve the fallback again as soon as the vault reverts with FeedInvalid(2) (usingFallback ${sf.fb}, price ${await price()})`, klines.join(" | "));
+  await tx("fixture alive", (o) => vault.connect(sig).set(1_000_000, false, o)); await tx("poke", (o) => w.connect(sig).poke(o));
+  await tx("fixture dead", (o) => vault.connect(sig).set(1_000_000, true, o)); await tx("USD price 0", (o) => base.connect(sig).setUsd(0, o));
   await tx("USD price back", (o) => base.connect(sig).setUsd(ethers.constants.WeiPerEther, o));
   check("P3.6", (await price()).eq(shareExpect(fallbackLeg((await state()).stored), ethers.constants.WeiPerEther)), "fallback resumes when the USDC price returns (still inside the window)");
 });

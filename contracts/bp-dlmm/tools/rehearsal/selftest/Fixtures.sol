@@ -28,11 +28,22 @@ contract Thrower {
 //      a base oracle with a settable asset USD price, a pToken that names its underlying. Nothing here is part of the product.
 contract FxAsset { function decimals() external pure returns (uint8) { return 6; } }
 contract FxVault {
-    address public asset; uint256 public leg = 1_050_000; bool public dead; address public assetOverride;
+    error FeedInvalid(uint8 which);   // the DLMM vault's own custom error (selector 0x... of FeedInvalid(uint8)): the ONLY outage the v3 wrapper covers
+    error ExitFailed();               // what the real vault throws when a pair read fails
+    address public asset; uint256 public leg = 1_050_000; uint8 public mode; // 0 ok, 1 FeedInvalid(2), 2 ExitFailed, 3 answers 0, 4 empty revert, 5 string revert, 6 short return
     constructor(address a) { asset = a; }
     function decimals() external pure returns (uint8) { return 6; }
-    function convertToAssets(uint256) external view returns (uint256) { require(!dead, "FeedInvalid"); return leg; }
-    function set(uint256 l, bool d) external { leg = l; dead = d; }
+    function convertToAssets(uint256) external view returns (uint256) {
+        if (mode == 1) revert FeedInvalid(2);
+        if (mode == 2) revert ExitFailed();
+        if (mode == 3) return 0;
+        if (mode == 4) { assembly { revert(0, 0) } }
+        if (mode == 5) revert("boom");
+        if (mode == 6) { assembly { mstore(0, 1) return(0, 16) } }
+        return leg;
+    }
+    function set(uint256 l, bool d) external { leg = l; mode = d ? 1 : 0; }
+    function setMode(uint256 l, uint8 m) external { leg = l; mode = m; }
 }
 contract FxBase {
     uint256 public usd = 1e18;

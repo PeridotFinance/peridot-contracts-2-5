@@ -10,7 +10,7 @@
 //     90,000 s, AVAX 1,200 s). The vault's USDC feed and the base oracle's USDC feed are the SAME address (B0.f2), so one re-pinned mock serves both.
 //   * eth_call / callStatic see block.timestamp == the head block's timestamp (probed on anvil 1.7.1), so the 24 h boundary is tested with static calls only (a mined transaction moves the head by 1 s).
 import {
-  ethers, BN, A, C, LIVE, check, note, group, provider, tx, expectRevert, codeOrRevert, impersonate, setErc20Balance, setFeed, readFeed, warp, warpTo, headTs, scenario, mocks,
+  ethers, BN, A, C, LIVE, check, note, group, provider, rpc, tx, expectRevert, codeOrRevert, impersonate, setErc20Balance, setFeed, readFeed, warp, warpTo, headTs, scenario, mocks,
 } from "./lib.mjs";
 
 const E18 = BN(10).pow(18);
@@ -32,6 +32,16 @@ export function expectPoke(prev, prevAt, live, now) {
   return { stored: true, value: live };
 }
 
+const FEED_INVALID_SEL = ethers.utils.id("FeedInvalid(uint8)").slice(0, 10);
+/** the RAW revert data of an eth_call (no ABI decoding): null when the call did not revert */
+async function rawRevert(to, data) {
+  try { await provider.send("eth_call", [{ to, data }, "latest"]); return null; }
+  catch (e) {
+    const cands = [e?.error?.data, e?.data, e?.error?.error?.data, e?.body, e?.error?.body, e?.message];
+    for (const x of cands) { const t = typeof x === "string" ? x : x && typeof x.data === "string" ? x.data : ""; const m = /0x[0-9a-fA-F]*/.exec(t); if (m && m[0].length >= 2) return m[0]; }
+    return "0x";   // reverted with data we could not read: treated as an empty revert
+  }
+}
 export async function runOutage(c) {
   const { ctl, vault, wrapper, guarded, pBP, pU, pW, usdc, D, runStep, step, room, borrowPowerUsdc, readPrices, exec, PT, CTL, ERC20, VAULT } = c;
   const usdcUsd = () => guarded.getPrice(LIVE.USDC);                 // the BASE oracle's live USDC price (1e18): the same read the wrapper makes
@@ -75,6 +85,19 @@ export async function runOutage(c) {
       const live0 = await vault.convertToAssets(1_000_000), s0 = await st(), px0 = await usdcUsd();
       check("B10.2", (await priceBP()).eq(shareExpect(live0, px0)) && s0.live.eq(live0) && !s0.usingFallback && (await priceBP()).gt(0) && s0.left.eq(WINDOW - ((await headTs()) - s0.at)),
         `no outage: the wrapper's share price ${await priceBP()} = convertToAssets(1 share) ${live0} x the base oracle's USDC price ${px0} (recomputed independently); shareState: live ${s0.live}, stored ${s0.stored} (at ${s0.at}), usingFallback ${s0.usingFallback}, ${s0.left} s of window left`);
+
+      // ------------------------------------------------------------------------------------------------ v3: a vault failure that is NOT FeedInvalid prices 0 at once, no fallback (fault injection on the pair, feeds fresh)
+      await scenario("broken vault: pair without code", async () => {
+        const origPairCode = await provider.getCode(LIVE.VAULT_PAIR);
+        await rpc("anvil_setCode", [LIVE.VAULT_PAIR, "0x"]);              // every pair read of the vault now fails; the feeds are fresh, so this is NOT the FeedInvalid outage
+        const data = new ethers.utils.Interface(VAULT).encodeFunctionData("convertToAssets", [1_000_000]);
+        const raw = await rawRevert(LIVE.VAULT, data), sb = await st(), pb = await priceBP(), pk = await wrapper.callStatic.poke();
+        if (raw === null) note("B10.2c", `FAULT INJECTION INEFFECTIVE: with the pair's code removed convertToAssets still answers (${await vault.convertToAssets(1_000_000)}): the broken-vault case could not be provoked on the fork; the offline self-test P3.7 covers it with stand-ins`);
+        else check("B10.2b", !(raw.startsWith(FEED_INVALID_SEL)) && pb.eq(0) && sb.usingFallback === false && sb.live.eq(0) && sb.left.gt(0) && pk === false,
+          `BROKEN VAULT (not an outage): with the pair's code removed (feeds fresh) convertToAssets reverts with ${raw.slice(0, 10)}${raw.length > 10 ? "..." : " (empty)"} (not FeedInvalid ${FEED_INVALID_SEL}); the wrapper prices the share 0 AT ONCE although the stored value is fresh (${sb.left} s of window left): usingFallback ${sb.usingFallback}, price ${pb}, live ${sb.live}; poke() returns ${pk}`);
+        await rpc("anvil_setCode", [LIVE.VAULT_PAIR, origPairCode]);
+        check("B10.2d", (await provider.getCode(LIVE.VAULT_PAIR)) === origPairCode && (await priceBP()).eq(shareExpect(await vault.convertToAssets(1_000_000), await usdcUsd())) && (await priceBP()).gt(0), "the pair's code is restored and the share price is the live price again");
+      });
 
       // ------------------------------------------------------------------------------------------------ the poke upward cap on the REAL vault (own snapshot)
       await scenario("poke upward cap", async () => {
@@ -123,8 +146,11 @@ export async function runOutage(c) {
       // ---- the vault leg dies: USDT age > maxFeedAge, USDC and AVAX fresh
       await warpTo(U0 + maxFeedAge + 100);
       const feedErr = await expectRevert(() => vault.convertToAssets(1_000_000)), taErr = await expectRevert(() => vault.totalAssets());
-      check("B10.8", /FeedInvalid\(2\)/.test(feedErr || "") && /FeedInvalid\(2\)/.test(taErr || "") && (await readFeed(LIVE.USDT_FEED)).age > maxFeedAge && (await readFeed(LIVE.USDC_FEED)).age < 100 && (await readFeed(LIVE.AVAX_FEED)).age < 100,
-        `the vault leg is DEAD (USDT feed ${(await readFeed(LIVE.USDT_FEED)).age} s old > maxFeedAge ${maxFeedAge}): convertToAssets reverts ${feedErr}, totalAssets reverts ${taErr}; the USDC and AVAX mocks are fresh (USDC ${(await readFeed(LIVE.USDC_FEED)).age} s, AVAX ${(await readFeed(LIVE.AVAX_FEED)).age} s)`);
+      const rawData = new ethers.utils.Interface(VAULT).encodeFunctionData("convertToAssets", [1_000_000]), rawTA = new ethers.utils.Interface(VAULT).encodeFunctionData("totalAssets", []);
+      const rev1 = await rawRevert(LIVE.VAULT, rawData), rev2 = await rawRevert(LIVE.VAULT, rawTA);
+      const isFI = (r) => !!r && r.startsWith(FEED_INVALID_SEL) && r.length === 74 && ethers.BigNumber.from("0x" + r.slice(10)).eq(2);   // load-bearing: the wrapper treats ONLY this selector as an outage
+      check("B10.8", isFI(rev1) && isFI(rev2) && /FeedInvalid\(2\)/.test(feedErr || "") && /FeedInvalid\(2\)/.test(taErr || "") && (await readFeed(LIVE.USDT_FEED)).age > maxFeedAge && (await readFeed(LIVE.USDC_FEED)).age < 100 && (await readFeed(LIVE.AVAX_FEED)).age < 100,
+        `the vault leg is DEAD (USDT feed ${(await readFeed(LIVE.USDT_FEED)).age} s old > maxFeedAge ${maxFeedAge}): through the PROXY the RAW revert data of convertToAssets is ${rev1} and of totalAssets ${rev2}: selector ${FEED_INVALID_SEL} = FeedInvalid(uint8) with argument 2 (the selector the v3 wrapper keys on); the USDC and AVAX mocks are fresh (USDC ${(await readFeed(LIVE.USDC_FEED)).age} s, AVAX ${(await readFeed(LIVE.AVAX_FEED)).age} s)`);
       const sOut = await st(), pxOut = await usdcUsd(), wantPrice = shareExpect(fallbackLeg(sOut.stored), pxOut);
       check("B10.9", sOut.live.eq(0) && sOut.usingFallback && sOut.left.eq(WINDOW - ((await headTs()) - sOut.at)) && sOut.left.gt(0) && (await priceBP()).eq(wantPrice) && wantPrice.gt(0) && (await wrapper.getShareUsdPrice()).eq(wantPrice.div(BN(10).pow(12))),
         `FALLBACK: usingFallback true, live 0, stored ${sOut.stored}, ${sOut.left} s left; price ${await priceBP()} = stored x 0.97 x the LIVE USDC price ${pxOut} (${wantPrice} recomputed independently); getShareUsdPrice() agrees`);

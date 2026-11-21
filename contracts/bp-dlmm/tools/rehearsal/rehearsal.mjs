@@ -206,7 +206,7 @@ if (DRY) {
     { // the artifact must be the v2 wrapper (run 1 used v1): ABI, runtime size, and the arithmetic helpers of the outage group
       const names = new Set(w.abi.filter((x) => x.type === "function").map((x) => x.name)), need = ["shareState", "poke", "lastGoodAssetsPerShare", "lastGoodTime", "FALLBACK_HAIRCUT_BPS", "FALLBACK_WINDOW", "POKE_MAX_UP_BPS", "POKE_UP_INTERVAL"];
       const miss = need.filter((n) => !names.has(n)); if (miss.length) bad(`the wrapper artifact is not v2: missing ${miss.join(", ")}`); else ok(`wrapper artifact is v2: ${need.join(", ")} in the ABI`);
-      const size = (w.deployed.length - 2) / 2, want = Number(process.env.BP_WRAPPER_RUNTIME || 3472);
+      const size = (w.deployed.length - 2) / 2, want = Number(process.env.BP_WRAPPER_RUNTIME || 3628);
       if (size !== want) bad(`wrapper runtime size ${size} bytes in ${BP_OUT}, expected ${want} (BP_WRAPPER_RUNTIME): another build / profile`); else ok(`wrapper runtime size ${size} bytes (v2: ${want}), under 24,576`);
       const iface = new utils.Interface(ORACLE); const probe = ["shareState", "poke", "lastGoodAssetsPerShare", "lastGoodTime"].every((n) => iface.getFunction(n).format() && w.abi.some((x) => x.name === n && x.inputs.length === iface.getFunction(n).inputs.length && x.outputs.length === iface.getFunction(n).outputs.length));
       if (!probe) bad("the harness ABI of the wrapper (shareState/poke/lastGood*) does not match the artifact's input/output counts"); else ok("harness ABI of shareState/poke/lastGoodAssetsPerShare/lastGoodTime matches the artifact's arity");
@@ -400,7 +400,7 @@ async function main() {
       }
       const size = async (a) => ((await provider.getCode(a)).length - 2) / 2, onchain = { wrapper: await size(D.WRAPPER), delegator: await size(D.PBP), delegate: await size(D.DELEGATE) };
       let pinSizes = null; try { if (TOOL_ON) pinSizes = JSON.parse(fs.readFileSync(pinFile, "utf8")).sizes; } catch { /* no pin */ }
-      const wantRuntime = Number(process.env.BP_WRAPPER_RUNTIME || 3472), LIMIT = 24576;
+      const wantRuntime = Number(process.env.BP_WRAPPER_RUNTIME || 3628), LIMIT = 24576;
       const all = { ...onchain, accountingModule: pinSizes?.accountingModule };
       check("B0.v4", Object.values(onchain).every((n) => n > 0 && n < LIMIT) && (all.accountingModule === undefined || all.accountingModule < LIMIT) && (!TOOL_ON || (onchain.wrapper === wantRuntime && pinSizes && onchain.wrapper === pinSizes.oracle && onchain.delegator === pinSizes.delegator && onchain.delegate === pinSizes.delegate)),
         `runtime sizes (EIP-170 limit ${LIMIT}): wrapper ${onchain.wrapper} bytes (v2 = ${wantRuntime}), market (delegator) ${onchain.delegator}, delegate ${onchain.delegate}, accounting module ${all.accountingModule ?? "n/a (no pin: built-in mode)"}; on chain == the pin ${pinSizes ? "yes" : "n/a"}`);
