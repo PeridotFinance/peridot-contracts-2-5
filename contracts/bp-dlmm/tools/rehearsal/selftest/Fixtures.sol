@@ -40,6 +40,7 @@ contract FxVault {
         if (mode == 4) { assembly { revert(0, 0) } }
         if (mode == 5) revert("boom");
         if (mode == 6) { assembly { mstore(0, 1) return(0, 16) } }
+        if (mode == 7) { uint256 x; for (uint256 i; i < 2000; ++i) { x = uint256(keccak256(abi.encode(x, i))); } if (x == 1) revert("never"); } // an EXPENSIVE read (~0.6M gas), like the real vault's NAV
         return leg;
     }
     function set(uint256 l, bool d) external { leg = l; mode = d ? 1 : 0; }
@@ -57,4 +58,17 @@ contract FxMarket {
     address public underlying;
     constructor(address u) { underlying = u; }
     function isPToken() external pure returns (bool) { return true; }
+}
+
+/// a stand-in for the controller's _setCollateralFactor: reads the oracle's price and RETURNS an error code (event Failure) instead of reverting when the price is 0
+interface FxPriceLike { function getUnderlyingPrice(address) external view returns (uint256); }
+contract FxCtl {
+    event Failure(uint256 error, uint256 info, uint256 detail);
+    address public oracle; uint256 public stored;
+    constructor(address o) { oracle = o; }
+    function setIfPriced(address market) external returns (uint256) {
+        uint256 p = FxPriceLike(oracle).getUnderlyingPrice(market);
+        if (p == 0) { emit Failure(13, 22, 0); return 13; }
+        stored = p; return 0;
+    }
 }

@@ -70,7 +70,11 @@ export const provider = new providers.StaticJsonRpcProvider(RPC, { chainId: CHAI
 provider.pollingInterval = 100;
 // 50 % headroom over eth_estimateGas on EVERY harness transaction (lesson of the range-tp run 5). ethers' JsonRpcSigner calls provider.estimateGas when no gasLimit is given.
 const estimateGas0 = provider.estimateGas.bind(provider);
-provider.estimateGas = async (txr) => { const g = await estimateGas0(txr); const m = g.mul(150).div(100); return m.gt(14_000_000) ? BN(14_000_000) : m; };
+// RUN 3 ROOT CAUSE (see README "Run 3"): eth_estimateGas finds the LOWEST gas at which the transaction does not REVERT. When the outcome depends on a nested call whose failure is TOLERATED (the wrapper reads the vault with a
+// staticcall and prices the share 0 when that read fails, the controller then RETURNS PRICE_ERROR instead of reverting), the lowest non-reverting gas starves that inner call (63/64 rule): the estimate is ~60-140k, the
+// mined transaction runs out of gas INSIDE the vault read, the share is priced 0 and the controller returns an error code with status 1 - while the eth_call simulation (huge gas) said 0. 50 % of such an estimate is no headroom.
+// So every harness transaction gets max(1.5 x estimate, estimate + 2,000,000) gas (cap 14M). Gas is free on the local fork.
+provider.estimateGas = async (txr) => { const g = await estimateGas0(txr); const a = g.mul(150).div(100), b = g.add(2_000_000), m = a.gt(b) ? a : b; return m.gt(14_000_000) ? BN(14_000_000) : m; };
 const send0 = provider.send.bind(provider);   // every JSON-RPC call (ours and ethers' own) goes through here: tracked, with a timeout (tracers get longer)
 const RPC_TIMEOUT = Number(process.env.REH_RPC_TIMEOUT_MS) || 180_000;
 provider.send = (method, params) => track(`rpc ${method} ${JSON.stringify(params ?? []).slice(0, 90)}`, send0(method, params), /^debug_/.test(method) ? Math.max(RPC_TIMEOUT, 600_000) : RPC_TIMEOUT)
@@ -172,11 +176,39 @@ export async function codeOrRevert(fn) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------- controller / pToken Failure events: a state-changing call that RETURNS an error code does not revert
+const FAILURE_TOPIC = utils.id("Failure(uint256,uint256,uint256)");
+let ENUMS = null;
+function enumNames() {   // names of Error / FailureInfo from ErrorReporter.sol of THIS tree (parsed, so the numbers in a log line are readable)
+  if (ENUMS) return ENUMS; ENUMS = { Error: [], FailureInfo: [] };
+  try {
+    const src = fs.readFileSync(path.join(HERE, "..", "..", "..", "contracts", "ErrorReporter.sol"), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const n of ["Error", "FailureInfo"]) { const m = new RegExp(`enum ${n}\\s*\\{([^}]*)\\}`).exec(src); if (m) ENUMS[n] = m[1].split(",").map((x) => x.trim()).filter(Boolean); }
+  } catch { /* names are a convenience */ }
+  return ENUMS;
+}
+/** Failure(error, info, detail) events of a receipt (any emitter): [{ address, error, info, detail, errorName, infoName }] */
+export function failuresOf(receipt) {
+  const e = enumNames();
+  return (receipt.logs || []).filter((l) => l.topics?.[0] === FAILURE_TOPIC).map((l) => { const [er, inf, det] = utils.defaultAbiCoder.decode(["uint256", "uint256", "uint256"], l.data).map((x) => x.toNumber ? x.toNumber() : Number(x)); return { address: l.address, error: er, info: inf, detail: det, errorName: e.Error[er] ?? `#${er}`, infoName: e.FailureInfo[inf] ?? `#${inf}` }; });
+}
+let txContext = null;   // set by rehearsal.mjs: async () => string with the wrapper's lastGoodTime etc.
+export function setTxContext(fn) { txContext = fn; }
+async function txContextLine(label, r, resp) {
+  try {
+    const head = (await provider.getBlock(r.blockNumber)).timestamp, f = {};
+    for (const [n, a] of [["AVAX", LIVE.AVAX_FEED], ["USDC", LIVE.USDC_FEED], ["USDT", LIVE.USDT_FEED]]) { const x = await provider.send("eth_call", [{ to: a, data: "0xfeaf968c" }, "latest"]); f[n] = x && x.length >= 322 ? parseInt("0x" + x.slice(2 + 192, 2 + 256), 16) : "n/a"; }
+    const extra = txContext ? await txContext() : "";
+    console.log(`TXCTX ${label}: block ${r.blockNumber} ts ${head} | feeds updatedAt AVAX ${f.AVAX} USDC ${f.USDC} USDT ${f.USDT} (age s: ${["AVAX", "USDC", "USDT"].map((n) => (typeof f[n] === "number" ? head - f[n] : "?")).join("/")}) | gas limit ${resp?.gasLimit ?? "?"} used ${r.gasUsed}${extra ? " | " + extra : ""}`);
+  } catch (e) { console.log(`TXCTX ${label}: unavailable (${String(e?.message || e).slice(0, 80)})`); }
+}
 /**
  * Send ONE transaction through `fn(overrides)` (which must return the ethers tx response), wait, and on any failure print the revert chain. When estimateGas itself fails
  * (no transaction exists to trace) the call is replayed once with a fixed gas limit so that a mined, failed transaction can be traced. Throws on failure.
+ * A mined transaction whose receipt carries a Failure(error, info, detail) event (the controller and the pTokens RETURN error codes instead of reverting) is a FAILURE too: `TXCODE` is printed and the call throws,
+ * unless opts.allowFailure. Every transaction prints one `TXCTX` line: block timestamp, the updatedAt of the three feeds, the gas limit and gas used, and the wrapper's stored leg time.
  */
-export async function tx(label, fn) {
+export async function tx(label, fn, opts = {}) {
   progress(`tx ${label}: sending`);
   let resp;
   try { resp = await fn({}); }
@@ -186,14 +218,22 @@ export async function tx(label, fn) {
       try { resp = await fn({ gasLimit: 6_000_000 }); } catch (e2) { throw Object.assign(new Error(`${label}: ${decodeErr(e2)}`), { cause: e2 }); }
     } else throw Object.assign(new Error(`${label}: ${decodeErr(e)}`), { cause: e });
   }
+  let r;
   try {
-    const r = await resp.wait();
+    r = await resp.wait();
     results.gas[label] = r.gasUsed.toNumber();
-    return r;
   } catch (e) {
     const deepest = await traceFailure(e);
     throw Object.assign(new Error(`${label} reverted: ${deepest || decodeErr(e)}`), { cause: e, transactionHash: e?.transactionHash });
   }
+  await txContextLine(label, r, resp);
+  const fails = failuresOf(r);
+  if (fails.length) {
+    for (const f of fails) console.log(`TXCODE ${label} (tx ${r.transactionHash}): ${f.address} returned controller error ${f.errorName} (${f.error}) info ${f.infoName} (${f.info}) detail ${f.detail}`);
+    (results.data.txCodes ||= []).push({ label, hash: r.transactionHash, failures: fails });
+    if (!opts.allowFailure) throw Object.assign(new Error(`${label}: the mined transaction RETURNED error code ${fails[0].errorName} (${fails[0].error}) / ${fails[0].infoName} (${fails[0].info}) instead of reverting (Failure event from ${fails[0].address})`), { transactionHash: r.transactionHash, failures: fails });
+  }
+  return r;
 }
 
 // ---------------------------------------------------------------------------------------------------------------- chain helpers

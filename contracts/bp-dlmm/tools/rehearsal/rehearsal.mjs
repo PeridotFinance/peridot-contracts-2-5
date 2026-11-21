@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ethers, utils, BN, BigNumber, A, C, LIVE, HERE, OUTDIR, check, note, group, finish, results, provider, rpc, log, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  decodeData, runProc, progress, blockNumber, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
+  decodeData, runProc, progress, blockNumber, setTxContext, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
 } from "./lib.mjs";
 import { snapshot, diff, PATH_CONTRACTS } from "./readback.mjs";
 import { runOutage, shareExpect, fallbackLeg } from "./outage.mjs";
@@ -271,6 +271,8 @@ async function main() {
   const ledger = () => signer(LIVE.LEDGER);
   const ageOf = async (f) => (await readFeed(f)).age;
   let S0, price0 = {}, deployerAddr = A("DE17");
+  // every transaction logs a TXCTX line (see lib.mjs tx()): block timestamp, feeds' updatedAt, gas limit / used, and here the wrapper's stored-leg time
+  setTxContext(async () => (D.WRAPPER ? `wrapper lastGoodTime ${await C(D.WRAPPER, ORACLE).lastGoodTime().catch(() => "n/a")} stored ${await C(D.WRAPPER, ORACLE).lastGoodAssetsPerShare().catch(() => "n/a")}` : ""));
 
   // ============================================================================================================ B0 pre-flight and deployment
   await group("B0 pre-flight and deployment", async () => {

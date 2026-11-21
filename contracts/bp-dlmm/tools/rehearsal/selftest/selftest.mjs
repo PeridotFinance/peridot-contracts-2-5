@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ethers, utils, BN, A, C, check, note, group, finish, results, provider, rpc, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  etchFeed, setFeed, repin, warp, warpTo, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR, checkpoint, blockNumber, progress, where } from "../lib.mjs";
+  etchFeed, setFeed, repin, warp, warpTo, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR, checkpoint, blockNumber, progress, where, failuresOf } from "../lib.mjs";
 import { shareExpect, fallbackLeg, expectPoke } from "../outage.mjs";
 import { crossCheckModel } from "../phar.mjs";
 
@@ -180,6 +180,36 @@ await group("P5 transactions across evm_revert", async () => {
   const r2 = await within("a transaction with logs and a receipt", send("logs")); 
   check("P5.3", r2.status === 1 && r2.confirmations === 1 && Array.isArray(r2.logs) && r2.gasUsed.gt(0) && r2.transactionHash.length === 66 && /mined 0x/.test(where.step), `the receipt the harness builds itself has status, confirmations, logs, gasUsed, transactionHash; the current step reads "${where.step}"`);
   progress("P5 a progress line"); check("P5.4", where.step === "P5 a progress line", "progress() sets the step the heartbeat reports");
+});
+
+// ---- P6: RUN 3 ROOT CAUSE, reproduced with the REAL v3 wrapper. A transaction whose outcome depends on a nested read whose failure is TOLERATED (the wrapper prices the share 0 when the vault read fails; the controller then RETURNS
+//      PRICE_ERROR with status 1) is estimated at the lowest non-reverting gas, which starves the vault read: the simulation (eth_call, huge gas) says 0, the mined transaction returns 13. Also: a mined transaction that
+//      carries a Failure(error, info, detail) event is detected by tx() (TXCODE line, throws) instead of being silently accepted.
+await group("P6 estimateGas starvation and Failure-code detection", async () => {
+  const wa = path.join(process.env.BP_OUT || "/nonexistent", "PharaohDlmmShareOracle.sol", "PharaohDlmmShareOracle.json");
+  if (!fs.existsSync(wa)) { note("P6.0", `no wrapper artifact at ${wa}: P6 skipped`); return; }
+  const j = JSON.parse(fs.readFileSync(wa, "utf8"));
+  const asset = await deploy("FxAsset", dep), base = await deploy("FxBase", dep), vault = await deploy("FxVault", dep, [asset.address]), market = await deploy("FxMarket", dep, [vault.address]);
+  const wc = await new ethers.ContractFactory(j.abi, j.bytecode.object, signer(dep)).deploy(base.address, market.address); await wc.deployed();
+  const ctl = await deploy("FxCtl", dep, [wc.address]), sig = signer(dep);
+  await tx("expensive vault read", (o) => vault.connect(sig).setMode(1_000_000, 7, o));
+  const stat = await ctl.callStatic.setIfPriced(market.address);
+  const data = ctl.interface.encodeFunctionData("setIfPriced", [market.address]);
+  const est = BN(await rpc("eth_estimateGas", [{ from: dep, to: ctl.address, data }])), old = est.mul(150).div(100);
+  // (1) the OLD behaviour: gas = 1.5 x the estimate (what the harness did through run 3)
+  const rcOld = await (await sig.sendTransaction({ to: ctl.address, data, gasLimit: old })).wait();
+  const f0 = failuresOf(rcOld), storedOld = await ctl.stored();
+  check("P6.1", stat.eq(0) && storedOld.eq(0) && f0.length === 1 && f0[0].error === 13 && rcOld.status === 1,
+    `REPRODUCED: the simulation returns ${stat} (priced), eth_estimateGas says ${est} gas, the tx mined with 1.5 x that (${old}) has status ${rcOld.status}, emitted Failure(error ${f0[0]?.error}) and stored ${storedOld}: the vault read was starved of gas, the real v3 wrapper priced the share 0 and the controller RETURNED PRICE_ERROR (gas used ${rcOld.gasUsed})`);
+  // (2) the harness now: tx() with the new headroom
+  await tx("setIfPriced with the harness's gas", (o) => ctl.connect(sig).setIfPriced(market.address, o));
+  const storedNew = await ctl.stored();
+  check("P6.2", storedNew.gt(0) && results.gas["setIfPriced with the harness's gas"] > est.toNumber(), `with max(1.5 x estimate, estimate + 2,000,000) the same call stores the price (${storedNew}) and uses ${results.gas["setIfPriced with the harness's gas"]} gas (> the estimate ${est})`);
+  // (3) a Failure code is a FAILURE of the step
+  let msg = "", allowed = null;
+  try { await tx("starved on purpose", (o) => ctl.connect(sig).setIfPriced(market.address, { ...o, gasLimit: old })); } catch (e) { msg = e.message; }
+  try { allowed = await tx("starved, allowed", (o) => ctl.connect(sig).setIfPriced(market.address, { ...o, gasLimit: old }), { allowFailure: true }); } catch (e) { allowed = null; }
+  check("P6.3", /RETURNED error code PRICE_ERROR \(13\)/.test(msg) && !!allowed && failuresOf(allowed).length === 1 && results.data.txCodes?.length >= 2, `tx() throws on a mined Failure event ("${msg.slice(0, 120)}...") and records it in results.data.txCodes; opts.allowFailure returns the receipt`);
 });
 
 await group("P2 results writer", async () => {
