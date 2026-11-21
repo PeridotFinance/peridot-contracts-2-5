@@ -6,6 +6,7 @@ import { UNIV3_POOL_WAVAX_USDC_500, USDC, WAVAX } from "../src/constants";
 import { poolIface } from "../src/reference";
 import { wavaxReferenceFromTick } from "../src/tickmath";
 import { A } from "./fixtures";
+import { wrapperIface } from "../src/poke";
 
 const ctrl = new utils.Interface(CONTROLLER_ABI);
 const pt = new utils.Interface(PTOKEN_ABI);
@@ -57,6 +58,25 @@ export class MockChain {
   /** if set, a liquidateBorrow simulation (eth_call) returns this error code */
   simulateCode = 0n;
   vaultUnderlying = ADDR.vault;
+  /** wrapper v2 (PharaohDlmmShareOracle): the vault leg (assets per whole share, 6 decimals; 0 = the vault cannot answer), the stored fallback value and its time */
+  vaultLive = 1_020_000n;
+  lastGood = 1_020_000n;
+  lastGoodTime = 1_700_000_000 - 4_000;
+  /** the base oracle's USDC price is usable (false: the wrapper never serves a fallback) */
+  assetUsdOk = true;
+  /** when set, the wrapper's own getUnderlyingPrice for ANY market returns this (monitor tests); otherwise `prices` */
+  wrapperPrice: bigint | undefined;
+  /** the next poke transaction is mined with status 0 */
+  pokeTxReverts = false;
+  /** a poke transaction does not move the stored value (simulates a node/contract that ignored it) */
+  pokeTxNoop = false;
+  pokeGas = 70_000;
+  /** poke() simulates/executes as `false` although the vault answers (a race, or a wrapper that refuses) */
+  forcePokeFalse = false;
+  /** a call of poke() reverts (eth_call) */
+  pokeCallReverts = false;
+  /** extra pending transactions of the operator wallet (pending nonce - latest nonce) */
+  pendingExtra = 0;
   private nonce = 0;
   private receipts: Record<string, any> = {};
 
@@ -116,6 +136,19 @@ export class MockChain {
         }
         case "liquidateCalculateSeizeTokens": return enc(ctrl, fn, [0n, this.seizeTokens(BigInt(args[2].toString()), args[1])]);
         default: return fail;
+      }
+    }
+    if (T === lc(ADDR.wrapper)) {
+      const fn = fnOf(wrapperIface);
+      if (fn === "shareState") {
+        const age = Math.max(0, this.ts - this.lastGoodTime);
+        const left = age > 86_400 ? 0 : 86_400 - age;
+        return enc(wrapperIface, fn, [this.vaultLive, this.lastGood, this.lastGoodTime, this.vaultLive === 0n && age <= 86_400 && this.assetUsdOk, left]);
+      }
+      if (fn === "poke") return this.pokeCallReverts ? fail : enc(wrapperIface, fn, [this.pokeOutcome().stored]);
+      if (fn === "getUnderlyingPrice" && T !== lc(this.oracle)) {
+        const p = lc(wrapperIface.decodeFunctionData(fn, data)[0]);
+        return enc(wrapperIface, fn, [this.wrapperPrice ?? this.prices[p] ?? 0n]);
       }
     }
     if (T === lc(this.oracle) || T === lc(ADDR.guarded) || T === lc(ADDR.wrapper)) {
@@ -186,6 +219,19 @@ export class MockChain {
     return fail;
   }
 
+  /** the wrapper's poke() rules (PharaohDlmmShareOracle v2): stores the LIVE leg; refused (false) when the vault cannot answer, or when a fresh stored value would move UP inside 1 h; an upward move is capped at +2% */
+  pokeOutcome(): { stored: boolean; value: bigint } {
+    if (this.vaultLive === 0n || this.forcePokeFalse) return { stored: false, value: this.lastGood };
+    let leg = this.vaultLive;
+    const age = this.ts - this.lastGoodTime;
+    if (age <= 86_400 && leg > this.lastGood) {
+      if (age < 3_600) return { stored: false, value: this.lastGood };
+      const cap = (this.lastGood * 10_200n) / 10_000n;
+      if (leg > cap) leg = cap;
+    }
+    return { stored: true, value: leg };
+  }
+
   /** the provider surface the operator code uses */
   provider(): any {
     const self = this;
@@ -194,9 +240,9 @@ export class MockChain {
       getBlockNumber: async () => self.block,
       getNetwork: async () => ({ chainId: 43114 }),
       getBalance: async () => BigNumber.from(10n ** 18n),
-      getTransactionCount: async () => 0,
+      getTransactionCount: async (_a: string, tag?: string) => (tag === "pending" ? self.pendingExtra : 0),
       getFeeData: async () => ({ maxFeePerGas: utilsGwei(30), maxPriorityFeePerGas: utilsGwei(1), gasPrice: utilsGwei(30) }),
-      estimateGas: async () => BigNumber.from(300_000),
+      estimateGas: async (tx?: { to?: string }) => BigNumber.from(tx?.to && lc(tx.to) === lc(ADDR.wrapper) ? self.pokeGas : 300_000),
       getLogs: async () => [],
       call: async (tx: { to: string; data: string; from?: string }) => {
         if (lc(tx.to) === "0xca11bde05977b3631167028862be2a173976ca11" && tx.data.startsWith(mc.getSighash("aggregate3"))) {
@@ -226,6 +272,20 @@ export class MockChain {
         const T = lc(tx.to);
         let name = "unknown";
         const logs: any[] = [];
+        if (T === lc(ADDR.wrapper)) {
+          name = "poke";
+          if (!self.pokeTxReverts && !self.pokeTxNoop) {
+            const o = self.pokeOutcome();
+            if (o.stored) {
+              self.lastGood = o.value;
+              self.lastGoodTime = self.ts;
+            }
+          }
+          self.sent.push({ to: tx.to, data: tx.data, name });
+          self.block += 1;
+          const reverts = self.pokeTxReverts;
+          return { hash, wait: async () => { if (reverts) throw Object.assign(new Error("transaction failed"), { code: "CALL_EXCEPTION" }); return { status: 1, blockNumber: self.block, gasUsed: BigNumber.from(60_000) }; } };
+        }
         if (T === lc(USDC)) {
           const d = erc.decodeFunctionData("approve", tx.data);
           name = "approve";

@@ -11,6 +11,8 @@ import { utils } from "ethers";
 export const UNSET = "UNSET";
 export const SIGNER_TYPES = ["foundry-keystore"] as const; // the only implemented external signer (hot keeper wallets, Foundry keystore accounts)
 export const ALERT_CHANNELS = ["log", "telegram", "webhook"] as const; // "log" until the Telegram bot exists
+/** shareCollateral.poke.pokeMinAgeSeconds: above the wrapper's 1 h upward gate (so an upward move is never refused), below the 3 h "poke stalled" alert */
+export const POKE_MIN_AGE_BOUNDS: readonly [number, number] = [3_601, 10_000];
 export type SignerType = (typeof SIGNER_TYPES)[number];
 export type AlertChannel = (typeof ALERT_CHANNELS)[number];
 
@@ -111,6 +113,13 @@ export interface MonitorConfig {
       /** ceiling on the oracle value of the share pTokens this operator HOLDS (it never sells them): no new share liquidation once held value + the new seize would exceed it */
       maxHeldValueUsdc: number;
     };
+    /**
+     * The wrapper's FALLBACK KEEPER (src/poke.ts). Optional; absent = `enabled: false` = the host does not poke (it still MONITORS the fallback). Exactly ONE host
+     * sets `enabled: true` (op1): it calls the wrapper's permissionless `poke()` from the executor wallet (gas only) so that the stored fallback value stays fresh.
+     * Needs `executor.enabled` and `deployment.oracleWrapper`. Optional keys: `pokeMinAgeSeconds` (default 3700; poke only when the stored value is at least this old),
+     * `maxFeeGwei` (default executor.maxFeeGwei), `minGasWei` (default executor.minGasWei).
+     */
+    poke?: { enabled: boolean; pokeMinAgeSeconds?: number; maxFeeGwei?: number; minGasWei?: string };
   };
   keeper: {
     enabled: boolean;
@@ -335,6 +344,19 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
       int(problems, "shareCollateral.liquidation.maxHeldValueUsdc", l.maxHeldValueUsdc, 1, 1_000_000_000);
       if (typeof l.maxRepayPerCallUsdc === "number" && typeof l.dailyRepayCapUsdc === "number" && l.maxRepayPerCallUsdc > l.dailyRepayCapUsdc) problems.push({ path: "shareCollateral.liquidation.maxRepayPerCallUsdc", problem: "must not exceed dailyRepayCapUsdc" });
       if (typeof l.minRepayUsdc === "number" && typeof l.maxRepayPerCallUsdc === "number" && l.minRepayUsdc > l.maxRepayPerCallUsdc) problems.push({ path: "shareCollateral.liquidation.minRepayUsdc", problem: "must not exceed maxRepayPerCallUsdc" });
+    }
+  }
+  if (c.shareCollateral !== undefined && c.shareCollateral?.poke !== undefined) {
+    const k = c.shareCollateral.poke;
+    if (typeof k !== "object" || k === null || typeof k.enabled !== "boolean") problems.push({ path: "shareCollateral.poke.enabled", problem: "must be a boolean" });
+    else {
+      if (k.enabled) {
+        if (c.executor?.enabled !== true) problems.push({ path: "shareCollateral.poke.enabled", problem: "the poke is sent from the operator wallet: executor.enabled must be true (poke on ONE host only: op1)" });
+        if (isUnsetString(d.oracleWrapper)) problems.push({ path: "shareCollateral.poke.enabled", problem: "the poke goes to the oracle wrapper: deployment.oracleWrapper must be set" });
+      }
+      if (k.pokeMinAgeSeconds !== undefined) int(problems, "shareCollateral.poke.pokeMinAgeSeconds", k.pokeMinAgeSeconds, POKE_MIN_AGE_BOUNDS[0], POKE_MIN_AGE_BOUNDS[1]);
+      if (k.maxFeeGwei !== undefined) int(problems, "shareCollateral.poke.maxFeeGwei", k.maxFeeGwei, 1, 5000);
+      if (k.minGasWei !== undefined) bigintString(problems, "shareCollateral.poke.minGasWei", k.minGasWei, true);
     }
   }
   {

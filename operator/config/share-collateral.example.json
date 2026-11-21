@@ -1,0 +1,30 @@
+{
+  "_comment": "NOT a host config and never read by the operator. The blocks to add BY HAND to config/hosts/<role>.json once the wrapper and the bpPHAR-USDC pToken exist (the placeholders make the file invalid on purpose; do NOT run deploy/make-host-configs.py afterwards, it drops them). op1 pokes; op2 and the treasury-keeper host only monitor. Details: docs/bp-share-market-rollout.md.",
+  "op1": {
+    "deployment": { "oracleWrapper": "<WRAPPER ADDRESS>" },
+    "shareCollateral": {
+      "pToken": "<bpPHAR-USDC pToken>",
+      "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+      "liquidation": { "enabled": false, "maxRepayPerCallUsdc": 60, "dailyRepayCapUsdc": 100, "minRepayUsdc": 1, "retryCooldownSeconds": 30, "maxHeldValueUsdc": 200 },
+      "poke": { "enabled": true, "pokeMinAgeSeconds": 3700, "maxFeeGwei": 100, "minGasWei": "10000000000000000" }
+    }
+  },
+  "op2": {
+    "deployment": { "oracleWrapper": "<WRAPPER ADDRESS>" },
+    "shareCollateral": {
+      "pToken": "<bpPHAR-USDC pToken>",
+      "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+      "liquidation": { "enabled": false, "maxRepayPerCallUsdc": 60, "dailyRepayCapUsdc": 100, "minRepayUsdc": 1, "retryCooldownSeconds": 30, "maxHeldValueUsdc": 200 },
+      "poke": { "enabled": false }
+    }
+  },
+  "keeper": {
+    "deployment": { "oracleWrapper": "<WRAPPER ADDRESS>" },
+    "shareCollateral": {
+      "pToken": "<bpPHAR-USDC pToken>",
+      "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
+      "liquidation": { "enabled": false },
+      "poke": { "enabled": false }
+    }
+  }
+}

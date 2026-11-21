@@ -26,6 +26,8 @@ import { classifyMargin, evaluateMarginPositions, marginFindings, marginConfigIf
 import type { MarginEval } from "./margin";
 import { ctrlIface } from "./chain";
 import { holdsShareCollateral, shareAlertOnlyText, shareMarketIndex } from "./share";
+import { readShareWatch, shareWatchFindings } from "./poke";
+import type { PokeState } from "./poke";
 
 export interface MonitorState {
   index: IndexState;
@@ -35,6 +37,8 @@ export interface MonitorState {
   lastIndexCrossCheckAt: number;
   keeper: KeeperState;
   executor: ExecutorState;
+  /** the wrapper-fallback poke loop (only the host with shareCollateral.poke.enabled writes it); optional so that an older state file still loads */
+  poke?: PokeState;
 }
 export function emptyMonitorState(cfg: MonitorConfig): MonitorState {
   return { index: emptyIndex(cfg.deployment.deploymentBlock), health: emptyHealthState(), alerts: { active: {} }, unknownPriceSince: null, lastIndexCrossCheckAt: 0, keeper: emptyKeeperState(), executor: emptyExecutorState() };
@@ -145,6 +149,8 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
     if (warn || scan.error) findings.push({ key: "index:behind", severity: crit ? "crit" : "warn", message: `the borrower index is ${scan.behindBlocks} blocks behind the head (about ${Math.round(scan.behindBlocks * 0.94)} s): ${scan.error ?? "catching up"}. Accounts that borrowed since the cursor are not yet known to the monitor and the executor; the log endpoint (AVALANCHE_LOGS_RPC_URL, default the Avalanche public RPC) may be down or rate-limited`, audience: "monitor-operator" });
   }
   findings.push(...oracleFindings(snap, cfg));
+  // the oracle wrapper's fallback watch (every host that has the wrapper and the share block in its configuration); read-only, never fails the cycle
+  findings.push(...shareWatchFindings(await readShareWatch(ctx.provider, cfg, snap.blockNumber), now, state.poke));
   findings.push(...marginFindings(marginEvals, marginExtra));
   if (!cfg.margin?.enabled && cls.margin.size > 0) findings.push({ key: "margin:unconfigured", severity: "warn", message: `${cls.margin.size} isolated margin account(s) exist but the margin block of the configuration is not enabled: they are excluded from the lending checks and NOT monitored as margin positions`, audience: "monitor-operator" });
   const mk = marketFindings(snap, cfg, state.health, sharesSum, indexComplete0);
@@ -212,6 +218,7 @@ export async function runCycle(ctx: Ctx, state: MonitorState, alerts: AlertManag
     lastIndexCrossCheckAt: state.lastIndexCrossCheckAt,
     keeper: state.keeper,
     executor: state.executor,
+    ...(state.poke ? { poke: state.poke } : {}),
   };
   return {
     report: {

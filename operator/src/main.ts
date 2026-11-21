@@ -19,6 +19,7 @@ import { rebalancerStep, emptyRebalancerState } from "./rebalancer";
 import type { RebalancerState } from "./rebalancer";
 import { executorStep, verifyExecutorSigner } from "./executor";
 import type { ExecutorState } from "./executor";
+import { emptyPokeState, pokeSettings, pokeStep } from "./poke";
 import { KeystoreSigner } from "./signer";
 import type { ExternalSigner } from "./signer";
 import type { MonitorState } from "./monitor";
@@ -85,7 +86,7 @@ async function main(): Promise<number> {
     return EX_CONFIG;
   }
   // one start-up line with the oracle allow-list and the share block this process runs with (a host on the new build but without the wrapper in its config is visible here, BEFORE the swap)
-  console.log(JSON.stringify({ startup: { oracleAllowList: oracleAllowList(cfg.deployment), shareCollateral: cfg.shareCollateral ? { pToken: cfg.shareCollateral.pToken, underlying: cfg.shareCollateral.underlying, liquidationEnabled: cfg.shareCollateral.liquidation.enabled } : null } }));
+  console.log(JSON.stringify({ startup: { oracleAllowList: oracleAllowList(cfg.deployment), shareCollateral: cfg.shareCollateral ? { pToken: cfg.shareCollateral.pToken, underlying: cfg.shareCollateral.underlying, liquidationEnabled: cfg.shareCollateral.liquidation.enabled, pokeEnabled: !!pokeSettings(cfg) } : null } }));
   if (cmd === "validate-config") {
     console.log("configuration valid");
     return 0;
@@ -177,6 +178,16 @@ async function main(): Promise<number> {
         state = { ...state, executor: x.state, alerts: alerts.toJson() };
         saveState(cfg.monitor.statePath, state);
         if (x.round || x.skipped.length || x.halted) console.log(mask(JSON.stringify({ executor: { round: x.round, skipped: x.skipped, unfunded: x.unfunded, swapBlocked: x.swapBlocked, halted: x.halted } })));
+      }
+      // the wrapper-fallback poke: only on the host with shareCollateral.poke.enabled; after the executor (a liquidation is more urgent than an hourly poke); never throws
+      if (execSigner && pokeSettings(cfg)) {
+        const px = await pokeStep(
+          { ctx, signer: execSigner, alerts, persist: (ps) => { state = { ...state, poke: ps }; saveState(cfg.monitor.statePath, { ...state, alerts: alerts.toJson() }); } },
+          state.poke ?? emptyPokeState(),
+        );
+        state = { ...state, poke: px.state, alerts: alerts.toJson() };
+        saveState(cfg.monitor.statePath, state);
+        if (px.result !== "not-due" && px.result !== "disabled") console.log(mask(JSON.stringify({ poke: { result: px.result, note: px.note, hash: px.hash } })));
       }
       // daily full re-scan of the events from the deployment block against the incremental index. It runs AFTER the keeper and the executor (it can be
       // long on a public log endpoint and must never starve them), never throws, and always advances its clock so that a failing endpoint is retried
