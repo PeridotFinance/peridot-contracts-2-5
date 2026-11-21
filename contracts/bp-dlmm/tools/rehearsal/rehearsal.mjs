@@ -2,24 +2,29 @@
 // oracle) on the LIVE Avalanche pilot. Started by rehearsal.sh (shared fork lock, anvil at head-4, instant mining, proxy-fronted endpoint, removes its scratch on exit).
 // THE ASSISTANT HAS NOT RUN THIS (it has no endpoint): the user runs it. NOTHING IS REAL: the throwaway deployer, the Ledger (the real admin of the controller, impersonated ONLY because this
 // is a fork), the Safe and every test wallet are impersonated on the local anvil. Every transaction goes to the LOCAL endpoint REH_RPC.
-// ORDER = the order of the ceremony: B0 pre-flight + deploy (the new contracts exist, nothing is seeded or listed) -> B1 price identity with the REAL feeds (oracle swap) and margin after the swap ->
-// B2 listing + seed -> B6a rollback before use -> B8 pToken inflation (seed-only market) -> B3 supply / CF 50 % / borrow / repay -> B4 stale feeds -> B5 liquidation -> B6b rollback after use ->
-// B7 manipulation -> B9 final read-back. (B6a and B8 run right after B2 because they need the pristine, seeded, unused market; every scenario is wrapped in an evm snapshot and reverted.)
+// ORDER = the order of the ceremony: B0 pre-flight + deploy (the new contracts exist, nothing is seeded or listed; v2 wrapper facts and the REAL feed evidence are read here) -> B1 price identity with the REAL feeds
+// (oracle swap) and margin after the swap -> B2 listing + seed -> B6a rollback before use -> B8 pToken inflation (seed-only market) -> B3 supply / CF 50 % / borrow / repay -> B4 stale feeds (v2: the 24 h fallback)
+// -> B5 liquidation -> B10 stale-feed OUTAGE on the real vault (fallback, liquidation during it, expiry at exactly 24 h, poke cap, R1 rollback) -> B6b rollback after use -> B7 manipulation -> B9 final read-back
+// -> B11 PHAR distribution with the deployed market as the wrapper holder (LAST group; REH_WRAPPER=0 skips it). (B6a and B8 run right after B2 because they need the pristine, seeded, unused market; every
+// scenario is wrapped in an evm snapshot and reverted.)
 // Output: `PASS <id> <text>`, `FAIL <id> <text> :: <detail>`, `NOTE <id> <text>`; RESULTS json (REH_RESULTS); exit 0 when nothing FAILED, 1 otherwise (42 / 3 / 2 are set by rehearsal.sh).
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import {
   ethers, utils, BN, BigNumber, A, C, LIVE, HERE, OUTDIR, check, note, group, finish, results, provider, rpc, log, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  decodeData, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
+  decodeData, runProc, etchFeed, setFeed, repin, warp, warpRaw, headTs, readFeed, scenario, touched, mocks, signer, mine, setStorage, sleep,
 } from "./lib.mjs";
 import { snapshot, diff, PATH_CONTRACTS } from "./readback.mjs";
+import { runOutage, shareExpect, fallbackLeg } from "./outage.mjs";
+import { runPhar, crossCheckModel } from "./phar.mjs";
 
 const DRY = process.argv.includes("--dry");
-const BP_OUT = process.env.BP_OUT || "/Users/joshua/Peridot/.wt-bp-core/contracts/out";
+const BP_OUT = process.env.BP_OUT || path.join(HERE, "..", "..", "..", "out_bpdlmm"); // THIS tree's ceremony build (rehearsal.sh always passes it)
+const WRAPPER_ON = process.env.REH_WRAPPER !== "0";   // the PHAR step (B11) is ON unless REH_WRAPPER=0
 const E18 = BN(10).pow(18), ZERO = ethers.constants.AddressZero;
 const usd6 = (x) => (Number(BN(x)) / 1e6).toFixed(6);
 const sh = (x) => BN(x).toString();
+const lc = (a) => String(a).toLowerCase();
 
 // ---------------------------------------------------------------------------------------------------------------- knobs (all overridable from the environment)
 const KNOB = {
@@ -61,7 +66,19 @@ const PT = [
   "error PharaohBoosted__SeedPending()", "error PharaohBoosted__InvalidConfiguration()", "error PharaohBoosted__InvalidVault()", "error PharaohBoosted__InsufficientVaultSeed()",
 ];
 const ORACLE = ["function getUnderlyingPrice(address) view returns (uint256)", "function getPrice(address) view returns (uint256)", "function marketAsset(address) view returns (address)", "function baseOracle() view returns (address)",
-  "function market() view returns (address)", "function vault() view returns (address)", "function vaultAsset() view returns (address)", "function getShareUsdPrice() view returns (uint256)", "function source() view returns (address)"];
+  "function market() view returns (address)", "function vault() view returns (address)", "function vaultAsset() view returns (address)", "function getShareUsdPrice() view returns (uint256)", "function source() view returns (address)",
+  // v2 wrapper (outputs unnamed on purpose: read by index, ethers v5 struct names collide with Array methods, e.g. `at`)
+  "function shareState() view returns (uint256,uint256,uint64,bool,uint256)", "function poke() returns (bool)", "function lastGoodAssetsPerShare() view returns (uint128)", "function lastGoodTime() view returns (uint64)",
+  "function FALLBACK_HAIRCUT_BPS() view returns (uint256)", "function FALLBACK_WINDOW() view returns (uint256)", "function POKE_MAX_UP_BPS() view returns (uint256)", "function POKE_UP_INTERVAL() view returns (uint256)",
+  "function shareDecimals() view returns (uint8)", "function assetDecimals() view returns (uint8)", "event FallbackPriceStored(uint256 assetsPerShare, uint256 at)"];
+const FEEDX = ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)", "function decimals() view returns (uint8)", "function description() view returns (string)", "function aggregator() view returns (address)"];
+const SRCX = ["function feeds(address) view returns (address,uint32,uint8,bool)", "function marketAsset(address) view returns (address)", "function assetDecimals(address) view returns (uint8)"];
+/** smallest block in [lo, hi] at which `addr` has code (null when it has none at hi): where a contract was created, by bisection on eth_getCode of the local chain */
+async function firstBlockWithCode(addr, lo, hi) {
+  if (hi < lo || (await provider.getCode(addr, hi)) === "0x") return null;
+  while (lo < hi) { const mid = Math.floor((lo + hi) / 2); if ((await provider.getCode(addr, mid)) === "0x") lo = mid + 1; else hi = mid; }
+  return lo;
+}
 const VAULT = [
   "function owner() view returns (address)", "function paused() view returns (bool)", "function asset() view returns (address)", "function decimals() view returns (uint8)", "function totalSupply() view returns (uint256)", "function totalAssets() view returns (uint256)",
   "function balanceOf(address) view returns (uint256)", "function convertToAssets(uint256) view returns (uint256)", "function convertToShares(uint256) view returns (uint256)", "function maxDeposit(address) view returns (uint256)", "function depositCap() view returns (uint256)",
@@ -169,14 +186,13 @@ async function runStep(s) {
 const step = (key) => ({ ...CER[key], id: CER[key].id || key });
 // A's ceremony tool (when present): run THROUGH it against the local fork (endpoint = the local anvil only)
 let TOOL_ON = false, ADDR_FILE = "";
-function toolRun(args, extra = {}) {
-  const r = spawnSync("bash", [KNOB.tool, ...args], { encoding: "utf8", timeout: 40 * 60 * 1000, maxBuffer: 64 * 1024 * 1024,
+async function toolRun(args, extra = {}) {   // ASYNC, stdin closed, own timeout, tracked: the heartbeat / watchdog stay alive while the tool runs (run 1 went silent here)
+  const r = await runProc("bash", [KNOB.tool, ...args], { timeoutMs: (Number(process.env.REH_TOOL_TIMEOUT_MS) || 25 * 60 * 1000), label: `ceremony tool ${args.join(" ")}`,
     env: { PATH: process.env.PATH, HOME: process.env.HOME, ETH_RPC_URL: process.env.REH_RPC, BP_ADDRESSES_FILE: ADDR_FILE, FOUNDRY_DISABLE_NIGHTLY_WARNING: "1", ...extra } });
-  const out = `${r.stdout || ""}${r.stderr || ""}`.replace(/https?:\/\/[^\s"]+/g, "<url-redacted>");
-  fs.writeFileSync(path.join(OUTDIR, `tool-${args.join("-")}.log`), out);
-  return { code: r.status, out };
+  fs.writeFileSync(path.join(OUTDIR, `tool-${args.join("-")}.log`), r.out);
+  return { code: r.code, out: r.out };
 }
-const toolCheck = (id, label, args, okText, extra = {}) => { if (!TOOL_ON) return; const r = toolRun(args, extra); check(id, r.code === 0 && okText.test(r.out), label, r.out.split("\n").slice(-6).join(" | ")); };
+const toolCheck = async (id, label, args, okText, extra = {}) => { if (!TOOL_ON) return; const r = await toolRun(args, extra); check(id, r.code === 0 && okText.test(r.out), label, r.out.split("\n").slice(-6).join(" | ")); };
 
 // ---------------------------------------------------------------------------------------------------------------- DRY mode: everything that can be checked without a chain
 if (DRY) {
@@ -184,9 +200,19 @@ if (DRY) {
   const ok = (m) => out.push(`DRY ok   ${m}`); const bad = (m) => { out.push(`DRY FAIL ${m}`); process.exitCode = 1; };
   try {
     for (const [k, v] of Object.entries(LIVE)) utils.getAddress(v); ok(`${Object.keys(LIVE).length} live addresses parse and checksum`);
-    for (const [n, abi] of Object.entries({ CTL, PT, ORACLE, VAULT, PAIR, DLMM_ROUTER, EXEC, REG, RISK, QUOTER, POOL, CLROUTER, ERC20 })) { const i = new utils.Interface(abi); ok(`Interface ${n}: ${Object.keys(i.functions).length} functions, ${Object.keys(i.errors).length} errors`); }
+    for (const [n, abi] of Object.entries({ CTL, PT, ORACLE, FEEDX, SRCX, VAULT, PAIR, DLMM_ROUTER, EXEC, REG, RISK, QUOTER, POOL, CLROUTER, ERC20 })) { const i = new utils.Interface(abi); ok(`Interface ${n}: ${Object.keys(i.functions).length} functions, ${Object.keys(i.errors).length} errors`); }
     const w = artifact(KNOB.wrapperName), d = artifact(KNOB.delegateName), g = artifact("PErc20Delegator");
     ok(`artifacts in ${BP_OUT}: ${KNOB.wrapperName} (${w.abi.filter((x) => x.type === "function").length} fns), ${KNOB.delegateName}, PErc20Delegator`);
+    { // the artifact must be the v2 wrapper (run 1 used v1): ABI, runtime size, and the arithmetic helpers of the outage group
+      const names = new Set(w.abi.filter((x) => x.type === "function").map((x) => x.name)), need = ["shareState", "poke", "lastGoodAssetsPerShare", "lastGoodTime", "FALLBACK_HAIRCUT_BPS", "FALLBACK_WINDOW", "POKE_MAX_UP_BPS", "POKE_UP_INTERVAL"];
+      const miss = need.filter((n) => !names.has(n)); if (miss.length) bad(`the wrapper artifact is not v2: missing ${miss.join(", ")}`); else ok(`wrapper artifact is v2: ${need.join(", ")} in the ABI`);
+      const size = (w.deployed.length - 2) / 2, want = Number(process.env.BP_WRAPPER_RUNTIME || 3472);
+      if (size !== want) bad(`wrapper runtime size ${size} bytes in ${BP_OUT}, expected ${want} (BP_WRAPPER_RUNTIME): another build / profile`); else ok(`wrapper runtime size ${size} bytes (v2: ${want}), under 24,576`);
+      const iface = new utils.Interface(ORACLE); const probe = ["shareState", "poke", "lastGoodAssetsPerShare", "lastGoodTime"].every((n) => iface.getFunction(n).format() && w.abi.some((x) => x.name === n && x.inputs.length === iface.getFunction(n).inputs.length && x.outputs.length === iface.getFunction(n).outputs.length));
+      if (!probe) bad("the harness ABI of the wrapper (shareState/poke/lastGood*) does not match the artifact's input/output counts"); else ok("harness ABI of shareState/poke/lastGoodAssetsPerShare/lastGoodTime matches the artifact's arity");
+      const ss = w.abi.find((x) => x.name === "shareState"); if (ss && ss.outputs.map((o) => o.type).join(",") === "uint256,uint256,uint64,bool,uint256") ok("shareState() output types uint256,uint256,uint64,bool,uint256 (read by index)"); else bad("shareState() output types differ from the harness ABI");
+      if (shareExpect(1_000_000, E18).eq(BN(10).pow(30)) && fallbackLeg(1_000_000).eq(970_000) && fallbackLeg(3).eq(2)) ok("outage helpers: share price of 1 share at $1 = 1e30, fallback leg = floor(stored x 0.97)"); else bad("outage helper arithmetic");
+    }
     const P = A("BB01");
     const dict = { baseOracle: LIVE.GUARDED_ORACLE, base: LIVE.GUARDED_ORACLE, market: P, pToken: P, owner: LIVE.LEDGER, vault: LIVE.VAULT, source: LIVE.SOURCE_ORACLE };
     const wa = ctorArgs(w.abi, dict, KNOB.wrapperName); ok(`wrapper constructor arguments resolved: ${w.abi.find((x) => x.type === "constructor").inputs.map((x) => x.name).join(", ")}`);
@@ -200,17 +226,32 @@ if (DRY) {
     if (KNOB.tool && fs.existsSync(KNOB.tool)) { // A's tool prints calldata without any network: compare it with the harness's own encoding, with placeholder addresses
       const af = path.join(process.env.TMPDIR || "/tmp", `bp-dry-addresses-${process.pid}.env`);
       fs.writeFileSync(af, `export BP_DELEGATE=${A("DE1E")}\nexport BP_MARKET=${D.PBP}\nexport BP_ORACLE=${D.WRAPPER}\n`); ADDR_FILE = af;
-      const r = toolRun(["print-ledger-calls", "rehearsal"]); fs.rmSync(af, { force: true });
+      const r = await toolRun(["print-ledger-calls", "rehearsal"]); fs.rmSync(af, { force: true });
       const pl2 = Object.values(parseLedgerCalls(r.out)), diffs = [], used = new Set();
       for (const [key, c] of Object.entries(CER)) { const t = pl2.find((x) => x.data && x.data.toLowerCase() === c.data.toLowerCase() && x.to.toLowerCase() === c.to.toLowerCase()); if (!t) diffs.push(`${key}: not printed by the tool`); else used.add(t.id); }
       for (const t of pl2) if (!used.has(t.id)) diffs.push(`${t.id} (${t.label}): printed by the tool but unknown to the harness`);
       if (diffs.length) bad(`tool print-ledger-calls differs from the harness encoding: ${diffs.join("; ")}`); else ok(`A's tool print-ledger-calls: calldata AND target of all ${Object.keys(CER).length} Ledger transactions (${pl2.map((x) => x.id).join(" ")}) match the harness's independent encoding one-to-one (offline, placeholder addresses)`);
     } else ok("A's ceremony tool not found: calldata cross-check skipped (BP_TOOL)");
-    const src = fs.readFileSync(new URL(import.meta.url), "utf8");
-    const ids = [...new Set([...src.matchAll(/\b(?:check|note)\(\s*[`"'](B[0-9a-z.]+)[`"']/g)].map((m) => m[1]))].sort();
+    const srcFiles = ["rehearsal.mjs", "outage.mjs", "phar.mjs"], idsBy = {}, ids = [];
+    for (const f of srcFiles) { const src = fs.readFileSync(path.join(HERE, f), "utf8"); idsBy[f] = [...new Set([...src.matchAll(/\b(?:check|note)\(\s*[`"'](B[0-9a-z.]+)[`"']/g)].map((m) => m[1]))].sort(); ids.push(...idsBy[f]); }
+    const dup = ids.filter((x, i) => ids.indexOf(x) !== i); if (dup.length) bad(`check ids used twice: ${[...new Set(dup)].join(" ")}`);
     const readme = fs.readFileSync(path.join(HERE, "README.md"), "utf8");
-    const missing = ids.filter((i) => !readme.includes(`\`${i}\``));
-    ok(`${ids.length} check ids in rehearsal.mjs`); if (missing.length) bad(`README.md does not list: ${missing.join(" ")}`); else ok("README.md lists every check id");
+    const missing = [...new Set(ids)].filter((i) => !readme.includes(`\`${i}\``));
+    ok(`${new Set(ids).size} check ids (${srcFiles.map((f) => `${f}: ${idsBy[f].length}`).join(", ")})`); if (missing.length) bad(`README.md does not list: ${missing.join(" ")}`); else ok("README.md lists every check id");
+    if (WRAPPER_ON) { // the PHAR step: its inputs and an offline cross-check of the expected-split model against the generator's own exported function
+      const proj = process.env.REH_REWARDS_PROJ || "";
+      const gfile = path.join(proj, "tools", "dlmm-rewards-root.mjs");
+      if (!proj || !fs.existsSync(gfile)) bad(`REH_WRAPPER is on but the generator is not at ${gfile}`);
+      else {
+        process.env.ETHERS_DIR = path.join(process.env.REH_ETHERS_DIR, "node_modules", "ethers");
+        const R = await import(gfile);
+        const cc = crossCheckModel(R); if (cc.ok) ok(`PHAR: the harness's expected-split model equals the generator's wrapperSplit on ${cc.cases} random histories (offline)`); else bad(`PHAR: model != generator: ${cc.detail}`);
+        const wf = R.parseWrappersFile({ schema: R.WRAPPERS_SCHEMA, wrappers: [{ pToken: A("BB01"), underlying: LIVE.VAULT, fromBlock: 100500000, label: "bpPHAR-USDC (deployed by this run)" }] }, { vault: LIVE.VAULT });
+        if (wf.length === 1 && wf[0].fromBlock === 100500000) ok("PHAR: a wrappers.json for the deployed market parses with the generator's own parser"); else bad("PHAR: wrappers.json sample");
+        for (const t of [["dlmm-rewards-ceremony.sh"], ["dlmm-rewards-safe-call.sh"]]) if (!fs.existsSync(path.join(proj, "tools", t[0]))) bad(`missing ${t[0]}`);
+        if (/^\d+$/.test(process.env.REH_SCAN_FROM || "")) ok(`PHAR: REH_SCAN_FROM=${process.env.REH_SCAN_FROM}`); else out.push("DRY WARN PHAR: REH_SCAN_FROM is not set (the real run refuses to start without it)");
+      }
+    } else ok("PHAR step skipped (REH_WRAPPER=0): B11 is not run");
   } catch (e) { bad(String(e?.message || e)); }
   console.log(out.join("\n")); process.exit(process.exitCode || 0);
 }
@@ -250,12 +291,36 @@ async function main() {
     note("B0.n2", `vault: totalAssets ${usd6(tA)} USDC, depositCap ${usd6(await vault.depositCap())}, paused ${await vault.paused()}, guard unsafe=${gs[0]} latched=${gs[1]} reasons=${gs[2]}, maxDeposit ${usd6(await vault.maxDeposit(LIVE.LEDGER))}, maxFeedAge ${gp.maxFeedAge}s, legBand ${gp.legBandBps}bp, poolDev ${gp.maxPoolOracleDevBps}bp`);
     const ages = { AVAX: await ageOf(LIVE.AVAX_FEED), USDC: await ageOf(LIVE.USDC_FEED), USDT: await ageOf(LIVE.USDT_FEED) };
     check("B0.9", ages.AVAX < 600 && ages.USDC < 90_000 - 3600 && ages.USDT < gp.maxFeedAge - 3600, `real feeds are fresh with margin at the pin (age s: AVAX ${ages.AVAX} (maxAge 1200), USDC ${ages.USDC} (maxAge 90000), USDT ${ages.USDT} (vault maxFeedAge ${gp.maxFeedAge})); a stale feed would make B1 compare 0 with 0 - re-run if this fails`);
+    // ---- B0.f: the REAL feeds behind the vault and behind the base oracle, read and PRINTED (evidence; the mocks of B1.n2 do not exist yet). Decides whether re-pinning the USDC feed fresh also refreshes the vault's asset leg.
+    {
+      const facts = async (addr) => {
+        const f = C(addr, FEEDX), r = await f.latestRoundData(), ts = await headTs();
+        return { addr, roundId: r[0].toString(), answer: r[1].toString(), updatedAt: r[3].toNumber(), answeredInRound: r[4].toString(), age: ts - r[3].toNumber(), decimals: await f.decimals(), description: await f.description().catch(() => "n/a"), aggregator: await f.aggregator().catch(() => "n/a") };
+      };
+      const src = C(LIVE.SOURCE_ORACLE, SRCX);
+      const keyU = await guarded.marketAsset(LIVE.PUSDC), keyW = await guarded.marketAsset(LIVE.PWAVAX);
+      const bU = await src.feeds(keyU), bW = await src.feeds(keyW);           // (feed, maxAge, feedDecimals, enabled), read by index
+      const vFA = await vault.feedAsset(), vFP = await vault.feedPair();
+      const fVA = await facts(vFA), fVP = await facts(vFP), fBU = await facts(bU[0]), fBW = await facts(bW[0]);
+      const line = (n, f, extra = "") => `${n}: ${f.addr} | ${f.description} | answer ${f.answer} (${f.decimals} dec) | updatedAt ${f.updatedAt} (age ${f.age} s) | round ${f.roundId}/${f.answeredInRound} | aggregator ${f.aggregator}${extra}`;
+      results.data.feedEvidence = { vaultFeedAsset: fVA, vaultFeedPair: fVP, baseUsdc: { ...fBU, maxAge: bU[1], enabled: bU[3], asset: keyU }, baseAvax: { ...fBW, maxAge: bW[1], enabled: bW[3], asset: keyW }, vaultMaxFeedAge: gp.maxFeedAge, vaultGuard: { legBandBps: gp.legBandBps, maxPoolOracleDevBps: gp.maxPoolOracleDevBps } };
+      check("B0.f1", lc(keyU) === lc(LIVE.USDC) && lc(keyW) === lc(LIVE.WAVAX) && bU[3] === true && bW[3] === true && [fVA, fVP, fBU, fBW].every((f) => BN(f.answer).gt(0) && f.updatedAt > 0 && f.age >= 0),
+        `evidence readable: the base oracle's feeds for USDC and WAVAX are enabled, and the vault's feedAsset / feedPair and both base feeds all answer (answer > 0, updatedAt > 0)`);
+      note("B0.f2", `VAULT ${line("feedAsset", fVA)}`); note("B0.f3", `VAULT ${line("feedPair", fVP)} | maxFeedAge ${gp.maxFeedAge} s (a feed older than that makes totalAssets/convertToAssets revert FeedInvalid)`);
+      note("B0.f4", `BASE ORACLE USDC (key ${keyU}) ${line("feed", fBU)} | maxAge ${bU[1]} s | feed decimals ${bU[2]} | enabled ${bU[3]}`); note("B0.f5", `BASE ORACLE WAVAX (key ${keyW}) ${line("feed", fBW)} | maxAge ${bW[1]} s | feed decimals ${bW[2]} | enabled ${bW[3]}`);
+      const sameFeed = lc(vFA) === lc(bU[0]), sameAgg = sameFeed || (fVA.aggregator !== "n/a" && lc(fVA.aggregator) === lc(fBU.aggregator)), sameRound = fVA.roundId === fBU.roundId && fVA.answer === fBU.answer && fVA.updatedAt === fBU.updatedAt;
+      check("B0.f6", sameFeed && lc(bW[0]) === lc(LIVE.AVAX_FEED) && lc(bU[0]) === lc(LIVE.USDC_FEED) && lc(vFP) === lc(LIVE.USDT_FEED),
+        `THE HARNESS'S MOCK MODEL HOLDS: the vault's USDC feed (${vFA}) is the SAME contract as the base oracle's USDC feed (${bU[0]}), so ONE re-pinned mock at that address refreshes both the vault's asset leg and pUSDC / the wrapper's USDC price; the AVAX feed and the USDT feed are the pinned ones. If this fails the outage and stale-feed groups would test the wrong thing`,
+        `vault feedAsset ${vFA} vs base USDC feed ${bU[0]} (same aggregator contract: ${sameAgg}, same round: ${sameRound})`);
+      note("B0.f7", `VERDICT: the vault's USDC/USD feed ${sameFeed ? "IS the same contract" : sameAgg ? "is a different proxy on the same aggregator" : "is NOT the same contract / aggregator"} as the base oracle's USDC/USD feed (latest round identical: ${sameRound}). ${sameFeed ? "Re-pinning USDC fresh therefore refreshes the vault's asset leg AND the base oracle's USDC price (pUSDC, the wrapper's USDC factor) together. The base oracle's maxAge (" + bU[1] + " s) is shorter than the vault's maxFeedAge (" + gp.maxFeedAge + " s): a stale USDC feed makes pUSDC and the wrapper price 0 first, the vault's asset leg is never the first to fail.": "Re-pinning must refresh BOTH feeds separately."} Ages now: vault asset ${fVA.age} s, vault pair ${fVP.age} s, base USDC ${fBU.age} s, base AVAX ${fBW.age} s.`);
+    }
     check("B0.10", (await risk.oracle()) === LIVE.GUARDED_ORACLE && (await quoter.oracle()) === LIVE.GUARDED_ORACLE, "the margin stack holds ITS OWN oracle pointer = the guarded oracle (risk engine and quoter); it does not read controller.oracle()");
     const next = (await exec.nextPositionId()).toNumber(), nextO = (await reg.nextOrderId()).toNumber();
     check("B0.11", next >= 3 && nextO >= 5, `live margin positions opened ${next - 1}, orders ${nextO - 1}`);
 
     // deploy the NEW contracts (the starting state of the ceremony: deployed, NOT seeded, NOT listed)
     await impersonate(deployerAddr);
+    const hBefore = await provider.getBlockNumber();
     const pinFile = KNOB.tool ? path.join(path.dirname(KNOB.tool), "..", "ceremony", "bp-dlmm-pin.json") : "";
     TOOL_ON = KNOB.useTool !== "0" && !!KNOB.tool && fs.existsSync(KNOB.tool) && fs.existsSync(pinFile);
     results.data.mode = TOOL_ON ? "TOOL (A's ceremony tool: real deploy script, verify-*, printed calldata)" : "BUILT-IN (harness deployment and encodings, NOT A's deploy script)";
@@ -264,17 +329,17 @@ async function main() {
     ADDR_FILE = KNOB.addressesFile || path.join(OUTDIR, "bp-addresses.env");
     if (TOOL_ON) {
       note("B0.t0", `MODE TOOL: ceremony tool in use: ${KNOB.tool} (pin file ${pinFile}); deploy, verify-deployed, verify-listing and print-ledger-calls run through it`);
-      toolCheck("B0.t1", "tool: `check rehearsal` (live facts: controller admin = Ledger, oracle = the guarded oracle, vault owner/ProxyAdmin = the Safe, feeds fresh, Ledger holds the seed) passes on the fork", ["check", "rehearsal"], /check: OK/);
+      await toolCheck("B0.t1", "tool: `check rehearsal` (live facts: controller admin = Ledger, oracle = the guarded oracle, vault owner/ProxyAdmin = the Safe, feeds fresh, Ledger holds the seed) passes on the fork", ["check", "rehearsal"], /check: OK/);
       fs.rmSync(ADDR_FILE, { force: true });
-      const r = toolRun(["deploy", "rehearsal"], { BP_DEPLOYER: deployerAddr });
+      const r = await toolRun(["deploy", "rehearsal"], { BP_DEPLOYER: deployerAddr });
       check("B0.12", r.code === 0 && /verify-deployed: OK/.test(r.out), `the REAL deploy script ran on the fork through the tool by the throwaway deployer (exit ${r.code}) and its verify-deployed (code == the pinned build, wrapper == guarded oracle for every market) passed; log tool-deploy-rehearsal.log`, r.out.split("\n").slice(-8).join(" | "));
       const e = Object.fromEntries(fs.readFileSync(ADDR_FILE, "utf8").split("\n").filter((l) => l.startsWith("export ")).map((l) => l.slice(7).split("=")));
       D = { PBP: utils.getAddress(e.BP_MARKET), WRAPPER: utils.getAddress(e.BP_ORACLE), DELEGATE: utils.getAddress(e.BP_DELEGATE) };
     } else if (KNOB.deployCmd) {
-      const r = spawnSync("bash", ["-c", KNOB.deployCmd], { cwd: process.env.BP_DEPLOY_CWD || process.cwd(), encoding: "utf8", timeout: 20 * 60 * 1000, maxBuffer: 64 * 1024 * 1024,
+      const r = await runProc("bash", ["-c", KNOB.deployCmd], { cwd: process.env.BP_DEPLOY_CWD || process.cwd(), timeoutMs: 20 * 60 * 1000, label: "BP_DEPLOY_CMD",
         env: { PATH: process.env.PATH, HOME: process.env.HOME, RPC_LOCAL: process.env.REH_RPC, ETH_RPC_URL: process.env.REH_RPC, AVALANCHE_MAINNET_RPC_URL: process.env.REH_RPC, BP_DEPLOYER: deployerAddr, BP_ADDRESSES_FILE: ADDR_FILE } });
-      fs.writeFileSync(path.join(OUTDIR, "deploy-cmd.log"), `${r.stdout || ""}${r.stderr || ""}`.replace(/https?:\/\/[^\s"]+/g, "<url-redacted>"));
-      check("B0.12", r.status === 0, `the deploy command ran on the fork (exit ${r.status}); log in deploy-cmd.log`, `${r.stderr || ""}`.slice(-300));
+      fs.writeFileSync(path.join(OUTDIR, "deploy-cmd.log"), r.out);
+      check("B0.12", r.code === 0, `the deploy command ran on the fork (exit ${r.code}); log in deploy-cmd.log`, r.out.slice(-300));
       const e = Object.fromEntries(fs.readFileSync(ADDR_FILE, "utf8").split("\n").filter((l) => l.startsWith("export ")).map((l) => l.slice(7).split("=")));
       D = { PBP: utils.getAddress(e.BP_MARKET || e.BP_PTOKEN), WRAPPER: utils.getAddress(e.BP_ORACLE || e.BP_WRAPPER), DELEGATE: e.BP_DELEGATE ? utils.getAddress(e.BP_DELEGATE) : ZERO };
     } else {
@@ -287,9 +352,11 @@ async function main() {
       D.WRAPPER = await deployFromArtifact(KNOB.wrapperName, { baseOracle: LIVE.GUARDED_ORACLE, base: LIVE.GUARDED_ORACLE, market: D.PBP, pToken: D.PBP, owner: LIVE.LEDGER, vault: LIVE.VAULT, source: LIVE.SOURCE_ORACLE }, deployerAddr);
       check("B0.12b", true, `built-in deployment by the throwaway deployer from the forge artifacts of ${BP_OUT} (NOT the real deploy script - use the ceremony tool for the real rehearsal): delegate ${D.DELEGATE}, market ${D.PBP}, wrapper ${D.WRAPPER}`);
     }
+    const hAfter = await provider.getBlockNumber();
+    D.blocks = { market: await firstBlockWithCode(D.PBP, hBefore + 1, hAfter), wrapper: await firstBlockWithCode(D.WRAPPER, hBefore + 1, hAfter), head: hAfter };   // where the contracts were created, found by bisection on eth_getCode of the local chain
     CER = ownCalls();
     if (TOOL_ON) {
-      const pl = Object.values(parseLedgerCalls(toolRun(["print-ledger-calls", "rehearsal"]).out)), probs = [], used = new Set();
+      const pl = Object.values(parseLedgerCalls((await toolRun(["print-ledger-calls", "rehearsal"])).out)), probs = [], used = new Set();
       for (const [key, c] of Object.entries(CER)) {
         const t = pl.find((x) => x.data && x.data.toLowerCase() === c.data.toLowerCase() && x.to.toLowerCase() === c.to.toLowerCase());
         if (!t) { probs.push(`${key}: the tool prints no transaction with the harness's calldata/target`); continue; }
@@ -298,7 +365,7 @@ async function main() {
       for (const t of pl) if (!used.has(t.id)) probs.push(`${t.id} (${t.label}): printed by the tool but unknown to the harness`);
       check("B0.t5", probs.length === 0, `every Ledger transaction printed by the tool's print-ledger-calls (${pl.map((x) => x.id).join(" ")}) has byte-identical calldata AND target to the harness's own independent encoding, and the harness knows no transaction the tool does not print (the harness sends the order the tool prints: ${["oracleSwap", ...orderOf(2), ...orderOf(3), ...orderOf(4)].map((k) => CER[k].id).join(" ")})`, probs.join("; "));
     }
-    check("B0.12a", true, `new contracts: market ${D.PBP}, wrapper ${D.WRAPPER}, delegate ${D.DELEGATE}`);
+    check("B0.12a", !!D.blocks.market && !!D.blocks.wrapper, `new contracts: market ${D.PBP} (created in block ${D.blocks.market}), wrapper ${D.WRAPPER} (block ${D.blocks.wrapper}), delegate ${D.DELEGATE}`, `no code found between blocks ${hBefore + 1} and ${hAfter}`);
     addErrorAbi(artifact(KNOB.wrapperName).abi);
     results.data.deployed = D;
     // the deployed, unlisted, unseeded starting state
@@ -313,6 +380,31 @@ async function main() {
       `wrapper: base oracle = the live guarded oracle, market = the new pToken, vault = the DLMM vault, asset = USDC`);
     const wp = await w.getUnderlyingPrice(D.PBP);
     check("B0.17", wp.gt(0), `the wrapper already prices the (unlisted) share market: ${wp} (USD per raw share x 1e36 / 1e18... = ${Number(wp) / 1e30} USD per whole share)`);
+    // ---- B0.v: the v2 wrapper's facts straight after the deployment (nothing else has touched the vault: the stored leg must be the live one)
+    {
+      const wv = await codeOrRevert(async () => { await w.shareState(); return 0; });
+      check("B0.v0", wv.code === 0, "the deployed wrapper answers shareState(): it is the v2 wrapper (run 1 used v1, which has no such function): if this fails re-pin and rebuild in THIS tree", JSON.stringify(wv));
+      if (wv.code === 0) {
+        const stored = await w.lastGoodAssetsPerShare(), storedAt = (await w.lastGoodTime()).toNumber(), headNow = await headTs();
+        const logs = await provider.getLogs({ address: D.WRAPPER, topics: [w.interface.getEventTopic("FallbackPriceStored")], fromBlock: D.blocks.wrapper, toBlock: D.blocks.head });
+        const ev = logs.length === 1 ? w.interface.parseLog(logs[0]).args : null;                     // by index: `at` collides with Array.prototype.at in ethers v5
+        const legAtDeploy = await vault.convertToAssets(1_000_000, { blockTag: D.blocks.wrapper }), blkTs = (await provider.getBlock(D.blocks.wrapper)).timestamp;
+        check("B0.v1", !!ev && BN(ev[0]).eq(stored) && stored.eq(legAtDeploy) && stored.eq(await sharePps()) && BN(ev[1]).eq(storedAt) && storedAt === blkTs && stored.gt(0),
+          `the constructor stored the LIVE vault leg: lastGoodAssetsPerShare ${stored} = convertToAssets(1e6) at the deployment block ${D.blocks.wrapper} (${legAtDeploy}) = now (${await sharePps()}); lastGoodTime ${storedAt} = that block's timestamp; exactly one FallbackPriceStored(${ev ? ev[0] : "?"}, ${ev ? ev[1] : "?"})`);
+        const ss = await w.shareState(), px = await w.getUnderlyingPrice(D.PBP);
+        check("B0.v2", ss[0].eq(stored) && ss[1].eq(stored) && ss[2].eq(storedAt) && ss[3] === false && ss[4].eq(86400 - (headNow - storedAt)) && (await w.getShareUsdPrice()).eq(px.div(BN(10).pow(12))) && px.eq(shareExpect(stored, await guarded.getPrice(LIVE.USDC))),
+          `shareState() is consistent: live ${ss[0]} = stored ${ss[1]} (at ${ss[2]}), usingFallback ${ss[3]}, ${ss[4]} s of window left = 86,400 - age ${headNow - storedAt}; getShareUsdPrice = price / 1e12; price = stored x the base oracle's USDC price (recomputed)`);
+        const cst = { h: await w.FALLBACK_HAIRCUT_BPS(), w: await w.FALLBACK_WINDOW(), u: await w.POKE_MAX_UP_BPS(), i: await w.POKE_UP_INTERVAL() };
+        check("B0.v3", cst.h.eq(300) && cst.w.eq(86400) && cst.u.eq(200) && cst.i.eq(3600) && (await w.shareDecimals()) === 6 && (await w.assetDecimals()) === 6,
+          `constants: FALLBACK_HAIRCUT_BPS ${cst.h} (3 %), FALLBACK_WINDOW ${cst.w} s (24 h), POKE_MAX_UP_BPS ${cst.u} (2 %), POKE_UP_INTERVAL ${cst.i} s (1 h); share and asset decimals 6`);
+      }
+      const size = async (a) => ((await provider.getCode(a)).length - 2) / 2, onchain = { wrapper: await size(D.WRAPPER), delegator: await size(D.PBP), delegate: await size(D.DELEGATE) };
+      let pinSizes = null; try { if (TOOL_ON) pinSizes = JSON.parse(fs.readFileSync(pinFile, "utf8")).sizes; } catch { /* no pin */ }
+      const wantRuntime = Number(process.env.BP_WRAPPER_RUNTIME || 3472), LIMIT = 24576;
+      const all = { ...onchain, accountingModule: pinSizes?.accountingModule };
+      check("B0.v4", Object.values(onchain).every((n) => n > 0 && n < LIMIT) && (all.accountingModule === undefined || all.accountingModule < LIMIT) && (!TOOL_ON || (onchain.wrapper === wantRuntime && pinSizes && onchain.wrapper === pinSizes.oracle && onchain.delegator === pinSizes.delegator && onchain.delegate === pinSizes.delegate)),
+        `runtime sizes (EIP-170 limit ${LIMIT}): wrapper ${onchain.wrapper} bytes (v2 = ${wantRuntime}), market (delegator) ${onchain.delegator}, delegate ${onchain.delegate}, accounting module ${all.accountingModule ?? "n/a (no pin: built-in mode)"}; on chain == the pin ${pinSizes ? "yes" : "n/a"}`);
+    }
     // the data B1 compares against (taken now, before any ceremony transaction)
     S0 = await snapshot({ extraMarkets: [] });
     fs.writeFileSync(path.join(OUTDIR, "snapshot-before.json"), JSON.stringify(S0));
@@ -353,7 +445,7 @@ async function main() {
     // 2. the Ledger transactions of the ceremony up to and including the oracle swap
     await runStep(step("oracleSwap"));
     check("B1.2", (await ctl.oracle()) === D.WRAPPER, `controller.oracle() is now the wrapper ${D.WRAPPER} (the oracle-swap transaction only)`);
-    toolCheck("B1.t1", "tool: `verify-listing rehearsal 1` (wrapper == guarded oracle for every market, share price sane) passes", ["verify-listing", "rehearsal", "1"], /verifyListing stage OK: 1/);
+    await toolCheck("B1.t1", "tool: `verify-listing rehearsal 1` (wrapper == guarded oracle for every market, share price sane) passes", ["verify-listing", "rehearsal", "1"], /verifyListing stage OK: 1/);
     const ageA = { AVAX: await ageOf(LIVE.AVAX_FEED), USDC: await ageOf(LIVE.USDC_FEED) }; log(`feed ages after the swap: AVAX ${ageA.AVAX}s USDC ${ageA.USDC}s`);
     // 3. after: the SAME functions through the wrapper and through the old oracle at the SAME block
     const newP = await readPrices(D.WRAPPER), oldP1 = await readPrices(LIVE.GUARDED_ORACLE), view1 = await liveView();
@@ -486,9 +578,9 @@ async function main() {
         check("B2.1", !!seedPending, `SEED WINDOW: between listing and the seed an outsider's mint is refused (${r.revert ?? "ACCEPTED code " + r.code}); the delegate allows only the admin to make the first mint`);
       }
     }
-    toolCheck("B2.t1", "tool: `verify-listing rehearsal 2` (listed, CF 0, borrow paused, cap 1, flash loans paused) passes", ["verify-listing", "rehearsal", "2"], /verifyListing stage OK: 2/);
+    await toolCheck("B2.t1", "tool: `verify-listing rehearsal 2` (listed, CF 0, borrow paused, cap 1, flash loans paused) passes", ["verify-listing", "rehearsal", "2"], /verifyListing stage OK: 2/);
     for (const key of orderOf(3)) await runStep(step(key));
-    toolCheck("B2.t2", "tool: `verify-listing rehearsal 3` (seed: supply 5,000,000,000 pTokens all at 0xdEaD, cash 1,000,000, exchange rate 2e14, mint paused) passes", ["verify-listing", "rehearsal", "3"], /verifyListing stage OK: 3/);
+    await toolCheck("B2.t2", "tool: `verify-listing rehearsal 3` (seed: supply 5,000,000,000 pTokens all at 0xdEaD, cash 1,000,000, exchange rate 2e14, mint paused) passes", ["verify-listing", "rehearsal", "3"], /verifyListing stage OK: 3/);
     // read-back of the listing
     const m = await ctl.markets(D.PBP), all = (await ctl.getAllMarkets()).map((a) => a.toLowerCase());
     check("B2.2", m[0] && m[1].eq(0) && all.length === 3 && all[2] === D.PBP.toLowerCase(), "LISTED with collateral factor 0 as the third market");
@@ -633,7 +725,7 @@ async function main() {
     const cfR = await provider.call({ from: LIVE.LEDGER, to: LIVE.CONTROLLER, data: new utils.Interface(CTL).encodeFunctionData("_setCollateralFactor", [D.PBP, KNOB.cf]) });
     check("B3.4", BN(cfR).eq(0), `_setCollateralFactor(pBP, 50 %) returns 0 (success) - it needs the wrapper's non-zero share price`);
     await runStep(step("setCF"));
-    toolCheck("B3.t1", "tool: `verify-listing rehearsal 4` (activation: CF 50 %, mint open) passes", ["verify-listing", "rehearsal", "4"], /verifyListing stage OK: 4/);
+    await toolCheck("B3.t1", "tool: `verify-listing rehearsal 4` (activation: CF 50 %, mint open) passes", ["verify-listing", "rehearsal", "4"], /verifyListing stage OK: 4/);
     check("B3.5", (await ctl.markets(D.PBP))[1].eq(KNOB.cf), `read-back: collateralFactorMantissa = ${(await ctl.markets(D.PBP))[1]}`);
     const l1 = await ctl.getAccountLiquidity(carol), rate = await pBP.exchangeRateStored(), price = await pricePBP();
     const collUsd = c.pTokens.mul(rate).div(E18).mul(price).div(E18);               // USD 1e18
@@ -677,19 +769,23 @@ async function main() {
     const gp = await vault.guardParams(); const maxFeedAge = gp.maxFeedAge;
     const real = { usdt: (await readFeed(LIVE.USDT_FEED)), usdc: await readFeed(LIVE.USDC_FEED) };
     const liq = A("11C01"); await impersonate(liq);
-    // 4.1 the USDT feed alone stale: the vault's totalAssets reverts, the wrapper returns 0, pUSDC / pWAVAX stay priced
+    // 4.1 the USDT feed alone stale: the vault's totalAssets reverts, the v2 wrapper serves the FALLBACK (stored leg x 0.97 x live USDC price, up to 24 h after its last store; here: the constructor's store, a few
+    //     hundred chain-seconds old), pUSDC / pWAVAX stay priced. (v1 said 0 here and froze every account that had entered the share market: the reason for v2.) The full outage timeline is B10.
     await scenario("stale USDT feed only", async () => {
+      const liqLive = await ctl.getAccountLiquidity(dave.addr), priceLive = await pricePBP();
       await setFeed(LIVE.USDT_FEED, real.usdt.answer, (await headTs()) - (maxFeedAge + 1000));
       const ta = await expectRevert(() => vault.totalAssets()), c2a = await expectRevert(() => vault.convertToAssets(1_000_000));
       check("B4.1", /FeedInvalid\(2\)/.test(ta || "") && /FeedInvalid\(2\)/.test(c2a || ""), `USDT feed older than the vault's maxFeedAge (${maxFeedAge} s): vault.totalAssets() and convertToAssets() REVERT (${ta})`);
-      check("B4.2", (await pricePBP()).eq(0) && (await wrapper.getShareUsdPrice()).eq(0) && (await priceUSDC()).gt(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).gt(0), "the wrapper returns 0 (price unavailable) for the share market and does NOT revert; pUSDC and pWAVAX stay priced (the failure is isolated)");
+      const ss = await wrapper.shareState(), stored = ss[1], px = await C(LIVE.GUARDED_ORACLE, ORACLE).getPrice(LIVE.USDC), want = shareExpect(fallbackLeg(stored), px), fbAge = (await headTs()) - ss[2].toNumber();
+      check("B4.2", fbAge >= 0 && fbAge < 86400 && ss[3] === true && ss[0].eq(0) && (await pricePBP()).eq(want) && want.gt(0) && (await pricePBP()).lt(priceLive) && (await wrapper.getShareUsdPrice()).gt(0) && (await priceUSDC()).gt(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).gt(0),
+        `v2 FALLBACK: with the vault leg dead the wrapper does NOT return 0 and does not revert: usingFallback ${ss[3]} (stored ${stored} written ${fbAge} s ago), price ${await pricePBP()} = stored x 0.97 x the live USDC price (${want} recomputed) < the live-leg price ${priceLive}; pUSDC and pWAVAX stay priced`);
       const liqD = await ctl.getAccountLiquidity(dave.addr);
-      check("B4.3", liqD[0].eq(13), `an account that entered the share market has no liquidity answer: getAccountLiquidity error ${liqD[0]} (13 = PRICE_ERROR)`);
+      check("B4.3", liqD[0].eq(0) && liqD[2].eq(0) && liqD[1].lt(liqLive[1]) && liqD[1].gt(0), `an account that entered the share market is PRICED (v1: error 13): getAccountLiquidity error ${liqD[0]}, liquidity ${liqD[1]} < ${liqLive[1]} at the live price (the 3 % haircut), shortfall ${liqD[2]}`);
       const bor = await codeOrRevert(() => C(LIVE.PUSDC, PT, dave.addr).callStatic.borrow(1_000)), red = await codeOrRevert(() => C(D.PBP, PT, dave.addr).callStatic.redeem(1_000));
-      check("B4.4", bor.code === 13 && red.code === 13, `FAIL-CLOSED: dave cannot borrow more (${JSON.stringify(bor)}) nor redeem pTokens (${JSON.stringify(red)}) while the share price is unavailable`);
+      check("B4.4", bor.code === 0 && red.code === 0, `BOUNDED, NOT FROZEN: dave can still borrow (${JSON.stringify(bor)}) and redeem pTokens (${JSON.stringify(red)}) while the share price is the fallback (the haircut leaves the healthy account healthy)`);
       await impersonate(liq); await setErc20Balance(LIVE.USDC, liq, 10_000_000); await tx("liq approve", (o) => C(LIVE.USDC, ERC20, liq).approve(LIVE.PUSDC, 10_000_000, o));
       const lr = await codeOrRevert(() => C(LIVE.PUSDC, PT, liq).callStatic.liquidateBorrow(dave.addr, 100_000, D.PBP));
-      check("B4.5", lr.code === 13 || !!lr.revert, `FAIL-CLOSED: liquidation of an account holding shares is refused while the price is unavailable (${JSON.stringify(lr)})`);
+      check("B4.5", lr.code === 3, `a HEALTHY account is not liquidatable at the fallback price: rejected with INSUFFICIENT_SHORTFALL (3), not PRICE_ERROR (13) (${JSON.stringify(lr)}); B10 liquidates an insolvent account the same way`);
       const alice = await position(1); const lm = await ctl.getAccountLiquidity(alice.account);
       check("B4.6", lm[0].eq(0), `the live margin accounts (they never entered the share market) are unaffected (getAccountLiquidity error ${lm[0]})`);
       // a supplier who never entered the market can still redeem; the share holder can leave through the vault's ungated redeemInKind only if he holds shares, not pTokens
@@ -700,7 +796,7 @@ async function main() {
     await scenario("stale USDC feed (91,000 s)", async () => {
       await setFeed(LIVE.USDC_FEED, real.usdc.answer, (await headTs()) - 91_000);
       const ok = await codeOrRevert(async () => (await vault.totalAssets()).gt(0) ? 0 : 1);
-      check("B4.8", ok.code === 0 && (await pricePBP()).eq(0) && (await priceUSDC()).eq(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).gt(0), "USDC feed 91,000 s old (guarded maxAge 90,000, vault maxFeedAge 93,600): the vault still prices, but the wrapper's share price AND pUSDC are 0 (the share price uses the BASE oracle's USDC price); pWAVAX stays priced");
+      check("B4.8", ok.code === 0 && (await pricePBP()).eq(0) && (await priceUSDC()).eq(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).gt(0) && (await wrapper.shareState())[3] === false, "USDC feed 91,000 s old (guarded maxAge 90,000, vault maxFeedAge 93,600): the vault still prices, but the wrapper's share price AND pUSDC are 0 (the share price uses the BASE oracle's USDC price; NEVER a fallback when the USDC price is missing: usingFallback false); pWAVAX stays priced");
       const bor = await codeOrRevert(() => C(LIVE.PUSDC, PT, dave.addr).callStatic.borrow(1_000));
       check("B4.9", bor.code === 13, `borrow refused with PRICE_ERROR (${JSON.stringify(bor)})`);
     });
@@ -708,7 +804,7 @@ async function main() {
     await scenario("time warp past every maxAge, then recovery", async () => {
       await warpRaw(100_000);
       const ageU = await ageOf(LIVE.USDC_FEED);
-      check("B4.10", ageU >= 100_000 && (await pricePBP()).eq(0) && (await priceUSDC()).eq(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).eq(0), `after 100,000 s with no feed update every price is 0 (USDC feed age ${ageU} s): share, pUSDC and pWAVAX`);
+      check("B4.10", ageU >= 100_000 && (await wrapper.shareState())[3] === false && (await pricePBP()).eq(0) && (await priceUSDC()).eq(0) && (await wrapper.getUnderlyingPrice(LIVE.PWAVAX)).eq(0), `after 100,000 s with no feed update every price is 0 (USDC feed age ${ageU} s): share (the stored value is older than 24 h AND the USDC price is missing: no fallback), pUSDC and pWAVAX`);
       const bor = await codeOrRevert(() => C(LIVE.PUSDC, PT, dave.addr).callStatic.borrow(1_000)); check("B4.11", bor.code === 13, `all borrowing is fail-closed (${JSON.stringify(bor)})`);
       await repin(); // the feeds update again
       check("B4.12", (await pricePBP()).gt(0) && (await priceUSDC()).gt(0), "RESTORE: when the feeds publish again the share price and pUSDC price return without any transaction on our side");
@@ -791,6 +887,10 @@ async function main() {
     });
   });
 
+  // ============================================================================================================ B10 stale-feed OUTAGE on the real vault (v2 fallback): after the listing, CF 50 %, the seed and the normal liquidation of B5; one snapshot, nothing survives it
+  const ctx = { ctl, vault, wrapper, guarded, pBP, pU, pW, usdc, D, runStep, step, room, borrowPowerUsdc, readPrices, exec, PT, CTL, ERC20, VAULT };
+  await runOutage(ctx);
+
   // ============================================================================================================ B6b rollback AFTER an account entered and borrowed
   await group("B6b rollback after use", async () => {
     await scenario("rollback after use", async () => {
@@ -823,7 +923,7 @@ async function main() {
       await runStep(step("oracleSwap"));
       const l3 = await ctl.getAccountLiquidity(d);
       check("B6.b10", l3[0].eq(0) && (await C(D.PBP, PT, d).callStatic.redeem(1_000)).eq(0), "re-applying the wrapper unfreezes everything: dave's liquidity answers and his pTokens redeem again");
-      note("B6.n1", "CONCLUSION: the one-transaction rollback is a clean undo only while NO account has entered the share market. After that it freezes those accounts' borrow, redeem and liquidation until the wrapper is re-applied; the safer reaction to a bad share price is the CF -> 0 / mint pause / stale-feed fail-closed path, not the rollback.");
+      note("B6.n1", "CONCLUSION: the one-transaction rollback is a clean undo only while NO account has entered the share market. After that it freezes those accounts' borrow, redeem and liquidation until the wrapper is re-applied; the safer reaction to a bad share price is the CF -> 0 / mint pause path (and, for a stale feed, the v2 wrapper's 24 h fallback: B4, B10), not the rollback.");
     });
   });
 
@@ -910,10 +1010,13 @@ async function main() {
     const path = PATH_CONTRACTS(); const inPath = Object.entries(path).filter(([, a]) => touchedAll.map((x) => x.toLowerCase()).includes(a.toLowerCase())).map(([n]) => n);
     if (touchedAll.length) check("B9.6", inPath.every((n) => ["controller", "dlmmVault"].includes(n)), `CONTRACTS TOUCHED (state written) by the whole ceremony: ${touchedAll.length} addresses; of those in the account's path: ${inPath.join(", ")} (expected: the controller [oracle pointer, new market, flags] and the DLMM vault [the seed transfer]); the new market ${D.PBP} and the wrapper's market ${D.WRAPPER} are new`, inPath.join(","));
     else note("B9.6", "state-diff tracer unavailable: the list of touched contracts could not be produced");
-    note("B9.n3", "OPTIONAL step from the rewards work (branch feat/dlmm-rewards-boosted, its rehearsal steps W01-W06: PHAR wrapper-holder distribution, seed excluded) is NOT part of this rehearsal; run it after this one on the same kind of fork if the wrapper-split distribution is wanted.");
+    note("B9.n3", WRAPPER_ON ? "the PHAR step (the rewards work's rehearsal folded in, checks B11.*) runs AFTER this read-back, as the last group: it moves shares, harvests and deploys a distributor, so it is not part of the state comparison above." : "the PHAR step (B11) was SKIPPED (REH_WRAPPER=0): the wrapper-split distribution of the rewards work was not rehearsed in this run.");
     note("B9.n2", `GAS of the ceremony txs: ${JSON.stringify(results.data.gasCeremony || {})}`);
     fs.writeFileSync(path2("snapshot-end.json"), JSON.stringify(S9)); fs.writeFileSync(path2("diff-end.json"), JSON.stringify(d));
   });
+  // ============================================================================================================ B11 the PHAR distribution with the DEPLOYED market as the wrapper holder (LAST group; REH_WRAPPER=0 skips it)
+  if (WRAPPER_ON) await runPhar(ctx);
+  else note("B11.n0", "the PHAR step was SKIPPED (REH_WRAPPER=0)");
   finish();
 }
 function path2(n) { return path.join(OUTDIR, n); }

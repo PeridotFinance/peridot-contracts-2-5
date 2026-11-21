@@ -4,13 +4,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ethers, utils, BN, A, C, check, note, group, finish, results, provider, rpc, impersonate, setErc20Balance, tx, expectRevert, codeOrRevert, addErrorAbi, decodeErr,
-  etchFeed, setFeed, repin, warp, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR } from "../lib.mjs";
+  etchFeed, setFeed, repin, warp, warpTo, headTs, readFeed, scenario, touched, mocks, signer, setNextTimestamp, mine, LIVE, OUTDIR, checkpoint } from "../lib.mjs";
+import { shareExpect, fallbackLeg, expectPoke } from "../outage.mjs";
+import { crossCheckModel } from "../phar.mjs";
 
 const FX = process.env.REH_FIXTURE_OUT;
 const art = (n) => JSON.parse(fs.readFileSync(path.join(FX, "Fixtures.sol", `${n}.json`), "utf8"));
-async function deploy(name, from) {
+async function deploy(name, from, args = []) {
   const a = art(name); const f = new ethers.ContractFactory(a.abi, a.bytecode.object, signer(from));
-  const c = await f.deploy(); await c.deployed(); return new ethers.Contract(c.address, a.abi, provider);
+  const c = await f.deploy(...args); await c.deployed(); return new ethers.Contract(c.address, a.abi, provider);
 }
 const dep = A("DE17");
 
@@ -78,8 +80,71 @@ await group("P1 feeds, time, snapshots", async () => {
   note("P1.8", "this NOTE line exercises the third result type (neither pass nor fail)");
 });
 
+// ---- P3: the harness's group-B10 helpers against the REAL v2 wrapper bytecode (BP_OUT), deployed on stand-in vault / base oracle / pToken fixtures. This is the only place the outage arithmetic, the poke
+//      expectations, shareState() indices, warpTo and the exact-24 h boundary have ever met the real contract code; the vault, the feeds and the controller are NOT the live ones.
+await group("P3 v2 wrapper vs the outage helpers", async () => {
+  const wa = path.join(process.env.BP_OUT || "/nonexistent", "PharaohDlmmShareOracle.sol", "PharaohDlmmShareOracle.json");
+  if (!fs.existsSync(wa)) { note("P3.0", `no wrapper artifact at ${wa}: the v2 helper test was skipped`); return; }
+  const j = JSON.parse(fs.readFileSync(wa, "utf8"));
+  const asset = await deploy("FxAsset", dep), base = await deploy("FxBase", dep), vault = await deploy("FxVault", dep, [asset.address]), market = await deploy("FxMarket", dep, [vault.address]);
+  const wf = new ethers.ContractFactory(j.abi, j.bytecode.object, signer(dep)); const wc = await wf.deploy(base.address, market.address); await wc.deployed();
+  const w = new ethers.Contract(wc.address, j.abi, provider), sig = signer(dep);
+  const runtime = (await provider.getCode(w.address)).length / 2 - 1;
+  const state = async () => { const x = await w.shareState(); return { live: x[0], stored: x[1], at: x[2].toNumber(), fb: x[3], left: x[4] }; };
+  const price = () => w.getUnderlyingPrice(market.address);
+  const usd = () => base.usd();
+  check("P3.1", (await price()).eq(shareExpect(1_050_000, await usd())) && (await w.getShareUsdPrice()).eq((await price()).div(BN(10).pow(12))) && (await w.lastGoodAssetsPerShare()).eq(1_050_000) && (await state()).live.eq(1_050_000),
+    `live path: price = shareExpect(1,050,000, 1e18) = ${await price()}, getShareUsdPrice = price / 1e12, constructor stored 1,050,000 (the fixture wrapper's runtime is ${runtime} bytes; the product build is 3,472)`);
+
+  // poke(): the harness's expectPoke (written from the specification) against the contract over a scripted sequence
+  const steps = [["10 s later, live +4.8 % (inside the 1 h gate)", 10, 1_100_000, false], ["3,601 s later, live still +4.8 %", 3601, 1_100_000, false], ["3,601 s later again", 3601, 1_100_000, false],
+    ["5 s later, live DOWN to 1,000,000", 5, 1_000_000, false], ["10 s later, the vault is DEAD", 10, 1_000_000, true], ["90,000 s later (older than 24 h), alive again at 2,000,000", 90_000, 2_000_000, false]];
+  let all = true; const lines = [];
+  for (const [label, dt, leg, dead] of steps) {
+    await warp(dt); await tx("fixture set", (o) => vault.connect(sig).set(leg, dead, o));
+    const before = await state(), staticRet = await w.callStatic.poke();
+    const exStatic = dead ? { stored: false } : expectPoke(before.stored, before.at, leg, await headTs());
+    const r = await tx("poke", (o) => w.connect(sig).poke(o)); const bts = (await provider.getBlock(r.blockNumber)).timestamp;
+    const ex = dead ? { stored: false } : expectPoke(before.stored, before.at, leg, bts), after = await state();
+    const okStep = staticRet === exStatic.stored && (ex.stored ? after.stored.eq(ex.value) && after.at === bts : after.stored.eq(before.stored) && after.at === before.at);
+    all = all && okStep; lines.push(`${label}: ${okStep ? "ok" : "MISMATCH"} stored ${before.stored} -> ${after.stored}`);
+  }
+  check("P3.2", all, `expectPoke() (written from BRIEF-v2) agrees with the real contract on ${steps.length} scripted pokes (upward refused inside 1 h, capped +2 %, downward at once, refused while the vault is dead, uncapped after 24 h): ${lines.join(" | ")}`, lines.join(" | "));
+
+  // the fallback: price, window, the exact boundary (eth_call sees the head block's timestamp)
+  await tx("fixture alive", (o) => vault.connect(sig).set(1_000_000, false, o)); await warp(5);
+  await tx("poke", (o) => w.connect(sig).poke(o)); const base0 = await state();
+  await tx("fixture dead", (o) => vault.connect(sig).set(1_000_000, true, o));
+  const sOut = await state(), want = shareExpect(fallbackLeg(sOut.stored), await usd());
+  check("P3.3", sOut.fb === true && sOut.live.eq(0) && (await price()).eq(want) && want.gt(0) && sOut.left.eq(86400 - ((await headTs()) - sOut.at)) && (await w.callStatic.poke()) === false,
+    `fallback: usingFallback true, live 0, price ${await price()} = floor(stored ${sOut.stored} x 0.97) x USD price (recomputed ${want}), ${sOut.left} s left; poke() returns false while the vault is dead`);
+  await warpTo(base0.at + 86400);
+  const e1 = await state(), p1 = await price();
+  await warpTo(base0.at + 86401);
+  const e2 = await state(), p2 = await price();
+  check("P3.4", e1.fb === true && e1.left.eq(0) && p1.eq(want) && p1.gt(0) && e2.fb === false && e2.left.eq(0) && p2.eq(0),
+    `the 24 h boundary: at age EXACTLY 86,400 s the fallback is valid (usingFallback ${e1.fb}, 0 s left, price ${p1}); one second later it is 0 (usingFallback ${e2.fb}, price ${p2}) - both read with static calls at the head block's timestamp`);
+  await tx("fixture alive", (o) => vault.connect(sig).set(1_000_000, false, o)); await tx("poke", (o) => w.connect(sig).poke(o));
+  await tx("fixture dead", (o) => vault.connect(sig).set(1_000_000, true, o)); await tx("USD price 0", (o) => base.connect(sig).setUsd(0, o));
+  const nz = await state();
+  check("P3.5", nz.fb === false && (await price()).eq(0), "never a fallback when the base oracle has no USDC price (usingFallback false, price 0), even inside the window");
+  await tx("USD price back", (o) => base.connect(sig).setUsd(ethers.constants.WeiPerEther, o));
+  check("P3.6", (await price()).eq(shareExpect(fallbackLeg((await state()).stored), ethers.constants.WeiPerEther)), "fallback resumes when the USDC price returns (still inside the window)");
+});
+
+await group("P4 PHAR expected-split model vs the generator", async () => {
+  const proj = process.env.REH_REWARDS_PROJ || "", gfile = path.join(proj, "tools", "dlmm-rewards-root.mjs");
+  if (!proj || !fs.existsSync(gfile)) { note("P4.0", "the rewards project's generator is not available: the model cross-check was skipped"); return; }
+  process.env.ETHERS_DIR = path.join(process.env.REH_ETHERS_DIR, "node_modules", "ethers");
+  const R = await import(gfile);
+  const cc = crossCheckModel(R, 11), cc2 = crossCheckModel(R, 4242);
+  check("P4.1", cc.ok && cc2.ok, `the harness's expected-split model equals the generator's exported wrapperSplit on ${cc.cases + cc2.cases} random histories (two seeds; one event in four shares its block with the previous one)`, cc.detail || cc2.detail);
+});
+
 await group("P2 results writer", async () => {
-  check("P2.1", results.checks.length >= 15 && results.notes === 1 && results.fail === 0, `results object: ${results.pass} pass, ${results.fail} fail, ${results.notes} note`);
+  check("P2.1", results.checks.length >= 15 && results.notes >= 1 && results.fail === 0, `results object: ${results.pass} pass, ${results.fail} fail, ${results.notes} note`);
+  const cp = JSON.parse(fs.readFileSync(path.join(OUTDIR, "results.json"), "utf8"));
+  check("P2.3", cp.partial === true && /^P1/.test(cp.lastGroup) === false && cp.checks.length >= 15, `checkpoint(): results.json already exists mid-run after each group (partial: ${cp.partial}, last finished group "${cp.lastGroup}", ${cp.checks.length} checks so far): a killed run keeps its finished groups`);
   // a deliberate failure must be counted, written and make the process exit 1 -- the shell wrapper checks that by running with REH_SELFTEST_FAIL=1
   if (process.env.REH_SELFTEST_FAIL === "1") check("P2.2", false, "deliberate failure (REH_SELFTEST_FAIL=1)", "expected by the self-test");
 });

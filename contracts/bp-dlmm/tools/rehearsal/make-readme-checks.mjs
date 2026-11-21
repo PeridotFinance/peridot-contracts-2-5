@@ -1,7 +1,7 @@
 // Prints the markdown table of every check / note of rehearsal.mjs (id, kind, text with ${...} elided), parsed from the source, so that README.md cannot drift from the code.
 //   node make-readme-checks.mjs > checks.md      (README.md embeds the output between the CHECKS markers; `DRY=1 rehearsal.sh` fails when an id in the code is missing from README.md)
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./rehearsal.mjs", import.meta.url), "utf8");
+let src = "";   // the checks live in rehearsal.mjs (B0..B9), outage.mjs (B10) and phar.mjs (B11); parsed one after the other
 function parseArgs(i) { // i = index just after "(": returns the raw argument strings (top level) and the end index
   const args = []; let depth = 0, cur = "", j = i;
   const readString = (q) => { let s = q; j++; while (j < src.length) { const c = src[j]; s += c; if (c === "\\") { s += src[++j]; j++; continue; } if (q === "`" && c === "$" && src[j + 1] === "{") { s += "{"; j += 2; let d = 1; while (d) { const k = src[j]; if (k === "`" || k === '"' || k === "'") { s += readString(k); continue; } if (k === "{") d++; if (k === "}") d--; s += k; j++; } continue; } if (c === q) { j++; return s; } j++; } return s; };
@@ -17,11 +17,14 @@ function parseArgs(i) { // i = index just after "(": returns the raw argument st
 }
 const lit = (a) => { const m = /^(["'`])([\s\S]*)\1$/.exec(a || ""); return m ? m[2].replace(/\$\{[\s\S]*?\}(?=[^}]|$)/g, "…").replace(/\|/g, "\\|") : null; };
 const rows = [];
-for (const m of src.matchAll(/\b(check|note)\(/g)) {
-  const { args } = parseArgs(m.index + m[0].length);
-  const id = lit(args[0]); if (!id || !/^B/.test(id)) continue;
-  const text = lit(m[1] === "check" ? args[2] : args[1]) ?? "(computed text)";
-  rows.push({ id, kind: m[1] === "check" ? "PASS/FAIL" : "NOTE", text: text.replace(/\s+/g, " ").slice(0, 400) });
+for (const f of ["rehearsal.mjs", "outage.mjs", "phar.mjs"]) {
+  src = fs.readFileSync(new URL(`./${f}`, import.meta.url), "utf8");
+  for (const m of src.matchAll(/\b(check|note)\(/g)) {
+    const { args } = parseArgs(m.index + m[0].length);
+    const id = lit(args[0]); if (!id || !/^B/.test(id)) continue;
+    const text = lit(m[1] === "check" ? args[2] : args[1]) ?? "(computed text)";
+    rows.push({ id, kind: m[1] === "check" ? "PASS/FAIL" : "NOTE", text: text.replace(/\s+/g, " ").slice(0, 400) });
+  }
 }
 const seen = new Set(); const order = (a, b) => a.id.localeCompare(b.id, "en", { numeric: true });
 const out = ["| id | kind | what it asserts / records |", "|---|---|---|"];

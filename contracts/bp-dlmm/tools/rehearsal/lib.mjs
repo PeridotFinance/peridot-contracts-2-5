@@ -4,6 +4,8 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import util from "node:util";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -12,6 +14,45 @@ if (!ETHERS_DIR) { console.error("REH_ETHERS_DIR is required (a directory with n
 const req = createRequire(path.join(ETHERS_DIR, "package.json"));
 export const { ethers } = req("ethers");
 export const { BigNumber, utils, providers, Wallet } = ethers;
+
+// ---------------------------------------------------------------------------------------------------------------- run-2 hardening (the run-1 harness went silent after the oracle swap and nobody could tell where)
+// 1. every console line is ALSO appended, redacted, to REH_LOGFILE by THIS process (synchronously): the log no longer depends on a sed | tee pipeline that buffers or can stall.
+// 2. every RPC call and every child process is TRACKED (label, start time) and has a TIMEOUT: a call that never answers becomes an error naming the call, not a hang.
+// 3. a HEARTBEAT line every 60 s names the current group, the last check id and every call in flight; a per-group WATCHDOG fails the group (and ends the run, results saved) with the calls in flight.
+const LOGFILE = process.env.REH_LOGFILE;
+const redactUrl = (x) => String(x).replace(/https?:\/\/[^\s"')]+/g, "<url-redacted>");
+for (const k of ["log", "error"]) {
+  const orig = console[k].bind(console);
+  console[k] = (...a) => { if (LOGFILE) { try { fs.appendFileSync(LOGFILE, redactUrl(util.format(...a)) + "\n"); } catch { /* the log file is a convenience: never end the run for it */ } } orig(...a); };
+}
+export const flight = new Map(); let flightId = 0;
+export const where = { group: "", id: "", idAt: Date.now() };
+/** race a promise against a timeout; the label (what is being waited for) is printed when the timeout fires and kept in the in-flight table meanwhile */
+export function track(label, promise, ms) {
+  const id = ++flightId; flight.set(id, { label, t: Date.now() }); let timer;
+  const to = new Promise((_, rej) => { timer = setTimeout(() => { console.log(`TIMEOUT after ${Math.round(ms / 1000)} s waiting for: ${label}`); rej(Object.assign(new Error(`timeout after ${Math.round(ms / 1000)} s: ${label}`), { code: "REH_TIMEOUT" })); }, ms); });
+  return Promise.race([promise, to]).finally(() => { clearTimeout(timer); flight.delete(id); });
+}
+/** run a child process ASYNCHRONOUSLY (the event loop, the heartbeat and the watchdogs stay alive) with stdin CLOSED, a timeout and the in-flight label. Returns { code, out } (stdout + stderr, urls redacted). */
+export function runProc(cmd, args, { env = {}, cwd, timeoutMs = 25 * 60 * 1000, label = "" } = {}) {
+  return new Promise((resolve) => {
+    const lab = `process ${label || `${cmd} ${args.slice(0, 3).join(" ")}`}`;
+    const id = ++flightId; flight.set(id, { label: lab, t: Date.now() });
+    let out = "", done = false, killed = false;
+    const child = spawn(cmd, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });   // stdin is /dev/null: a tool that waits for input gets EOF instead of hanging
+    const add = (d) => { if (out.length < 64 * 1024 * 1024) out += d.toString(); };
+    child.stdout.on("data", add); child.stderr.on("data", add);
+    const timer = setTimeout(() => { killed = true; console.log(`TIMEOUT after ${Math.round(timeoutMs / 1000)} s waiting for: ${lab} (killing it)`); child.kill("SIGKILL"); }, timeoutMs);
+    const fin = (code) => { if (done) return; done = true; clearTimeout(timer); flight.delete(id); resolve({ code: killed ? 124 : code, out: redactUrl(out) + (killed ? `\n[killed after ${Math.round(timeoutMs / 1000)} s]` : "") }); };
+    child.on("error", (e) => { out += `spawn error: ${e.message}\n`; fin(127); });
+    child.on("exit", (code) => { setTimeout(() => fin(code), 2000).unref(); });   // 'close' can wait forever for a grandchild that kept the pipe open: after the exit, give the pipes 2 s, then go on
+    child.on("close", (code) => fin(code));
+  });
+}
+const heartbeat = setInterval(() => {
+  const now_ = Date.now(), fl = [...flight.values()].map((f) => `${f.label} (${Math.round((now_ - f.t) / 1000)} s)`).join(" | ") || "none";
+  console.log(`HEARTBEAT ${new Date().toISOString().slice(11, 19)} group="${where.group}" last check ${where.id || "-"} (${Math.round((now_ - where.idAt) / 1000)} s ago) in flight: ${fl}`);
+}, Number(process.env.REH_HEARTBEAT_MS) || 60_000); heartbeat.unref();
 export const BN = (x) => BigNumber.from(x);
 export const RPC = process.env.REH_RPC;
 const OUTJSON = process.env.REH_RESULTS || path.join(process.env.REH_SCRATCH || ".", "results.json");
@@ -28,6 +69,9 @@ provider.pollingInterval = 100;
 // 50 % headroom over eth_estimateGas on EVERY harness transaction (lesson of the range-tp run 5). ethers' JsonRpcSigner calls provider.estimateGas when no gasLimit is given.
 const estimateGas0 = provider.estimateGas.bind(provider);
 provider.estimateGas = async (txr) => { const g = await estimateGas0(txr); const m = g.mul(150).div(100); return m.gt(14_000_000) ? BN(14_000_000) : m; };
+const send0 = provider.send.bind(provider);   // every JSON-RPC call (ours and ethers' own) goes through here: tracked, with a timeout (tracers get longer)
+const RPC_TIMEOUT = Number(process.env.REH_RPC_TIMEOUT_MS) || 180_000;
+provider.send = (method, params) => track(`rpc ${method} ${JSON.stringify(params ?? []).slice(0, 90)}`, send0(method, params), /^debug_/.test(method) ? Math.max(RPC_TIMEOUT, 600_000) : RPC_TIMEOUT);
 export const rpc = (m, p = []) => provider.send(m, p);
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const now = () => new Date().toISOString().slice(11, 19);
@@ -36,15 +80,31 @@ export const log = (...a) => console.log(`[${now()}]`, ...a);
 // ---------------------------------------------------------------------------------------------------------------- results: PASS / FAIL / NOTE
 export const results = { startedAt: new Date().toISOString(), pin: process.env.REH_PIN, pass: 0, fail: 0, notes: 0, checks: [], gas: {}, data: {} };
 export function check(id, ok, text, detail = "") {
+  where.id = id; where.idAt = Date.now();
   results.checks.push({ id, ok: !!ok, text, detail: ok ? "" : String(detail).slice(0, 600) });
   if (ok) { results.pass++; console.log(`PASS ${id} ${text}`); } else { results.fail++; console.log(`FAIL ${id} ${text}${detail ? ` :: ${String(detail).slice(0, 600)}` : ""}`); }
   return !!ok;
 }
 /** an observation that is recorded but is neither a PASS nor a FAIL (a decision input for the integrator) */
-export function note(id, text) { results.notes++; results.checks.push({ id, ok: null, text, detail: "" }); console.log(`NOTE ${id} ${text}`); }
-export async function group(name, fn) {
-  log(`>>> GROUP ${name}`);
-  try { await fn(); } catch (e) { check(`${name.split(" ")[0]}.exception`, false, `group ${name} aborted by an exception`, e?.message || e?.reason || e); await traceFailure(e); }
+export function note(id, text) { where.id = id; where.idAt = Date.now(); results.notes++; results.checks.push({ id, ok: null, text, detail: "" }); console.log(`NOTE ${id} ${text}`); }
+export async function group(name, fn, opts = {}) {
+  log(`>>> GROUP ${name}`); where.group = name;
+  const ms = opts.timeoutMs ?? (Number(process.env.REH_GROUP_TIMEOUT_MS) || 20 * 60 * 1000);
+  let timer, expired = false;
+  const watchdog = new Promise((res) => { timer = setTimeout(() => { expired = true; res(); }, ms); });
+  try { await Promise.race([fn(), watchdog]); }
+  catch (e) { check(`${name.split(" ")[0]}.exception`, false, `group ${name} aborted by an exception`, e?.message || e?.reason || e); await traceFailure(e); }
+  finally { clearTimeout(timer); }
+  if (expired) {   // the group is still running somewhere: the chain state is unknown, so the run ENDS here (results so far are saved), it does not carry on into the next group
+    const fl = [...flight.values()].map((f) => `${f.label} (${Math.round((Date.now() - f.t) / 1000)} s)`).join(" | ") || "none";
+    check(`${name.split(" ")[0]}.watchdog`, false, `group ${name} exceeded ${Math.round(ms / 1000)} s and was stopped by the watchdog; last check ${where.id}; calls in flight: ${fl}`, fl);
+    finish({ aborted: `watchdog in ${name}` });
+  }
+  checkpoint(name);
+}
+/** write the results so far (run 2 is long: a killed run must still leave the finished groups on disk). finish() overwrites it. */
+export function checkpoint(afterGroup = "") {
+  try { fs.writeFileSync(OUTJSON, JSON.stringify({ ...results, partial: true, lastGroup: afterGroup, checkpointAt: new Date().toISOString() }, bnReplacer, 1)); } catch { /* the output directory is the user's: a write error must not end the run */ }
 }
 export function finish(extra = {}) {
   results.finishedAt = new Date().toISOString();
@@ -160,6 +220,15 @@ export async function warpRaw(seconds) {
 }
 export async function warp(seconds) {
   await warpRaw(seconds);
+  await repin();
+}
+/** move the head block to EXACTLY timestamp `ts` (>= head + 1) and re-pin every mock feed that is not deliberately stale. eth_call / callStatic then see block.timestamp == ts (probed on anvil 1.7.1). */
+export async function warpTo(ts) {
+  const head = await headTs();
+  if (Number(ts) <= head) throw new Error(`warpTo(${ts}): the head is already at ${head}`);
+  await rpc("evm_setNextBlockTimestamp", [Number(ts)]);
+  await mine(1);
+  if ((await headTs()) !== Number(ts)) throw new Error(`warpTo did not land on ${ts} (head ${await headTs()})`);
   await repin();
 }
 export async function setNextTimestamp(ts) { await rpc("evm_setNextBlockTimestamp", [Number(ts)]); }
