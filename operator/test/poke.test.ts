@@ -10,6 +10,7 @@ import { emptyMonitorState, runCycle } from "../src/monitor";
 import type { MonitorState } from "../src/monitor";
 import { POKE_IN_FLIGHT_SECONDS, wrapperIface, POKE_RETRY_COOLDOWN_SECONDS, emptyPokeState, pokeDue, pokeSettings, pokeStep, shareWatchFindings } from "../src/poke";
 import type { PokeState, ShareState } from "../src/poke";
+import { BigNumber } from "ethers";
 import { decidedConfig, A } from "./fixtures";
 import { ADDR, MockChain } from "./mockchain";
 
@@ -49,7 +50,7 @@ test("poke config: optional, DEFAULT OFF; enabled needs the executor and the wra
   assert.equal(pokeSettings(requireValidConfig(baseCfg())), undefined, "absent = off");
   assert.equal(pokeSettings(requireValidConfig(baseCfg({ enabled: false }))), undefined, "enabled false = off (op2 and the treasury host: they still monitor)");
   const s = pokeSettings(cfgOn())!;
-  assert.deepEqual(s, { enabled: true, pokeMinAgeSeconds: 3_700, maxFeeGwei: 100, minGasWei: "500000000000000000" }, "defaults: 3700 s, the executor's fee cap and gas floor");
+  assert.deepEqual(s, { enabled: true, pokeMinAgeSeconds: 3_700, maxFeeGwei: 100, minGasWei: "500000000000000000", gasLimit: 1_500_000 }, "defaults: 3700 s, the executor's fee cap and gas floor, an explicit 1.5M gas limit");
   const custom = pokeSettings(cfgOn({ pokeMinAgeSeconds: 4000, maxFeeGwei: 40, minGasWei: "5000000000000000" }))!;
   assert.deepEqual([custom.pokeMinAgeSeconds, custom.maxFeeGwei, custom.minGasWei], [4000, 40, "5000000000000000"]);
   const bad = (mut: (x: any) => void, re: RegExp) => {
@@ -65,6 +66,9 @@ test("poke config: optional, DEFAULT OFF; enabled needs the executor and the wra
   bad((x) => (x.shareCollateral.poke.pokeMinAgeSeconds = 20_000), /pokeMinAgeSeconds/); // beyond the stall alert
   bad((x) => (x.shareCollateral.poke.maxFeeGwei = 0), /maxFeeGwei/);
   bad((x) => (x.shareCollateral.poke.minGasWei = "0"), /minGasWei/);
+  bad((x) => (x.shareCollateral.poke.gasLimit = 999_999), /gasLimit/); // below the vault read's need: refused
+  bad((x) => (x.shareCollateral.poke.gasLimit = 60_627), /gasLimit/);
+  assert.equal(pokeSettings(cfgOn({ gasLimit: 1_000_000 }))!.gasLimit, 1_000_000, "the minimum is accepted");
   const disabledNoExecutor = baseCfg({ enabled: false });
   disabledNoExecutor.executor.enabled = false;
   disabledNoExecutor.keeper.enabled = true;
@@ -111,10 +115,14 @@ test("poke: sends poke() once when due, confirms the receipt, the stored time mo
     assert.equal(tx.data, wrapperIface.encodeFunctionData("poke"), "calldata is exactly poke()");
     return orig(tx);
   };
-  const r = await poke(chain, emptyPokeState(), cfgOn(), { signer });
+  const prov = chain.provider();
+  let estimated = 0;
+  const spy: any = new Proxy(prov, { get: (tg, k) => (k === "estimateGas" ? async (...a: any[]) => (estimated++, tg.estimateGas(...a)) : tg[k]) });
+  const r = await poke(chain, emptyPokeState(), cfgOn(), { signer, provider: spy });
   assert.equal(r.out.result, "poked", r.out.note);
+  assert.equal(estimated, 0, "estimateGas is never called for the poke");
   assert.equal(pokes(chain), 1);
-  assert.deepEqual(gas, ["105000"], "estimate 70,000 x 1.5");
+  assert.deepEqual(gas, ["1500000"], "an EXPLICIT gas limit from config (default 1,500,000), never an estimate");
   assert.equal(chain.lastGoodTime, T0, "the wrapper stored at the block time");
   assert.equal(r.out.state.inFlight, null);
   assert.equal(r.out.state.lastError, null);
@@ -182,7 +190,7 @@ test("poke: a simulation that returns false sends nothing (no gas wasted), count
   assert.equal(ok.out.state.refusedRounds, 0);
 });
 
-test("poke: a reverting simulation, a low fee cap, a gas floor, an absurd gas estimate: nothing is sent; failures are recorded as errors with a retry cooldown", async () => {
+test("poke: a reverting simulation, a low fee cap, a gas floor: nothing is sent; failures are recorded as errors with a retry cooldown", async () => {
   // simulation reverts
   const c1 = new MockChain();
   c1.pokeCallReverts = true;
@@ -212,12 +220,50 @@ test("poke: a reverting simulation, a low fee cap, a gas floor, an absurd gas es
   assert.equal(r3.out.result, "error");
   assert.match(r3.out.state.lastError!.message, /below the poke floor/);
   assert.equal(pokes(c3), 0);
-  // an estimate that is not a poke
-  const c4 = new MockChain();
-  c4.pokeGas = 600_000;
-  const r4 = await poke(c4);
-  assert.equal(r4.out.result, "error");
-  assert.equal(pokes(c4), 0);
+});
+
+test("poke gas: the live vault read needs hundreds of thousands of gas: an ESTIMATE starves it (the poke no-ops without reverting); the explicit limit stores", async () => {
+  const chain = new MockChain();
+  chain.vaultReadGas = 600_000n;
+  // what eth_estimateGas does on the real fork: the lowest gas at which the tx does not revert, i.e. the starved amount
+  const est = await chain.provider().estimateGas({ to: ADDR.wrapper, data: wrapperIface.encodeFunctionData("poke") });
+  assert.equal(est.toString(), "60627");
+  const starved = await chain.signer().sendTransaction({ to: ADDR.wrapper, data: wrapperIface.encodeFunctionData("poke"), gasLimit: est.mul(15).div(10) });
+  await starved.wait();
+  assert.equal(chain.lastGoodTime, T0 - 4_000, "the estimate-based poke stored nothing, and did not revert");
+  assert.equal(chain.receiptsFor(starved.hash).logs.length, 0, "no FallbackPriceStored in its receipt");
+  // the loop: explicit limit, same limit in the simulation: stores, and the receipt carries the event
+  const r = await poke(chain);
+  assert.equal(r.out.result, "poked", r.out.note);
+  assert.equal(chain.lastGoodTime, T0);
+  assert.equal(chain.gasLimits[chain.gasLimits.length - 1], 1_500_000n);
+  assert.match(r.out.note!, /gas used 600000 of 1500000/);
+  // a vault read that needs more than the limit: the SIMULATION (same gas) says false and nothing is sent
+  const c2 = new MockChain();
+  c2.vaultReadGas = 2_000_000n;
+  const r2 = await poke(c2);
+  assert.equal(r2.out.result, "refused");
+  assert.equal(pokes(c2), 0);
+  // a limit between the two: a mined poke that stored nothing is a FAILED poke (not a success), warned about, with the cooldown
+  const c3 = new MockChain();
+  c3.vaultReadGas = 1_200_000n;
+  const sim = c3.provider().call;
+  c3.provider = () => { const pr = MockChain.prototype.provider.call(c3); pr.call = async (tx: any) => sim.call(pr, { ...tx, gasLimit: undefined }); return pr; }; // a simulation that ignores the gas limit (as a node with its own call gas cap would)
+  const r3 = await poke(c3, emptyPokeState(), cfgOn({ gasLimit: 1_000_000 }));
+  assert.equal(r3.out.result, "error", r3.out.note);
+  assert.equal(pokes(c3), 1, "it was sent");
+  assert.match(r3.out.state.lastError!.message, /stored NOTHING/);
+  assert.equal(r3.out.state.retryAfter, T0 + POKE_RETRY_COOLDOWN_SECONDS);
+});
+
+test("poke: the wallet must cover the prefund (gas limit x max fee) and the configured floor", async () => {
+  const chain = new MockChain();
+  const prov: any = chain.provider();
+  prov.getBalance = async () => BigNumber.from(40_000_000_000_000_000n); // 0.04 AVAX < 1.5M x 30 gwei = 0.045
+  const r = await poke(chain, emptyPokeState(), cfgOn({ minGasWei: "1000" }), { provider: prov });
+  assert.equal(r.out.result, "error");
+  assert.match(r.out.state.lastError!.message, /below the poke floor 45000000000000000/);
+  assert.equal(pokes(chain), 0);
 });
 
 test("poke: restart safety: an in-flight record blocks a second poke for 10 minutes, a pending nonce blocks it, and a stale record does not", async () => {
@@ -248,7 +294,7 @@ test("poke: one poke at a time (two concurrent rounds send exactly one transacti
   assert.deepEqual([a.out.result, b.out.result].sort(), ["poked", "skipped"]);
 });
 
-test("poke: a mined-but-reverted poke, a poke that did not move the stored time, and an unconfirmed poke are errors (never exceptions); the unconfirmed one keeps the in-flight guard", async () => {
+test("poke: a mined-but-reverted poke, a mined poke that stored nothing (no event), and an unconfirmed poke are errors (never exceptions); the unconfirmed one keeps the in-flight guard", async () => {
   const c1 = new MockChain();
   c1.pokeTxReverts = true;
   const r1 = await poke(c1);
@@ -259,7 +305,12 @@ test("poke: a mined-but-reverted poke, a poke that did not move the stored time,
   c2.pokeTxNoop = true;
   const r2 = await poke(c2);
   assert.equal(r2.out.result, "error");
-  assert.match(r2.out.state.lastError!.message, /stored time did not move/);
+  assert.match(r2.out.state.lastError!.message, /stored NOTHING.*no FallbackPriceStored event/);
+  assert.equal(r2.out.state.refusedRounds, 1, "counted as a refusal-like failure");
+  assert.equal(r2.out.state.retryAfter, T0 + POKE_RETRY_COOLDOWN_SECONDS, "with the 300 s cooldown");
+  assert.equal(r2.out.state.inFlight, null);
+  c2.pokeTxNoop = false;
+  assert.equal((await poke(c2, r2.out.state)).out.result, "skipped", "no immediate retry");
   const c3 = new MockChain();
   const s3 = c3.signer();
   s3.sendTransaction = async () => {

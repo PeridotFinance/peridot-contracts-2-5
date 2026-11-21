@@ -24,6 +24,7 @@ import { feesWithin, makeSender, TxReverted } from "./txkit";
 export const WRAPPER_ABI = [
   "function shareState() view returns (uint256 liveAssetsPerShare, uint256 storedAssetsPerShare, uint64 storedAt, bool usingFallback, uint256 fallbackSecondsLeft)",
   "function poke() returns (bool stored)",
+  "event FallbackPriceStored(uint256 assetsPerShare, uint256 at)",
   "function lastGoodAssetsPerShare() view returns (uint128)",
   "function lastGoodTime() view returns (uint64)",
   "function getUnderlyingPrice(address pToken) view returns (uint256)",
@@ -39,20 +40,27 @@ export const POKE_REFUSED_ROUNDS = 3;
 export const POKE_RETRY_COOLDOWN_SECONDS = 300;
 /** a poke sent this recently (possibly still unmined, e.g. across a restart) blocks a second one */
 export const POKE_IN_FLIGHT_SECONDS = 600;
-/** a poke costs about 50-80k gas (about 40k measured against a mock vault on a local EVM); an estimate above this is not a poke: nothing is sent */
-export const POKE_GAS_SANITY = 500_000;
+/**
+ * The poke is sent with an EXPLICIT gas limit and NEVER with an estimate. eth_estimateGas returns the lowest gas at which the transaction does not revert, and
+ * poke() does not revert when the wrapper's vault read fails for lack of gas (the read is a swallowed staticcall: poke() then returns false and stores nothing),
+ * so an estimate converges on a STARVED amount (observed on a mainnet fork: exactly 60,627 gas, returns false, stores nothing). The live vault read (two Chainlink
+ * feeds and the pair's bins through the proxy) needs several hundred thousand gas: the gas of one poke on mainnet is UNMEASURED here. Default limit 1,500,000;
+ * a configured value below 1,000,000 is refused by the configuration check. The same limit is used for the eth_call simulation.
+ */
+export const POKE_DEFAULT_GAS_LIMIT = 1_500_000;
 
 export interface PokeConfig {
   enabled: boolean;
   pokeMinAgeSeconds: number;
   maxFeeGwei: number;
   minGasWei: string;
+  gasLimit: number;
 }
 /** The resolved poke settings, or undefined when the block is absent or `enabled` is false (the default: hosts do nothing until configured). */
 export function pokeSettings(cfg: MonitorConfig): PokeConfig | undefined {
   const p = cfg.shareCollateral?.poke;
   if (!p?.enabled) return undefined;
-  return { enabled: true, pokeMinAgeSeconds: p.pokeMinAgeSeconds ?? POKE_DEFAULT_MIN_AGE_SECONDS, maxFeeGwei: p.maxFeeGwei ?? cfg.executor.maxFeeGwei, minGasWei: p.minGasWei ?? cfg.executor.minGasWei };
+  return { enabled: true, pokeMinAgeSeconds: p.pokeMinAgeSeconds ?? POKE_DEFAULT_MIN_AGE_SECONDS, maxFeeGwei: p.maxFeeGwei ?? cfg.executor.maxFeeGwei, minGasWei: p.minGasWei ?? cfg.executor.minGasWei, gasLimit: p.gasLimit ?? POKE_DEFAULT_GAS_LIMIT };
 }
 
 // ------------------------------------------------------------------ state (persisted in the monitor state file under `poke`)
@@ -135,7 +143,7 @@ export function shareWatchFindings(w: ShareWatch | undefined, now: number, poke:
   else if (w.price === 0n) {
     f.push({ key: "share:price-zero", severity: "crit", message: `wrapper price for the share market is 0: any account that has entered the share market now returns a price error in EVERY market (no borrow, no redeem, no exit, no liquidation). ${s ? `shareState: live ${s.live > 0n ? fmt6(s.live) : "unavailable"}, stored ${fmt6(s.stored)}, fallback ${s.usingFallback ? "in use" : "not in use"}, ${s.fallbackSecondsLeft} s of window left.` : "shareState unreadable."} Causes: the vault is BROKEN (asset() changed or unreadable), the 24 h fallback expired, or the USDC price (base oracle) is 0`, audience: "guardian", escalates: true });
   }
-  if (poke && poke.refusedRounds >= POKE_REFUSED_ROUNDS) f.push({ key: "share:poke-refused", severity: "warn", message: `the poke() simulation returned false in ${poke.refusedRounds} consecutive rounds although the vault answered and the stored value is old: nothing is sent. The wrapper refuses to store (check shareState() by hand)`, audience: "monitor-operator" });
+  if (poke && poke.refusedRounds >= POKE_REFUSED_ROUNDS) f.push({ key: "share:poke-refused", severity: "warn", message: `the the poke did not store in ${poke.refusedRounds} consecutive rounds (the simulation returned false, or a mined poke emitted no FallbackPriceStored: refused or gas-starved) although the vault answers and the stored value is old. The wrapper refuses to store, or the gas limit is too low for the vault read (shareCollateral.poke.gasLimit) (check shareState() by hand)`, audience: "monitor-operator" });
   if (poke?.lastError) f.push({ key: "share:poke-error", severity: "warn", message: `the poke attempt failed at ${poke.lastError.at}: ${poke.lastError.message}. It is retried (at most every ${POKE_RETRY_COOLDOWN_SECONDS} s) until it succeeds`, audience: "monitor-operator" });
   return f;
 }
@@ -163,6 +171,27 @@ export function pokeDue(s: ShareState, nowChain: number, minAge: number): { due:
   const age = nowChain - s.storedAt;
   if (age < minAge) return { due: false, why: `stored value is ${age} s old (< ${minAge} s)` };
   return { due: true, why: `stored value is ${age} s old` };
+}
+
+/** did the mined transaction store a value? receipt event first; with no receipt (lagging node), the stored time at the block against the block time */
+async function confirmStored(provider: Ctx["provider"], wrapper: string, hash: string, blockNumber: number): Promise<{ stored: boolean; why: string }> {
+  try {
+    const topic = wrapperIface.getEventTopic("FallbackPriceStored");
+    let rc = await provider.getTransactionReceipt(hash);
+    if (!rc) {
+      await new Promise((r) => setTimeout(r, 1000));
+      rc = await provider.getTransactionReceipt(hash);
+    }
+    if (rc) {
+      const ev = rc.logs.some((l) => l.address.toLowerCase() === wrapper.toLowerCase() && l.topics[0] === topic);
+      return ev ? { stored: true, why: "FallbackPriceStored in the receipt" } : { stored: false, why: "no FallbackPriceStored event in the receipt" };
+    }
+    const blk = await provider.getBlock(blockNumber);
+    const s = await readShareState(provider, wrapper, blockNumber);
+    return s.storedAt >= blk.timestamp ? { stored: true, why: "stored time at the block" } : { stored: false, why: "no receipt available and the stored time at the block is older than the block" };
+  } catch (e) {
+    return { stored: false, why: `cannot confirm: ${safeError(e)}` };
+  }
 }
 
 let pokeBusy = false; // one poke at a time (the step is sequential in the process; this also guards re-entry)
@@ -219,13 +248,17 @@ export async function pokeStep(deps: PokeDeps, state: PokeState): Promise<PokeOu
     if (pendingNonce !== latestNonce) return { state: st, result: "skipped", note: "a transaction of the operator wallet is still pending: no second poke" };
     const feesR = await feesWithin(provider, pc.maxFeeGwei);
     if (!feesR.ok) return { state: st, result: "skipped", note: `fee: ${feesR.reason}` };
+    const gasLimit = BigNumber.from(pc.gasLimit);
     const gasBal = await provider.getBalance(operator);
-    if (gasBal.lt(pc.minGasWei)) return fail(`operator AVAX ${gasBal.toString()} wei is below the poke floor ${pc.minGasWei}: refill the wallet or the fallback goes stale`);
-    // simulate: a false result (or a revert) sends nothing
+    // the node requires balance >= gasLimit x maxFeePerGas up front (the unused part is refunded): the floor is the larger of the configured floor and that
+    const prefund = gasLimit.mul(feesR.fees.maxFeePerGas);
+    const need = prefund.gt(pc.minGasWei) ? prefund : BigNumber.from(pc.minGasWei);
+    if (gasBal.lt(need)) return fail(`operator AVAX ${gasBal.toString()} wei is below the poke floor ${need.toString()} wei (the larger of poke.minGasWei and gasLimit ${pc.gasLimit} x max fee ${feesR.fees.maxFeePerGas.toString()}): refill the wallet or the fallback goes stale`);
+    // simulate with the SAME gas limit as the transaction (a starved vault read would return false): a false result (or a revert) sends nothing
     const data = wrapperIface.encodeFunctionData("poke");
     let sim: boolean;
     try {
-      sim = wrapperIface.decodeFunctionResult("poke", await provider.call({ from: operator, to: wrapper, data }))[0] as boolean;
+      sim = wrapperIface.decodeFunctionResult("poke", await provider.call({ from: operator, to: wrapper, data, gasLimit }))[0] as boolean;
     } catch (e) {
       return fail(`poke() simulation reverted (${safeError(e)}): nothing sent`);
     }
@@ -235,13 +268,10 @@ export async function pokeStep(deps: PokeDeps, state: PokeState): Promise<PokeOu
       return { state: st, result: "refused", note: `poke() simulation returned false (round ${st.refusedRounds}): nothing sent` };
     }
     st = { ...st, refusedRounds: 0 };
-    const est = await provider.estimateGas({ from: operator, to: wrapper, data });
-    if (est.gt(POKE_GAS_SANITY)) return fail(`poke() gas estimate ${est.toString()} is above ${POKE_GAS_SANITY}: not a normal poke, nothing sent`);
-    const gasLimit: BigNumber = est.mul(15).div(10);
     // the in-flight record is persisted BEFORE the transaction: a restart between send and receipt cannot send a second one
     st = { ...st, inFlight: { at: nowS } };
     save();
-    deps.trace?.(`poke: sending (estimate ${est.toString()})`);
+    deps.trace?.(`poke: sending with gas limit ${pc.gasLimit}`);
     let tx: { hash: string; blockNumber: number; gasUsed: BigNumber };
     try {
       tx = await makeSender(deps.signer, feesR.fees)(wrapper, data, gasLimit);
@@ -249,16 +279,16 @@ export async function pokeStep(deps: PokeDeps, state: PokeState): Promise<PokeOu
       if (e instanceof TxReverted) return fail(`poke transaction ${e.hash} was mined and reverted`, { inFlight: null });
       return fail(`poke transaction not confirmed: ${safeError(e)} (it may still be mined; no new poke for ${POKE_IN_FLIGHT_SECONDS} s)`); // inFlight stays set
     }
-    // confirm that the wrapper really stored a new value (best effort: a lagging node is not an error)
-    let moved = true;
-    try {
-      moved = (await readShareState(provider, wrapper, tx.blockNumber)).storedAt > s.storedAt;
-    } catch {
-      /* cannot confirm: assume ok */
+    // A mined transaction is NOT a stored value: poke() returns false without reverting when it refuses or when its vault read starves. Success needs the wrapper's
+    // FallbackPriceStored event in the receipt (or, with no receipt, the stored time at the block >= the block time).
+    const conf = await confirmStored(provider, wrapper, tx.hash, tx.blockNumber);
+    const last = { at: wall(), hash: tx.hash, blockNumber: tx.blockNumber, gasUsed: tx.gasUsed.toString() };
+    if (!conf.stored) {
+      return fail(`poke ${tx.hash} was mined (gas used ${tx.gasUsed.toString()} of ${pc.gasLimit}) but the wrapper stored NOTHING (${conf.why}): a refused or gas-starved poke. No new attempt for ${POKE_RETRY_COOLDOWN_SECONDS} s`, { inFlight: null, refusedRounds: st.refusedRounds + 1, last });
     }
-    st = { ...st, inFlight: null, lastError: moved ? null : { at: wall(), message: `poke ${tx.hash} was mined but the wrapper's stored time did not move` }, refusedRounds: 0, last: { at: wall(), hash: tx.hash, blockNumber: tx.blockNumber, gasUsed: tx.gasUsed.toString() } };
+    st = { ...st, inFlight: null, lastError: null, refusedRounds: 0, last };
     save();
-    return { state: st, result: moved ? "poked" : "error", hash: tx.hash, note: moved ? `stored a new fallback value (gas ${tx.gasUsed.toString()})` : st.lastError!.message };
+    return { state: st, result: "poked", hash: tx.hash, note: `stored a new fallback value (gas used ${tx.gasUsed.toString()} of ${pc.gasLimit})` };
   } catch (e) {
     return fail(`poke round failed: ${safeError(e)}`);
   } finally {

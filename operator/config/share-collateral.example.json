@@ -6,7 +6,7 @@
       "pToken": "<bpPHAR-USDC pToken>",
       "underlying": "0x278B1b625C74B1926C5F989ddE601f3C5Ba27f7D",
       "liquidation": { "enabled": false, "maxRepayPerCallUsdc": 60, "dailyRepayCapUsdc": 100, "minRepayUsdc": 1, "retryCooldownSeconds": 30, "maxHeldValueUsdc": 200 },
-      "poke": { "enabled": true, "pokeMinAgeSeconds": 3700, "maxFeeGwei": 100, "minGasWei": "10000000000000000" }
+      "poke": { "enabled": true, "pokeMinAgeSeconds": 3700, "maxFeeGwei": 100, "minGasWei": "100000000000000000", "gasLimit": 1500000 }
     }
   },
   "op2": {

@@ -117,9 +117,9 @@ export interface MonitorConfig {
      * The wrapper's FALLBACK KEEPER (src/poke.ts). Optional; absent = `enabled: false` = the host does not poke (it still MONITORS the fallback). Exactly ONE host
      * sets `enabled: true` (op1): it calls the wrapper's permissionless `poke()` from the executor wallet (gas only) so that the stored fallback value stays fresh.
      * Needs `executor.enabled` and `deployment.oracleWrapper`. Optional keys: `pokeMinAgeSeconds` (default 3700; poke only when the stored value is at least this old),
-     * `maxFeeGwei` (default executor.maxFeeGwei), `minGasWei` (default executor.minGasWei).
+     * `maxFeeGwei` (default executor.maxFeeGwei), `minGasWei` (default executor.minGasWei), `gasLimit` (default 1,500,000, minimum 1,000,000: the poke is sent with this explicit limit, never an estimate).
      */
-    poke?: { enabled: boolean; pokeMinAgeSeconds?: number; maxFeeGwei?: number; minGasWei?: string };
+    poke?: { enabled: boolean; pokeMinAgeSeconds?: number; maxFeeGwei?: number; minGasWei?: string; gasLimit?: number };
   };
   keeper: {
     enabled: boolean;
@@ -357,6 +357,7 @@ export function validateConfig(raw: unknown): { problems: ConfigProblem[]; confi
       if (k.pokeMinAgeSeconds !== undefined) int(problems, "shareCollateral.poke.pokeMinAgeSeconds", k.pokeMinAgeSeconds, POKE_MIN_AGE_BOUNDS[0], POKE_MIN_AGE_BOUNDS[1]);
       if (k.maxFeeGwei !== undefined) int(problems, "shareCollateral.poke.maxFeeGwei", k.maxFeeGwei, 1, 5000);
       if (k.minGasWei !== undefined) bigintString(problems, "shareCollateral.poke.minGasWei", k.minGasWei, true);
+      if (k.gasLimit !== undefined) int(problems, "shareCollateral.poke.gasLimit", k.gasLimit, 1_000_000, 10_000_000);
     }
   }
   {

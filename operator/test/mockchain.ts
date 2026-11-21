@@ -73,12 +73,16 @@ export class MockChain {
   /** a poke transaction does not move the stored value (simulates a node/contract that ignored it) */
   pokeTxNoop = false;
   pokeGas = 70_000;
+  /** the vault read inside poke() needs this much gas (the live vault: several hundred thousand). With less, the wrapper's swallowed staticcall fails: poke() returns false, stores nothing, DOES NOT REVERT; eth_estimateGas then converges on a starved amount (60,627 on the real fork) */
+  vaultReadGas = 0n;
   /** poke() simulates/executes as `false` although the vault answers (a race, or a wrapper that refuses) */
   forcePokeFalse = false;
   /** a call of poke() reverts (eth_call) */
   pokeCallReverts = false;
   /** extra pending transactions of the operator wallet (pending nonce - latest nonce) */
   pendingExtra = 0;
+  /** gas limits of the transactions sent to the wrapper */
+  gasLimits: bigint[] = [];
   private nonce = 0;
   private receipts: Record<string, any> = {};
 
@@ -103,7 +107,7 @@ export class MockChain {
   }
 
   // ------------------------------------------------------------------ eth_call
-  private callOne(to: string, data: string, from?: string): { ok: boolean; ret: string } {
+  private callOne(to: string, data: string, from?: string, gas?: bigint): { ok: boolean; ret: string } {
     const T = lc(to);
     const sel = data.slice(0, 10);
     const fail = { ok: false, ret: "0x" };
@@ -147,7 +151,7 @@ export class MockChain {
         const left = age > 86_400 ? 0 : 86_400 - age;
         return enc(wrapperIface, fn, [this.vaultLive, this.lastGood, this.lastGoodTime, this.vaultLive === 0n && !this.vaultBroken && age <= 86_400 && this.assetUsdOk, left]);
       }
-      if (fn === "poke") return this.pokeCallReverts ? fail : enc(wrapperIface, fn, [this.pokeOutcome().stored]);
+      if (fn === "poke") return this.pokeCallReverts ? fail : enc(wrapperIface, fn, [this.pokeOutcome(gas).stored]);
       if (fn === "getUnderlyingPrice" && T !== lc(this.oracle)) {
         const p = lc(wrapperIface.decodeFunctionData(fn, data)[0]);
         return enc(wrapperIface, fn, [this.wrapperPrice ?? this.prices[p] ?? 0n]);
@@ -222,8 +226,8 @@ export class MockChain {
   }
 
   /** the wrapper's poke() rules (PharaohDlmmShareOracle v2): stores the LIVE leg; refused (false) when the vault cannot answer, or when a fresh stored value would move UP inside 1 h; an upward move is capped at +2% */
-  pokeOutcome(): { stored: boolean; value: bigint } {
-    if (this.vaultLive === 0n || this.forcePokeFalse) return { stored: false, value: this.lastGood };
+  pokeOutcome(gas?: bigint): { stored: boolean; value: bigint } {
+    if (this.vaultLive === 0n || this.forcePokeFalse || (gas !== undefined && gas < this.vaultReadGas)) return { stored: false, value: this.lastGood };
     let leg = this.vaultLive;
     const age = this.ts - this.lastGoodTime;
     if (age <= 86_400 && leg > this.lastGood) {
@@ -244,9 +248,9 @@ export class MockChain {
       getBalance: async () => BigNumber.from(10n ** 18n),
       getTransactionCount: async (_a: string, tag?: string) => (tag === "pending" ? self.pendingExtra : 0),
       getFeeData: async () => ({ maxFeePerGas: utilsGwei(30), maxPriorityFeePerGas: utilsGwei(1), gasPrice: utilsGwei(30) }),
-      estimateGas: async (tx?: { to?: string }) => BigNumber.from(tx?.to && lc(tx.to) === lc(ADDR.wrapper) ? self.pokeGas : 300_000),
+      estimateGas: async (tx?: { to?: string }) => BigNumber.from(tx?.to && lc(tx.to) === lc(ADDR.wrapper) ? (self.vaultReadGas > 0n ? 60_627 : self.pokeGas) : 300_000),
       getLogs: async () => [],
-      call: async (tx: { to: string; data: string; from?: string }) => {
+      call: async (tx: { to: string; data: string; from?: string; gasLimit?: any }) => {
         if (lc(tx.to) === "0xca11bde05977b3631167028862be2a173976ca11" && tx.data.startsWith(mc.getSighash("aggregate3"))) {
           const calls = mc.decodeFunctionData("aggregate3", tx.data)[0] as Array<{ target: string; allowFailure: boolean; callData: string }>;
           const res = calls.map((c) => {
@@ -255,7 +259,7 @@ export class MockChain {
           });
           return mc.encodeFunctionResult("aggregate3", [res]);
         }
-        const r = self.callOne(tx.to, tx.data, tx.from);
+        const r = self.callOne(tx.to, tx.data, tx.from, (tx as any).gasLimit !== undefined ? BigInt((tx as any).gasLimit.toString()) : undefined);
         if (!r.ok) throw Object.assign(new Error("execution reverted (mock)"), { code: "CALL_EXCEPTION" });
         return r.ret;
       },
@@ -276,17 +280,22 @@ export class MockChain {
         const logs: any[] = [];
         if (T === lc(ADDR.wrapper)) {
           name = "poke";
+          let storedNow = false;
           if (!self.pokeTxReverts && !self.pokeTxNoop) {
-            const o = self.pokeOutcome();
+            const o = self.pokeOutcome(BigInt((tx as any).gasLimit.toString()));
             if (o.stored) {
               self.lastGood = o.value;
               self.lastGoodTime = self.ts;
+              storedNow = true;
             }
           }
           self.sent.push({ to: tx.to, data: tx.data, name });
+          self.gasLimits.push(BigInt((tx as any).gasLimit.toString()));
           self.block += 1;
           const reverts = self.pokeTxReverts;
-          return { hash, wait: async () => { if (reverts) throw Object.assign(new Error("transaction failed"), { code: "CALL_EXCEPTION" }); return { status: 1, blockNumber: self.block, gasUsed: BigNumber.from(60_000) }; } };
+          const ev = wrapperIface.encodeEventLog(wrapperIface.getEvent("FallbackPriceStored"), [self.lastGood, self.ts]);
+          self.receipts[hash] = { blockNumber: self.block, status: 1, logs: storedNow ? [{ address: ADDR.wrapper, topics: ev.topics, data: ev.data }] : [] };
+          return { hash, wait: async () => { if (reverts) throw Object.assign(new Error("transaction failed"), { code: "CALL_EXCEPTION" }); return { status: 1, blockNumber: self.block, gasUsed: BigNumber.from(storedNow ? Math.max(Number(self.vaultReadGas), 60_000) : 60_627) }; } };
         }
         if (T === lc(USDC)) {
           const d = erc.decodeFunctionData("approve", tx.data);
@@ -314,6 +323,9 @@ export class MockChain {
         return { hash, wait: async () => ({ status: 1, blockNumber: self.block, gasUsed: BigNumber.from(200_000) }) };
       },
     };
+  }
+  receiptsFor(hash: string): any {
+    return this.receipts[hash];
   }
   poolBal(p: string, who: string): bigint {
     return this.pbal(p, who);
