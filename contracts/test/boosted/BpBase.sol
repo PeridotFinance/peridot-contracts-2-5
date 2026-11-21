@@ -445,6 +445,18 @@ abstract contract BpBase is Test {
         usdcFeed.setRound(1e8, block.timestamp - USDC_MAX_AGE - 1, 7, 7);
     }
 
+    /// @dev Pins BOTH base feeds fresh at the EXPLICIT timestamp `ts` (use after `vm.warp(ts)`: Foundry 1.7.1 caches `block.timestamp`
+    ///      inside the same function, so the caller passes its own variable). `avax8` is the AVAX/USD answer (8 decimals); USDC stays $1.
+    function _pinFeeds(uint256 ts, int256 avax8) internal {
+        avaxFeed.setRound(avax8, ts, 9, 9);
+        usdcFeed.setRound(1e8, ts, 9, 9);
+    }
+
+    /// @dev Makes the BASE USDC feed stale relative to the explicit timestamp `ts` (not the vault: the vault mock is untouched).
+    function _staleUsdcFeedAt(uint256 ts) internal {
+        usdcFeed.setRound(1e8, ts - USDC_MAX_AGE - 1, 7, 7);
+    }
+
     function _freshUsdcFeed() internal {
         usdcFeed.setRound(1e8, block.timestamp, 8, 8);
     }

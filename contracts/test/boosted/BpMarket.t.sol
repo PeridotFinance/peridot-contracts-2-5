@@ -195,12 +195,52 @@ contract BpMarketTest is BpBase {
         assertTrue(ok, "liquidation works again once the feed is fresh");
     }
 
-    function test_vaultReadReverts_priceIsZero_andFailsClosedForEnteredAccounts() external {
+    /// @dev v2 (PharaohDlmmShareOracle fallback). (a) A VAULT-side outage (convertToAssets reverts, BASE USDC feed fresh) is served by the 97%
+    ///      fallback for 24 h after the last poke: the share is priced at 97% of the last good leg and entered accounts keep working (full
+    ///      matrix in BpStaleFallback.t.sol). (b) A stale/zero BASE USDC feed (test_staleFeed_* above) still prices the share 0 AND pUSDC 0 in
+    ///      the guarded oracle: unchanged. (c) After the window the vault outage fails closed as in v1 (next test).
+    function test_vaultReadReverts_servedByFallback_at97Percent_enteredAccountsKeepWorking() external {
+        _borrowerWithDebt(); // ALICE: 100 shares, 40 USDC debt, CF 50%
+        _supplyShares(BOB, 100e6);
+        _enter(BOB, address(bp));
+        vault.setConvertReverts(true); // models the DLMM vault's totalAssets() FeedInvalid revert
+        assertEq(_price(PToken(address(bp))), 0.97e30, "fallback: 97% of the last good leg (1.0) x USDC $1");
+        assertEq(wrapper.getShareUsdPrice(), 0.97e18);
+        assertGt(_price(PToken(address(pUsdc))), 0, "USDC itself is still priced");
+        (, , , bool usingFallback,) = wrapper.shareState();
+        assertTrue(usingFallback);
+
+        // BOB (entered, 100 shares): 100 * 0.97 * 50% = $48.5 of power, one base unit more is refused
+        (bool ok, bytes memory ret) = _borrowUsdc(BOB, 48.5e6 + 1);
+        assertFalse(ok);
+        assertEq(_errCode(ret), ERR_INSUFFICIENT_LIQUIDITY, "limit is 97% of the share value");
+        (ok,) = _borrowUsdc(BOB, 48.5e6);
+        assertTrue(ok, "entered account borrows during the fallback");
+        // ALICE (entered, debt 40): 100 * 0.97 * 0.5 = 48.5 >= 40: healthy, small redeem works, not liquidatable
+        (ok,) = _redeemShares(ALICE, 1e6 * 5000);
+        assertTrue(ok, "entered account with debt redeems a little inside the 97% valuation");
+        (ok, ret) = _liquidate(CAROL, ALICE, 10e6);
+        assertFalse(ok);
+        assertEq(_errCode(ret), ERR_INSUFFICIENT_SHORTFALL, "healthy at 97%: no liquidation");
+
+        // an account that never entered the share market is unaffected, as before
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (ok,) = _borrowUsdc(DAVE, 1e6);
+        assertTrue(ok, "pWAVAX-only borrower still borrows USDC");
+    }
+
+    /// @dev v1 behaviour kept for the EXPIRED window: a vault outage older than 24 h since the last poke prices the share 0, which fails
+    ///      closed for every account that entered the share market.
+    function test_vaultReadReverts_afterWindow_priceIsZero_andFailsClosedForEnteredAccounts() external {
         _borrowerWithDebt();
         _supplyShares(BOB, 100e6);
         _enter(BOB, address(bp));
-        vault.setConvertReverts(true); // models the DLMM vault's totalAssets() guard revert / pause
-        assertEq(_price(PToken(address(bp))), 0, "reverting convertToAssets -> 0");
+        vault.setConvertReverts(true);
+        uint256 tExpired = wrapper.lastGoodTime() + wrapper.FALLBACK_WINDOW() + 1;
+        vm.warp(tExpired);
+        _pinFeeds(tExpired, 20e8); // the base feeds are fresh: ONLY the vault is down
+        assertEq(_price(PToken(address(bp))), 0, "reverting convertToAssets, window over -> 0");
         assertEq(wrapper.getShareUsdPrice(), 0);
         assertGt(_price(PToken(address(pUsdc))), 0, "USDC itself is still priced");
 
@@ -210,8 +250,9 @@ contract BpMarketTest is BpBase {
         (ok, ret) = _redeemShares(ALICE, 1);
         assertFalse(ok);
         assertEq(_errCode(ret), ERR_PRICE, "entered account: redeem blocked");
+        vault.setAssetsPerWholeShare(0.5e6); // (live read is down, so this only matters once the vault answers again)
         (ok, ret) = _liquidate(CAROL, ALICE, 10e6);
-        assertFalse(ok, "liquidation blocked while the vault read reverts");
+        assertFalse(ok, "liquidation blocked while the vault read reverts and the window is over");
         assertEq(_errCode(ret), ERR_PRICE);
 
         // an account that never entered the share market is unaffected
@@ -221,16 +262,18 @@ contract BpMarketTest is BpBase {
         assertTrue(ok, "pWAVAX-only borrower still borrows USDC");
     }
 
-    function test_vaultAssetChangeOrZeroPrice_alsoFailClosed() external {
+    /// @dev Only a vault whose asset() is unreadable or different (BROKEN) is priced 0 at once. A vault that answers asset() but returns 0
+    ///      from convertToAssets is an UNAVAILABLE leg: served by the fallback in v2.
+    function test_vaultAssetChange_alsoFailsClosed_zeroLegIsFallback() external {
         vault.setAssetOverride(address(wavax));
-        assertEq(_price(PToken(address(bp))), 0, "vault asset() changed");
+        assertEq(_price(PToken(address(bp))), 0, "vault asset() changed: BROKEN, never a fallback");
         vault.setAssetOverride(address(0));
         assertGt(_price(PToken(address(bp))), 0);
         vault.setAssetReverts(true);
-        assertEq(_price(PToken(address(bp))), 0, "vault asset() reverts");
+        assertEq(_price(PToken(address(bp))), 0, "vault asset() reverts: BROKEN, never a fallback");
         vault.setAssetReverts(false);
         vault.setAssetsPerWholeShare(0);
-        assertEq(_price(PToken(address(bp))), 0, "pps 0");
+        assertEq(_price(PToken(address(bp))), 0.97e30, "pps 0 = leg unavailable: 97% fallback (v1: 0)");
     }
 
     function test_repayStillWorks_whenPriceIsZero() external {
@@ -308,9 +351,10 @@ contract BpMarketTest is BpBase {
         assertEq(vault.balanceOf(ALICE), 5e6);
     }
 
-    /// @dev CONTAGION: entering bp costs nothing and needs no balance. While the share price is unavailable (vault read
-    ///      reverts), every account that entered bp is unliquidatable in ALL markets, including pure pWAVAX/pUSDC borrowers.
-    function test_zeroBalanceEntry_vaultReadReverts_makesPilotDebtorsUnliquidatable() external {
+    /// @dev CONTAGION. Entering bp costs nothing and needs no balance. v1: while the share price was unavailable (vault read reverts) every
+    ///      account that entered bp was unliquidatable in ALL markets. v2: the 97% fallback prices the share for 24 h after the last poke, so
+    ///      a zero-balance entrant stays liquidatable inside the window; only after the window is the v1 freeze back.
+    function test_zeroBalanceEntry_vaultReadReverts_pilotDebtorsStayLiquidatable_insideWindow() external {
         _mintUnderlyingP(pWavax, DAVE, 10e18);
         _enter(DAVE, address(pWavax));
         (bool ok,) = _borrowUsdc(DAVE, 10e6);
@@ -319,27 +363,45 @@ contract BpMarketTest is BpBase {
         vault.setConvertReverts(true);
         avaxFeed.setRound(1e8, block.timestamp, 9, 9);
         (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
-        assertFalse(ok, "unliquidatable while the DLMM vault read reverts");
+        assertTrue(ok, "liquidatable while the DLMM vault read reverts (fallback window)");
+        (ok,) = _repayUsdc(DAVE, 8e6);
+        assertTrue(ok, "repay works");
+    }
+
+    function test_zeroBalanceEntry_vaultReadReverts_afterWindow_makesPilotDebtorsUnliquidatable() external {
+        _mintUnderlyingP(pWavax, DAVE, 10e18);
+        _enter(DAVE, address(pWavax));
+        (bool ok,) = _borrowUsdc(DAVE, 10e6);
+        assertTrue(ok);
+        _enter(DAVE, address(bp)); // zero bp balance
+        vault.setConvertReverts(true);
+        uint256 tExpired = wrapper.lastGoodTime() + wrapper.FALLBACK_WINDOW() + 1;
+        vm.warp(tExpired);
+        _pinFeeds(tExpired, 1e8); // AVAX $1: DAVE underwater; both base feeds fresh
+        (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
+        assertFalse(ok, "unliquidatable once the fallback window is over and the vault read still reverts");
         assertEq(_errCode(lastRevert), ERR_PRICE);
-        (ok, ) = _try(DAVE, address(pWavax), abi.encodeWithSelector(PErc20.redeem.selector, 1));
+        (ok,) = _try(DAVE, address(pWavax), abi.encodeWithSelector(PErc20.redeem.selector, 1));
         assertFalse(ok, "and cannot redeem pWAVAX either");
         (ok,) = _repayUsdc(DAVE, 10e6);
         assertTrue(ok, "repay still works");
     }
 
-    function test_zeroBalanceEntry_liquidationResumesWhenTheVaultReadRecovers() external {
+    function test_zeroBalanceEntry_afterWindow_liquidationResumesWhenTheVaultReadRecovers() external {
         _mintUnderlyingP(pWavax, DAVE, 10e18);
         _enter(DAVE, address(pWavax));
         (bool ok,) = _borrowUsdc(DAVE, 10e6);
         assertTrue(ok);
         _enter(DAVE, address(bp));
         vault.setConvertReverts(true);
-        avaxFeed.setRound(1e8, block.timestamp, 9, 9);
+        uint256 tExpired = wrapper.lastGoodTime() + wrapper.FALLBACK_WINDOW() + 1;
+        vm.warp(tExpired);
+        _pinFeeds(tExpired, 1e8);
         (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
         assertFalse(ok);
         vault.setConvertReverts(false);
         (ok,) = _liquidateSeizing(FRANK, DAVE, 2e6, address(pWavax));
-        assertTrue(ok, "recovers with the vault");
+        assertTrue(ok, "recovers with the vault (the live price needs no poke)");
     }
 
     // =================================================================== 8. CF 0 at listing, then 50%
@@ -349,16 +411,23 @@ contract BpMarketTest is BpBase {
         assertEq(_cf(address(bp)), CF_SHARE);
     }
 
+    /// @dev v2: a price of 0 is refused; a fallback price (vault leg unavailable, window valid) is a price and is accepted.
     function test_setCollateralFactor_refusesWhenPriceIsZero() external {
         _staleUsdcFeed();
-        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "stale feed");
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "stale BASE feed: price 0");
         assertEq(_cf(address(bp)), 0);
         _freshUsdcFeed();
+        vault.setAssetReverts(true);
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "vault asset() unreadable: BROKEN, price 0");
+        vault.setAssetReverts(false);
         vault.setConvertReverts(true);
-        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "vault reverts");
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), 0, "vault reverts inside the window: fallback price, accepted");
+        assertEq(_cf(address(bp)), CF_SHARE);
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), 0), 0);
         vault.setConvertReverts(false);
         vault.setAssetsPerWholeShare(0);
-        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "pps 0");
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), 0, "pps 0 = unavailable leg: fallback, accepted");
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), 0), 0);
         vault.setAssetsPerWholeShare(1e6);
         assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), 0, "fresh and priced");
         // lowering to 0 is always possible, even while the price is unavailable (non-zero CF is the only gated value)

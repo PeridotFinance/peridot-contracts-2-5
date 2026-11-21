@@ -180,8 +180,9 @@ contract BpLiquidationTest is BpBase {
 
     /// @dev MODEL-ONLY property. In this mock the share price is `pps * USDC/USD`, so a USDC feed move scales collateral and debt
     ///      equally. The LIVE vault differs: its `totalAssets()` is marked by Chainlink with a 50 bp leg band and REVERTS when
-    ///      its feed guard trips, which the wrapper turns into price 0 (fail closed, see BpMarketTest). Do not read this test as
-    ///      "a USDC depeg cannot liquidate": a depeg beyond the vault guard freezes entered accounts instead.
+    ///      its feed guard trips (FeedInvalid: a STALE or bad feed, not a price move). v2 wrapper: that vault-side outage is served by the
+    ///      97% fallback for 24 h after the last poke, then prices the share 0 (see BpStaleFallback.t.sol); a stale/zero BASE USDC feed
+    ///      prices the share 0 and pUSDC 0 at once. Do not read this test as "a USDC depeg cannot liquidate".
     function test_usdcFeedMove_ratioUnchangedInThisMockModel() external {
         _aliceAtMax();
         (, uint256 liquidityBefore, uint256 shortfallBefore) = controller.getAccountLiquidity(ALICE);

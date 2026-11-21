@@ -31,6 +31,23 @@ abstract contract BpIdentityBase is BpBase {
         unknownWavaxMarket = new PharaohTestMarket(address(wavax));
         unknownUsdcMarket = new PharaohTestMarket(address(usdc));
         notAMarket = new BpNotAMarket();
+        _applyMode(); // v2: normal / fallback active / fallback expired (a SEPARATE call frame from every test body)
+    }
+
+    /// @dev Wrapper v2 modes. Normal (default): the vault answers. Subclasses below put the vault in an outage and move the clock, so that
+    ///      identity for every existing market is checked in all of: normal, fallback active, fallback expired. They warp to an EXPLICIT
+    ///      timestamp variable (Foundry 1.7.1 caches block.timestamp in a function) and re-pin both base feeds fresh at that time, so the
+    ///      feed-state matrix starts from the same fresh baseline in every mode.
+    function _applyMode() internal virtual {}
+
+    /// @dev What the wrapper must return for the share market in the current mode (USDC $1, last good leg 1.0).
+    function _expectedSharePrice() internal pure virtual returns (uint256) {
+        return 1e30;
+    }
+
+    function _modeWarp(uint256 ts) internal {
+        vm.warp(ts);
+        _pinFeeds(ts, 20e8);
     }
 
     // ---------------------------------------------------------------- feed state machine
@@ -154,7 +171,7 @@ contract BpPriceIdentityTest is BpIdentityBase {
         _assertAllMarketsSame("after listing");
         // the ONLY intended difference: the new market
         assertEq(old.getUnderlyingPrice(PToken(address(bp))), 0, "old oracle does not know bpPHAR");
-        assertEq(wrapper.getUnderlyingPrice(PToken(address(bp))), 1e30, "wrapper prices it: $1.00/share, 6 dec -> 1e30");
+        assertEq(wrapper.getUnderlyingPrice(PToken(address(bp))), _expectedSharePrice(), "wrapper prices it by the mode (normal $1.00 -> 1e30; fallback 97%; expired 0)");
     }
 
     /// @dev Fuzz: random raw feed rounds for both feeds, random disabled flags, random vault state, every probe target.
@@ -280,5 +297,63 @@ contract BpPriceIdentityMarginSurfaceTest is BpIdentityBase {
         avaxFeed.setReadReverts(revertsFeed);
         _assertSame(abi.encodeWithSignature("getPrice(address)", address(wavax)), "getPrice WAVAX fuzz");
         _assertSame(abi.encodeWithSignature("marketAsset(address)", address(pWavax)), "marketAsset fuzz");
+    }
+}
+
+// ====================================================================================================== v2 modes
+// The same identity suites (getUnderlyingPrice matrix 14x14 feed states, margin surface, controller views, fuzz) re-run with the vault in an
+// outage. The share market's own price differs by mode; the identity of every OTHER market and of the margin surface must not.
+
+/// @notice FALLBACK ACTIVE: vault convertToAssets reverts, clock 12 h after the last poke, base feeds fresh.
+contract BpPriceIdentityFallbackActiveTest is BpPriceIdentityTest {
+    function _applyMode() internal override {
+        vault.setConvertReverts(true);
+        uint256 ts = wrapper.lastGoodTime() + 12 hours;
+        _modeWarp(ts);
+    }
+
+    function _expectedSharePrice() internal pure override returns (uint256) {
+        return 0.97e30;
+    }
+
+    function test_mode_isFallbackActive() external view {
+        (, , , bool usingFallback, uint256 left) = wrapper.shareState();
+        assertTrue(usingFallback);
+        assertEq(left, 12 hours);
+    }
+}
+
+/// @notice FALLBACK EXPIRED: vault outage, clock one second past the 24 h window, base feeds fresh.
+contract BpPriceIdentityFallbackExpiredTest is BpPriceIdentityTest {
+    function _applyMode() internal override {
+        vault.setConvertReverts(true);
+        uint256 ts = wrapper.lastGoodTime() + wrapper.FALLBACK_WINDOW() + 1;
+        _modeWarp(ts);
+    }
+
+    function _expectedSharePrice() internal pure override returns (uint256) {
+        return 0;
+    }
+
+    function test_mode_isFallbackExpired() external view {
+        (, , , bool usingFallback, uint256 left) = wrapper.shareState();
+        assertFalse(usingFallback);
+        assertEq(left, 0);
+    }
+}
+
+contract BpPriceIdentityMarginSurfaceFallbackActiveTest is BpPriceIdentityMarginSurfaceTest {
+    function _applyMode() internal override {
+        vault.setConvertReverts(true);
+        uint256 ts = wrapper.lastGoodTime() + 12 hours;
+        _modeWarp(ts);
+    }
+}
+
+contract BpPriceIdentityMarginSurfaceFallbackExpiredTest is BpPriceIdentityMarginSurfaceTest {
+    function _applyMode() internal override {
+        vault.setConvertReverts(true);
+        uint256 ts = wrapper.lastGoodTime() + wrapper.FALLBACK_WINDOW() + 1;
+        _modeWarp(ts);
     }
 }
