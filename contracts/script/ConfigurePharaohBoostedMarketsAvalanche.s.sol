@@ -15,6 +15,9 @@ interface ILaunchPharaohVault is IERC4626 {
 }
 
 /**
+ * @notice SUPERSEDED for the DLMM market (18 Nov 2026): the bpPHAR-USDC listing is the Ledger call sequence of
+ *         contracts/avalanche_bp_dlmm_ceremony_calls.md (tools/bp-dlmm-ceremony.sh). This script targets the two older CL vaults,
+ *         the PharaohVaultShareOracle registry and a PRIVATE_KEY broadcaster; do not use it for the DLMM market.
  * @notice Installs and configures deployed Pharaoh vault-share markets on Avalanche.
  * @dev The default bootstrap mode lists both markets with zero collateral factor, minting paused,
  *      borrowing paused, and one-raw-share borrow caps. Activation is separately gated and keeps
