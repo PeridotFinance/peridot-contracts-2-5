@@ -458,6 +458,26 @@ test("share liquidation while the price is the FALLBACK price: the route is unch
   }
 });
 
+test("wrapper v3: a vault failure that is NOT FeedInvalid (ExitFailed) = BROKEN: price 0 at once, no fallback, critical price-zero, no fallback alert, the poke loop sends nothing", async () => {
+  const chain = new MockChain();
+  chain.vaultLive = 0n;
+  chain.vaultBroken = true; // a fresh stored value exists (4,000 s old) but is NOT used
+  chain.wrapperPrice = 0n;
+  chain.prices[lc(ADDR.pShare)] = 0n;
+  const cfg = monitorCfg();
+  const sink = new MemorySink();
+  await cycle(chain, cfg, emptyMonitorState(cfg), new AlertManager(sink, [3600]));
+  const share = sink.messages.filter((m) => m.key.startsWith("share:")).map((m) => `${m.severity}:${m.key}`);
+  assert.deepEqual(share, ["crit:share:price-zero"], "price 0 is critical; usingFallback is false so there is no fallback alert");
+  const r = await poke(chain, emptyPokeState(), cfgOn());
+  assert.equal(r.out.result, "not-due");
+  assert.equal(chain.sent.length, 0, "nothing sent");
+  // and the liquidation route does nothing at price 0
+  shareBorrower(chain);
+  assert.equal((await liquidate(chain)).round, undefined);
+  assert.equal(chain.sent.length, 0);
+});
+
 test("share liquidation when the price is 0 (the 24 h window ran out, or the vault is broken): nothing is sent, whatever the controller reports", async () => {
   const chain = new MockChain();
   chain.vaultLive = 0n;

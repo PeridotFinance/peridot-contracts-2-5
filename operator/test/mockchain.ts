@@ -62,6 +62,8 @@ export class MockChain {
   vaultLive = 1_020_000n;
   lastGood = 1_020_000n;
   lastGoodTime = 1_700_000_000 - 4_000;
+  /** v3: the vault fails with something OTHER than FeedInvalid (e.g. ExitFailed): live leg 0, NO fallback (the wrapper prices 0 at once); set `vaultLive = 0n` with it */
+  vaultBroken = false;
   /** the base oracle's USDC price is usable (false: the wrapper never serves a fallback) */
   assetUsdOk = true;
   /** when set, the wrapper's own getUnderlyingPrice for ANY market returns this (monitor tests); otherwise `prices` */
@@ -143,7 +145,7 @@ export class MockChain {
       if (fn === "shareState") {
         const age = Math.max(0, this.ts - this.lastGoodTime);
         const left = age > 86_400 ? 0 : 86_400 - age;
-        return enc(wrapperIface, fn, [this.vaultLive, this.lastGood, this.lastGoodTime, this.vaultLive === 0n && age <= 86_400 && this.assetUsdOk, left]);
+        return enc(wrapperIface, fn, [this.vaultLive, this.lastGood, this.lastGoodTime, this.vaultLive === 0n && !this.vaultBroken && age <= 86_400 && this.assetUsdOk, left]);
       }
       if (fn === "poke") return this.pokeCallReverts ? fail : enc(wrapperIface, fn, [this.pokeOutcome().stored]);
       if (fn === "getUnderlyingPrice" && T !== lc(this.oracle)) {
