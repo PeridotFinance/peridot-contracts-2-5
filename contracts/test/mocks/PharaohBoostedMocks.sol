@@ -26,16 +26,24 @@ contract PharaohTestAsset is ERC20 {
 }
 
 contract PharaohTestVault is ERC4626 {
-    bool public conversionReverts;
+    bool public conversionReverts; // the live vault's FeedInvalid(2): a Chainlink feed is stale or bad (the ONLY outage the wrapper falls back on)
+    bool public conversionOtherRevert; // any other revert of the live vault (a failed pair read is ExitFailed): NOT an outage
+    error FeedInvalid(uint8 which);
+    error ExitFailed();
 
     constructor(IERC20 asset_, string memory name_, string memory symbol_) ERC20(name_, symbol_) ERC4626(asset_) {}
+
+    function setConversionOtherRevert(bool state) external {
+        conversionOtherRevert = state;
+    }
 
     function setConversionReverts(bool state) external {
         conversionReverts = state;
     }
 
     function convertToAssets(uint256 shares) public view override returns (uint256) {
-        require(!conversionReverts, "vault price unavailable");
+        if (conversionReverts) revert FeedInvalid(2);
+        if (conversionOtherRevert) revert ExitFailed();
         return super.convertToAssets(shares);
     }
 }

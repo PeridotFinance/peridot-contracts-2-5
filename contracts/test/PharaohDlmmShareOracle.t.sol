@@ -139,11 +139,27 @@ contract PharaohDlmmShareOracleTest is Test {
         vault.setConversionReverts(false);
         assertEq(oracle.getUnderlyingPrice(m), 1e30);
 
-        // short return data, a zero answer: the vault cannot answer, same fallback
+        // anything that is not the vault's own FeedInvalid is a BROKEN vault, not an outage: no fallback, price 0 at once
         vm.mockCall(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encode(uint256(0)));
-        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        assertEq(oracle.getUnderlyingPrice(m), 0, "a zero NAV is not an outage");
         vm.mockCall(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), hex"");
-        assertEq(oracle.getUnderlyingPrice(m), 0.97e30);
+        assertEq(oracle.getUnderlyingPrice(m), 0, "short return data");
+        vm.clearMockedCalls();
+        vault.setConversionOtherRevert(true); // ExitFailed: a failed pair read
+        assertEq(oracle.getUnderlyingPrice(m), 0, "another revert is not an outage");
+        assertEq(oracle.getShareUsdPrice(), 0);
+        vault.setConversionOtherRevert(false);
+        vm.mockCallRevert(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), hex""); // empty revert (out of gas, assert)
+        assertEq(oracle.getUnderlyingPrice(m), 0, "empty revert data");
+        vm.mockCallRevert(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encodeWithSignature("Panic(uint256)", 0x11));
+        assertEq(oracle.getUnderlyingPrice(m), 0, "a panic");
+        vm.clearMockedCalls();
+        // both FeedInvalid values (1 asset feed, 2 pair feed) are an outage
+        vm.mockCallRevert(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encodeWithSignature("FeedInvalid(uint8)", uint8(1)));
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30, "FeedInvalid(1)");
+        vm.mockCallRevert(address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encodeWithSignature("FeedInvalid(uint8)", uint8(2)));
+        assertEq(oracle.getUnderlyingPrice(m), 0.97e30, "FeedInvalid(2)");
+        vm.clearMockedCalls();
         // an oversized answer is a broken vault, not an outage: no fallback
         vm.mockCall(
             address(vault), abi.encodeWithSignature("convertToAssets(uint256)"), abi.encode(uint256(type(uint128).max) + 1)
