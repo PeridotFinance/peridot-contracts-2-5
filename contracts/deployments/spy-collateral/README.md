@@ -7,8 +7,8 @@ Nothing here is live. Scope and design: `../../../SCOPE.md`. To go live, the ope
 
 | Contract | Role | Runtime B (EIP-170 headroom) |
 | --- | --- | --- |
-| `RobinhoodSpyCollateralDelegate` | New pSPY implementation. It is the plain delegate's two October corrections plus: (1) a session gate for non-margin pSPY holders while SPY is closed or stale. If the holder has a borrow balance in any controller market (`getAssetsIn` + `borrowBalanceStored`, views only), `getAccountSnapshot` returns the SPY source reason as its error and the account is frozen except for repay. If the holder is debt-free, the snapshot is served with a zero exchange rate: SPY counts as zero collateral, so redeem, transfer and exitMarket work, and a new borrow can only lean on other collateral; (2) `seize` reverts while SPY is withheld (covers un-entered holders, whom the snapshot gate never reads); (3) a lending supply cap on non-margin mints, measured in SPY against total pSPY. One appended storage slot (21, `lendingSupplyCap`). Immutable `spySource`. | 18,999 (5,577) |
-| `SpyCollateralLiquidator` | Immutable, no admin. For pUSDG debt (`liquidate`): flash USDG, `liquidateBorrow`, redeem pSPY, swap SPY to USDG via router adapter 0xa32C, repay. For pNVDA debt (`liquidateNvdaDebt`): flash USDG, swap it to NVDA (floor: guarded NVDA margin price 0x25E0 − 1 %), liquidate, then the same SPY to USDG repayment. Proceeds, including any leftover NVDA, go to the Ledger. It flashes USDG because the vault's NVDA balance is only 0.025 NVDA; its USDG capacity is 105.27 USDG at 5 bp. | 3,812 (20,764) |
+| `RobinhoodSpyCollateralDelegate` | New pSPY implementation. It is the plain delegate's two October corrections plus: (1) a session gate for non-margin pSPY holders while SPY is closed or stale. If the holder has a borrow balance in any controller market (`getAssetsIn` + `borrowBalanceStored`, views only), `getAccountSnapshot` returns the SPY source reason as its error and the account is frozen except for repay. If the holder is debt-free, the snapshot is served with a zero exchange rate: SPY counts as zero collateral, so redeem, transfer and exitMarket work, and a new borrow can only lean on other collateral; (2) `seize` reverts while SPY is withheld (covers un-entered holders, whom the snapshot gate never reads); (3) a lending supply cap on non-margin mints, measured in SPY against total pSPY. One appended storage slot (21, `lendingSupplyCap`). Immutable `spySource`. | 19,558 (5,018) |
+| `SpyCollateralLiquidator` | Immutable, no admin. For pUSDG debt (`liquidate`): flash USDG, `liquidateBorrow`, redeem pSPY, swap SPY to USDG via router adapter 0xa32C, repay. For pNVDA debt (`liquidateNvdaDebt`): flash USDG, swap it to NVDA (floor: guarded NVDA margin price 0x25E0 − 1 %), liquidate, then the same SPY to USDG repayment. Proceeds, including any leftover NVDA, go to the Ledger. It flashes USDG because the vault's NVDA balance is only 0.025 NVDA; its USDG capacity is 105.27 USDG at 5 bp. | 6,043 (18,533) |
 | `PToken.getAccountSnapshot`, `PToken.seize` | Now `virtual`. `RobinhoodPlainDelegate` executable bytecode is unchanged by both (only the CBOR metadata hash differs). | n/a |
 
 Storage layout: `RobinhoodPlainDelegate` slots 0-20 (`implementation` = 20) and `RobinhoodSpyCollateralDelegate` slots 0-20 are
@@ -28,12 +28,12 @@ pUSDG `borrowCap` stays at 1,000 USDG. It is shared with margin debt, so it is n
 
 | Suite | Result |
 | --- | --- |
-| Unit `test/spy/SpyCollateralDelegate.t.sol` (real Peridottroller + delegators, incl. 1 fuzz) | 28 / 28 |
+| Unit `test/spy/SpyCollateralDelegate.t.sol` (real Peridottroller + delegators, incl. 1 fuzz) | 35 / 35 |
 | Existing SPY unit suites (`SpyMarginPriceSource`, `RouterAndAdapter`) | 32 / 32 |
-| Hand-written mutants (`tools/spy-collateral/mutate.py`) | 25 / 25 killed |
-| Fork `test/spy/SpyCollateralFork.t.sol` (SPY margin ceremony applied with the deployed contracts, then this ceremony) | 11 / 11 |
-| Existing SPY margin fork suites (parity, long, weekend), same pin | 27 / 27 |
-| Keeper (`.wt-margin-keeper-collateral`, `infra/app-platform`: test_lending + test_gas_cap) | 23 / 23 |
+| Hand-written mutants (`tools/spy-collateral/mutate.py`, 35 incl. 9 new for the 2026-11-21 changes) | 25 / 25 killed on the pre-11-21 code (mutate-run3). After the 11-21 changes, an earlier partial run (run4) caught one surviving mutant, which led to the margin-account rate assertion (that fix is in place). Run 5 killed 6 / 6 and was then stopped by the host for low memory, so **29 mutants are not yet re-run** (`python3 tools/spy-collateral/mutate.py`, ~1 min each) |
+| Fork `test/spy/SpyCollateralFork.t.sol` (SPY margin ceremony applied with the deployed contracts, then this ceremony) | 16 / 16 (weekend pin 119751055, Sat 2026-11-21 08:42 UTC, warped to Mon 02:00 UTC with both feeds re-stamped) |
+| Existing SPY margin fork suites (parity, long, weekend), Thursday pin 118584093 from the RPC cache | 27 / 27 |
+| Keeper (`.wt-margin-keeper-collateral`, `infra/app-platform`: test_lending + test_gas_cap) | 25 / 25 |
 
 Fork pin: `SPY_FORK_BLOCK=118584093 SPY_NATIVE_BLOCK=26452241` (Thu 2026-11-19 22:52 UTC; an earlier run at 118572697 passed too, before the seize gate). The run used the RPC cache
 captured within minutes of the pin.
@@ -55,6 +55,12 @@ Fork coverage:
   - repay plus `exitDebtFreeToPTokens` at the weekend.
 - Donation inflation: the donor gains less borrowing power than it costs.
 - Rollback ordering (cap 0, then CF 0, which makes SPY-backed debt liquidatable).
+- 2026-11-21 additions:
+  - a debt-free holder withdraws at the weekend (transfer, redeem, exitMarket) and cannot borrow against SPY;
+  - an account that repays to 0 at the weekend can then withdraw;
+  - NVDA debt is liquidated through `liquidateNvdaDebt` after a −20 % SPY print (1.24M gas) and after a +20 % NVDA print (1.26M gas);
+  - an indebted NVDA borrower is frozen at the weekend.
+- The +20 % NVDA case stubs the guarded NVDA source with the shocked price, because the fork moves the feed and not the pool.
 
 ## Anvil rehearsal (`tools/spy-collateral/rehearse_ceremony.sh`, fork block 118584663, Thu 2026-11-19 22:53 UTC; with the seize gate): passed
 
@@ -94,22 +100,14 @@ Rehearsal-only deviations, the same as the SPY margin rehearsal:
 
 | SHA-256 | File (`.scratch/`) |
 | --- | --- |
-| ad41911809bab6a3cab35f9ae2fdbcc6b6ffc8d609f7ce0fcf4815f2f0612863 | rehearsal-run2.log |
-| 3d26e06e062f1e4472390d4927982feea8bb4888b74e26c00919a6c1b70ee896 | fork-all-run3.log |
-| da6973a113add3c6686fb6ea9f2b4054d7e1fc212aa64c3bdc642f8e97ac7917 | mutate-run3.log |
-| fa9a2ae8ee1435425694b40f1886ff6c010575266a6b7c52b46ee93239a00c27 | fork-pin.env |
+| 7c6b8c8fdb5d6e711af97c3116150023897c27d5da23cd8ebdcc75c7e2975e44 | fork-collateral-run6.log (fork 16/16 at 119751055) |
+| 892d560bf10e9499e44d06d087f4e0374ccaba0a226b4512828d13d70891866c | fork-margin-cached-run.log (existing margin fork 27/27, cached pin) |
+| 34b58a36cb6f0a51a2717cd9deea1512cfcfa9d251becd80a605da57a5c322ca | fork-pin-weekend.env |
+| e38b48fe922f578526bbaaa83967d4543c8127873477ba2b16a8d06ac8e665b8 | mutate-run5.log (partial, stopped by host) |
+| da6973a113add3c6686fb6ea9f2b4054d7e1fc212aa64c3bdc642f8e97ac7917 | mutate-run3.log (pre-11-21 code, 25/25) |
+| ad41911809bab6a3cab35f9ae2fdbcc6b6ffc8d609f7ce0fcf4815f2f0612863 | rehearsal-run2.log (pre-11-21 rehearsal) |
 | b83b1c07add314d26d4340dac9b482279e0767fea9d778c0ac638b3a7be658d0 | worker-smoke-false.log |
 | 2c957adffb7618307e87b44d69be4d9ad0f88a12ee3677f626f5eb927fc50577 | worker-smoke-true.log |
-| b73e7fab19a709d15dc4af9ff5e0a7a90a33365b317f7e5b91563df5c53ba56b | rehearsal/t0.log |
-| 270485b38b9affa929647ce5d2efae0554d07cc958235b6c0fc6695082a268f4 | rehearsal/preflight.log |
-| 1957ece71bf8ae551a7555bf98a3eb134f7c180a7cf5d36ec682f519734b0b68 | rehearsal/keeper-3.log |
-| 6a208dcaf5ad065d2de0d55477f38a93014c84e5b8a29a84b9015a8a9e7b1189 | rehearsal/keeper-4.log |
-| e71ee1208a64e4d5860ce715dbef2652bcbbbaa5c82907be8d4cd37a9d62d9ce | rehearsal/closed-check.log |
-| 61b57858b654e1c7504c5a5a4830c14bbd00f2f1be4b835db1b0ce1eb927294f | rehearsal/rollback.log |
-| b810f76839a45d412e8d36b2f7ccdf3b1de656b035851d6fa60b483357756fd1 | rehearsal/deploy.log |
-| 03a83599b87533e10a0f07473db23e9abe7ac47fc4fd0088d7271ebe97716e3f | rehearsal-run1.log (superseded: before the seize gate) |
-| d6cfbd1c878bc47c00a200d14892a4482b006600fe1459e43f24459f4dd08eac | fork-all-run2.log (superseded: before the seize gate) |
-| 2113b3ec36100ea670b785f3d4db3bd1e09a040fd6264e578a253be2f32faf29 | mutate-run2.log (superseded: before the seize gate) |
 
 ## Demo sizing (operator decision 5)
 
