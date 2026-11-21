@@ -29,8 +29,11 @@ import {PharaohTestAsset, PharaohTestFeed} from "../mocks/PharaohBoostedMocks.so
 /// @notice Controllable stand-in for the Peridot Pharaoh DLMM vault (ERC-4626 share token, 6 decimals, asset = USDC).
 /// @dev Only what the delegate, the oracle wrapper and the tests touch is implemented. `assetsPerWholeShare` is the
 ///      number of asset base units that one whole share (10^decimals share base units) converts to. The live vault
-///      REVERTS `totalAssets()` (and therefore `convertToAssets`) when a Chainlink guard trips; `convertReverts`
-///      models that, and `assetOverride` models a vault whose asset() changes under the wrapper.
+///      REVERTS `totalAssets()` (and therefore `convertToAssets`) with its own custom error `FeedInvalid(uint8)` when a Chainlink
+///      feed is stale or bad; `convertReverts` models that (the ONLY outage the wrapper v3 falls back on; `feedInvalidCode` 1 or 2 picks
+///      the argument). `convertOtherRevert` models any other failure of the live vault (a failed pair read reverts `ExitFailed()`),
+///      `convertEmptyRevert` an empty revert (out of gas), `zeroNav` a zero answer: all BROKEN for the wrapper, never a fallback.
+///      `assetOverride` models a vault whose asset() changes under the wrapper.
 contract BpDlmmVaultMock {
     string public name = "Peridot Pharaoh DLMM USDC/USDt Vault";
     string public symbol = "pdlmm-USDC";
@@ -41,7 +44,14 @@ contract BpDlmmVaultMock {
     uint256 public totalSupply;
     uint256 public assetsPerWholeShare = 1e6; // 1.000000 USDC per whole share, like the live vault at listing
     bool public convertReverts;
+    uint8 public feedInvalidCode = 2;
+    bool public convertOtherRevert;
+    bool public convertEmptyRevert;
+    bool public zeroNav;
     bool public assetReverts;
+
+    error FeedInvalid(uint8 which);
+    error ExitFailed();
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
@@ -65,6 +75,22 @@ contract BpDlmmVaultMock {
         convertReverts = state;
     }
 
+    function setFeedInvalidCode(uint8 code) external {
+        feedInvalidCode = code;
+    }
+
+    function setConvertOtherRevert(bool state) external {
+        convertOtherRevert = state;
+    }
+
+    function setConvertEmptyRevert(bool state) external {
+        convertEmptyRevert = state;
+    }
+
+    function setZeroNav(bool state) external {
+        zeroNav = state;
+    }
+
     function setAssetReverts(bool state) external {
         assetReverts = state;
     }
@@ -74,7 +100,14 @@ contract BpDlmmVaultMock {
     }
 
     function convertToAssets(uint256 shares) public view returns (uint256) {
-        require(!convertReverts, "vault price unavailable");
+        if (convertReverts) revert FeedInvalid(feedInvalidCode);
+        if (convertOtherRevert) revert ExitFailed();
+        if (convertEmptyRevert) {
+            assembly {
+                revert(0, 0)
+            }
+        }
+        if (zeroNav) return 0;
         return (shares * assetsPerWholeShare) / 1e6;
     }
 

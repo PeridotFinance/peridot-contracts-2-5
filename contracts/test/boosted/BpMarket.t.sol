@@ -262,18 +262,30 @@ contract BpMarketTest is BpBase {
         assertTrue(ok, "pWAVAX-only borrower still borrows USDC");
     }
 
-    /// @dev Only a vault whose asset() is unreadable or different (BROKEN) is priced 0 at once. A vault that answers asset() but returns 0
-    ///      from convertToAssets is an UNAVAILABLE leg: served by the fallback in v2.
-    function test_vaultAssetChange_alsoFailsClosed_zeroLegIsFallback() external {
+    /// @dev v3: only the vault's own FeedInvalid(uint8) revert is an outage (fallback). A vault whose asset() is unreadable or different,
+    ///      a zero answer (pps 0), another revert (ExitFailed) or an empty revert is BROKEN: priced 0 at once, never a fallback.
+    function test_vaultBroken_failsClosedAtOnce_neverAFallback() external {
         vault.setAssetOverride(address(wavax));
-        assertEq(_price(PToken(address(bp))), 0, "vault asset() changed: BROKEN, never a fallback");
+        assertEq(_price(PToken(address(bp))), 0, "vault asset() changed: BROKEN");
         vault.setAssetOverride(address(0));
         assertGt(_price(PToken(address(bp))), 0);
         vault.setAssetReverts(true);
-        assertEq(_price(PToken(address(bp))), 0, "vault asset() reverts: BROKEN, never a fallback");
+        assertEq(_price(PToken(address(bp))), 0, "vault asset() reverts: BROKEN");
         vault.setAssetReverts(false);
         vault.setAssetsPerWholeShare(0);
-        assertEq(_price(PToken(address(bp))), 0.97e30, "pps 0 = leg unavailable: 97% fallback (v1: 0)");
+        assertEq(_price(PToken(address(bp))), 0, "pps 0 (zero answer): BROKEN, no fallback (v2 served 0.97e30)");
+        vault.setAssetsPerWholeShare(1e6);
+        vault.setZeroNav(true);
+        assertEq(_price(PToken(address(bp))), 0, "zero NAV mode: BROKEN");
+        vault.setZeroNav(false);
+        vault.setConvertOtherRevert(true);
+        assertEq(_price(PToken(address(bp))), 0, "ExitFailed: BROKEN");
+        vault.setConvertOtherRevert(false);
+        vault.setConvertEmptyRevert(true);
+        assertEq(_price(PToken(address(bp))), 0, "empty revert: BROKEN");
+        vault.setConvertEmptyRevert(false);
+        vault.setConvertReverts(true);
+        assertEq(_price(PToken(address(bp))), 0.97e30, "FeedInvalid: the only outage, 97% fallback");
     }
 
     function test_repayStillWorks_whenPriceIsZero() external {
@@ -426,8 +438,11 @@ contract BpMarketTest is BpBase {
         assertEq(controller._setCollateralFactor(PToken(address(bp)), 0), 0);
         vault.setConvertReverts(false);
         vault.setAssetsPerWholeShare(0);
-        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), 0, "pps 0 = unavailable leg: fallback, accepted");
-        assertEq(controller._setCollateralFactor(PToken(address(bp)), 0), 0);
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "pps 0 = BROKEN (v3): no fallback, price 0, refused");
+        vault.setAssetsPerWholeShare(1e6);
+        vault.setConvertOtherRevert(true);
+        assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), ERR_PRICE, "ExitFailed = BROKEN: refused");
+        vault.setConvertOtherRevert(false);
         vault.setAssetsPerWholeShare(1e6);
         assertEq(controller._setCollateralFactor(PToken(address(bp)), CF_SHARE), 0, "fresh and priced");
         // lowering to 0 is always possible, even while the price is unavailable (non-zero CF is the only gated value)

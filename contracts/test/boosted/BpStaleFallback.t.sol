@@ -213,6 +213,100 @@ contract BpStaleFallbackTest is BpBase {
         _assertFrozenLiquidation(DAVE, "second window over");
     }
 
+    // ================================================================ v3: ONLY FeedInvalid(uint8) is an outage
+    /// @dev Puts the vault in a BROKEN state (anything but the vault's own FeedInvalid): 0 ExitFailed revert, 1 empty revert, 2 zero NAV mode,
+    ///      3 pps 0 (zero answer), 4 asset() reverts, 5 asset() changed.
+    function _breakVault(uint256 how) internal {
+        if (how == 0) vault.setConvertOtherRevert(true);
+        else if (how == 1) vault.setConvertEmptyRevert(true);
+        else if (how == 2) vault.setZeroNav(true);
+        else if (how == 3) vault.setAssetsPerWholeShare(0);
+        else if (how == 4) vault.setAssetReverts(true);
+        else vault.setAssetOverride(address(wavax));
+    }
+
+    function _healVault() internal {
+        vault.setConvertOtherRevert(false);
+        vault.setConvertEmptyRevert(false);
+        vault.setZeroNav(false);
+        vault.setAssetsPerWholeShare(1e6);
+        vault.setAssetReverts(false);
+        vault.setAssetOverride(address(0));
+    }
+
+    /// @dev BROKEN vault (ExitFailed, empty revert, zero NAV, zero answer, asset() problems), INSIDE the 24 h window with a fresh stored leg:
+    ///      the share is priced 0 at once. ACCEPTED CONTAGION for a BROKEN vault (the v1 behaviour): an account that entered bp with a zero
+    ///      balance is frozen with PRICE_ERROR 13 in every market, so a WAVAX borrower who did that is NOT liquidatable until the vault answers
+    ///      again; accounts that never entered bp are unaffected. The exposure is bounded by the pUSDC borrow cap (200 USDC: asserted).
+    function test_brokenVault_pricesZeroAtOnce_zeroBalanceEntrantFrozen_wavaxBorrowerNotLiquidatable() external {
+        for (uint256 how = 0; how <= 5; how++) {
+            uint256 snap = vm.snapshotState();
+            _contagionDebtor(DAVE);
+            _plainDebtor(EVE);
+            _breakVault(how);
+            uint256 ts = t0 + 1 hours; // well inside the window: still no fallback
+            _at(ts, 1e8); // AVAX $1: both debtors underwater
+            string memory tag = string.concat("break mode ", vm.toString(how));
+            assertEq(_price(PToken(address(bp))), 0, string.concat(tag, ": share priced 0 at once"));
+            assertEq(wrapper.getShareUsdPrice(), 0);
+            (uint256 live,,, bool usingFallback,) = wrapper.shareState();
+            assertEq(live, 0);
+            assertFalse(usingFallback, string.concat(tag, ": BROKEN is never a fallback"));
+            assertGt(_price(PToken(address(pUsdc))), 0, "USDC itself is priced");
+
+            (uint256 err,,) = controller.getAccountLiquidity(DAVE);
+            assertEq(err, ERR_PRICE, string.concat(tag, ": zero-balance entrant frozen"));
+            _assertFrozenLiquidation(DAVE, tag);
+            (bool ok, bytes memory ret) = _try(DAVE, address(pWavax), abi.encodeWithSelector(PErc20.redeem.selector, 1));
+            assertFalse(ok);
+            assertEq(_errCode(ret), ERR_PRICE);
+            assertFalse(wrapper.poke(), string.concat(tag, ": poke cannot store from a broken vault"));
+            assertEq(wrapper.lastGoodTime(), t0);
+
+            // accounts that never entered bp are unaffected
+            _liquidateAndCheck(EVE, 2e6);
+            // the exposure of the frozen account is bounded by the pUSDC borrow cap
+            assertEq(controller.borrowCaps(address(pUsdc)), USDC_BORROW_CAP);
+            assertLt(pUsdc.totalBorrows(), USDC_BORROW_CAP, "total pUSDC debt (all frozen accounts included) < the 200 USDC cap");
+
+            // recovery: the vault answers again -> liquidatable at once
+            _healVault();
+            _liquidateAndCheck(DAVE, 2e6);
+            vm.revertToState(snap);
+        }
+    }
+
+    /// @dev A BROKEN vault switched on in the middle of an active fallback ends the fallback at once.
+    function test_brokenVault_afterFeedInvalidFallback_endsTheFallbackImmediately() external {
+        _contagionDebtor(DAVE);
+        vault.setConvertReverts(true);
+        uint256 ts = t0 + 2 hours;
+        _at(ts, 1e8);
+        assertEq(_price(PToken(address(bp))), 0.97e30, "outage: fallback");
+        _liquidateAndCheck(DAVE, 1e6);
+        vault.setConvertReverts(false);
+        vault.setConvertOtherRevert(true); // now the vault fails differently
+        assertEq(_price(PToken(address(bp))), 0, "ExitFailed: priced 0 at once despite the valid window");
+        _assertFrozenLiquidation(DAVE, "broken after outage");
+    }
+
+    function test_feedInvalid1And2_bothStartTheFallback() external {
+        _contagionDebtor(DAVE);
+        uint8[3] memory codes = [uint8(1), uint8(2), uint8(7)]; // the wrapper keys on the selector only
+        for (uint256 i = 0; i < codes.length; i++) {
+            uint256 snap = vm.snapshotState();
+            vault.setFeedInvalidCode(codes[i]);
+            vault.setConvertReverts(true);
+            uint256 ts = t0 + 3 hours;
+            _at(ts, 1e8);
+            (, , , bool usingFallback,) = wrapper.shareState();
+            assertTrue(usingFallback, string.concat("FeedInvalid(", vm.toString(codes[i]), ") starts the fallback"));
+            assertEq(_price(PToken(address(bp))), 0.97e30);
+            _liquidateAndCheck(DAVE, 2e6);
+            vm.revertToState(snap);
+        }
+    }
+
     // ================================================================ 3. borrow / redeem during the fallback use 97% of the last good leg
     function test_fallbackBorrowLimit_is97PercentOfTheLastGoodLeg() external {
         _raiseCf();

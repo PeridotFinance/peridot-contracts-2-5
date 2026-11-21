@@ -357,3 +357,32 @@ contract BpPriceIdentityMarginSurfaceFallbackExpiredTest is BpPriceIdentityMargi
         _modeWarp(ts);
     }
 }
+
+/// @notice v3 BROKEN vault (another revert: the real vault's `ExitFailed()` from a failed pair read), inside the 24 h window: the share is
+///         priced 0 at once with NO fallback. Identity of every other market must still hold.
+contract BpPriceIdentityBrokenVaultTest is BpPriceIdentityTest {
+    function _applyMode() internal override {
+        vault.setConvertOtherRevert(true);
+        uint256 ts = wrapper.lastGoodTime() + 1 hours;
+        _modeWarp(ts);
+    }
+
+    function _expectedSharePrice() internal pure override returns (uint256) {
+        return 0;
+    }
+
+    function test_mode_isBrokenNotFallback() external view {
+        (uint256 live,, , bool usingFallback, uint256 left) = wrapper.shareState();
+        assertEq(live, 0);
+        assertFalse(usingFallback, "ExitFailed is not an outage");
+        assertEq(left, 23 hours, "the window is still open, but unused");
+    }
+}
+
+contract BpPriceIdentityMarginSurfaceBrokenVaultTest is BpPriceIdentityMarginSurfaceTest {
+    function _applyMode() internal override {
+        vault.setConvertOtherRevert(true);
+        uint256 ts = wrapper.lastGoodTime() + 1 hours;
+        _modeWarp(ts);
+    }
+}
