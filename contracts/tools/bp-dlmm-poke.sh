@@ -4,6 +4,8 @@
 #   usage: tools/bp-dlmm-poke.sh <state|simulate|send>
 #   environment: ETH_RPC_URL (the ENVIRONMENT only, never an argument), BP_ORACLE (the wrapper; default: read from ceremony/bp-dlmm-addresses.env)
 #   send: signer = the Ledger (default, `--ledger`), or a Foundry keystore account when BP_POKER_ACCOUNT is set (password prompted by cast).
+# GAS: poke() is sent with an EXPLICIT gas limit (BP_POKE_GAS, default 1500000), never with an estimate. The wrapper swallows a failed vault read (poke() then returns false and stores
+# nothing without reverting), so eth_estimateGas converges on a STARVED amount (measured on the fork: 60,627 gas, tx status 1, nothing stored). send checks the stored time moved.
 # `poke()` is permissionless: it only ever stores the vault's OWN live answer, at most +2% per accepted poke and once per hour upward (lower values at once), and does
 # nothing while the vault cannot answer. state/simulate sign nothing. send runs the simulation first and refuses to send when it returns false (a refused poke would only burn gas).
 set -uo pipefail
@@ -37,6 +39,11 @@ SIM="$(cast call --from "$FROM" "$BP_ORACLE" 'poke()(bool)' 2>&1 | REDACT | u)"
 echo "SIMULATION (poke() from $FROM): $SIM   (true = a value would be stored; false = the vault cannot answer, or an upward move came inside 1 h of the last store)"
 [ "$MODE" = simulate ] && exit 0
 [ "$SIM" = true ] || { echo "refusing to send: the simulation did not return true" >&2; exit 1; }
-if [ -n "${BP_POKER_ACCOUNT:-}" ]; then cast send --account "$BP_POKER_ACCOUNT" "$BP_ORACLE" 'poke()' 2>&1 | REDACT
-else cast send --ledger --from "$LEDGER" "$BP_ORACLE" 'poke()' 2>&1 | REDACT; fi
+GAS="${BP_POKE_GAS:-1500000}"; [ "$GAS" -ge 1000000 ] || { echo "BP_POKE_GAS must be at least 1000000" >&2; exit 1; }
+BEFORE="$(cast call "$BP_ORACLE" 'lastGoodTime()(uint64)' 2>&1 | REDACT | u)"
+if [ -n "${BP_POKER_ACCOUNT:-}" ]; then cast send --gas-limit "$GAS" --account "$BP_POKER_ACCOUNT" "$BP_ORACLE" 'poke()' 2>&1 | REDACT
+else cast send --gas-limit "$GAS" --ledger --from "$LEDGER" "$BP_ORACLE" 'poke()' 2>&1 | REDACT; fi
 echo "--- read-back"; state
+AFTER="$(cast call "$BP_ORACLE" 'lastGoodTime()(uint64)' 2>&1 | REDACT | u)"
+[ "$AFTER" -gt "$BEFORE" ] || { echo "POKE DID NOT STORE: lastGoodTime did not move ($BEFORE -> $AFTER). A mined poke without a store means the vault read ran out of gas or the vault cannot answer." >&2; exit 1; }
+echo "POKE STORED: lastGoodTime $BEFORE -> $AFTER"
