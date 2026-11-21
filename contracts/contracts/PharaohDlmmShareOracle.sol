@@ -35,15 +35,15 @@ interface IShareMarket {
  *      price is ALWAYS the live base-oracle read; only the vault leg can ever come from storage. Prices use the Peridot
  *      scaling 10^(36 - underlyingDecimals).
  *
- *      FALLBACK (the only logic added in v2). The vault's `totalAssets()` (hence `convertToAssets`) reverts ONLY when one
- *      of its two Chainlink feeds (USDC/USD, USDT/USD) is stale or bad (FeedInvalid); an out-of-band price or a pool/oracle
- *      deviation does NOT revert it, and then the live value is returned unchanged. When the live vault read fails (revert,
- *      short return, zero) while `asset()` still answers correctly, the share price is the LAST GOOD vault leg minus
- *      FALLBACK_HAIRCUT_BPS (3%) times the live USDC price, for at most FALLBACK_WINDOW (24 h) after the last successful
- *      `poke()`; after that it is 0 ("price unavailable", the controller answers PRICE_ERROR). A vault that cannot answer
- *      `asset()`, answers a different asset, an oversized value, or a base oracle with no USDC price (the USDC feed itself
- *      is stale: pUSDC is then unpriced by the base oracle as well) is 0 at once. Without a recurring `poke()` the fallback
- *      simply expires 24 h after the last poke (the behaviour of v1: price 0 during a vault outage).
+ *      FALLBACK (the only logic added in v2/v3). The vault's `totalAssets()` (hence `convertToAssets`) reverts with its own
+ *      `FeedInvalid(uint8)` when one of its two Chainlink feeds (USDC/USD, USDT/USD) is stale or bad; an out-of-band price or a
+ *      pool/oracle deviation does NOT revert it and the live value is returned unchanged. ONLY that selector is an outage: the share
+ *      price is then the LAST GOOD vault leg minus FALLBACK_HAIRCUT_BPS (3%) times the live USDC price, for at most FALLBACK_WINDOW
+ *      (24 h) after the last successful `poke()`; after that it is 0 ("price unavailable", the controller answers PRICE_ERROR).
+ *      Any OTHER failure is a broken vault and prices 0 at once, with no fallback: another revert (a failed pair read is
+ *      `ExitFailed`), an empty revert (out of gas), a zero or oversized answer, an `asset()` that cannot answer or answers a different
+ *      asset, and a base oracle with no USDC price (the USDC feed itself is stale: pUSDC is then unpriced by the base oracle as well).
+ *      Without a recurring `poke()` the fallback simply expires 24 h after the last poke (the behaviour of v1: price 0 during a vault outage).
  *
  *      WRITE PATH. The stored leg is seeded in the constructor and moved only by `poke()`: it stores the LIVE vault leg when
  *      the live read succeeds. Downward moves are stored at once. Upward moves are stored at most once per POKE_UP_INTERVAL
@@ -86,8 +86,10 @@ contract PharaohDlmmShareOracle is PriceOracle, IMarginPriceOracle {
     uint128 public lastGoodAssetsPerShare;
     uint64 public lastGoodTime;
 
-    /// @dev vault leg status: OK = live value, UNAVAILABLE = the vault answered asset() but not convertToAssets (feed stale/bad),
-    ///      BROKEN = asset() unreadable or different, or an oversized value: never falls back.
+    /// @dev vault leg status: OK = live value, UNAVAILABLE = the vault answered asset() but convertToAssets reverted with ITS OWN
+    ///      FeedInvalid(uint8) (a Chainlink feed stale or bad: the only outage the fallback covers), BROKEN = anything else (asset()
+    ///      unreadable or different, another revert such as a failed pair read, out of gas, a zero or oversized answer): never falls back.
+    bytes4 private constant FEED_INVALID = bytes4(keccak256("FeedInvalid(uint8)"));
     uint8 private constant LEG_OK = 0;
     uint8 private constant LEG_UNAVAILABLE = 1;
     uint8 private constant LEG_BROKEN = 2;
@@ -226,9 +228,16 @@ contract PharaohDlmmShareOracle is PriceOracle, IMarginPriceOracle {
         (bool okAsset, address currentAsset) = _tryAddress(vault_, abi.encodeWithSignature("asset()"));
         if (!okAsset || currentAsset != asset_) return (LEG_BROKEN, 0);
 
-        (bool okVault, uint256 value) = _tryUint(vault_, abi.encodeWithSignature("convertToAssets(uint256)", shareUnit));
-        if (!okVault || value == 0) return (LEG_UNAVAILABLE, 0);
-        if (value > MAX_OPERAND) return (LEG_BROKEN, 0);
+        (bool okVault, bytes memory ret) = vault_.staticcall(abi.encodeWithSignature("convertToAssets(uint256)", shareUnit));
+        if (!okVault) {
+            // ONLY the vault's own FeedInvalid(uint8) (a Chainlink feed stale or bad) is an outage; any other revert (a failed pair read = ExitFailed, out of gas = empty data, a panic) is a BROKEN vault: price 0, no fallback
+            if (ret.length >= 4 && bytes4(ret) == FEED_INVALID) return (LEG_UNAVAILABLE, 0);
+            return (LEG_BROKEN, 0);
+        }
+        if (ret.length < 32) return (LEG_BROKEN, 0);
+        uint256 value = abi.decode(ret, (uint256));
+        // an answer of 0 (NAV rounds to nothing) is a broken vault, not an outage
+        if (value == 0 || value > MAX_OPERAND) return (LEG_BROKEN, 0);
         return (LEG_OK, value);
     }
 
